@@ -1,12 +1,10 @@
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-
-    // Discord sends a POST request when someone uses a slash command
+    // Discord sends a POST request to verify the endpoint
     if (request.method === "POST") {
       const body = await request.json();
 
-      // Discord endpoint verification
+      // Discord's initial endpoint verification
       if (body.type === 1) {
         return Response.json({
           type: 1
@@ -35,7 +33,6 @@ export default {
       }
     }
 
-    // Normal browser request
     return new Response("MyTree Bot is online! 🌲✨");
   }
 };
