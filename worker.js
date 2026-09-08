@@ -1978,110 +1978,98 @@ async function renameTree(
 // There is NO GUILD_ID.
 // ============================================================
 
-async function registerCommands(env) {
-
-  const commands = [
-
-    {
-      name: "tree",
-      description:
-        "View your tree"
-    },
-
-    {
-      name: "water",
-      description:
-        "Water your tree and gain EXP"
-    },
-
-    {
-      name: "catch",
-      description:
-        "Catch a sparkle"
-    },
-
-    {
-      name: "shop",
-      description:
-        "Open the tree shop"
-    },
-
-    {
-      name: "customize",
-      description:
-        "Customize your tree"
-    },
-
-    {
-      name: "inventory",
-      description:
-        "View your inventory"
-    },
-
-    {
-      name: "leaderboard",
-      description:
-        "View the tree leaderboard"
-    },
-
-    {
-      name: "rename",
-      description:
-        "Rename your tree",
-
-      options: [
-
-        {
-
-          name: "name",
-
-          description:
-            "The new name for your tree",
-
-          type: 3,
-
-          required: true,
-
-          max_length: 50
-
-        }
-
-      ]
-
-    }
-
-  ];
-
-  const response =
-    await fetch(
-
-      `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
-
+if (url.pathname === "/register" && request.method === "GET") {
+  try {
+    const commands = [
       {
-
-        method: "PUT",
-
-        headers: {
-
-          Authorization:
-            `Bot ${env.BOT_TOKEN}`,
-
-          "Content-Type":
-            "application/json"
-
-        },
-
-        body:
-          JSON.stringify(commands)
-
+        name: "tree",
+        description: "View your tree"
+      },
+      {
+        name: "water",
+        description: "Water your tree and earn EXP"
+      },
+      {
+        name: "catch",
+        description: "Catch a sparkle if one is available"
+      },
+      {
+        name: "shop",
+        description: "Open the tree shop"
+      },
+      {
+        name: "customize",
+        description: "Customize your tree"
+      },
+      {
+        name: "inventory",
+        description: "View your inventory"
+      },
+      {
+        name: "leaderboard",
+        description: "View the tree leaderboard"
+      },
+      {
+        name: "rename",
+        description: "Rename your tree",
+        options: [
+          {
+            name: "name",
+            description: "The new name for your tree",
+            type: 3,
+            required: true
+          }
+        ]
       }
+    ];
 
+    const response = await fetch(
+      `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+      {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bot ${env.BOT_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(commands)
+      }
     );
 
-  return response.ok;
+    const result = await response.text();
 
+    if (!response.ok) {
+      return new Response(
+        `❌ Discord rejected the command registration.\n\nHTTP ${response.status}\n\n${result}`,
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8"
+          }
+        }
+      );
+    }
+
+    return new Response(
+      `✅ Commands registered successfully!\n\n${result}`,
+      {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8"
+        }
+      }
+    );
+
+  } catch (error) {
+    return new Response(
+      `❌ Registration crashed.\n\n${error.stack || error.message || error}`,
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8"
+        }
+      }
+    );
+  }
 }
-
 // ============================================================
 // 📡 DISCORD API
 // ============================================================
