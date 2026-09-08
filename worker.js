@@ -2155,7 +2155,7 @@ async function handleCommand(
     interaction.data.name;
 
   if (
-    command === "tree"
+    command === "mytree"
   ) {
 
     const user =
