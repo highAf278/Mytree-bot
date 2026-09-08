@@ -1970,107 +1970,6 @@ async function renameTree(
 }
 
 // ============================================================
-// 📋 SLASH COMMAND REGISTRATION
-// ============================================================
-//
-// IMPORTANT:
-// This is GLOBAL registration.
-// There is NO GUILD_ID.
-// ============================================================
-
-if (url.pathname === "/register" && request.method === "GET") {
-  try {
-    const commands = [
-      {
-        name: "tree",
-        description: "View your tree"
-      },
-      {
-        name: "water",
-        description: "Water your tree and earn EXP"
-      },
-      {
-        name: "catch",
-        description: "Catch a sparkle if one is available"
-      },
-      {
-        name: "shop",
-        description: "Open the tree shop"
-      },
-      {
-        name: "customize",
-        description: "Customize your tree"
-      },
-      {
-        name: "inventory",
-        description: "View your inventory"
-      },
-      {
-        name: "leaderboard",
-        description: "View the tree leaderboard"
-      },
-      {
-        name: "rename",
-        description: "Rename your tree",
-        options: [
-          {
-            name: "name",
-            description: "The new name for your tree",
-            type: 3,
-            required: true
-          }
-        ]
-      }
-    ];
-
-    const response = await fetch(
-      `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
-      {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bot ${env.BOT_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(commands)
-      }
-    );
-
-    const result = await response.text();
-
-    if (!response.ok) {
-      return new Response(
-        `❌ Discord rejected the command registration.\n\nHTTP ${response.status}\n\n${result}`,
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8"
-          }
-        }
-      );
-    }
-
-    return new Response(
-      `✅ Commands registered successfully!\n\n${result}`,
-      {
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8"
-        }
-      }
-    );
-
-  } catch (error) {
-    return new Response(
-      `❌ Registration crashed.\n\n${error.stack || error.message || error}`,
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8"
-        }
-      }
-    );
-  }
-}
-// ============================================================
 // 📡 DISCORD API
 // ============================================================
 
@@ -2717,6 +2616,13 @@ async function handleSelect(
 // 🚀 WORKER
 // ============================================================
 async function registerCommands(env) {
+  if (!env.BOT_TOKEN || !env.CLIENT_ID) {
+    return {
+      success: false,
+      error: "Missing BOT_TOKEN or CLIENT_ID secret."
+    };
+  }
+
   const commands = [
     {
       name: "tree",
@@ -2775,10 +2681,13 @@ async function registerCommands(env) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error("Discord command registration failed:", errorText);
-    return false;
+    return {
+      success: false,
+      error: `HTTP ${response.status}: ${errorText}`
+    };
   }
 
-  return true;
+  return { success: true };
 }
 export default {
 
