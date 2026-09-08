@@ -2716,7 +2716,70 @@ async function handleSelect(
 // ============================================================
 // 🚀 WORKER
 // ============================================================
+async function registerCommands(env) {
+  const commands = [
+    {
+      name: "tree",
+      description: "View your tree"
+    },
+    {
+      name: "water",
+      description: "Water your tree and earn EXP"
+    },
+    {
+      name: "catch",
+      description: "Catch a sparkle"
+    },
+    {
+      name: "shop",
+      description: "Open the tree shop"
+    },
+    {
+      name: "customize",
+      description: "Customize your tree"
+    },
+    {
+      name: "inventory",
+      description: "View your inventory"
+    },
+    {
+      name: "leaderboard",
+      description: "View the tree leaderboard"
+    },
+    {
+      name: "rename",
+      description: "Rename your tree",
+      options: [
+        {
+          name: "name",
+          description: "The new name for your tree",
+          type: 3,
+          required: true
+        }
+      ]
+    }
+  ];
 
+  const response = await fetch(
+    `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+    {
+      method: "PUT",
+      headers: {
+        "Authorization": `Bot ${env.BOT_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(commands)
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Discord command registration failed:", errorText);
+    return false;
+  }
+
+  return true;
+}
 export default {
 
   async fetch(
