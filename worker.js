@@ -342,8 +342,9 @@ function newPlayer(id, username) {
     sparkles: 0,
 
     waterCount: 0,
+lastWatered: 0,
 
-    sparkle: null,
+sparkle: null,
 
     inventory: {
 
