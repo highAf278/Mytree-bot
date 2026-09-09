@@ -31,7 +31,7 @@ const TREE_STAGES = [
   {
     level: 1,
     name: "Seedling",
-    image: "tree_seedling.png"
+    image: "IMG_7244.png"
   },
   {
     level: 5,
