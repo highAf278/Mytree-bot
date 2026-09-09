@@ -1,103 +1,162 @@
 import puppeteer from "@cloudflare/puppeteer";
 
+/* =========================
+   SETTINGS
+========================= */
+
 const EXP_PER_WATER = 10;
 const SPARKLE_CHANCE = 0.50;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 const WATER_COOLDOWN = 60 * 60 * 1000;
+const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
 const BACKGROUND_IMAGE = "IMG_7251.jpeg";
 
 const R2_BASE =
   "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/";
 
+/* =========================
+   TREE STAGES
+========================= */
+
 const TREE_STAGES = [
-  { level: 1, name: "Seedling", image: "IMG_7244.png" },
-  { level: 5, name: "Young Tree", image: "IMG_7244.png" },
-  { level: 10, name: "Growing Tree", image: "IMG_7244.png" },
-  { level: 20, name: "Mature Tree", image: "IMG_7244.png" },
-  { level: 35, name: "Enchanted Tree", image: "IMG_7244.png" },
-  { level: 50, name: "Legendary Tree", image: "IMG_7244.png" }
+  {
+    level: 1,
+    name: "Seedling",
+    image: "IMG_7244.png"
+  },
+  {
+    level: 5,
+    name: "Young Tree",
+    image: "IMG_7244.png"
+  },
+  {
+    level: 10,
+    name: "Growing Tree",
+    image: "IMG_7244.png"
+  },
+  {
+    level: 20,
+    name: "Mature Tree",
+    image: "IMG_7244.png"
+  },
+  {
+    level: 35,
+    name: "Enchanted Tree",
+    image: "IMG_7244.png"
+  },
+  {
+    level: 50,
+    name: "Legendary Tree",
+    image: "IMG_7244.png"
+  }
 ];
+
+/* =========================
+   LEVEL REWARDS
+========================= */
 
 const LEVEL_REWARDS = {
   5: {
     sparkles: 50,
-    message: "🌸 Your tree reached level 5! You received 50 sparkles!"
+    message:
+      "🌸 Your tree reached level 5! You received 50 sparkles!"
   },
 
   10: {
     sparkles: 100,
-    message: "🌸 Level 10! Your tree is getting magical! +100 sparkles!"
+    message:
+      "🌸 Level 10! Your tree is getting magical! +100 sparkles!"
   },
 
   20: {
     sparkles: 200,
-    message: "✨ Level 20! Your tree is becoming enchanted! +200 sparkles!"
+    message:
+      "✨ Level 20! Your tree is becoming enchanted! +200 sparkles!"
   },
 
   35: {
     sparkles: 350,
-    message: "💫 Level 35! The tree is ENCHANTED! +350 sparkles!"
+    message:
+      "💫 Level 35! The tree is ENCHANTED! +350 sparkles!"
   },
 
   50: {
     sparkles: 500,
-    message: "🌟 LEVEL 50! LEGENDARY TREE! +500 sparkles!"
+    message:
+      "🌟 LEVEL 50! LEGENDARY TREE! +500 sparkles!"
   }
 };
 
+/* =========================
+   WEREWIVES CHAOS
+========================= */
+
 const WEREWIVES_EVENTS = [
   {
-    message: "🐺 A pack of werewives sprinted through the garden!",
+    message:
+      "🐺 A pack of werewives sprinted through the garden!",
     exp: 15,
     sparkles: 10
   },
 
   {
-    message: "💅 The werewives aggressively decorated your tree!",
+    message:
+      "💅 The werewives aggressively decorated your tree!",
     exp: 20,
     sparkles: 15
   },
 
   {
-    message: "🌙 The werewives howled at the moon and scared XP into your tree!",
+    message:
+      "🌙 The werewives howled at the moon and scared XP into your tree!",
     exp: 25,
     sparkles: 20
   },
 
   {
-    message: "🌸 A werewife accidentally watered your tree with glitter!",
+    message:
+      "🌸 A werewife accidentally watered your tree with glitter!",
     exp: 30,
     sparkles: 25
   },
 
   {
-    message: "💥 WEREWIFE CHAOS! Nobody knows what happened, but your tree benefited!",
+    message:
+      "💥 WEREWIFE CHAOS! Nobody knows what happened, but your tree benefited!",
     exp: 40,
     sparkles: 35
   }
 ];
 
+/* =========================
+   BASIC HELPERS
+========================= */
+
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json"
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "content-type": "application/json"
+      }
     }
-  });
+  );
 }
 
-function getStage(level) {
-  let stage = TREE_STAGES[0];
-
-  for (const s of TREE_STAGES) {
-    if (level >= s.level) {
-      stage = s;
-    }
-  }
-
-  return stage;
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
+
+/* =========================
+   PLAYER
+========================= */
 
 function newPlayer() {
   return {
@@ -113,7 +172,8 @@ function newPlayer() {
 
     sparkle: null,
 
-    sceneMessage: "🌸 Your little tree is waiting for you!",
+    sceneMessage:
+      "🌸 Your little tree is waiting for you!",
 
     claimedLevelRewards: [],
 
@@ -136,83 +196,154 @@ function newPlayer() {
   };
 }
 
+function repairPlayer(player) {
+  const defaults = newPlayer();
+
+  player.name ??= defaults.name;
+  player.level ??= defaults.level;
+  player.exp ??= defaults.exp;
+  player.sparkles ??= defaults.sparkles;
+  player.lastWater ??= defaults.lastWater;
+  player.lastDaily ??= defaults.lastDaily;
+  player.sparkle ??= defaults.sparkle;
+  player.sceneMessage ??= defaults.sceneMessage;
+  player.claimedLevelRewards ??=
+    defaults.claimedLevelRewards;
+
+  player.inventory ??= {};
+
+  player.inventory.backgrounds ??=
+    defaults.inventory.backgrounds;
+
+  player.inventory.tree_types ??=
+    defaults.inventory.tree_types;
+
+  player.inventory.decorations ??=
+    defaults.inventory.decorations;
+
+  player.inventory.effects ??=
+    defaults.inventory.effects;
+
+  player.inventory.cosmetics ??=
+    defaults.inventory.cosmetics;
+
+  player.inventory.fertilizer ??=
+    defaults.inventory.fertilizer;
+
+  player.equipped ??= {};
+
+  player.equipped.background ??=
+    defaults.equipped.background;
+
+  player.equipped.tree_type ??=
+    defaults.equipped.tree_type;
+
+  player.equipped.decoration ??=
+    defaults.equipped.decoration;
+
+  player.equipped.effect ??=
+    defaults.equipped.effect;
+
+  player.equipped.cosmetic ??=
+    defaults.equipped.cosmetic;
+
+  return player;
+}
+
 async function getPlayer(env, userId) {
-  const data = await env.TREE_DATA.get(userId, "json");
+  const data =
+    await env.TREE_DATA.get(
+      userId,
+      "json"
+    );
 
   if (!data) {
     const player = newPlayer();
 
-    await env.TREE_DATA.put(
+    await savePlayer(
+      env,
       userId,
-      JSON.stringify(player)
+      player
     );
 
     return player;
   }
 
-  // Safety for older player data
-  if (!playerHasDefaults(data)) {
-    const defaults = newPlayer();
-
-    data.sceneMessage ??= defaults.sceneMessage;
-    data.claimedLevelRewards ??= [];
-    data.sparkle ??= null;
-
-    data.inventory ??= defaults.inventory;
-    data.equipped ??= defaults.equipped;
-  }
-
-  return data;
+  return repairPlayer(data);
 }
 
-function playerHasDefaults(player) {
-  return (
-    player.sceneMessage !== undefined &&
-    player.claimedLevelRewards !== undefined
-  );
-}
-
-async function savePlayer(env, userId, player) {
+async function savePlayer(
+  env,
+  userId,
+  player
+) {
   await env.TREE_DATA.put(
     userId,
     JSON.stringify(player)
   );
 }
 
+/* =========================
+   TREE LOGIC
+========================= */
+
+function getStage(level) {
+  let stage = TREE_STAGES[0];
+
+  for (const current of TREE_STAGES) {
+    if (level >= current.level) {
+      stage = current;
+    }
+  }
+
+  return stage;
+}
+
 function addExp(player, amount) {
   player.exp += amount;
 
-  let leveledUp = false;
   const levelUps = [];
 
-  while (player.exp >= player.level * 50) {
+  while (
+    player.exp >= player.level * 50
+  ) {
     player.exp -= player.level * 50;
 
     player.level++;
 
-    leveledUp = true;
-
-    const reward = LEVEL_REWARDS[player.level];
+    const reward =
+      LEVEL_REWARDS[player.level];
 
     if (
       reward &&
-      !player.claimedLevelRewards.includes(player.level)
+      !player.claimedLevelRewards.includes(
+        player.level
+      )
     ) {
-      player.sparkles += reward.sparkles;
+      player.sparkles +=
+        reward.sparkles;
 
       player.claimedLevelRewards.push(
         player.level
       );
 
-      levelUps.push(reward.message);
+      levelUps.push(
+        reward.message
+      );
     }
   }
 
   return {
-    leveledUp,
+    leveledUp:
+      levelUps.length > 0,
+
     levelUps
   };
 }
+
+/* =========================
+   SPARKLES
+========================= */
 
 function sparkleInfo() {
   const choices = [
@@ -243,28 +374,69 @@ function sparkleInfo() {
 
   return choices[
     Math.floor(
-      Math.random() * choices.length
+      Math.random() *
+      choices.length
     )
   ];
 }
 
 function sparklePosition() {
   const positions = [
-    { left: "14%", top: "20%" },
-    { left: "28%", top: "12%" },
-    { left: "43%", top: "18%" },
-    { left: "58%", top: "10%" },
-    { left: "72%", top: "19%" },
-    { left: "82%", top: "30%" },
-    { left: "18%", top: "38%" },
-    { left: "76%", top: "42%" },
-    { left: "35%", top: "30%" },
-    { left: "63%", top: "34%" }
+    {
+      left: "14%",
+      top: "20%"
+    },
+
+    {
+      left: "28%",
+      top: "12%"
+    },
+
+    {
+      left: "43%",
+      top: "18%"
+    },
+
+    {
+      left: "58%",
+      top: "10%"
+    },
+
+    {
+      left: "72%",
+      top: "19%"
+    },
+
+    {
+      left: "82%",
+      top: "30%"
+    },
+
+    {
+      left: "18%",
+      top: "38%"
+    },
+
+    {
+      left: "76%",
+      top: "42%"
+    },
+
+    {
+      left: "35%",
+      top: "30%"
+    },
+
+    {
+      left: "63%",
+      top: "34%"
+    }
   ];
 
   return positions[
     Math.floor(
-      Math.random() * positions.length
+      Math.random() *
+      positions.length
     )
   ];
 }
@@ -272,48 +444,63 @@ function sparklePosition() {
 function randomWerewivesEvent() {
   return WEREWIVES_EVENTS[
     Math.floor(
-      Math.random() * WEREWIVES_EVENTS.length
+      Math.random() *
+      WEREWIVES_EVENTS.length
     )
   ];
 }
+
+/* =========================
+   TREE IMAGE
+========================= */
 
 async function renderTree(
   env,
   player,
   statusMessage = null
 ) {
-  const stage = getStage(player.level);
+  const stage =
+    getStage(player.level);
 
-  const browser = await puppeteer.launch(
-    env.BROWSER
-  );
+  const browser =
+    await puppeteer.launch(
+      env.BROWSER
+    );
 
-  const page = await browser.newPage();
+  try {
+    const page =
+      await browser.newPage();
 
-  const backgroundUrl =
-    `${R2_BASE}${BACKGROUND_IMAGE}`;
+    const backgroundUrl =
+      `${R2_BASE}${BACKGROUND_IMAGE}`;
 
-  const treeUrl =
-    `${R2_BASE}${stage.image}`;
+    const treeUrl =
+      `${R2_BASE}${stage.image}`;
 
-  const activeSparkle =
-    player.sparkle &&
-    Date.now() - player.sparkle.spawnedAt <
-      SPARKLE_LIFETIME
-      ? player.sparkle
-      : null;
+    let activeSparkle = null;
 
-  const sparklePos =
-    activeSparkle
-      ? player.sparkle.position
-      : null;
+    if (player.sparkle) {
+      if (
+        Date.now() -
+          player.sparkle.spawnedAt <
+        SPARKLE_LIFETIME
+      ) {
+        activeSparkle =
+          player.sparkle;
+      }
+    }
 
-  const message =
-    statusMessage ||
-    player.sceneMessage ||
-    "";
+    const sparklePos =
+      activeSparkle
+        ? activeSparkle.position
+        : null;
 
-  const html = `
+    const message =
+      statusMessage ||
+      player.sceneMessage ||
+      "";
+
+    const html = `
 <!DOCTYPE html>
 
 <html>
@@ -324,7 +511,8 @@ async function renderTree(
 
 <style>
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
 
@@ -354,6 +542,8 @@ html, body {
   height: 100%;
 
   object-fit: cover;
+
+  z-index: 0;
 }
 
 .tree {
@@ -363,14 +553,16 @@ html, body {
 
   bottom: 125px;
 
-  transform: translateX(-50%);
+  transform:
+    translateX(-50%);
 
   width: 78%;
   height: 70%;
 
   object-fit: contain;
 
-  object-position: center bottom;
+  object-position:
+    center bottom;
 
   z-index: 2;
 }
@@ -379,7 +571,6 @@ html, body {
   position: absolute;
 
   top: 30px;
-
   left: 0;
 
   width: 100%;
@@ -405,16 +596,17 @@ html, body {
   position: absolute;
 
   top: 90px;
-
   left: 30px;
 
   padding: 10px 18px;
 
   border-radius: 20px;
 
-  background: rgba(255,255,255,.78);
+  background:
+    rgba(255,255,255,.78);
 
-  font-family: Arial, sans-serif;
+  font-family:
+    Arial, sans-serif;
 
   font-size: 22px;
 
@@ -438,18 +630,25 @@ html, body {
     0 0 40px #ffb7e5;
 
   animation:
-    sparkleFloat 1s ease-in-out infinite alternate,
-    sparklePulse .7s ease-in-out infinite alternate;
+    sparkleFloat
+    1s ease-in-out infinite alternate,
+
+    sparklePulse
+    .7s ease-in-out infinite alternate;
 }
 
 @keyframes sparkleFloat {
 
   from {
-    transform: translateY(0px) rotate(-5deg);
+    transform:
+      translateY(0px)
+      rotate(-5deg);
   }
 
   to {
-    transform: translateY(-15px) rotate(5deg);
+    transform:
+      translateY(-15px)
+      rotate(5deg);
   }
 
 }
@@ -470,7 +669,6 @@ html, body {
   position: absolute;
 
   left: 5%;
-
   bottom: 25px;
 
   width: 90%;
@@ -489,9 +687,11 @@ html, body {
 
   border-radius: 22px;
 
-  background: rgba(255,255,255,.88);
+  background:
+    rgba(255,255,255,.88);
 
-  font-family: Arial, sans-serif;
+  font-family:
+    Arial, sans-serif;
 
   font-size: 25px;
 
@@ -502,7 +702,8 @@ html, body {
   color: #8b4770;
 
   box-shadow:
-    0 3px 15px rgba(0,0,0,.18);
+    0 3px 15px
+    rgba(0,0,0,.18);
 
   z-index: 10;
 }
@@ -530,17 +731,21 @@ html, body {
 </div>
 
 <div class="level">
-  🌸 Level ${player.level} • ${escapeHtml(stage.name)}
+  🌸 Level ${player.level}
+  • ${escapeHtml(stage.name)}
 </div>
 
 ${
-  activeSparkle && sparklePos
+  activeSparkle &&
+  sparklePos
     ? `
 <div
   class="sparkle"
   style="
-    left: ${sparklePos.left};
-    top: ${sparklePos.top};
+    left:
+      ${sparklePos.left};
+    top:
+      ${sparklePos.top};
   "
 >
   ${activeSparkle.emoji}
@@ -560,104 +765,85 @@ ${
 </html>
 `;
 
-  await page.setContent(
-    html,
-    {
-      waitUntil: "networkidle0"
-    }
-  );
-
-  await page.evaluate(async () => {
-
-    const images =
-      Array.from(document.images);
-
-    await Promise.all(
-      images.map(img => {
-
-        if (img.complete) {
-          return Promise.resolve();
-        }
-
-        return new Promise(resolve => {
-
-          img.onload = resolve;
-
-          img.onerror = resolve;
-
-        });
-
-      })
+    await page.setContent(
+      html,
+      {
+        waitUntil:
+          "networkidle0"
+      }
     );
 
-  });
+    await page.evaluate(
+      async () => {
+        const images =
+          Array.from(
+            document.images
+          );
 
-  const screenshot =
-    await page.screenshot({
+        await Promise.all(
+          images.map(img => {
+            if (img.complete) {
+              return Promise.resolve();
+            }
+
+            return new Promise(
+              resolve => {
+                img.onload =
+                  resolve;
+
+                img.onerror =
+                  resolve;
+              }
+            );
+          })
+        );
+      }
+    );
+
+    return await page.screenshot({
       type: "png"
     });
 
-  await browser.close();
-
-  return screenshot;
+  } finally {
+    await browser.close();
+  }
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+/* =========================
+   BUTTONS
+========================= */
 
 function treeButtons(player) {
-
   const buttons = [];
 
   if (player.sparkle) {
-
     buttons.push({
       type: 2,
-
       style: 1,
-
       custom_id: "tree_catch",
-
-      label: `Catch ${player.sparkle.name}`,
-
+      label:
+        `Catch ${player.sparkle.name}`,
       emoji: {
         name: "🧺"
       }
     });
-
   } else {
-
     buttons.push({
       type: 2,
-
       style: 1,
-
       custom_id: "tree_water",
-
       label: "Water Tree",
-
       emoji: {
         name: "💧"
       }
     });
-
   }
 
   buttons.push({
     type: 2,
-
     style: 2,
-
     custom_id: "tree_daily",
-
     label: "Daily",
-
     emoji: {
       name: "🎁"
     }
@@ -665,13 +851,9 @@ function treeButtons(player) {
 
   buttons.push({
     type: 2,
-
     style: 2,
-
     custom_id: "tree_inventory",
-
     label: "Inventory",
-
     emoji: {
       name: "🎒"
     }
@@ -679,13 +861,9 @@ function treeButtons(player) {
 
   buttons.push({
     type: 2,
-
     style: 2,
-
     custom_id: "tree_shop",
-
     label: "Shop",
-
     emoji: {
       name: "🛍️"
     }
@@ -697,40 +875,19 @@ function treeButtons(player) {
   };
 }
 
-async function discordRequest(
-  env,
-  endpoint,
-  body
+/* =========================
+   DISCORD RESPONSES
+========================= */
+
+/*
+  IMPORTANT:
+  Discord gets an immediate acknowledgement first.
+  Then we edit the original response with the tree image.
+*/
+
+async function acknowledge(
+  interaction
 ) {
-
-  return fetch(
-    `https://discord.com/api/v10${endpoint}`,
-    {
-      method: "POST",
-
-      headers: {
-        Authorization:
-          `Bot ${env.BOT_TOKEN}`,
-
-        "Content-Type":
-          "application/json"
-      },
-
-      body: JSON.stringify(body)
-    }
-  );
-}
-
-async function respond(
-  interaction,
-  env,
-  content,
-  ephemeral = false
-) {
-
-  const flags =
-    ephemeral ? 64 : 0;
-
   return fetch(
     `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
@@ -742,31 +899,23 @@ async function respond(
       },
 
       body: JSON.stringify({
-        type: 4,
-
-        data: {
-          content,
-
-          flags
-        }
+        type: 5
       })
     }
   );
 }
 
-async function respondWithImage(
+async function editOriginal(
   interaction,
-  env,
   image,
   content = "",
   components = []
 ) {
-
-  const form = new FormData();
+  const form =
+    new FormData();
 
   form.append(
     "payload_json",
-
     JSON.stringify({
       content,
 
@@ -775,7 +924,6 @@ async function respondWithImage(
       attachments: [
         {
           id: 0,
-
           filename: "tree.png"
         }
       ]
@@ -784,99 +932,86 @@ async function respondWithImage(
 
   form.append(
     "files[0]",
-
     new File(
       [image],
-
       "tree.png",
-
       {
         type: "image/png"
       }
     )
   );
 
+  const response =
+    await fetch(
+      `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
+      {
+        method: "PATCH",
+
+        body: form
+      }
+    );
+
+  if (!response.ok) {
+    console.error(
+      "Discord edit error:",
+      response.status,
+      await response.text()
+    );
+  }
+
+  return response;
+}
+
+async function sendText(
+  interaction,
+  content,
+  ephemeral = false
+) {
+  const flags =
+    ephemeral ? 64 : 0;
+
   return fetch(
-    `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+    `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
     {
       method: "POST",
 
-      body: form
+      headers: {
+        "Content-Type":
+          "application/json"
+      },
+
+      body: JSON.stringify({
+        content,
+        flags
+      })
     }
   );
 }
 
-async function updateInteractionImage(
-  interaction,
-  env,
-  image,
-  content = "",
-  components = []
-) {
-
-  const form = new FormData();
-
-  form.append(
-    "payload_json",
-
-    JSON.stringify({
-      content,
-
-      components,
-
-      attachments: [
-        {
-          id: 0,
-
-          filename: "tree.png"
-        }
-      ]
-    })
-  );
-
-  form.append(
-    "files[0]",
-
-    new File(
-      [image],
-
-      "tree.png",
-
-      {
-        type: "image/png"
-      }
-    )
-  );
-
-  return fetch(
-    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
-    {
-      method: "PATCH",
-
-      body: form
-    }
-  );
-}
+/* =========================
+   TREE COMMAND
+========================= */
 
 async function handleTree(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
-  // Remove expired sparkle
   if (
     player.sparkle &&
-    Date.now() - player.sparkle.spawnedAt >
+    Date.now() -
+      player.sparkle.spawnedAt >
       SPARKLE_LIFETIME
   ) {
-
     player.sparkle = null;
 
     player.sceneMessage =
@@ -895,26 +1030,34 @@ async function handleTree(
       player
     );
 
-  return respondWithImage(
+  return editOriginal(
     interaction,
-    env,
     image,
-    `🌸 **${player.name}** • Level **${player.level}**\n💖 Sparkles: **${player.sparkles}**`,
+
+    `🌸 **${player.name}** • Level **${player.level}**\n` +
+    `💖 Sparkles: **${player.sparkles}**`,
+
     [treeButtons(player)]
   );
 }
+
+/* =========================
+   WATER
+========================= */
 
 async function handleWater(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
   const now = Date.now();
 
@@ -923,7 +1066,6 @@ async function handleWater(
     now - player.lastWater <
       WATER_COOLDOWN
   ) {
-
     const remaining =
       WATER_COOLDOWN -
       (now - player.lastWater);
@@ -945,13 +1087,11 @@ async function handleWater(
     const image =
       await renderTree(
         env,
-        player,
-        player.sceneMessage
+        player
       );
 
-    return respondWithImage(
+    return editOriginal(
       interaction,
-      env,
       image,
       "",
       [treeButtons(player)]
@@ -969,23 +1109,25 @@ async function handleWater(
   let message =
     `💧 You watered ${player.name}! +${EXP_PER_WATER} XP`;
 
-  if (levelResult.leveledUp) {
-
+  if (
+    levelResult.leveledUp
+  ) {
     message +=
       `\n🌸 LEVEL UP! Level ${player.level}!`;
-
   }
 
-  if (levelResult.levelUps.length) {
-
+  if (
+    levelResult.levelUps.length
+  ) {
     message +=
       `\n${levelResult.levelUps.join("\n")}`;
-
   }
 
-  // Werewives chaos chance
-  if (Math.random() < 0.25) {
+  /* Werewives chaos */
 
+  if (
+    Math.random() < 0.25
+  ) {
     const event =
       randomWerewivesEvent();
 
@@ -1004,44 +1146,42 @@ async function handleWater(
     message +=
       `\n✨ Werewives bonus: +${event.exp} XP and +${event.sparkles} sparkles!`;
 
-    if (chaosResult.leveledUp) {
-
+    if (
+      chaosResult.leveledUp
+    ) {
       message +=
         `\n🌸 LEVEL UP! Level ${player.level}!`;
-
     }
 
-    if (chaosResult.levelUps.length) {
-
+    if (
+      chaosResult.levelUps.length
+    ) {
       message +=
         `\n${chaosResult.levelUps.join("\n")}`;
-
     }
   }
 
-  // Spawn sparkle
+  /* Sparkle spawn */
+
   if (
     !player.sparkle &&
-    Math.random() < SPARKLE_CHANCE
+    Math.random() <
+      SPARKLE_CHANCE
   ) {
-
     const sparkle =
       sparkleInfo();
-
-    const position =
-      sparklePosition();
 
     player.sparkle = {
       ...sparkle,
 
       spawnedAt: now,
 
-      position
+      position:
+        sparklePosition()
     };
 
     message +=
       `\n\n✨ A ${sparkle.name} appeared! Catch it!`;
-
   }
 
   player.sceneMessage =
@@ -1056,33 +1196,36 @@ async function handleWater(
   const image =
     await renderTree(
       env,
-      player,
-      message
+      player
     );
 
-  return respondWithImage(
+  return editOriginal(
     interaction,
-    env,
     image,
     "",
     [treeButtons(player)]
   );
 }
 
+/* =========================
+   CATCH
+========================= */
+
 async function handleCatch(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
   if (!player.sparkle) {
-
     player.sceneMessage =
       "✨ There isn't a sparkle to catch right now!";
 
@@ -1098,9 +1241,8 @@ async function handleCatch(
         player
       );
 
-    return respondWithImage(
+    return editOriginal(
       interaction,
-      env,
       image,
       "",
       [treeButtons(player)]
@@ -1110,10 +1252,10 @@ async function handleCatch(
   const now = Date.now();
 
   if (
-    now - player.sparkle.spawnedAt >
-      SPARKLE_LIFETIME
+    now -
+      player.sparkle.spawnedAt >
+    SPARKLE_LIFETIME
   ) {
-
     player.sparkle = null;
 
     player.sceneMessage =
@@ -1131,9 +1273,8 @@ async function handleCatch(
         player
       );
 
-    return respondWithImage(
+    return editOriginal(
       interaction,
-      env,
       image,
       "",
       [treeButtons(player)]
@@ -1163,40 +1304,41 @@ async function handleCatch(
       player
     );
 
-  return respondWithImage(
+  return editOriginal(
     interaction,
-    env,
     image,
     "",
     [treeButtons(player)]
   );
 }
 
+/* =========================
+   DAILY
+========================= */
+
 async function handleDaily(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
   const now = Date.now();
-
-  const DAY =
-    24 * 60 * 60 * 1000;
 
   if (
     player.lastDaily &&
     now - player.lastDaily <
-      DAY
+      DAILY_COOLDOWN
   ) {
-
     const remaining =
-      DAY -
+      DAILY_COOLDOWN -
       (now - player.lastDaily);
 
     const hours =
@@ -1206,16 +1348,13 @@ async function handleDaily(
 
     player.sceneMessage =
       `🎁 You already collected your daily reward! Come back in about ${hours} hour${hours === 1 ? "" : "s"}.`;
-
   } else {
-
     player.lastDaily = now;
 
     player.sparkles += 25;
 
     player.sceneMessage =
       "🎁 Daily reward! +25 sparkles!";
-
   }
 
   await savePlayer(
@@ -1230,30 +1369,34 @@ async function handleDaily(
       player
     );
 
-  return respondWithImage(
+  return editOriginal(
     interaction,
-    env,
     image,
     "",
     [treeButtons(player)]
   );
 }
 
+/* =========================
+   INVENTORY
+========================= */
+
 async function handleInventory(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
-  return respond(
+  return sendText(
     interaction,
-    env,
 
     `🎒 **${player.name}'s Inventory**\n\n` +
 
@@ -1265,14 +1408,16 @@ async function handleInventory(
   );
 }
 
+/* =========================
+   SHOP
+========================= */
+
 async function handleShop(
   interaction,
   env
 ) {
-
-  return respond(
+  return sendText(
     interaction,
-    env,
 
     `🛍️ **My Tree Shop**\n\n` +
 
@@ -1288,21 +1433,26 @@ async function handleShop(
   );
 }
 
+/* =========================
+   CUSTOMIZE
+========================= */
+
 async function handleCustomize(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   const player =
-    await getPlayer(env, userId);
+    await getPlayer(
+      env,
+      userId
+    );
 
-  return respond(
+  return sendText(
     interaction,
-    env,
 
     `🎀 **Customize ${player.name}**\n\n` +
 
@@ -1314,14 +1464,16 @@ async function handleCustomize(
   );
 }
 
+/* =========================
+   LEADERBOARD
+========================= */
+
 async function handleLeaderboard(
   interaction,
   env
 ) {
-
-  return respond(
+  return sendText(
     interaction,
-    env,
 
     `🏆 **My Tree Leaderboard**\n\n` +
 
@@ -1329,11 +1481,14 @@ async function handleLeaderboard(
   );
 }
 
+/* =========================
+   RENAME
+========================= */
+
 async function handleRename(
   interaction,
   env
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
@@ -1345,13 +1500,10 @@ async function handleRename(
     )?.value;
 
   if (!newName) {
-
-    return respond(
+    return sendText(
       interaction,
-      env,
       "🌸 Please provide a name for your tree."
     );
-
   }
 
   const player =
@@ -1373,18 +1525,21 @@ async function handleRename(
     player
   );
 
-  return respond(
+  return sendText(
     interaction,
-    env,
+
     `🌸 Your tree is now named **${player.name}**!`
   );
 }
+
+/* =========================
+   COMPONENTS
+========================= */
 
 async function handleComponent(
   interaction,
   env
 ) {
-
   const customId =
     interaction.data?.custom_id;
 
@@ -1421,84 +1576,76 @@ async function handleComponent(
       );
 
     default:
-      return respond(
+      return sendText(
         interaction,
-        env,
         "🌸 Unknown button."
       );
   }
 }
 
+/* =========================
+   COMMAND REGISTRATION
+========================= */
+
 async function registerCommands(
   env
 ) {
-
   const commands = [
 
     {
       name: "tree",
-
       description:
         "View your tree"
     },
 
     {
       name: "water",
-
       description:
         "Water your tree"
     },
 
     {
       name: "catch",
-
       description:
         "Catch an appearing sparkle"
     },
 
     {
       name: "daily",
-
       description:
         "Collect your daily sparkle reward"
     },
 
     {
       name: "shop",
-
       description:
         "Visit the My Tree shop"
     },
 
     {
       name: "customize",
-
       description:
         "Customize your tree"
     },
 
     {
       name: "inventory",
-
       description:
         "View your inventory"
     },
 
     {
       name: "leaderboard",
-
       description:
         "View the tree leaderboard"
     },
 
     {
       name: "rename",
-
       description:
         "Rename your tree",
 
       options: [
-
         {
           name: "name",
 
@@ -1509,7 +1656,6 @@ async function registerCommands(
 
           required: true
         }
-
       ]
     }
 
@@ -1517,6 +1663,7 @@ async function registerCommands(
 
   return fetch(
     `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+
     {
       method: "PUT",
 
@@ -1534,11 +1681,14 @@ async function registerCommands(
   );
 }
 
+/* =========================
+   DISCORD SIGNATURE
+========================= */
+
 async function verifyDiscordRequest(
   request,
   env
 ) {
-
   const signature =
     request.headers.get(
       "X-Signature-Ed25519"
@@ -1572,7 +1722,6 @@ async function verifyDiscordRequest(
 
       {
         name: "Ed25519",
-
         namedCurve: "Ed25519"
       },
 
@@ -1586,7 +1735,9 @@ async function verifyDiscordRequest(
 
     publicKey,
 
-    hexToBytes(signature),
+    hexToBytes(
+      signature
+    ),
 
     encoder.encode(
       timestamp + body
@@ -1595,7 +1746,6 @@ async function verifyDiscordRequest(
 }
 
 function hexToBytes(hex) {
-
   const bytes =
     new Uint8Array(
       hex.length / 2
@@ -1606,7 +1756,6 @@ function hexToBytes(hex) {
     i < bytes.length;
     i++
   ) {
-
     bytes[i] =
       parseInt(
         hex.slice(
@@ -1615,11 +1764,14 @@ function hexToBytes(hex) {
         ),
         16
       );
-
   }
 
   return bytes;
 }
+
+/* =========================
+   MAIN WORKER
+========================= */
 
 export default {
 
@@ -1627,41 +1779,40 @@ export default {
     request,
     env
   ) {
-
     const url =
       new URL(request.url);
+
+    /* Health check */
 
     if (
       request.method === "GET" &&
       url.pathname === "/"
     ) {
-
       return new Response(
         "My Tree bot is alive 🌸",
         {
           status: 200
         }
       );
-
     }
+
+    /* Register commands */
 
     if (
       request.method === "GET" &&
       url.pathname === "/register"
     ) {
-
       const result =
-        await registerCommands(env);
+        await registerCommands(
+          env
+        );
 
       const text =
         await result.text();
 
       return new Response(
-
         result.ok
-
           ? "Commands registered successfully! 🌸"
-
           : `Registration failed:\n${text}`,
 
         {
@@ -1670,10 +1821,10 @@ export default {
               ? 200
               : 500
         }
-
       );
-
     }
+
+    /* Discord interactions */
 
     if (
       request.method === "POST" &&
@@ -1687,126 +1838,212 @@ export default {
         );
 
       if (!valid) {
-
         return new Response(
           "Invalid request signature",
           {
             status: 401
           }
         );
-
       }
 
       const interaction =
         await request.json();
 
-      // Ping
+      /* Discord Ping */
+
       if (
         interaction.type === 1
       ) {
-
         return json({
           type: 1
         });
-
       }
 
-      // Slash command
+      /*
+        Slash commands
+      */
+
       if (
         interaction.type === 2
       ) {
 
-        const command =
-          interaction.data?.name;
+        /*
+          IMPORTANT:
+          Immediately acknowledge Discord.
+        */
+
+        const ack =
+          await acknowledge(
+            interaction
+          );
+
+        if (!ack.ok) {
+          console.error(
+            "Discord acknowledgement failed:",
+            ack.status,
+            await ack.text()
+          );
+
+          return new Response(
+            "Failed to acknowledge Discord interaction",
+            {
+              status: 500
+            }
+          );
+        }
 
         try {
 
+          const command =
+            interaction.data?.name;
+
           switch (command) {
 
-            case "tree":
-              return await handleTree(
+            case "tree": {
+              const userId =
+                interaction.member?.user?.id ||
+                interaction.user?.id;
+
+              const player =
+                await getPlayer(
+                  env,
+                  userId
+                );
+
+              if (
+                player.sparkle &&
+                Date.now() -
+                  player.sparkle.spawnedAt >
+                  SPARKLE_LIFETIME
+              ) {
+                player.sparkle = null;
+
+                player.sceneMessage =
+                  "💨 Your sparkle disappeared!";
+
+                await savePlayer(
+                  env,
+                  userId,
+                  player
+                );
+              }
+
+              const image =
+                await renderTree(
+                  env,
+                  player
+                );
+
+              return editOriginal(
                 interaction,
-                env
+                image,
+
+                `🌸 **${player.name}** • Level **${player.level}**\n` +
+                `💖 Sparkles: **${player.sparkles}**`,
+
+                [treeButtons(player)]
               );
+            }
 
             case "water":
-              return await handleWater(
+              return handleWater(
                 interaction,
                 env
               );
 
             case "catch":
-              return await handleCatch(
+              return handleCatch(
                 interaction,
                 env
               );
 
             case "daily":
-              return await handleDaily(
+              return handleDaily(
                 interaction,
                 env
               );
 
             case "shop":
-              return await handleShop(
+              return handleShop(
                 interaction,
                 env
               );
 
             case "customize":
-              return await handleCustomize(
+              return handleCustomize(
                 interaction,
                 env
               );
 
             case "inventory":
-              return await handleInventory(
+              return handleInventory(
                 interaction,
                 env
               );
 
             case "leaderboard":
-              return await handleLeaderboard(
+              return handleLeaderboard(
                 interaction,
                 env
               );
 
             case "rename":
-              return await handleRename(
+              return handleRename(
                 interaction,
                 env
               );
 
             default:
-              return respond(
+              return sendText(
                 interaction,
-                env,
                 "🌸 Unknown command."
               );
-
           }
 
         } catch (error) {
 
-          console.error(error);
+          console.error(
+            "COMMAND ERROR:",
+            error
+          );
 
-          return respond(
+          return sendText(
             interaction,
-            env,
 
             `❌ Something went wrong while growing your tree.\n\`${error.message || error}\``,
 
             true
           );
-
         }
-
       }
 
-      // Button interaction
+      /*
+        Button interactions
+      */
+
       if (
         interaction.type === 3
       ) {
+
+        const ack =
+          await acknowledge(
+            interaction
+          );
+
+        if (!ack.ok) {
+          console.error(
+            "Button acknowledgement failed:",
+            ack.status,
+            await ack.text()
+          );
+
+          return new Response(
+            "Failed to acknowledge button",
+            {
+              status: 500
+            }
+          );
+        }
 
         try {
 
@@ -1817,25 +2054,24 @@ export default {
 
         } catch (error) {
 
-          console.error(error);
+          console.error(
+            "BUTTON ERROR:",
+            error
+          );
 
-          return respond(
+          return sendText(
             interaction,
-            env,
 
             `❌ Button error.\n\`${error.message || error}\``,
 
             true
           );
-
         }
-
       }
 
       return json({
         type: 1
       });
-
     }
 
     return new Response(
@@ -1844,7 +2080,5 @@ export default {
         status: 404
       }
     );
-
   }
-
 };
