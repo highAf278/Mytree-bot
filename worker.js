@@ -22,38 +22,45 @@ const R2_BASE =
 
 
 /* =========================================================
+   TREE IMAGE
+========================================================= */
+
+const TREE_IMAGE = "IMG_7259.png";
+
+
+/* =========================================================
    TREE STAGES
 ========================================================= */
 
 const TREE_STAGES = {
   1: {
     name: "Baby Seedling",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   },
 
   5: {
     name: "Little Cherry Tree",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   },
 
   10: {
     name: "Growing Cherry Tree",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   },
 
   20: {
     name: "Blooming Cherry Tree",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   },
 
   35: {
     name: "Magical Cherry Tree",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   },
 
   50: {
     name: "Eternal Cherry Tree",
-    image: "IMG_7244.png"
+    image: TREE_IMAGE
   }
 };
 
@@ -131,7 +138,9 @@ function createPlayer() {
 
     claimedLevelRewards: [],
 
-    inventory: [],
+    inventory: [
+      "pink_sky_background"
+    ],
 
     equipped: {
       decoration: null,
@@ -170,9 +179,28 @@ function repairPlayer(player) {
 
     inventory:
       Array.isArray(player.inventory)
-        ? player.inventory
+        ? [...player.inventory]
         : []
   };
+
+  /*
+    Make sure every existing player owns
+    the original Pink Sky background.
+  */
+
+  if (
+    !repaired.inventory.includes(
+      "pink_sky_background"
+    )
+  ) {
+    repaired.inventory.unshift(
+      "pink_sky_background"
+    );
+  }
+
+  /*
+    Keep the theme valid.
+  */
 
   if (
     repaired.equipped.theme !== "halloween" &&
@@ -303,25 +331,25 @@ function sparkleInfo() {
     {
       name: "Pink Sparkle",
       emoji: "💗",
-      value: 1
+      value: 10
     },
 
     {
       name: "Rainbow Sparkle",
       emoji: "🌈",
-      value: 2
+      value: 25
     },
 
     {
       name: "Moon Sparkle",
       emoji: "🌙",
-      value: 3
+      value: 40
     },
 
     {
       name: "Rare Star",
       emoji: "⭐",
-      value: 5
+      value: 75
     }
   ];
 
@@ -569,11 +597,6 @@ body {
     }
   );
 
-  /*
-    Removed the old 1200ms artificial delay.
-    This should make Water/Catch noticeably faster.
-  */
-
   const screenshot =
     await page.screenshot({
       type: "png"
@@ -608,7 +631,7 @@ function buildTreeText(player) {
     player.equipped?.theme ===
     "halloween"
       ? "🎃 Halloween"
-      : "🌸 Cherry Blossom";
+      : "🌸 Pink Sky";
 
   let text = "";
 
@@ -663,10 +686,19 @@ function treeButtons(player) {
       ? {
           type: 2,
           style: 1,
+
+          /*
+            Tie the button to this exact
+            sparkle so stale buttons cannot
+            catch it twice.
+          */
+
           custom_id:
-            "tree_catch",
+            `tree_catch_${player.sparkle.createdAt}`,
+
           label:
             "Catch Sparkle",
+
           emoji: {
             name: "✨"
           }
@@ -674,10 +706,13 @@ function treeButtons(player) {
       : {
           type: 2,
           style: 1,
+
           custom_id:
             "tree_water",
+
           label:
             "Water Tree",
+
           emoji: {
             name: "💧"
           }
@@ -885,10 +920,13 @@ function shopButtons() {
         {
           type: 2,
           style: 1,
+
           custom_id:
             "shop_buy_halloween",
+
           label:
             `Buy Halloween — ${HALLOWEEN_PRICE} ✨`,
+
           emoji: {
             name: "🎃"
           }
@@ -912,43 +950,56 @@ function customizeButtons(player) {
       "halloween_background"
     );
 
+  /*
+    Pink Sky is always owned.
+  */
+
+  buttons.push({
+    type: 2,
+
+    style:
+      player.equipped.theme ===
+      "cherry"
+        ? 3
+        : 1,
+
+    custom_id:
+      "theme_cherry",
+
+    label:
+      "Pink Sky",
+
+    emoji: {
+      name: "🌸"
+    }
+  });
+
   if (ownsHalloween) {
     buttons.push({
       type: 2,
+
       style:
         player.equipped.theme ===
         "halloween"
           ? 3
           : 1,
+
       custom_id:
         "theme_halloween",
+
       label:
         "Halloween",
+
       emoji: {
         name: "🎃"
       }
     });
   }
 
-  buttons.push({
-    type: 2,
-    style:
-      player.equipped.theme ===
-      "cherry"
-        ? 3
-        : 1,
-    custom_id:
-      "theme_cherry",
-    label:
-      "Cherry Blossom",
-    emoji: {
-      name: "🌸"
-    }
-  });
-
   return [
     {
       type: 1,
+
       components:
         buttons
     }
@@ -1124,17 +1175,41 @@ async function handleCatch(
 
   cleanExpiredSparkle(player);
 
+  const buttonId =
+    interaction.data?.custom_id || "";
+
+  const buttonSparkleTime =
+    buttonId.startsWith(
+      "tree_catch_"
+    )
+      ? buttonId.slice(
+          "tree_catch_".length
+        )
+      : null;
+
+  /*
+    Make sure the sparkle still exists
+    and belongs to this exact button.
+  */
+
   if (
     !player.sparkle ||
     typeof player.sparkle !==
       "object" ||
     typeof player.sparkle.value !==
-      "number"
+      "number" ||
+    !buttonSparkleTime ||
+    String(
+      player.sparkle.createdAt
+    ) !==
+      String(
+        buttonSparkleTime
+      )
   ) {
     player.sparkle = null;
 
     player.sceneMessage =
-      "✨ There isn't a sparkle to catch right now.";
+      "✨ That sparkle has already been caught!";
 
     await savePlayer(
       env,
@@ -1177,7 +1252,7 @@ async function handleCatch(
     );
 
   player.sceneMessage =
-    `${sparkle.emoji || "✨"} You caught a ${sparkle.name || "sparkle"}! +${sparkleValue} sparkle(s)`;
+    `${sparkle.emoji || "✨"} You caught a ${sparkle.name || "sparkle"}! +${sparkleValue} ✨`;
 
   if (messages.length) {
     player.sceneMessage +=
@@ -1186,6 +1261,12 @@ async function handleCatch(
         " • "
       );
   }
+
+  /*
+    Do NOT immediately spawn another sparkle.
+    This keeps the caught sparkle from being
+    replaced instantly by a new one.
+  */
 
   await savePlayer(
     env,
@@ -1323,6 +1404,14 @@ async function handleInventory(
     text +=
       player.inventory
         .map(item => {
+
+          if (
+            item ===
+            "pink_sky_background"
+          ) {
+            return "• 🌸 Pink Sky Background";
+          }
+
           if (
             item ===
             "halloween_background"
@@ -1341,7 +1430,7 @@ async function handleInventory(
       player.equipped.theme ===
       "halloween"
         ? "🎃 Halloween"
-        : "🌸 Cherry Blossom"
+        : "🌸 Pink Sky"
     );
 
   return sendText(
@@ -1381,6 +1470,15 @@ async function handleShop(
     `✨ You have **${player.sparkles}** sparkles.\n\n`;
 
   text +=
+    `🌸 **Pink Sky Background**\n`;
+
+  text +=
+    `💗 Your original background — owned forever!\n`;
+
+  text +=
+    `✨ Price: **FREE**\n\n`;
+
+  text +=
     `🎃 **Halloween Background**\n`;
 
   text +=
@@ -1391,10 +1489,10 @@ async function handleShop(
 
   if (ownsHalloween) {
     text +=
-      `✅ **You already own this!**\n\n`;
+      `✅ **You already own the Halloween Background!**\n\n`;
 
     text +=
-      `Go to 🎀 **Customize** to equip it.`;
+      `Go to 🎀 **Customize** to switch between backgrounds.`;
 
     return sendText(
       interaction,
@@ -1473,7 +1571,8 @@ async function handleBuyHalloween(
 
     `🎃 **Purchase Complete!**\n\n` +
     `You bought the **Halloween Background** for **${HALLOWEEN_PRICE} ✨**.\n\n` +
-    `🎀 Press **Customize** on your tree to equip it!`
+    `🌸 Your Pink Sky Background is still safely in your inventory!\n\n` +
+    `🎀 Press **Customize** on your tree to equip either background!`
   );
 }
 
@@ -1500,7 +1599,7 @@ async function handleCustomize(
     player.equipped.theme ===
     "halloween"
       ? "🎃 Halloween"
-      : "🌸 Cherry Blossom";
+      : "🌸 Pink Sky";
 
   let text =
     `🎀 **Tree Customization**\n\n`;
@@ -1584,7 +1683,7 @@ async function handleThemeHalloween(
 
 
 /* =========================================================
-   EQUIP CHERRY
+   EQUIP PINK SKY
 ========================================================= */
 
 async function handleThemeCherry(
@@ -1601,11 +1700,26 @@ async function handleThemeCherry(
       userId
     );
 
+  /*
+    Pink Sky is automatically owned,
+    but make sure older players receive it.
+  */
+
+  if (
+    !player.inventory.includes(
+      "pink_sky_background"
+    )
+  ) {
+    player.inventory.push(
+      "pink_sky_background"
+    );
+  }
+
   player.equipped.theme =
     "cherry";
 
   player.sceneMessage =
-    `🌸 Cherry Blossom mode activated!`;
+    `🌸💗 Pink Sky mode activated!`;
 
   await savePlayer(
     env,
@@ -1888,16 +2002,27 @@ async function handleComponent(
   const id =
     interaction.data.custom_id;
 
+  /*
+    Catch Sparkle buttons contain a
+    unique timestamp, so route them
+    separately from normal buttons.
+  */
+
+  if (
+    id.startsWith(
+      "tree_catch_"
+    )
+  ) {
+    return handleCatch(
+      interaction,
+      env
+    );
+  }
+
   switch (id) {
 
     case "tree_water":
       return handleWater(
-        interaction,
-        env
-      );
-
-    case "tree_catch":
-      return handleCatch(
         interaction,
         env
       );
