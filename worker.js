@@ -344,6 +344,8 @@ function newPlayer(id, username) {
 
     waterCount: 0,
 
+    lastWatered: 0,
+
     sparkle: null,
 
     inventory: {
@@ -1155,6 +1157,28 @@ function inventoryEmbed(player) {
 
   };
 
+}
+
+// ============================================================
+// ⏰ TIME FORMATTER
+// ============================================================
+
+function formatDuration(ms) {
+
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
 }
 
 // ============================================================
@@ -2050,25 +2074,18 @@ async function updateOriginal(
 ) {
 
   return fetch(
-
-    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
-
+    `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
-
-      method: "PATCH",
-
+      method: "POST",
       headers: {
-
         "Content-Type":
           "application/json"
-
       },
-
-      body:
-        JSON.stringify(data)
-
+      body: JSON.stringify({
+        type: 7,
+        data
+      })
     }
-
   );
 
 }
