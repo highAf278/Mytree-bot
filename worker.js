@@ -14,161 +14,49 @@ const MAX_SPARKLES_PER_SPAWN = 4;
 const MAX_ACTIVE_SPARKLES = 5;
 
 const WATER_COOLDOWN = 60 * 60 * 1000;
-const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
 /* =========================================================
-   DAILY RIDDLE
+   BIRTHDAY EVENT
 ========================================================= */
 
-const DAILY_RIDDLE_START_REWARD = 100;
-const DAILY_RIDDLE_REWARD_INCREASE = 5;
-
 /*
-  Riddles are automatically selected by the day.
-  The pool can be expanded later without changing
-  the command itself.
+  ONE-TIME STONED BIRTHDAY EVENT
+
+  Tomorrow from the current date:
+  September 10, 2026
+
+  4:00 PM Eastern -> 7:00 PM Eastern
+
+  The Worker cron runs every minute and checks
+  Eastern time before starting/continuing the event.
 */
 
-const DAILY_RIDDLES = [
+const BIRTHDAY_EVENT_DATE = "2026-09-10";
+const BIRTHDAY_START_HOUR = 16;
+const BIRTHDAY_END_HOUR = 19;
 
-  {
-    question:
-      "🧩 I have branches, but no leaves. I have a trunk, but no bark. What am I?",
-    answers: [
-      "bank",
-      "a bank",
-      "banking"
-    ]
-  },
+const BIRTHDAY_PIN = "LOVE";
 
-  {
-    question:
-      "🧩 What has hands but cannot clap?",
-    answers: [
-      "clock",
-      "a clock"
-    ]
-  },
+const STONED_TREE_IMAGE = "IMG_7283.png";
+const STONED_BALLOON_IMAGE = "IMG_7277.png";
+const STONED_BACKGROUND = "IMG_7275.jpeg";
 
-  {
-    question:
-      "🧩 What gets wetter the more it dries?",
-    answers: [
-      "towel",
-      "a towel"
-    ]
-  },
+const STONED_GIFT_SPARKLES = 300;
 
-  {
-    question:
-      "🧩 What has many keys but cannot open a single lock?",
-    answers: [
-      "piano",
-      "a piano"
-    ]
-  },
+/*
+  Gift hunt timing.
 
-  {
-    question:
-      "🧩 What can travel around the world while staying in one corner?",
-    answers: [
-      "stamp",
-      "a stamp"
-    ]
-  },
+  A gift is released roughly every 8–12 minutes,
+  with some random variation so people cannot
+  predict exactly when the next one appears.
 
-  {
-    question:
-      "🧩 What has one eye but cannot see?",
-    answers: [
-      "needle",
-      "a needle"
-    ]
-  },
+  3 hours = plenty of gifts without flooding chat.
+*/
 
-  {
-    question:
-      "🧩 What has a neck but no head?",
-    answers: [
-      "bottle",
-      "a bottle"
-    ]
-  },
+const GIFT_HUNT_MIN_INTERVAL = 8 * 60 * 1000;
+const GIFT_HUNT_MAX_INTERVAL = 12 * 60 * 1000;
 
-  {
-    question:
-      "🧩 What belongs to you but other people use it more than you do?",
-    answers: [
-      "name",
-      "your name",
-      "my name"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What has words but never speaks?",
-    answers: [
-      "book",
-      "a book"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What has teeth but cannot bite?",
-    answers: [
-      "comb",
-      "a comb"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What goes up but never comes down?",
-    answers: [
-      "age",
-      "your age"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What has a face and two hands but no arms or legs?",
-    answers: [
-      "clock",
-      "a clock"
-    ]
-  },
-
-  {
-    question:
-      "🧩 I’m tall when I’m young and short when I’m old. What am I?",
-    answers: [
-      "candle",
-      "a candle"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What has cities, roads, and rivers but no people, cars, or water?",
-    answers: [
-      "map",
-      "a map"
-    ]
-  },
-
-  {
-    question:
-      "🧩 What can you catch but never throw?",
-    answers: [
-      "cold",
-      "a cold"
-    ]
-  }
-
-];
+const GIFT_HUNT_DURATION = 3 * 60 * 60 * 1000;
 
 /* =========================================================
    BACKGROUNDS
@@ -208,12 +96,9 @@ const R2_BASE =
 ========================================================= */
 
 /*
-  Tree is intentionally low and centered.
+  Tree is centered and moved far down.
 
-  The tree itself uses a smaller percentage
-  width so the entire image remains visible.
-
-  Higher number = farther DOWN.
+  The tree remains fully inside the 1024x1024 image.
 */
 
 const TREE_TOP_POSITION = 78;
@@ -248,7 +133,6 @@ const LEVEL_REWARDS = {
 ========================================================= */
 
 const WEREWIVES_EVENTS = [
-
   {
     type: "random",
     amount: 100,
@@ -257,7 +141,6 @@ const WEREWIVES_EVENTS = [
       "The cheese has selected its champion.\n" +
       "*The cheese will not explain itself.*"
   },
-
   {
     type: "everyone",
     amount: 15,
@@ -266,7 +149,6 @@ const WEREWIVES_EVENTS = [
       "The cheese has escaped!\n" +
       "Nobody actually helped."
   },
-
   {
     type: "random",
     amount: -25,
@@ -274,7 +156,6 @@ const WEREWIVES_EVENTS = [
       "🧀 **THE CHEESE TAX IS DUE.**\n\n" +
       "The cheese demands tribute."
   },
-
   {
     type: "everyone",
     amount: 5,
@@ -282,7 +163,6 @@ const WEREWIVES_EVENTS = [
       "🔮🧀 **THE CHEESE HAS SPOKEN.**\n\n" +
       "Nobody understands the prophecy."
   },
-
   {
     type: "random",
     amount: -15,
@@ -291,7 +171,6 @@ const WEREWIVES_EVENTS = [
       "Someone looked behind the couch.\n" +
       "They found the cheese."
   },
-
   {
     type: "everyone",
     amount: -10,
@@ -300,7 +179,6 @@ const WEREWIVES_EVENTS = [
       "Nobody knows what happened.\n" +
       "The cheese refuses to elaborate."
   },
-
   {
     type: "random",
     amount: 75,
@@ -308,7 +186,6 @@ const WEREWIVES_EVENTS = [
       "🦝 **THE RACCOON COUNCIL HAS CHOSEN.**\n\n" +
       "One Werewife has been blessed by the raccoons."
   },
-
   {
     type: "random",
     amount: -30,
@@ -317,7 +194,6 @@ const WEREWIVES_EVENTS = [
       "A raccoon has stolen someone's sparkles.\n" +
       "Nobody saw anything."
   },
-
   {
     type: "everyone",
     amount: 10,
@@ -326,7 +202,6 @@ const WEREWIVES_EVENTS = [
       "The raccoons are celebrating.\n" +
       "You have been invited."
   },
-
   {
     type: "everyone",
     amount: -10,
@@ -334,7 +209,6 @@ const WEREWIVES_EVENTS = [
       "🦝 **THE RACCOONS HAVE DISCOVERED THE SPARKLE VAULT.**\n\n" +
       "This is not good."
   },
-
   {
     type: "random",
     amount: 50,
@@ -342,7 +216,6 @@ const WEREWIVES_EVENTS = [
       "🦝 **MYSTERIOUS RACCOON DONATION.**\n\n" +
       "A raccoon dropped a suspicious bag of sparkles."
   },
-
   {
     type: "everyone",
     amount: 20,
@@ -350,7 +223,6 @@ const WEREWIVES_EVENTS = [
       "🐺 **WEREWOLF PACK MEETING!**\n\n" +
       "The meeting accomplished absolutely nothing."
   },
-
   {
     type: "random",
     amount: 80,
@@ -358,7 +230,6 @@ const WEREWIVES_EVENTS = [
       "🐺 **THE ALPHA HAS CHOSEN A FAVORITE.**\n\n" +
       "One Werewife has received the pack's blessing."
   },
-
   {
     type: "random",
     amount: -40,
@@ -366,7 +237,6 @@ const WEREWIVES_EVENTS = [
       "🐺 **WEREWOLF TAX!**\n\n" +
       "The pack requires payment."
   },
-
   {
     type: "everyone",
     amount: -15,
@@ -374,7 +244,6 @@ const WEREWIVES_EVENTS = [
       "🌕 **FULL MOON CHAOS!**\n\n" +
       "Nobody is behaving normally tonight."
   },
-
   {
     type: "random",
     amount: 60,
@@ -382,7 +251,6 @@ const WEREWIVES_EVENTS = [
       "🐺 **LONE WOLF LUCK!**\n\n" +
       "One lucky Werewife has been spotted by the pack."
   },
-
   {
     type: "random",
     amount: 50,
@@ -390,7 +258,6 @@ const WEREWIVES_EVENTS = [
       "💅 **WIFE PRIVILEGE ACTIVATED.**\n\n" +
       "Someone has been chosen."
   },
-
   {
     type: "everyone",
     amount: 10,
@@ -398,7 +265,6 @@ const WEREWIVES_EVENTS = [
       "💅 **WEREWIVES CHAOS HOUR!**\n\n" +
       "The server has officially lost control."
   },
-
   {
     type: "random",
     amount: -20,
@@ -407,7 +273,6 @@ const WEREWIVES_EVENTS = [
       "Nobody knows.\n" +
       "Someone is paying for it."
   },
-
   {
     type: "everyone",
     amount: 15,
@@ -415,7 +280,6 @@ const WEREWIVES_EVENTS = [
       "✨ **THE TREE HAS BEEN BLESSED.**\n\n" +
       "The Werewives have decided everyone deserves sparkles."
   },
-
   {
     type: "everyone",
     amount: -5,
@@ -424,7 +288,6 @@ const WEREWIVES_EVENTS = [
       "Something happened.\n" +
       "Nobody is talking about it."
   },
-
   {
     type: "random",
     amount: 100,
@@ -432,7 +295,6 @@ const WEREWIVES_EVENTS = [
       "👑 **WEREWIFE ROYALTY!**\n\n" +
       "One random member has been crowned."
   },
-
   {
     type: "everyone",
     amount: 13,
@@ -440,7 +302,6 @@ const WEREWIVES_EVENTS = [
       "🎃 **JACK-O'-CHAOS!**\n\n" +
       "The pumpkins have escaped."
   },
-
   {
     type: "everyone",
     amount: -13,
@@ -448,7 +309,6 @@ const WEREWIVES_EVENTS = [
       "🎃 **PUMPKIN HEIST!**\n\n" +
       "The pumpkins have stolen the sparkles."
   },
-
   {
     type: "random",
     amount: 75,
@@ -456,7 +316,6 @@ const WEREWIVES_EVENTS = [
       "🧙 **WITCH'S BLESSING!**\n\n" +
       "A mysterious witch has chosen a favorite."
   },
-
   {
     type: "everyone",
     amount: 20,
@@ -464,7 +323,6 @@ const WEREWIVES_EVENTS = [
       "👻 **GHOSTLY DONATION!**\n\n" +
       "A ghost has decided to be unusually generous."
   },
-
   {
     type: "random",
     amount: -15,
@@ -473,7 +331,6 @@ const WEREWIVES_EVENTS = [
       "There is a spider.\n" +
       "Nobody is handling this well."
   }
-
 ];
 
 /* =========================================================
@@ -481,31 +338,142 @@ const WEREWIVES_EVENTS = [
 ========================================================= */
 
 const SPARKLE_TYPES = [
-
   {
     name: "Pink Sparkle",
     emoji: "💖",
     value: 10
   },
-
   {
     name: "Rainbow Sparkle",
     emoji: "🌈",
     value: 20
   },
-
   {
     name: "Moon Sparkle",
     emoji: "🌙",
     value: 30
   },
-
   {
     name: "Rare Star",
     emoji: "🌟",
     value: 50
   }
+];
 
+/* =========================================================
+   DAILY RIDDLES
+========================================================= */
+
+const DAILY_RIDDLES = [
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I have keys but open no locks.\n" +
+      "I have space but no room.\n" +
+      "You can enter, but you cannot go inside.\n\n" +
+      "What am I?",
+    answers: ["keyboard"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "The more you take away from me,\n" +
+      "the bigger I become.\n\n" +
+      "What am I?",
+    answers: ["hole"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I have hands but cannot clap.\n\n" +
+      "What am I?",
+    answers: ["clock"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I get wetter the more I dry.\n\n" +
+      "What am I?",
+    answers: ["towel"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I have one eye but cannot see.\n\n" +
+      "What am I?",
+    answers: ["needle"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I can travel around the world while staying in one corner.\n\n" +
+      "What am I?",
+    answers: ["stamp"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "I have a neck but no head.\n\n" +
+      "What am I?",
+    answers: ["bottle"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "What has many teeth but cannot bite?",
+    answers: ["comb"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "What has words but never speaks?",
+    answers: ["book"]
+  },
+  {
+    riddle:
+      "🧩 **DAILY RIDDLE**\n\n" +
+      "What goes up but never comes down?",
+    answers: ["age"]
+  }
+];
+
+/* =========================================================
+   BIRTHDAY GIFT HUNT PRIZES
+========================================================= */
+
+const GIFT_HUNT_PRIZES = [
+  25,
+  25,
+  50,
+  50,
+  75,
+  75,
+  100,
+  100,
+  125,
+  150,
+  150,
+  200,
+  250,
+  300
+];
+
+const GIFT_HUNT_PRANKS = [
+  "😂 **PRANK GIFT!**\n\nYou opened it...\n\n🎁 It was just an aggressively folded napkin.\n\n✨ **0 sparkles.**",
+
+  "🧦 **PRANK GIFT!**\n\n🎁 Congratulations! You won...\n\n**ONE MYSTERIOUS SOCK.**\n\nIt has no mate.",
+
+  "🧀 **PRANK GIFT!**\n\nThe cheese was inside.\n\nThe cheese has escaped.\n\nYou received **0 ✨**.",
+
+  "🦝 **PRANK GIFT!**\n\nA raccoon immediately stole the present.\n\nYou got nothing.\n\nThe raccoon seems pleased.",
+
+  "🎁 **PRANK GIFT!**\n\nYou found an empty box.\n\nThere is a note inside:\n\n*\"lol.\"*",
+
+  "💀 **PRANK GIFT!**\n\nYou found a coupon for **one free high five**.\n\nUnfortunately, the coupon expired 4 seconds ago.",
+
+  "🎃 **PRANK GIFT!**\n\nA pumpkin stared at you.\n\nYou stared back.\n\nNobody won.",
+
+  "🐺 **PRANK GIFT!**\n\nThe werewolf pack investigated the present.\n\nThey found absolutely nothing."
 ];
 
 /* =========================================================
@@ -513,36 +481,19 @@ const SPARKLE_TYPES = [
 ========================================================= */
 
 function defaultPlayer() {
-
   return {
+    userId: "",
+    username: "",
+    displayName: "",
 
     treeName: "Cherry Blossom",
 
     level: 1,
-
     exp: 0,
 
     sparkles: 0,
 
     lastWater: 0,
-
-    lastDaily: 0,
-
-    /* Daily riddle tracking */
-
-    dailyRiddleDate: "",
-
-    dailyRiddleReward: DAILY_RIDDLE_START_REWARD,
-
-    dailyRiddleCompleted: false,
-
-    dailyRiddleStreak: 0,
-
-    dailyRiddleIndex: 0,
-
-    /* Leaderboard identity */
-
-    username: "Unknown Werewife",
 
     sparklesOnTree: [],
 
@@ -555,17 +506,18 @@ function defaultPlayer() {
     ],
 
     equipped: {
-
       decoration: null,
-
       theme: "cherry",
-
       tree: "cherry"
+    },
 
-    }
+    dailyRiddleDay: "",
+    dailyRiddleSolved: false,
+    dailyRiddleWins: 0,
 
+    birthdayUnlocked: false,
+    birthdayGiftClaimed: false
   };
-
 }
 
 /* =========================================================
@@ -573,14 +525,9 @@ function defaultPlayer() {
 ========================================================= */
 
 function repairPlayer(player) {
+  const fresh = defaultPlayer();
 
-  const fresh =
-    defaultPlayer();
-
-  if (
-    !player ||
-    typeof player !== "object"
-  ) {
+  if (!player || typeof player !== "object") {
     return fresh;
   }
 
@@ -618,63 +565,11 @@ function repairPlayer(player) {
   repaired.lastWater =
     Number(repaired.lastWater) || 0;
 
-  repaired.lastDaily =
-    Number(repaired.lastDaily) || 0;
-
-  repaired.dailyRiddleReward =
-    Math.max(
-      DAILY_RIDDLE_START_REWARD,
-      Number(
-        repaired.dailyRiddleReward
-      ) ||
-        DAILY_RIDDLE_START_REWARD
-    );
-
-  repaired.dailyRiddleStreak =
-    Math.max(
-      0,
-      Number(
-        repaired.dailyRiddleStreak
-      ) || 0
-    );
-
-  repaired.dailyRiddleIndex =
-    Math.max(
-      0,
-      Number(
-        repaired.dailyRiddleIndex
-      ) || 0
-    );
-
-  repaired.dailyRiddleDate =
-    String(
-      repaired.dailyRiddleDate || ""
-    );
-
-  repaired.dailyRiddleCompleted =
-    Boolean(
-      repaired.dailyRiddleCompleted
-    );
-
-  repaired.username =
-    String(
-      repaired.username ||
-      "Unknown Werewife"
-    );
-
-  if (
-    !Array.isArray(
-      repaired.sparklesOnTree
-    )
-  ) {
+  if (!Array.isArray(repaired.sparklesOnTree)) {
     repaired.sparklesOnTree = [];
   }
 
-  if (
-    !Array.isArray(
-      repaired.inventory
-    )
-  ) {
+  if (!Array.isArray(repaired.inventory)) {
     repaired.inventory = [];
   }
 
@@ -688,11 +583,7 @@ function repairPlayer(player) {
     );
   }
 
-  if (
-    !Array.isArray(
-      repaired.claimedLevelRewards
-    )
-  ) {
+  if (!Array.isArray(repaired.claimedLevelRewards)) {
     repaired.claimedLevelRewards = [];
   }
 
@@ -710,59 +601,77 @@ function repairPlayer(player) {
   if (
     repaired.equipped.theme !== "cherry" &&
     repaired.equipped.theme !== "halloween" &&
-    repaired.equipped.theme !== "candyland"
+    repaired.equipped.theme !== "candyland" &&
+    repaired.equipped.theme !== "stoned_birthday"
   ) {
     repaired.equipped.theme = "cherry";
   }
 
   if (
     repaired.equipped.tree !== "cherry" &&
-    repaired.equipped.tree !== "cotton_candy"
+    repaired.equipped.tree !== "cotton_candy" &&
+    repaired.equipped.tree !== "stoned_birthday"
   ) {
     repaired.equipped.tree = "cherry";
   }
 
   if (
     repaired.equipped.decoration !== null &&
-    repaired.equipped.decoration !==
-      "pumpkin_cat"
+    repaired.equipped.decoration !== "pumpkin_cat" &&
+    repaired.equipped.decoration !== "stoned_balloon"
   ) {
     repaired.equipped.decoration = null;
   }
+
+  repaired.userId =
+    repaired.userId || "";
+
+  repaired.username =
+    repaired.username || "";
+
+  repaired.displayName =
+    repaired.displayName || "";
+
+  repaired.dailyRiddleDay =
+    repaired.dailyRiddleDay || "";
+
+  repaired.dailyRiddleSolved =
+    Boolean(repaired.dailyRiddleSolved);
+
+  repaired.dailyRiddleWins =
+    Math.max(
+      0,
+      Number(repaired.dailyRiddleWins) || 0
+    );
+
+  repaired.birthdayUnlocked =
+    Boolean(repaired.birthdayUnlocked);
+
+  repaired.birthdayGiftClaimed =
+    Boolean(repaired.birthdayGiftClaimed);
 
   return repaired;
 }
 
 /* =========================================================
-   DATABASE HELPERS
+   DATABASE
 ========================================================= */
 
-async function getPlayer(
-  env,
-  userId
-) {
-
+async function getPlayer(env, userId) {
   const raw =
-    await env.TREE_DATA.get(
-      userId
-    );
+    await env.TREE_DATA.get(userId);
 
   if (!raw) {
     return defaultPlayer();
   }
 
   try {
-
     return repairPlayer(
       JSON.parse(raw)
     );
-
   } catch {
-
     return defaultPlayer();
-
   }
-
 }
 
 async function savePlayer(
@@ -770,41 +679,46 @@ async function savePlayer(
   userId,
   player
 ) {
-
   await env.TREE_DATA.put(
     userId,
     JSON.stringify(
       repairPlayer(player)
     )
   );
-
 }
 
 /* =========================================================
-   SAVE DISCORD USERNAME
+   IDENTITY
 ========================================================= */
 
-function getInteractionUsername(
+function updatePlayerIdentity(
+  player,
   interaction
 ) {
-
   const user =
     interaction.member?.user ||
     interaction.user;
 
   if (!user) {
-    return "Unknown Werewife";
+    return;
   }
 
-  if (user.global_name) {
-    return user.global_name;
-  }
+  player.userId =
+    user.id ||
+    player.userId ||
+    "";
 
-  if (user.username) {
-    return user.username;
-  }
+  player.username =
+    user.username ||
+    player.username ||
+    "";
 
-  return "Unknown Werewife";
+  player.displayName =
+    interaction.member?.nick ||
+    user.global_name ||
+    user.username ||
+    player.displayName ||
+    "Werewife";
 }
 
 /* =========================================================
@@ -815,30 +729,10 @@ function xpNeeded(level) {
   return level * 50;
 }
 
-function getTreeHeight(player) {
-
-  /*
-    Level 1 = 1 ft
-    Every additional level = +1 ft
-
-    So:
-    Level 1 = 1 ft
-    Level 2 = 2 ft
-    Level 10 = 10 ft
-    etc.
-  */
-
-  return Math.max(
-    1,
-    Number(player.level) || 1
-  );
-}
-
 function addExp(
   player,
   amount
 ) {
-
   const rewardMessages = [];
 
   player.exp += amount;
@@ -847,29 +741,22 @@ function addExp(
     player.exp >=
     xpNeeded(player.level)
   ) {
-
     player.exp -=
       xpNeeded(player.level);
 
     player.level++;
 
     if (
-      LEVEL_REWARDS[
-        player.level
-      ]
+      LEVEL_REWARDS[player.level]
     ) {
-
       const reward =
-        LEVEL_REWARDS[
-          player.level
-        ];
+        LEVEL_REWARDS[player.level];
 
       if (
         !player.claimedLevelRewards.includes(
           player.level
         )
       ) {
-
         player.sparkles +=
           reward;
 
@@ -880,11 +767,8 @@ function addExp(
         rewardMessages.push(
           `🎉 Level ${player.level}! You received 💖 ${reward} sparkles!`
         );
-
       }
-
     }
-
   }
 
   return rewardMessages;
@@ -898,119 +782,21 @@ function randomInt(
   min,
   max
 ) {
-
-  return (
-    Math.floor(
-      Math.random() *
-        (max - min + 1)
-    ) + min
-  );
-
+  return Math.floor(
+    Math.random() *
+      (max - min + 1)
+  ) + min;
 }
 
-function randomItem(array) {
-
+function randomItem(
+  array
+) {
   return array[
     Math.floor(
       Math.random() *
         array.length
     )
   ];
-
-}
-
-/* =========================================================
-   DATE HELPERS
-========================================================= */
-
-function getDayKey() {
-
-  return new Date()
-    .toISOString()
-    .slice(0, 10);
-
-}
-
-/* =========================================================
-   DAILY RIDDLE SELECTION
-========================================================= */
-
-function getDailyRiddle(
-  date
-) {
-
-  let hash = 0;
-
-  for (
-    let i = 0;
-    i < date.length;
-    i++
-  ) {
-
-    hash =
-      (
-        hash * 31 +
-        date.charCodeAt(i)
-      ) >>> 0;
-
-  }
-
-  const index =
-    hash %
-    DAILY_RIDDLES.length;
-
-  return {
-    ...DAILY_RIDDLES[index],
-    index
-  };
-
-}
-
-/* =========================================================
-   NORMALIZE RIDDLE ANSWER
-========================================================= */
-
-function normalizeAnswer(
-  answer
-) {
-
-  return String(
-    answer || ""
-  )
-    .toLowerCase()
-    .trim()
-    .replace(
-      /[^a-z0-9\s]/g,
-      ""
-    )
-    .replace(
-      /\s+/g,
-      " "
-    );
-
-}
-
-/* =========================================================
-   RIDDLE ANSWER CHECK
-========================================================= */
-
-function isCorrectRiddleAnswer(
-  answer,
-  acceptedAnswers
-) {
-
-  const normalized =
-    normalizeAnswer(
-      answer
-    );
-
-  return acceptedAnswers.some(
-    accepted =>
-      normalizeAnswer(
-        accepted
-      ) === normalized
-  );
-
 }
 
 /* =========================================================
@@ -1020,7 +806,6 @@ function isCorrectRiddleAnswer(
 function cleanExpiredSparkles(
   player
 ) {
-
   const now =
     Date.now();
 
@@ -1031,56 +816,36 @@ function cleanExpiredSparkles(
           sparkle.createdAt <
         SPARKLE_LIFETIME
     );
-
 }
 
 function createSparkle() {
-
   const type =
     randomItem(
       SPARKLE_TYPES
     );
 
   return {
-
     id:
       Date.now().toString(36) +
       Math.random()
         .toString(36)
         .slice(2),
 
-    x:
-      randomInt(
-        12,
-        88
-      ),
+    x: randomInt(30, 70),
+    y: randomInt(55, 84),
 
-    y:
-      randomInt(
-        15,
-        72
-      ),
-
-    emoji:
-      type.emoji,
-
-    name:
-      type.name,
-
-    value:
-      type.value,
+    emoji: type.emoji,
+    name: type.name,
+    value: type.value,
 
     createdAt:
       Date.now()
-
   };
-
 }
 
 function maybeSpawnSparkles(
   player
 ) {
-
   cleanExpiredSparkles(
     player
   );
@@ -1103,7 +868,6 @@ function maybeSpawnSparkles(
     i < amount;
     i++
   ) {
-
     if (
       player.sparklesOnTree.length >=
       MAX_ACTIVE_SPARKLES
@@ -1114,21 +878,19 @@ function maybeSpawnSparkles(
     player.sparklesOnTree.push(
       createSparkle()
     );
-
   }
-
 }
 
 /* =========================================================
-   CHAOS EVENT
+   CHAOS
 ========================================================= */
 
 function maybeChaosEvent(
   player
 ) {
-
   if (
-    Math.random() > 0.20
+    Math.random() >
+    0.20
   ) {
     return null;
   }
@@ -1139,7 +901,8 @@ function maybeChaosEvent(
     );
 
   const amount =
-    Number(event.amount) || 0;
+    Number(event.amount) ||
+    0;
 
   const before =
     player.sparkles;
@@ -1147,41 +910,38 @@ function maybeChaosEvent(
   player.sparkles =
     Math.max(
       0,
-      player.sparkles + amount
+      player.sparkles +
+        amount
     );
 
   const actualChange =
-    player.sparkles - before;
+    player.sparkles -
+    before;
 
   if (
     actualChange > 0
   ) {
-
     return (
       `${event.message}\n\n` +
       `💖 **+${actualChange} sparkles!**\n` +
       `✨ You now have **${player.sparkles} ✨**`
     );
-
   }
 
   if (
     actualChange < 0
   ) {
-
     return (
       `${event.message}\n\n` +
       `💔 **${Math.abs(actualChange)} sparkles lost!**\n` +
       `✨ You now have **${player.sparkles} ✨**`
     );
-
   }
 
   return (
     `${event.message}\n\n` +
     `✨ No sparkles were lost because you had none to take.`
   );
-
 }
 
 /* =========================================================
@@ -1191,7 +951,6 @@ function maybeChaosEvent(
 function getBackground(
   player
 ) {
-
   const theme =
     player.equipped?.theme ||
     "cherry";
@@ -1199,30 +958,35 @@ function getBackground(
   if (
     theme === "halloween"
   ) {
-
     return (
       R2_BASE +
       HALLOWEEN_BACKGROUND
     );
-
   }
 
   if (
     theme === "candyland"
   ) {
-
     return (
       R2_BASE +
       CANDYLAND_BACKGROUND
     );
+  }
 
+  if (
+    theme ===
+    "stoned_birthday"
+  ) {
+    return (
+      R2_BASE +
+      STONED_BACKGROUND
+    );
   }
 
   return (
     R2_BASE +
     NORMAL_BACKGROUND
   );
-
 }
 
 /* =========================================================
@@ -1232,51 +996,67 @@ function getBackground(
 function getTreeImage(
   player
 ) {
-
   const tree =
     player.equipped?.tree ||
     "cherry";
 
   if (
-    tree === "cotton_candy"
+    tree ===
+    "cotton_candy"
   ) {
-
     return (
       R2_BASE +
       COTTON_CANDY_TREE
     );
+  }
 
+  if (
+    tree ===
+    "stoned_birthday"
+  ) {
+    return (
+      R2_BASE +
+      STONED_TREE_IMAGE
+    );
   }
 
   return (
     R2_BASE +
     TREE_IMAGE
   );
-
 }
 
 /* =========================================================
-   DECORATION IMAGE
+   DECORATION
 ========================================================= */
 
 function getDecorationImage(
   player
 ) {
+  const decoration =
+    player.equipped?.decoration;
 
   if (
-    player.equipped?.decoration ===
+    decoration ===
     "pumpkin_cat"
   ) {
-
     return (
       R2_BASE +
       PUMPKIN_CAT_IMAGE
     );
+  }
 
+  if (
+    decoration ===
+    "stoned_balloon"
+  ) {
+    return (
+      R2_BASE +
+      STONED_BALLOON_IMAGE
+    );
   }
 
   return null;
-
 }
 
 /* =========================================================
@@ -1287,7 +1067,6 @@ async function renderTree(
   env,
   player
 ) {
-
   cleanExpiredSparkles(
     player
   );
@@ -1298,20 +1077,33 @@ async function renderTree(
     );
 
   try {
-
     const page =
       await browser.newPage();
 
     const backgroundUrl =
-      getBackground(player);
+      getBackground(
+        player
+      );
 
     const treeUrl =
-      getTreeImage(player);
+      getTreeImage(
+        player
+      );
 
     const decorationUrl =
       getDecorationImage(
         player
       );
+
+    const decorationHtml =
+      decorationUrl
+        ? `
+          <img
+            class="decoration"
+            src="${decorationUrl}"
+          />
+        `
+        : "";
 
     const sparkleHtml =
       player.sparklesOnTree
@@ -1330,27 +1122,13 @@ async function renderTree(
         )
         .join("");
 
-    const decorationHtml =
-      decorationUrl
-        ? `
-          <img
-            class="decoration"
-            src="${decorationUrl}"
-          />
-        `
-        : "";
-
     const html = `
       <!DOCTYPE html>
-
       <html>
-
       <head>
-
         <meta charset="UTF-8">
 
         <style>
-
           * {
             box-sizing: border-box;
           }
@@ -1359,10 +1137,8 @@ async function renderTree(
           body {
             margin: 0;
             padding: 0;
-
             width: 1024px;
             height: 1024px;
-
             overflow: hidden;
           }
 
@@ -1376,7 +1152,6 @@ async function renderTree(
               url("${backgroundUrl}");
 
             background-size: cover;
-
             background-position: center;
           }
 
@@ -1384,30 +1159,24 @@ async function renderTree(
             TREE
 
             Centered horizontally.
-
-            Moved low in the scene.
-
-            Width is deliberately moderate so
-            the complete tree remains visible.
+            Farther down the scene.
+            Large enough to be the main focus.
+            Still fully inside the image.
           */
 
           .tree {
             position: absolute;
 
             left: 50%;
-
             top: ${TREE_TOP_POSITION}%;
 
             transform:
               translate(-50%, -50%);
 
-            width: 31%;
-
-            height: 38%;
+            width: 36%;
+            height: 36%;
 
             object-fit: contain;
-
-            object-position: center;
 
             z-index: 5;
           }
@@ -1415,23 +1184,29 @@ async function renderTree(
           /*
             DECORATION
 
-            Far enough left to leave a visible gap,
-            but still comfortably inside the image.
+            Much larger than before.
+
+            It is intentionally placed
+            well to the LEFT of the tree,
+            but not against the edge.
+
+            It is about half the tree width,
+            making it noticeably smaller
+            than the tree while still
+            looking like a major decoration.
           */
 
           .decoration {
             position: absolute;
 
-            left: 25%;
-
-            top: 77%;
+            left: 23%;
+            top: 80%;
 
             transform:
               translate(-50%, -50%);
 
-            width: 15%;
-
-            height: 15%;
+            width: 28%;
+            height: 28%;
 
             object-fit: contain;
 
@@ -1457,12 +1232,10 @@ async function renderTree(
                 0 0 10px
                 rgba(255,255,255,1)
               )
-
               drop-shadow(
                 0 0 22px
                 rgba(255,180,255,1)
               )
-
               drop-shadow(
                 0 0 35px
                 rgba(255,255,255,0.9)
@@ -1470,7 +1243,6 @@ async function renderTree(
           }
 
           @keyframes sparkleFloat {
-
             from {
               transform:
                 translate(-50%, -50%)
@@ -1482,11 +1254,9 @@ async function renderTree(
                 translate(-50%, -50%)
                 translateY(-12px);
             }
-
           }
 
           @keyframes sparklePulse {
-
             0%,
             100% {
               opacity: 0.9;
@@ -1495,39 +1265,26 @@ async function renderTree(
             50% {
               opacity: 1;
             }
-
           }
-
         </style>
-
       </head>
 
       <body>
-
         <div class="scene">
-
-          ${decorationHtml}
 
           <img
             class="tree"
             src="${treeUrl}"
           />
 
+          ${decorationHtml}
+
           ${sparkleHtml}
 
         </div>
-
       </body>
-
       </html>
     `;
-
-    /*
-      IMPORTANT:
-      Do NOT use networkidle0.
-      It can wait indefinitely on external
-      image/network requests.
-    */
 
     await page.setContent(
       html,
@@ -1543,7 +1300,6 @@ async function renderTree(
     });
 
     try {
-
       await page.waitForFunction(
         () =>
           Array.from(
@@ -1556,13 +1312,10 @@ async function renderTree(
           timeout: 5000
         }
       );
-
     } catch {
-
       console.log(
         "Image loading timed out; continuing render."
       );
-
     }
 
     return await page.screenshot({
@@ -1570,11 +1323,21 @@ async function renderTree(
     });
 
   } finally {
-
     await browser.close();
-
   }
+}
 
+/* =========================================================
+   TREE HEIGHT
+========================================================= */
+
+function getTreeHeight(
+  player
+) {
+  return Math.max(
+    1,
+    Number(player.level) || 1
+  );
 }
 
 /* =========================================================
@@ -1584,7 +1347,6 @@ async function renderTree(
 function buildTreeText(
   player
 ) {
-
   cleanExpiredSparkles(
     player
   );
@@ -1600,21 +1362,13 @@ function buildTreeText(
     );
 
   return (
-
     `🌸 **${player.treeName}**\n\n` +
-
     `🌱 Level: **${player.level}**\n` +
-
-    `📏 Height: **${height} ft**\n` +
-
+    `🌳 Height: **${height} ft**\n` +
     `✨ EXP: **${player.exp}/${needed}**\n` +
-
     `💖 Sparkles: **${player.sparkles}**\n\n` +
-
     `✨ Sparkles on tree: **${player.sparklesOnTree.length}**`
-
   );
-
 }
 
 /* =========================================================
@@ -1622,84 +1376,44 @@ function buildTreeText(
 ========================================================= */
 
 function treeButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 1,
         label: "💧 Water",
         custom_id: "water"
       },
-
       {
         type: 2,
         style: 1,
         label: "✨ Catch Sparkle",
         custom_id: "catch"
       },
-
       {
         type: 2,
         style: 2,
-        label: "🎁 Daily",
-        custom_id: "daily"
+        label: "🧩 Daily Riddle",
+        custom_id:
+          "daily_riddle"
       },
-
-      {
-        type: 2,
-        style: 2,
-        label: "🧩 Riddle",
-        custom_id: "daily_riddle"
-      },
-
       {
         type: 2,
         style: 2,
         label: "🛍️ Shop",
         custom_id: "shop"
-      }
-
-    ]
-
-  };
-
-}
-
-/* =========================================================
-   SECOND TREE BUTTON ROW
-========================================================= */
-
-function treeButtonsSecondRow() {
-
-  return {
-
-    type: 1,
-
-    components: [
-
+      },
       {
         type: 2,
         style: 2,
         label: "🎀 Customize",
-        custom_id: "customize"
-      },
-
-      {
-        type: 2,
-        style: 2,
-        label: "🏆 Leaderboard",
-        custom_id: "leaderboard"
+        custom_id:
+          "customize"
       }
-
     ]
-
   };
-
 }
 
 /* =========================================================
@@ -1710,11 +1424,9 @@ async function acknowledge(
   env,
   interaction
 ) {
-
   return fetch(
     `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
-
       method: "POST",
 
       headers: {
@@ -1725,14 +1437,12 @@ async function acknowledge(
       body: JSON.stringify({
         type: 5
       })
-
     }
   );
-
 }
 
 /* =========================================================
-   SEND TREE AFTER DEFER
+   SEND TREE
 ========================================================= */
 
 async function sendTree(
@@ -1740,7 +1450,6 @@ async function sendTree(
   interaction,
   player
 ) {
-
   const image =
     await renderTree(
       env,
@@ -1752,7 +1461,8 @@ async function sendTree(
       [image],
       "tree.png",
       {
-        type: "image/png"
+        type:
+          "image/png"
       }
     );
 
@@ -1762,24 +1472,22 @@ async function sendTree(
   form.append(
     "payload_json",
     JSON.stringify({
-
       content:
         buildTreeText(
           player
         ),
 
       components: [
-        treeButtons(),
-        treeButtonsSecondRow()
+        treeButtons()
       ],
 
       attachments: [
         {
           id: 0,
-          filename: "tree.png"
+          filename:
+            "tree.png"
         }
       ]
-
     })
   );
 
@@ -1791,14 +1499,10 @@ async function sendTree(
   return fetch(
     `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
     {
-
       method: "PATCH",
-
       body: form
-
     }
   );
-
 }
 
 /* =========================================================
@@ -1811,11 +1515,9 @@ async function sendText(
   content,
   components = []
 ) {
-
   return fetch(
     `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
-
       method: "POST",
 
       headers: {
@@ -1824,36 +1526,26 @@ async function sendText(
       },
 
       body: JSON.stringify({
-
         type: 4,
 
         data: {
-
           content,
-
           components
-
         }
-
       })
-
     }
   );
-
 }
 
 /* =========================================================
-   REGULAR SHOP BUTTONS
+   SHOP
 ========================================================= */
 
 function shopCategoryButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 2,
@@ -1861,7 +1553,6 @@ function shopCategoryButtons() {
         custom_id:
           "shop_backgrounds"
       },
-
       {
         type: 2,
         style: 2,
@@ -1869,7 +1560,6 @@ function shopCategoryButtons() {
         custom_id:
           "shop_trees"
       },
-
       {
         type: 2,
         style: 1,
@@ -1877,114 +1567,70 @@ function shopCategoryButtons() {
         custom_id:
           "limited_shop"
       },
-
       {
         type: 2,
         style: 4,
         label: "❌ Close",
-        custom_id: "tree"
+        custom_id:
+          "tree"
       }
-
     ]
-
   };
-
 }
-
-/* =========================================================
-   REGULAR BACKGROUND SHOP
-========================================================= */
 
 function backgroundShopButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 1,
-
         label:
           `🍭 Candy Land — ${CANDYLAND_PRICE} ✨`,
-
         custom_id:
           "buy_candyland"
-
       },
-
       {
         type: 2,
         style: 2,
-
         label: "⬅️ Back",
-
         custom_id:
           "shop"
-
       }
-
     ]
-
   };
-
 }
 
-/* =========================================================
-   TREE SHOP BUTTONS
-========================================================= */
-
 function treeShopButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 1,
-
         label:
           `🍭 Cotton Candy Tree — ${COTTON_CANDY_PRICE} ✨`,
-
         custom_id:
           "buy_cotton_candy"
-
       },
-
       {
         type: 2,
         style: 2,
-
         label: "⬅️ Back",
-
         custom_id:
           "shop"
-
       }
-
     ]
-
   };
-
 }
 
-/* =========================================================
-   LIMITED SHOP MAIN
-========================================================= */
-
 function limitedShopButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 1,
@@ -1992,7 +1638,6 @@ function limitedShopButtons() {
         custom_id:
           "limited_halloween"
       },
-
       {
         type: 2,
         style: 2,
@@ -2000,7 +1645,6 @@ function limitedShopButtons() {
         custom_id:
           "limited_special"
       },
-
       {
         type: 2,
         style: 2,
@@ -2008,7 +1652,6 @@ function limitedShopButtons() {
         custom_id:
           "limited_holidays"
       },
-
       {
         type: 2,
         style: 2,
@@ -2016,144 +1659,97 @@ function limitedShopButtons() {
         custom_id:
           "shop"
       }
-
     ]
-
   };
-
 }
 
-/* =========================================================
-   LIMITED HALLOWEEN
-========================================================= */
-
 function limitedHalloweenButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 4,
-
         label:
-          `🎃 Halloween Background — ${HALLOWEEN_PRICE} ✨`,
-
+          `🎃 Halloween — ${HALLOWEEN_PRICE} ✨`,
         custom_id:
           "buy_halloween"
-
       },
-
       {
         type: 2,
         style: 1,
-
         label:
           `🐱 Pumpkin Cat — ${PUMPKIN_CAT_PRICE} ✨`,
-
         custom_id:
           "buy_pumpkin_cat"
-
       },
-
       {
         type: 2,
         style: 2,
-
         label:
           "⬅️ Limited Shop",
-
         custom_id:
           "limited_shop"
-
       }
-
     ]
-
   };
-
 }
-
-/* =========================================================
-   LIMITED SPECIAL
-========================================================= */
 
 function limitedSpecialButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 2,
-        label: "⭐ Coming Soon",
+        label:
+          "⭐ Coming Soon",
         custom_id:
           "limited_coming_soon"
       },
-
       {
         type: 2,
         style: 2,
-        label: "⬅️ Limited Shop",
+        label:
+          "⬅️ Limited Shop",
         custom_id:
           "limited_shop"
       }
-
     ]
-
   };
-
 }
-
-/* =========================================================
-   LIMITED HOLIDAYS
-========================================================= */
 
 function limitedHolidayButtons() {
-
   return {
-
     type: 1,
 
     components: [
-
       {
         type: 2,
         style: 2,
-        label: "🎁 Coming Soon",
+        label:
+          "🎁 Coming Soon",
         custom_id:
           "limited_coming_soon"
       },
-
       {
         type: 2,
         style: 2,
-        label: "⬅️ Limited Shop",
+        label:
+          "⬅️ Limited Shop",
         custom_id:
           "limited_shop"
       }
-
     ]
-
   };
-
 }
-
-/* =========================================================
-   SHOP
-========================================================= */
 
 async function handleShop(
   env,
   interaction
 ) {
-
   return sendText(
     env,
     interaction,
@@ -2166,7 +1762,6 @@ async function handleShop(
       shopCategoryButtons()
     ]
   );
-
 }
 
 async function handleShopCategory(
@@ -2174,11 +1769,10 @@ async function handleShopCategory(
   interaction,
   category
 ) {
-
   if (
-    category === "backgrounds"
+    category ===
+    "backgrounds"
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2191,7 +1785,6 @@ async function handleShopCategory(
         backgroundShopButtons()
       ]
     );
-
   }
 
   return sendText(
@@ -2205,18 +1798,12 @@ async function handleShopCategory(
       treeShopButtons()
     ]
   );
-
 }
-
-/* =========================================================
-   LIMITED SHOP
-========================================================= */
 
 async function handleLimitedShop(
   env,
   interaction
 ) {
-
   return sendText(
     env,
     interaction,
@@ -2231,7 +1818,6 @@ async function handleLimitedShop(
       limitedShopButtons()
     ]
   );
-
 }
 
 async function handleLimitedCategory(
@@ -2239,11 +1825,10 @@ async function handleLimitedCategory(
   interaction,
   category
 ) {
-
   if (
-    category === "halloween"
+    category ===
+    "halloween"
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2258,13 +1843,12 @@ async function handleLimitedCategory(
         limitedHalloweenButtons()
       ]
     );
-
   }
 
   if (
-    category === "special"
+    category ===
+    "special"
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2277,7 +1861,6 @@ async function handleLimitedCategory(
         limitedSpecialButtons()
       ]
     );
-
   }
 
   return sendText(
@@ -2292,7 +1875,6 @@ async function handleLimitedCategory(
       limitedHolidayButtons()
     ]
   );
-
 }
 
 /* =========================================================
@@ -2304,33 +1886,33 @@ async function buyHalloween(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     player.inventory.includes(
       "halloween_background"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "🎃 You already own the Halloween background!"
     );
-
   }
 
   if (
     player.sparkles <
     HALLOWEEN_PRICE
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2338,7 +1920,6 @@ async function buyHalloween(
       `❌ You need **${HALLOWEEN_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
-
   }
 
   player.sparkles -=
@@ -2361,7 +1942,6 @@ async function buyHalloween(
     "🎃 **Halloween background purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
-
 }
 
 /* =========================================================
@@ -2373,33 +1953,33 @@ async function buyCandyland(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     player.inventory.includes(
       "candyland_background"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "🍭 You already own the Candy Land background!"
     );
-
   }
 
   if (
     player.sparkles <
     CANDYLAND_PRICE
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2407,7 +1987,6 @@ async function buyCandyland(
       `❌ You need **${CANDYLAND_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
-
   }
 
   player.sparkles -=
@@ -2430,7 +2009,6 @@ async function buyCandyland(
     "🍭 **Candy Land background purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
-
 }
 
 /* =========================================================
@@ -2442,33 +2020,33 @@ async function buyCottonCandy(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     player.inventory.includes(
       "cotton_candy_tree"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "🍭 You already own the Cotton Candy Tree!"
     );
-
   }
 
   if (
     player.sparkles <
     COTTON_CANDY_PRICE
   ) {
-
     return sendText(
       env,
       interaction,
@@ -2476,7 +2054,6 @@ async function buyCottonCandy(
       `❌ You need **${COTTON_CANDY_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
-
   }
 
   player.sparkles -=
@@ -2499,7 +2076,6 @@ async function buyCottonCandy(
     "🍭 **Cotton Candy Tree purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
-
 }
 
 /* =========================================================
@@ -2511,48 +2087,47 @@ async function buyPumpkinCat(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     player.inventory.includes(
-      "pumpkin_cat"
+      "pumpkin_cat_decoration"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
-      "🐱🎃 You already own the Pumpkin Cat!"
+      "🐱 You already own the Pumpkin Cat decoration!"
     );
-
   }
 
   if (
     player.sparkles <
     PUMPKIN_CAT_PRICE
   ) {
-
     return sendText(
       env,
       interaction,
 
-      `❌ You need **${PUMPKIN_CAT_PRICE} ✨** to buy Pumpkin Cat.\n` +
+      `❌ You need **${PUMPKIN_CAT_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
-
   }
 
   player.sparkles -=
     PUMPKIN_CAT_PRICE;
 
   player.inventory.push(
-    "pumpkin_cat"
+    "pumpkin_cat_decoration"
   );
 
   await savePlayer(
@@ -2566,9 +2141,8 @@ async function buyPumpkinCat(
     interaction,
 
     "🐱🎃 **Pumpkin Cat purchased!**\n\n" +
-    "Go to `/customize` → **Decorations** to equip it!"
+    "Use `/customize` → **Decorations** to equip it!"
   );
-
 }
 
 /* =========================================================
@@ -2580,33 +2154,34 @@ async function handleWater(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
-  player.username =
-    getInteractionUsername(
-      interaction
-    );
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
 
   const now =
     Date.now();
 
   if (
-    now - player.lastWater <
+    now -
+      player.lastWater <
     WATER_COOLDOWN
   ) {
-
     const remaining =
       WATER_COOLDOWN -
-      (now - player.lastWater);
+      (now -
+        player.lastWater);
 
     const minutes =
       Math.ceil(
-        remaining / 60000
+        remaining /
+          60000
       );
 
     return sendText(
@@ -2616,7 +2191,6 @@ async function handleWater(
       `💧 Your tree has already been watered!\n` +
       `Try again in about **${minutes} minutes**.`
     );
-
   }
 
   player.lastWater =
@@ -2645,36 +2219,29 @@ async function handleWater(
 
   let message =
     `💧 You watered **${player.treeName}**!\n` +
-    `✨ +${EXP_PER_WATER} EXP\n` +
-    `📏 Tree height: **${getTreeHeight(player)} ft**`;
+    `✨ +${EXP_PER_WATER} EXP`;
 
   if (
     player.sparklesOnTree.length
   ) {
-
     message +=
       `\n✨ Sparkles appeared around your tree!`;
-
   }
 
   if (
     rewardMessages.length
   ) {
-
     message +=
       "\n\n" +
       rewardMessages.join(
         "\n"
       );
-
   }
 
   if (chaos) {
-
     message +=
       "\n\n" +
       chaos;
-
   }
 
   return sendText(
@@ -2682,7 +2249,6 @@ async function handleWater(
     interaction,
     message
   );
-
 }
 
 /* =========================================================
@@ -2694,12 +2260,16 @@ async function handleCatch(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
 
   cleanExpiredSparkles(
     player
@@ -2709,7 +2279,6 @@ async function handleCatch(
     player.sparklesOnTree.length ===
     0
   ) {
-
     await savePlayer(
       env,
       userId,
@@ -2719,10 +2288,8 @@ async function handleCatch(
     return sendText(
       env,
       interaction,
-
       "✨ There aren't any sparkles to catch right now!"
     );
-
   }
 
   const index =
@@ -2755,215 +2322,205 @@ async function handleCatch(
     `💖 +${sparkle.value} sparkles!\n` +
     `✨ You now have **${player.sparkles} ✨**`
   );
-
 }
 
 /* =========================================================
-   OLD DAILY REWARD
+   DAILY RIDDLE HELPERS
 ========================================================= */
 
-async function handleDaily(
-  env,
-  interaction,
-  userId
+function getEasternDateParts(
+  date = new Date()
 ) {
+  const formatter =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/New_York",
 
-  const player =
-    await getPlayer(
-      env,
-      userId
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }
     );
 
-  const now =
-    Date.now();
+  const parts =
+    formatter.formatToParts(
+      date
+    );
 
-  if (
-    now - player.lastDaily <
-    DAILY_COOLDOWN
+  const result = {};
+
+  for (
+    const part of parts
   ) {
-
-    const remaining =
-      DAILY_COOLDOWN -
-      (now - player.lastDaily);
-
-    const hours =
-      Math.ceil(
-        remaining / 3600000
-      );
-
-    return sendText(
-      env,
-      interaction,
-
-      `🎁 You already claimed your daily reward!\n` +
-      `Come back in about **${hours} hours**.`
-    );
-
+    if (
+      part.type !==
+      "literal"
+    ) {
+      result[part.type] =
+        part.value;
+    }
   }
 
-  player.lastDaily =
-    now;
+  return result;
+}
 
-  const reward =
-    randomInt(
-      25,
-      75
+function getEasternDateKey(
+  date = new Date()
+) {
+  const parts =
+    getEasternDateParts(
+      date
     );
 
-  player.sparkles +=
-    reward;
-
-  await savePlayer(
-    env,
-    userId,
-    player
+  return (
+    `${parts.year}-${parts.month}-${parts.day}`
   );
+}
 
-  return sendText(
-    env,
-    interaction,
+function getDailyRiddle(
+  dateKey
+) {
+  let total = 0;
 
-    `🎁 **Daily reward!**\n\n` +
-    `💖 You received **${reward} sparkles!**\n` +
-    `✨ Total: **${player.sparkles} ✨**`
-  );
+  for (
+    let i = 0;
+    i < dateKey.length;
+    i++
+  ) {
+    total =
+      (total * 31 +
+        dateKey.charCodeAt(i)) %
+      DAILY_RIDDLES.length;
+  }
 
+  return DAILY_RIDDLES[
+    total
+  ];
+}
+
+function normalizeAnswer(
+  answer
+) {
+  return String(
+    answer || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9 ]/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    );
 }
 
 /* =========================================================
-   DAILY RIDDLE COMMAND
+   DAILY RIDDLE
 ========================================================= */
 
 async function handleDailyRiddle(
   env,
   interaction,
   userId,
-  suppliedAnswer = null
+  suppliedAnswer
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
-  player.username =
-    getInteractionUsername(
-      interaction
-    );
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
 
-  const today =
-    getDayKey();
+  const dateKey =
+    getEasternDateKey();
+
+  if (
+    player.dailyRiddleDay !==
+    dateKey
+  ) {
+    player.dailyRiddleDay =
+      dateKey;
+
+    player.dailyRiddleSolved =
+      false;
+  }
 
   const riddle =
     getDailyRiddle(
-      today
+      dateKey
     );
 
-  /*
-    New day:
-    reset today's completion state.
-  */
-
   if (
-    player.dailyRiddleDate !==
-    today
+    player.dailyRiddleSolved
   ) {
-
-    player.dailyRiddleDate =
-      today;
-
-    player.dailyRiddleCompleted =
-      false;
-
-    player.dailyRiddleIndex =
-      riddle.index;
-
-    /*
-      The reward is calculated from
-      successful completions.
-
-      First successful riddle:
-      100
-
-      Then:
-      105
-      110
-      115...
-    */
-
-    player.dailyRiddleReward =
-      DAILY_RIDDLE_START_REWARD +
-      (
-        player.dailyRiddleStreak *
-        DAILY_RIDDLE_REWARD_INCREASE
-      );
-
     await savePlayer(
       env,
       userId,
       player
     );
 
-  }
-
-  /* -----------------------------------------
-     ALREADY COMPLETED
-  ----------------------------------------- */
-
-  if (
-    player.dailyRiddleCompleted
-  ) {
-
     return sendText(
       env,
       interaction,
 
       `🧩 **Today's riddle is already solved!**\n\n` +
-      `💖 You earned **${player.dailyRiddleReward} ✨** today.\n` +
-      `🔥 Riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
-      `Come back tomorrow for a new riddle!`
+      `🎉 You already claimed today's reward.\n` +
+      `✨ Come back tomorrow for a new riddle!`
     );
-
   }
 
-  /* -----------------------------------------
-     NO ANSWER = SHOW RIDDLE
-  ----------------------------------------- */
-
   if (
-    !suppliedAnswer
+    suppliedAnswer ===
+    undefined ||
+    suppliedAnswer ===
+    null ||
+    String(
+      suppliedAnswer
+    ).trim() === ""
   ) {
+    await savePlayer(
+      env,
+      userId,
+      player
+    );
 
     return sendText(
       env,
       interaction,
 
-      `🧩 **DAILY RIDDLE**\n\n` +
-
-      `${riddle.question}\n\n` +
-
-      `💖 Correct answer reward: **${player.dailyRiddleReward} ✨**\n` +
-
-      `🔥 Current riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
-
-      `Use **/daily-riddle** and put your answer in the \`answer\` field!`
+      `${riddle.riddle}\n\n` +
+      `💡 Submit your answer with:\n` +
+      `**/daily-riddle answer:YOUR ANSWER**\n\n` +
+      `💖 The first correct answer is worth **100 ✨**!\n` +
+      `✨ Every future correct daily riddle increases your reward by **5 ✨**.`
     );
-
   }
 
-  /* -----------------------------------------
-     CHECK ANSWER
-  ----------------------------------------- */
+  const answer =
+    normalizeAnswer(
+      suppliedAnswer
+    );
 
   const correct =
-    isCorrectRiddleAnswer(
-      suppliedAnswer,
-      riddle.answers
+    riddle.answers.some(
+      possible =>
+        normalizeAnswer(
+          possible
+        ) === answer
     );
 
   if (!correct) {
-
     await savePlayer(
       env,
       userId,
@@ -2975,35 +2532,23 @@ async function handleDailyRiddle(
       interaction,
 
       `❌ **Not quite!**\n\n` +
-      `🧩 Riddle:\n${riddle.question}\n\n` +
-      `Try again today! 💖\n` +
-      `The reward is still **${player.dailyRiddleReward} ✨**.`
+      `🧩 The riddle is still waiting for you.\n` +
+      `Try another answer with **/daily-riddle**.`
     );
-
   }
 
-  /* -----------------------------------------
-     CORRECT
-  ----------------------------------------- */
-
   const reward =
-    player.dailyRiddleReward;
+    100 +
+    player.dailyRiddleWins *
+      5;
 
   player.sparkles +=
     reward;
 
-  player.dailyRiddleCompleted =
+  player.dailyRiddleWins++;
+
+  player.dailyRiddleSolved =
     true;
-
-  player.dailyRiddleStreak++;
-
-  /*
-    Next successful day gets +5.
-  */
-
-  player.dailyRiddleReward =
-    reward +
-    DAILY_RIDDLE_REWARD_INCREASE;
 
   await savePlayer(
     env,
@@ -3015,17 +2560,12 @@ async function handleDailyRiddle(
     env,
     interaction,
 
-    `🎉 **CORRECT!** 🧩✨\n\n` +
-
-    `💖 You earned **${reward} sparkles!**\n\n` +
-
-    `✨ Total sparkles: **${player.sparkles}**\n` +
-
-    `🔥 Riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
-
-    `📈 Tomorrow's reward: **${player.dailyRiddleReward} ✨**`
+    `🎉🎉 **CORRECT!** 🎉🎉\n\n` +
+    `🧩 You solved today's riddle!\n\n` +
+    `💖 **+${reward} sparkles!**\n` +
+    `✨ You now have **${player.sparkles} ✨**\n\n` +
+    `🔥 Your next correct daily riddle will be worth **${100 + player.dailyRiddleWins * 5} ✨**!`
   );
-
 }
 
 /* =========================================================
@@ -3037,12 +2577,22 @@ async function handleInventory(
   interaction,
   userId
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
 
   const items = [];
 
@@ -3051,11 +2601,9 @@ async function handleInventory(
       "pink_sky_background"
     )
   ) {
-
     items.push(
       "🌸 Pink Sky Background"
     );
-
   }
 
   if (
@@ -3063,11 +2611,9 @@ async function handleInventory(
       "halloween_background"
     )
   ) {
-
     items.push(
       "🎃 Halloween Background"
     );
-
   }
 
   if (
@@ -3075,11 +2621,9 @@ async function handleInventory(
       "candyland_background"
     )
   ) {
-
     items.push(
       "🍭 Candy Land Background"
     );
-
   }
 
   if (
@@ -3087,23 +2631,49 @@ async function handleInventory(
       "cotton_candy_tree"
     )
   ) {
-
     items.push(
       "🍭 Cotton Candy Tree"
     );
-
   }
 
   if (
     player.inventory.includes(
-      "pumpkin_cat"
+      "pumpkin_cat_decoration"
     )
   ) {
-
     items.push(
       "🐱🎃 Pumpkin Cat Decoration"
     );
+  }
 
+  if (
+    player.inventory.includes(
+      "stoned_birthday_tree"
+    )
+  ) {
+    items.push(
+      "🌳🎂 Stoned's Birthday Tree"
+    );
+  }
+
+  if (
+    player.inventory.includes(
+      "stoned_balloon_decoration"
+    )
+  ) {
+    items.push(
+      "🎈 Stoned's Balloon Decoration"
+    );
+  }
+
+  if (
+    player.inventory.includes(
+      "stoned_birthday_background"
+    )
+  ) {
+    items.push(
+      "🎂 Stoned's Birthday Background"
+    );
   }
 
   return sendText(
@@ -3111,96 +2681,102 @@ async function handleInventory(
     interaction,
 
     `🎒 **Your Inventory**\n\n` +
-
     (
       items.length
-        ? items.join("\n")
+        ? items.join(
+            "\n"
+          )
         : "Nothing yet!"
     ) +
-
     `\n\n💖 Sparkles: **${player.sparkles} ✨**`
   );
-
 }
 
 /* =========================================================
-   CUSTOMIZE MAIN
+   CUSTOMIZE MAIN CATEGORIES
 ========================================================= */
 
-function customizeMainButtons() {
+function customizeCategoryButtons() {
+  return [
+    {
+      type: 1,
 
-  return {
+      components: [
+        {
+          type: 2,
+          style: 2,
+          label:
+            "🌌 Backgrounds",
+          custom_id:
+            "customize_backgrounds"
+        },
+        {
+          type: 2,
+          style: 2,
+          label:
+            "🌳 Trees",
+          custom_id:
+            "customize_trees"
+        },
+        {
+          type: 2,
+          style: 1,
+          label:
+            "🎀 Decorations",
+          custom_id:
+            "customize_decorations"
+        }
+      ]
+    },
 
-    type: 1,
+    {
+      type: 1,
 
-    components: [
-
-      {
-        type: 2,
-        style: 1,
-        label: "🌌 Backgrounds",
-        custom_id:
-          "customize_backgrounds"
-      },
-
-      {
-        type: 2,
-        style: 1,
-        label: "🌳 Trees",
-        custom_id:
-          "customize_trees"
-      },
-
-      {
-        type: 2,
-        style: 1,
-        label: "🎃 Decorations",
-        custom_id:
-          "customize_decorations"
-      }
-
-    ]
-
-  };
-
+      components: [
+        {
+          type: 2,
+          style: 2,
+          label:
+            "🌳 Back to Tree",
+          custom_id:
+            "tree"
+        }
+      ]
+    }
+  ];
 }
 
 /* =========================================================
-   CUSTOMIZE BACKGROUND BUTTONS
+   CUSTOMIZE BACKGROUNDS
 ========================================================= */
 
 function customizeBackgroundButtons(
   player
 ) {
-
-  const buttons = [];
-
-  buttons.push({
-
-    type: 2,
-    style: 1,
-    label: "🌸 Pink Sky",
-    custom_id:
-      "equip_theme_cherry"
-
-  });
+  const buttons = [
+    {
+      type: 2,
+      style: 1,
+      label:
+        "🌸 Pink Sky",
+      custom_id:
+        "equip_theme_cherry"
+    }
+  ];
 
   if (
     player.inventory.includes(
       "halloween_background"
     )
   ) {
-
     buttons.push({
-
       type: 2,
       style: 1,
-      label: "🎃 Halloween",
+      label:
+        "🎃 Halloween",
       custom_id:
         "equip_theme_halloween"
-
     });
-
   }
 
   if (
@@ -3208,63 +2784,73 @@ function customizeBackgroundButtons(
       "candyland_background"
     )
   ) {
-
     buttons.push({
-
       type: 2,
       style: 1,
-      label: "🍭 Candy Land",
+      label:
+        "🍭 Candy Land",
       custom_id:
         "equip_theme_candyland"
-
     });
+  }
 
+  if (
+    player.inventory.includes(
+      "stoned_birthday_background"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+      style: 1,
+      label:
+        "🎂 Stoned's Birthday",
+      custom_id:
+        "equip_theme_stoned_birthday"
+    });
   }
 
   return [
-
     {
       type: 1,
-      components: buttons
+      components:
+        buttons.slice(
+          0,
+          5
+        )
     },
 
     {
       type: 1,
       components: [
-
         {
           type: 2,
           style: 2,
-          label: "⬅️ Customize",
+          label:
+            "⬅️ Categories",
           custom_id:
             "customize"
         }
-
       ]
     }
-
   ];
-
 }
 
 /* =========================================================
-   CUSTOMIZE TREE BUTTONS
+   CUSTOMIZE TREES
 ========================================================= */
 
 function customizeTreeButtons(
   player
 ) {
-
   const buttons = [
-
     {
       type: 2,
       style: 1,
-      label: "🌸 Cherry Tree",
+      label:
+        "🌸 Cherry Tree",
       custom_id:
         "equip_tree_cherry"
     }
-
   ];
 
   if (
@@ -3272,44 +2858,55 @@ function customizeTreeButtons(
       "cotton_candy_tree"
     )
   ) {
-
     buttons.push({
-
       type: 2,
       style: 1,
       label:
         "🍭 Cotton Candy",
       custom_id:
         "equip_tree_cotton_candy"
-
     });
+  }
 
+  if (
+    player.inventory.includes(
+      "stoned_birthday_tree"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+      style: 1,
+      label:
+        "🎂 Stoned's Tree",
+      custom_id:
+        "equip_tree_stoned_birthday"
+    });
   }
 
   return [
-
     {
       type: 1,
-      components: buttons
+      components:
+        buttons.slice(
+          0,
+          5
+        )
     },
 
     {
       type: 1,
       components: [
-
         {
           type: 2,
           style: 2,
-          label: "⬅️ Customize",
+          label:
+            "⬅️ Categories",
           custom_id:
             "customize"
         }
-
       ]
     }
-
   ];
-
 }
 
 /* =========================================================
@@ -3319,62 +2916,71 @@ function customizeTreeButtons(
 function customizeDecorationButtons(
   player
 ) {
-
   const buttons = [];
 
   if (
     player.inventory.includes(
-      "pumpkin_cat"
+      "pumpkin_cat_decoration"
     )
   ) {
-
     buttons.push({
-
       type: 2,
       style: 1,
       label:
         "🐱🎃 Pumpkin Cat",
       custom_id:
         "equip_decoration_pumpkin_cat"
-
     });
+  }
 
+  if (
+    player.inventory.includes(
+      "stoned_balloon_decoration"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+      style: 1,
+      label:
+        "🎈 Stoned's Balloon",
+      custom_id:
+        "equip_decoration_stoned_balloon"
+    });
   }
 
   buttons.push({
-
     type: 2,
     style: 2,
-    label: "❌ No Decoration",
+    label:
+      "❌ Remove Decoration",
     custom_id:
-      "equip_decoration_none"
-
+      "unequip_decoration"
   });
 
   return [
-
     {
       type: 1,
-      components: buttons
+      components:
+        buttons.slice(
+          0,
+          5
+        )
     },
 
     {
       type: 1,
       components: [
-
         {
           type: 2,
           style: 2,
-          label: "⬅️ Customize",
+          label:
+            "⬅️ Categories",
           custom_id:
             "customize"
         }
-
       ]
     }
-
   ];
-
 }
 
 /* =========================================================
@@ -3386,41 +2992,35 @@ async function handleCustomize(
   interaction,
   userId
 ) {
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
 
   return sendText(
     env,
     interaction,
 
-    `🎀 **CUSTOMIZE YOUR TREE**\n\n` +
+    `🎀 **Customize Your Tree**\n\n` +
+    `Choose a category!\n\n` +
+    `🌌 Backgrounds\n` +
+    `🌳 Trees\n` +
+    `🎀 Decorations`,
 
-    `Choose what you want to customize!\n\n` +
-
-    `🌌 **Backgrounds**\n` +
-    `🌳 **Trees**\n` +
-    `🎃 **Decorations**`,
-
-    [
-      customizeMainButtons(),
-
-      {
-        type: 1,
-        components: [
-
-          {
-            type: 2,
-            style: 2,
-            label:
-              "🌳 Back to Tree",
-            custom_id:
-              "tree"
-          }
-
-        ]
-      }
-
-    ]
+    customizeCategoryButtons()
   );
-
 }
 
 /* =========================================================
@@ -3433,77 +3033,62 @@ async function handleCustomizeCategory(
   userId,
   category
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     category ===
     "backgrounds"
   ) {
-
     return sendText(
       env,
       interaction,
 
-      `🌌 **BACKGROUND CUSTOMIZATION**\n\n` +
-
-      `Current: **${player.equipped.theme}**\n\n` +
-
+      `🌌 **CUSTOMIZE — BACKGROUNDS**\n\n` +
       `Choose your background:`,
 
       customizeBackgroundButtons(
         player
       )
     );
-
   }
 
   if (
     category ===
     "trees"
   ) {
-
     return sendText(
       env,
       interaction,
 
-      `🌳 **TREE CUSTOMIZATION**\n\n` +
-
-      `Current tree: **${player.equipped.tree}**\n` +
-
-      `📏 Current height: **${getTreeHeight(player)} ft**\n\n` +
-
+      `🌳 **CUSTOMIZE — TREES**\n\n` +
       `Choose your tree:`,
 
       customizeTreeButtons(
         player
       )
     );
-
   }
 
   return sendText(
     env,
     interaction,
 
-    `🎃 **DECORATION CUSTOMIZATION**\n\n` +
-
-    `Current decoration: **${
-      player.equipped.decoration ||
-      "None"
-    }**\n\n` +
-
-    `Decorations appear to the left of your tree with space between them!`,
+    `🎀 **CUSTOMIZE — DECORATIONS**\n\n` +
+    `Choose your decoration:`,
 
     customizeDecorationButtons(
       player
     )
   );
-
 }
 
 /* =========================================================
@@ -3516,43 +3101,57 @@ async function equipTheme(
   userId,
   theme
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
-    theme === "halloween" &&
+    theme ===
+    "halloween" &&
     !player.inventory.includes(
       "halloween_background"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "❌ You don't own the Halloween background yet!"
     );
-
   }
 
   if (
-    theme === "candyland" &&
+    theme ===
+    "candyland" &&
     !player.inventory.includes(
       "candyland_background"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "❌ You don't own the Candy Land background yet!"
     );
+  }
 
+  if (
+    theme ===
+    "stoned_birthday" &&
+    !player.inventory.includes(
+      "stoned_birthday_background"
+    )
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "❌ You don't own Stoned's Birthday background yet!"
+    );
   }
 
   player.equipped.theme =
@@ -3570,7 +3169,6 @@ async function equipTheme(
 
     `✨ Background changed to **${theme}**!`
   );
-
 }
 
 /* =========================================================
@@ -3583,27 +3181,43 @@ async function equipTree(
   userId,
   tree
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
-    tree === "cotton_candy" &&
+    tree ===
+    "cotton_candy" &&
     !player.inventory.includes(
       "cotton_candy_tree"
     )
   ) {
-
     return sendText(
       env,
       interaction,
-
       "❌ You don't own the Cotton Candy Tree yet!"
     );
+  }
 
+  if (
+    tree ===
+    "stoned_birthday" &&
+    !player.inventory.includes(
+      "stoned_birthday_tree"
+    )
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "❌ You don't own Stoned's Birthday Tree yet!"
+    );
   }
 
   player.equipped.tree =
@@ -3621,7 +3235,6 @@ async function equipTree(
 
     `🌳 Tree changed to **${tree}**!`
   );
-
 }
 
 /* =========================================================
@@ -3634,50 +3247,77 @@ async function equipDecoration(
   userId,
   decoration
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   if (
     decoration ===
-    "pumpkin_cat"
+    "pumpkin_cat" &&
+    !player.inventory.includes(
+      "pumpkin_cat_decoration"
+    )
   ) {
-
-    if (
-      !player.inventory.includes(
-        "pumpkin_cat"
-      )
-    ) {
-
-      return sendText(
-        env,
-        interaction,
-
-        "❌ You don't own Pumpkin Cat yet!"
-      );
-
-    }
-
-    player.equipped.decoration =
-      "pumpkin_cat";
-
-    await savePlayer(
-      env,
-      userId,
-      player
-    );
-
     return sendText(
       env,
       interaction,
+      "❌ You don't own Pumpkin Cat yet!"
+    );
+  }
 
-      "🐱🎃 **Pumpkin Cat is now decorating your tree!**"
+  if (
+    decoration ===
+    "stoned_balloon" &&
+    !player.inventory.includes(
+      "stoned_balloon_decoration"
+    )
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "❌ You don't own Stoned's Balloon yet!"
+    );
+  }
+
+  player.equipped.decoration =
+    decoration;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎀 Decoration equipped!`
+  );
+}
+
+async function unequipDecoration(
+  env,
+  interaction,
+  userId
+) {
+  const player =
+    await getPlayer(
+      env,
+      userId
     );
 
-  }
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
 
   player.equipped.decoration =
     null;
@@ -3691,15 +3331,25 @@ async function equipDecoration(
   return sendText(
     env,
     interaction,
-
-    "✨ Your tree decoration has been removed."
+    "🎀 Decoration removed!"
   );
-
 }
 
 /* =========================================================
    RENAME
 ========================================================= */
+
+async function handleRename(
+  env,
+  interaction
+) {
+  return sendText(
+    env,
+    interaction,
+
+    "🌸 To rename your tree, use the `/rename` command followed by the new name."
+  );
+}
 
 async function renameTree(
   env,
@@ -3707,36 +3357,37 @@ async function renameTree(
   userId,
   name
 ) {
-
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
   const cleanName =
-    String(name || "")
+    String(
+      name || ""
+    )
       .trim()
-      .slice(0, 40);
+      .slice(
+        0,
+        40
+      );
 
   if (!cleanName) {
-
     return sendText(
       env,
       interaction,
-
       "❌ Please provide a name."
     );
-
   }
 
   player.treeName =
     cleanName;
-
-  player.username =
-    getInteractionUsername(
-      interaction
-    );
 
   await savePlayer(
     env,
@@ -3750,173 +3401,185 @@ async function renameTree(
 
     `🌸 Your tree is now named **${cleanName}**!`
   );
-
 }
 
 /* =========================================================
    LEADERBOARD
 ========================================================= */
 
+async function listAllPlayerKeys(
+  env
+) {
+  const keys = [];
+
+  let cursor =
+    undefined;
+
+  while (true) {
+    const options =
+      cursor
+        ? {
+            cursor
+          }
+        : undefined;
+
+    const result =
+      await env.TREE_DATA.list(
+        options
+      );
+
+    for (
+      const key of
+      result.keys
+    ) {
+      /*
+        Player keys are Discord user IDs.
+
+        Ignore anything else that may
+        eventually be stored in KV.
+      */
+
+      if (
+        /^\d{15,25}$/.test(
+          key.name
+        )
+      ) {
+        keys.push(
+          key.name
+        );
+      }
+    }
+
+    if (
+      result.list_complete
+    ) {
+      break;
+    }
+
+    cursor =
+      result.cursor;
+
+    if (!cursor) {
+      break;
+    }
+  }
+
+  return keys;
+}
+
 async function handleLeaderboard(
   env,
   interaction
 ) {
+  const keys =
+    await listAllPlayerKeys(
+      env
+    );
 
-  try {
+  const players = [];
 
-    const result =
-      await env.TREE_DATA.list({
-        limit: 1000
-      });
+  for (
+    const key of keys
+  ) {
+    const raw =
+      await env.TREE_DATA.get(
+        key
+      );
 
-    const players = [];
-
-    for (
-      const key of result.keys
-    ) {
-
-      try {
-
-        const raw =
-          await env.TREE_DATA.get(
-            key.name
-          );
-
-        if (!raw) {
-          continue;
-        }
-
-        const player =
-          repairPlayer(
-            JSON.parse(raw)
-          );
-
-        players.push({
-
-          username:
-            player.username ||
-            "Unknown Werewife",
-
-          treeName:
-            player.treeName ||
-            "Cherry Blossom",
-
-          sparkles:
-            Number(
-              player.sparkles
-            ) || 0,
-
-          level:
-            Number(
-              player.level
-            ) || 1,
-
-          height:
-            getTreeHeight(
-              player
-            )
-
-        });
-
-      } catch {
-        /* Ignore broken player records */
-      }
-
+    if (!raw) {
+      continue;
     }
 
-    players.sort(
-      (a, b) => {
+    try {
+      const player =
+        repairPlayer(
+          JSON.parse(raw)
+        );
 
-        if (
-          b.sparkles !==
+      players.push({
+        ...player,
+        userId:
+          player.userId ||
+          key
+      });
+    } catch {
+      // Ignore broken records.
+    }
+  }
+
+  players.sort(
+    (a, b) => {
+      if (
+        b.sparkles !==
+        a.sparkles
+      ) {
+        return (
+          b.sparkles -
           a.sparkles
-        ) {
+        );
+      }
 
-          return (
-            b.sparkles -
-            a.sparkles
-          );
-
-        }
-
+      if (
+        b.level !==
+        a.level
+      ) {
         return (
           b.level -
           a.level
         );
+      }
 
+      return (
+        getTreeHeight(b) -
+        getTreeHeight(a)
+      );
+    }
+  );
+
+  const top =
+    players.slice(
+      0,
+      10
+    );
+
+  if (!top.length) {
+    return sendText(
+      env,
+      interaction,
+
+      "🏆 **Werewives Tree Leaderboard**\n\n" +
+      "Nobody has a tree yet! 🌸"
+    );
+  }
+
+  const lines =
+    top.map(
+      (
+        player,
+        index
+      ) => {
+        const name =
+          player.displayName ||
+          player.username ||
+          player.treeName ||
+          "Werewife";
+
+        return (
+          `**${index + 1}.** ${name}\n` +
+          `🌱 Level ${player.level} • 🌳 ${getTreeHeight(player)} ft • 💖 ${player.sparkles} ✨`
+        );
       }
     );
 
-    const top =
-      players.slice(
-        0,
-        10
-      );
+  return sendText(
+    env,
+    interaction,
 
-    if (
-      top.length === 0
-    ) {
-
-      return sendText(
-        env,
-        interaction,
-
-        `🏆 **WEREWIVES TREE LEADERBOARD**\n\n` +
-        `Nobody has appeared yet! 🌸\n\n` +
-        `Use \`/tree\` and start growing!`
-      );
-
-    }
-
-    const lines =
-      top.map(
-        (player, index) => {
-
-          const medal =
-            index === 0
-              ? "🥇"
-              : index === 1
-                ? "🥈"
-                : index === 2
-                  ? "🥉"
-                  : `**${index + 1}.**`;
-
-          return (
-            `${medal} **${player.username}**\n` +
-            `　✨ ${player.sparkles} sparkles • ` +
-            `🌱 Level ${player.level} • ` +
-            `📏 ${player.height} ft`
-          );
-
-        }
-      );
-
-    return sendText(
-      env,
-      interaction,
-
-      `🏆 **WEREWIVES TREE LEADERBOARD**\n\n` +
-      lines.join("\n\n") +
-
-      `\n\n✨ Ranked by sparkles!`
-    );
-
-  } catch (error) {
-
-    console.error(
-      "LEADERBOARD ERROR:",
-      error
-    );
-
-    return sendText(
-      env,
-      interaction,
-
-      "❌ I couldn't load the leaderboard right now. Try again!"
-    );
-
-  }
-
+    `🏆 **WEREWIVES TREE LEADERBOARD**\n\n` +
+    lines.join(
+      "\n\n"
+    )
+  );
 }
 
 /* =========================================================
@@ -3930,39 +3593,35 @@ async function handleGiveSparkles(
   targetId,
   amount
 ) {
-
   const callerId =
     interaction.member?.user?.id ||
     interaction.user?.id;
 
   if (
-    callerId !== env.OWNER_ID
+    callerId !==
+    env.OWNER_ID
   ) {
-
     return sendText(
       env,
       interaction,
-
       "❌ Only the bot owner can use this command."
     );
-
   }
 
   const number =
     Number(amount);
 
   if (
-    !Number.isFinite(number) ||
+    !Number.isFinite(
+      number
+    ) ||
     number <= 0
   ) {
-
     return sendText(
       env,
       interaction,
-
       "❌ Please enter a valid positive amount."
     );
-
   }
 
   const player =
@@ -3972,7 +3631,9 @@ async function handleGiveSparkles(
     );
 
   player.sparkles +=
-    Math.floor(number);
+    Math.floor(
+      number
+    );
 
   await savePlayer(
     env,
@@ -3984,9 +3645,977 @@ async function handleGiveSparkles(
     env,
     interaction,
 
-    `✨ Gave **${Math.floor(number)} sparkles**!`
+    `✨ Gave **${Math.floor(
+      number
+    )} sparkles**!`
+  );
+}
+
+/* =========================================================
+   BIRTHDAY GIFT
+========================================================= */
+
+function birthdayGiftButtons() {
+  return [
+    {
+      type: 1,
+
+      components: [
+        {
+          type: 2,
+          style: 1,
+          label:
+            "🎁 Open Birthday Present",
+          custom_id:
+            "open_birthday_gift"
+        }
+      ]
+    }
+  ];
+}
+
+/* =========================================================
+   /BIRTHDAY
+========================================================= */
+
+async function handleBirthday(
+  env,
+  interaction,
+  userId,
+  pin
+) {
+  const suppliedPin =
+    String(
+      pin || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    suppliedPin !==
+    BIRTHDAY_PIN
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      "🎂 **Birthday Gift Locked!**\n\n" +
+      "🔐 That's not the right PIN."
+    );
+  }
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
   );
 
+  /*
+    PIN ONLY unlocks these items.
+  */
+
+  if (
+    !player.inventory.includes(
+      "stoned_birthday_tree"
+    )
+  ) {
+    player.inventory.push(
+      "stoned_birthday_tree"
+    );
+  }
+
+  if (
+    !player.inventory.includes(
+      "stoned_balloon_decoration"
+    )
+  ) {
+    player.inventory.push(
+      "stoned_balloon_decoration"
+    );
+  }
+
+  if (
+    !player.inventory.includes(
+      "stoned_birthday_background"
+    )
+  ) {
+    player.inventory.push(
+      "stoned_birthday_background"
+    );
+  }
+
+  player.birthdayUnlocked =
+    true;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎂🎉 **HAPPY BIRTHDAY, STONED!** 🎉🎂\n\n` +
+    `💖 Your secret birthday gift has been unlocked!\n\n` +
+    `🌳 **Stoned's Birthday Tree**\n` +
+    `🎈 **Stoned's Balloon Decoration**\n` +
+    `🎂 **Stoned's Birthday Background**\n\n` +
+    `Everything has been added to your inventory. ✨\n\n` +
+    `🎁 There's also a special present waiting for you...`,
+
+    birthdayGiftButtons()
+  );
+}
+
+/* =========================================================
+   OPEN BIRTHDAY GIFT
+========================================================= */
+
+async function openBirthdayGift(
+  env,
+  interaction,
+  userId
+) {
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  if (
+    !player.birthdayUnlocked
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      "🔐 You need to unlock the birthday gift first!"
+    );
+  }
+
+  if (
+    player.birthdayGiftClaimed
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      "🎁 You already opened your birthday present! 💖"
+    );
+  }
+
+  player.birthdayGiftClaimed =
+    true;
+
+  player.sparkles +=
+    STONED_GIFT_SPARKLES;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎂💖 **HAPPY BIRTHDAY, STONED!!!** 💖🎂\n\n` +
+    `🎁 You opened your special birthday present!\n\n` +
+    `✨ **+${STONED_GIFT_SPARKLES} SPARKLES!** ✨\n\n` +
+    `💖 You now have **${player.sparkles} ✨**\n\n` +
+    `🌸 Hope your birthday is absolutely magical! 🎉`
+  );
+}
+
+/* =========================================================
+   BIRTHDAY HUNT STORAGE
+========================================================= */
+
+function guildStateKey(
+  guildId
+) {
+  return `guild:${guildId}`;
+}
+
+async function getGuildState(
+  env,
+  guildId
+) {
+  const raw =
+    await env.TREE_DATA.get(
+      guildStateKey(
+        guildId
+      )
+    );
+
+  if (!raw) {
+    return {
+      guildId,
+      knownChannels: [],
+      hunt: {
+        active: false,
+        startAt: 0,
+        endAt: 0,
+        nextGiftAt: 0,
+        giftNumber: 0
+      }
+    };
+  }
+
+  try {
+    return JSON.parse(
+      raw
+    );
+  } catch {
+    return {
+      guildId,
+      knownChannels: [],
+      hunt: {
+        active: false,
+        startAt: 0,
+        endAt: 0,
+        nextGiftAt: 0,
+        giftNumber: 0
+      }
+    };
+  }
+}
+
+async function saveGuildState(
+  env,
+  guildId,
+  state
+) {
+  await env.TREE_DATA.put(
+    guildStateKey(
+      guildId
+    ),
+    JSON.stringify(
+      state
+    )
+  );
+}
+
+/* =========================================================
+   REGISTER GUILD
+========================================================= */
+
+async function rememberGuild(
+  env,
+  interaction
+) {
+  const guildId =
+    interaction.guild_id;
+
+  if (!guildId) {
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      guildId
+    );
+
+  state.guildId =
+    guildId;
+
+  await saveGuildState(
+    env,
+    guildId,
+    state
+  );
+}
+
+/* =========================================================
+   DISCORD BOT REQUEST
+========================================================= */
+
+async function discordBotRequest(
+  env,
+  path,
+  options = {}
+) {
+  return fetch(
+    `https://discord.com/api/v10${path}`,
+    {
+      ...options,
+
+      headers: {
+        Authorization:
+          `Bot ${env.BOT_TOKEN}`,
+
+        ...(options.headers ||
+          {})
+      }
+    }
+  );
+}
+
+/* =========================================================
+   GET GUILD CHANNELS
+========================================================= */
+
+async function getGuildTextChannels(
+  env,
+  guildId
+) {
+  const response =
+    await discordBotRequest(
+      env,
+      `/guilds/${guildId}/channels`
+    );
+
+  if (!response.ok) {
+    console.error(
+      "Unable to get guild channels:",
+      response.status
+    );
+
+    return [];
+  }
+
+  const channels =
+    await response.json();
+
+  return channels.filter(
+    channel =>
+      channel.type === 0
+  );
+}
+
+/* =========================================================
+   SEND CHANNEL MESSAGE
+========================================================= */
+
+async function sendChannelMessage(
+  env,
+  channelId,
+  content,
+  components = []
+) {
+  const response =
+    await discordBotRequest(
+      env,
+      `/channels/${channelId}/messages`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          content,
+          components
+        })
+      }
+    );
+
+  return response;
+}
+
+/* =========================================================
+   HUNT GIFT BUTTON
+========================================================= */
+
+function huntGiftButton(
+  giftId
+) {
+  return [
+    {
+      type: 1,
+
+      components: [
+        {
+          type: 2,
+          style: 1,
+          label:
+            "🎁 Claim Present!",
+          custom_id:
+            `hunt_gift:${giftId}`
+        }
+      ]
+    }
+  ];
+}
+
+/* =========================================================
+   CREATE HUNT GIFT
+========================================================= */
+
+function createHuntGift() {
+  const isPrank =
+    Math.random() <
+    0.25;
+
+  if (isPrank) {
+    return {
+      id:
+        Date.now().toString(36) +
+        Math.random()
+          .toString(36)
+          .slice(2),
+
+      type:
+        "prank",
+
+      amount: 0,
+
+      message:
+        randomItem(
+          GIFT_HUNT_PRANKS
+        ),
+
+      claimed: false
+    };
+  }
+
+  return {
+    id:
+      Date.now().toString(36) +
+      Math.random()
+        .toString(36)
+        .slice(2),
+
+    type:
+      "sparkles",
+
+    amount:
+      randomItem(
+        GIFT_HUNT_PRIZES
+      ),
+
+    message:
+      `🎁 **BIRTHDAY GIFT FOUND!** 🎁\n\n` +
+      `Someone hid a birthday present in the server!\n\n` +
+      `🏃💨 **FIRST PERSON TO CLAIM IT GETS IT!**`,
+
+    claimed: false
+  };
+}
+
+/* =========================================================
+   CLAIM HUNT GIFT
+========================================================= */
+
+async function claimHuntGift(
+  env,
+  interaction,
+  userId,
+  giftId
+) {
+  const guildId =
+    interaction.guild_id;
+
+  if (!guildId) {
+    return sendText(
+      env,
+      interaction,
+      "❌ Gift Hunt presents can only be claimed inside the server."
+    );
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      guildId
+    );
+
+  const gift =
+    state.hunt?.currentGift;
+
+  if (
+    !state.hunt?.active
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "🎁 The Birthday Gift Hunt isn't active right now!"
+    );
+  }
+
+  if (
+    Date.now() >=
+    state.hunt.endAt
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "⏰ The Birthday Gift Hunt has ended!"
+    );
+  }
+
+  if (
+    !gift ||
+    gift.id !==
+      giftId
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "🎁 That present has already disappeared!"
+    );
+  }
+
+  /*
+    Mark it claimed immediately in KV.
+
+    This makes the first successful
+    interaction the winner.
+  */
+
+  if (
+    gift.claimed
+  ) {
+    return sendText(
+      env,
+      interaction,
+      "🎁 Too late! Someone already grabbed this present!"
+    );
+  }
+
+  gift.claimed =
+    true;
+
+  gift.claimedBy =
+    userId;
+
+  gift.claimedAt =
+    Date.now();
+
+  state.hunt.currentGift =
+    gift;
+
+  await saveGuildState(
+    env,
+    guildId,
+    state
+  );
+
+  if (
+    gift.type ===
+    "prank"
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      `${gift.message}\n\n` +
+      `🎁 **You got pranked!** 😂`
+    );
+  }
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  player.sparkles +=
+    gift.amount;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎉 **YOU GOT IT FIRST!** 🎉\n\n` +
+    `🎁 Birthday present claimed!\n\n` +
+    `💖 **+${gift.amount} sparkles!**\n` +
+    `✨ You now have **${player.sparkles} ✨**`
+  );
+}
+
+/* =========================================================
+   BIRTHDAY HUNT ANNOUNCEMENT
+========================================================= */
+
+async function announceBirthdayHunt(
+  env,
+  guildId,
+  channels
+) {
+  const announcement =
+    `🎂🎉 **STONED'S BIRTHDAY GIFT HUNT IS LIVE!!!** 🎉🎂\n\n` +
+    `🎁 Presents are going to be hidden around the server for the next **3 HOURS**!\n\n` +
+    `🏃💨 Watch the channels because presents will appear throughout the event.\n` +
+    `🥇 **FIRST PERSON TO CLICK THE CLAIM BUTTON WINS!**\n\n` +
+    `💖 Some presents contain sparkles...\n` +
+    `😂 Some are completely ridiculous.\n` +
+    `👀 You never know what you're going to find.\n\n` +
+    `⏰ **Gift Hunt: 4:00 PM – 7:00 PM Eastern**\n\n` +
+    `🎂 HAPPY BIRTHDAY, STONED! 💖🎁`;
+
+  /*
+    Announce in the available text channels.
+  */
+
+  for (
+    const channel of channels
+  ) {
+    try {
+      await sendChannelMessage(
+        env,
+        channel.id,
+        announcement
+      );
+    } catch (error) {
+      console.error(
+        "Announcement failed:",
+        error
+      );
+    }
+  }
+}
+
+/* =========================================================
+   RELEASE HUNT GIFT
+========================================================= */
+
+async function releaseHuntGift(
+  env,
+  guildId,
+  channels,
+  state
+) {
+  if (
+    !channels.length
+  ) {
+    return;
+  }
+
+  const channel =
+    randomItem(
+      channels
+    );
+
+  const gift =
+    createHuntGift();
+
+  state.hunt.giftNumber =
+    (state.hunt.giftNumber ||
+      0) + 1;
+
+  state.hunt.currentGift =
+    gift;
+
+  /*
+    IMPORTANT:
+    The present message itself is what
+    people race to claim.
+  */
+
+  const response =
+    await sendChannelMessage(
+      env,
+      channel.id,
+
+      gift.type ===
+        "prank"
+        ? `🎁 **A MYSTERY PRESENT HAS APPEARED!**\n\n` +
+          `👀 First person to open it gets to discover what's inside...`
+        : gift.message,
+
+      huntGiftButton(
+        gift.id
+      )
+    );
+
+  if (!response.ok) {
+    console.error(
+      "Could not send hunt gift:",
+      response.status
+    );
+
+    return;
+  }
+
+  /*
+    Next present appears randomly
+    8–12 minutes later.
+  */
+
+  state.hunt.nextGiftAt =
+    Date.now() +
+    randomInt(
+      GIFT_HUNT_MIN_INTERVAL,
+      GIFT_HUNT_MAX_INTERVAL
+    );
+
+  await saveGuildState(
+    env,
+    guildId,
+    state
+  );
+}
+
+/* =========================================================
+   GET KNOWN GUILDS
+========================================================= */
+
+async function getKnownGuildIds(
+  env
+) {
+  const keys = [];
+
+  let cursor =
+    undefined;
+
+  while (true) {
+    const result =
+      await env.TREE_DATA.list(
+        cursor
+          ? { cursor }
+          : undefined
+      );
+
+    for (
+      const key of
+      result.keys
+    ) {
+      if (
+        key.name.startsWith(
+          "guild:"
+        )
+      ) {
+        keys.push(
+          key.name.slice(
+            6
+          )
+        );
+      }
+    }
+
+    if (
+      result.list_complete
+    ) {
+      break;
+    }
+
+    cursor =
+      result.cursor;
+
+    if (!cursor) {
+      break;
+    }
+  }
+
+  return keys;
+}
+
+/* =========================================================
+   BIRTHDAY EVENT SCHEDULER
+========================================================= */
+
+async function processBirthdayEvent(
+  env
+) {
+  const now =
+    new Date();
+
+  const eastern =
+    getEasternDateParts(
+      now
+    );
+
+  const dateKey =
+    `${eastern.year}-${eastern.month}-${eastern.day}`;
+
+  /*
+    Only operate on the specific
+    birthday date.
+  */
+
+  if (
+    dateKey !==
+    BIRTHDAY_EVENT_DATE
+  ) {
+    return;
+  }
+
+  const hour =
+    Number(
+      eastern.hour
+    );
+
+  const minute =
+    Number(
+      eastern.minute
+    );
+
+  const currentMinutes =
+    hour * 60 +
+    minute;
+
+  const startMinutes =
+    BIRTHDAY_START_HOUR *
+    60;
+
+  const endMinutes =
+    BIRTHDAY_END_HOUR *
+    60;
+
+  const guildIds =
+    await getKnownGuildIds(
+      env
+    );
+
+  /*
+    4 PM:
+    Start the event.
+  */
+
+  if (
+    currentMinutes >=
+      startMinutes &&
+    currentMinutes <
+      endMinutes
+  ) {
+    for (
+      const guildId of
+      guildIds
+    ) {
+      const state =
+        await getGuildState(
+          env,
+          guildId
+        );
+
+      if (
+        !state.hunt.active
+      ) {
+        const channels =
+          await getGuildTextChannels(
+            env,
+            guildId
+          );
+
+        if (
+          !channels.length
+        ) {
+          continue;
+        }
+
+        state.hunt = {
+          active: true,
+
+          startAt:
+            now.getTime(),
+
+          endAt:
+            now.getTime() +
+            GIFT_HUNT_DURATION,
+
+          nextGiftAt:
+            now.getTime() +
+            randomInt(
+              2 * 60 * 1000,
+              5 * 60 * 1000
+            ),
+
+          giftNumber: 0,
+
+          currentGift:
+            null
+        };
+
+        await saveGuildState(
+          env,
+          guildId,
+          state
+        );
+
+        await announceBirthdayHunt(
+          env,
+          guildId,
+          channels
+        );
+      }
+    }
+  }
+
+  /*
+    Release gifts throughout the event.
+  */
+
+  for (
+    const guildId of
+    guildIds
+  ) {
+    const state =
+      await getGuildState(
+        env,
+        guildId
+      );
+
+    if (
+      !state.hunt?.active
+    ) {
+      continue;
+    }
+
+    if (
+      Date.now() >=
+      state.hunt.endAt
+    ) {
+      state.hunt.active =
+        false;
+
+      state.hunt.currentGift =
+        null;
+
+      await saveGuildState(
+        env,
+        guildId,
+        state
+      );
+
+      continue;
+    }
+
+    if (
+      Date.now() >=
+      state.hunt.nextGiftAt
+    ) {
+      const channels =
+        await getGuildTextChannels(
+          env,
+          guildId
+        );
+
+      await releaseHuntGift(
+        env,
+        guildId,
+        channels,
+        state
+      );
+    }
+  }
 }
 
 /* =========================================================
@@ -3997,16 +4626,9 @@ async function handleTree(
   env,
   interaction
 ) {
-
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
-
-  /*
-    IMPORTANT:
-    Acknowledge immediately before
-    doing KV/Puppeteer work.
-  */
 
   const acknowledged =
     await acknowledge(
@@ -4017,7 +4639,6 @@ async function handleTree(
   if (
     !acknowledged.ok
   ) {
-
     console.error(
       "Discord acknowledgement failed:",
       acknowledged.status
@@ -4032,10 +4653,10 @@ async function handleTree(
       userId
     );
 
-  player.username =
-    getInteractionUsername(
-      interaction
-    );
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
 
   cleanExpiredSparkles(
     player
@@ -4051,16 +4672,18 @@ async function handleTree(
     player
   );
 
-  try {
+  await rememberGuild(
+    env,
+    interaction
+  );
 
+  try {
     return await sendTree(
       env,
       interaction,
       player
     );
-
   } catch (error) {
-
     console.error(
       "TREE RENDER ERROR:",
       error
@@ -4069,7 +4692,6 @@ async function handleTree(
     return fetch(
       `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
       {
-
         method: "PATCH",
 
         headers: {
@@ -4078,22 +4700,16 @@ async function handleTree(
         },
 
         body: JSON.stringify({
-
           content:
             "🌸 Your tree is alive, but I couldn't render the picture right now. Try again! ✨",
 
           components: [
-            treeButtons(),
-            treeButtonsSecondRow()
+            treeButtons()
           ]
-
         })
-
       }
     );
-
   }
-
 }
 
 /* =========================================================
@@ -4104,7 +4720,6 @@ async function handleComponent(
   env,
   interaction
 ) {
-
   const customId =
     interaction.data?.custom_id;
 
@@ -4112,8 +4727,29 @@ async function handleComponent(
     interaction.member?.user?.id ||
     interaction.user?.id;
 
-  switch (customId) {
+  await rememberGuild(
+    env,
+    interaction
+  );
 
+  if (
+    customId?.startsWith(
+      "hunt_gift:"
+    )
+  ) {
+    return claimHuntGift(
+      env,
+      interaction,
+      userId,
+      customId.slice(
+        "hunt_gift:".length
+      )
+    );
+  }
+
+  switch (
+    customId
+  ) {
     case "tree":
       return handleTree(
         env,
@@ -4129,13 +4765,6 @@ async function handleComponent(
 
     case "catch":
       return handleCatch(
-        env,
-        interaction,
-        userId
-      );
-
-    case "daily":
-      return handleDaily(
         env,
         interaction,
         userId
@@ -4287,6 +4916,14 @@ async function handleComponent(
         "candyland"
       );
 
+    case "equip_theme_stoned_birthday":
+      return equipTheme(
+        env,
+        interaction,
+        userId,
+        "stoned_birthday"
+      );
+
     case "equip_tree_cherry":
       return equipTree(
         env,
@@ -4303,6 +4940,14 @@ async function handleComponent(
         "cotton_candy"
       );
 
+    case "equip_tree_stoned_birthday":
+      return equipTree(
+        env,
+        interaction,
+        userId,
+        "stoned_birthday"
+      );
+
     case "equip_decoration_pumpkin_cat":
       return equipDecoration(
         env,
@@ -4311,31 +4956,35 @@ async function handleComponent(
         "pumpkin_cat"
       );
 
-    case "equip_decoration_none":
+    case "equip_decoration_stoned_balloon":
       return equipDecoration(
         env,
         interaction,
         userId,
-        "none"
+        "stoned_balloon"
       );
 
-    case "leaderboard":
-      return handleLeaderboard(
+    case "unequip_decoration":
+      return unequipDecoration(
         env,
-        interaction
+        interaction,
+        userId
+      );
+
+    case "open_birthday_gift":
+      return openBirthdayGift(
+        env,
+        interaction,
+        userId
       );
 
     default:
-
       return sendText(
         env,
         interaction,
-
         "❌ Unknown button."
       );
-
   }
-
 }
 
 /* =========================================================
@@ -4346,7 +4995,6 @@ async function handleCommand(
   env,
   interaction
 ) {
-
   const command =
     interaction.data?.name;
 
@@ -4354,8 +5002,14 @@ async function handleCommand(
     interaction.member?.user?.id ||
     interaction.user?.id;
 
-  switch (command) {
+  await rememberGuild(
+    env,
+    interaction
+  );
 
+  switch (
+    command
+  ) {
     case "tree":
       return handleTree(
         env,
@@ -4376,15 +5030,7 @@ async function handleCommand(
         userId
       );
 
-    case "daily":
-      return handleDaily(
-        env,
-        interaction,
-        userId
-      );
-
     case "daily-riddle": {
-
       const answer =
         interaction.data?.options?.find(
           option =>
@@ -4398,7 +5044,6 @@ async function handleCommand(
         userId,
         answer
       );
-
     }
 
     case "shop":
@@ -4427,8 +5072,23 @@ async function handleCommand(
         interaction
       );
 
-    case "rename": {
+    case "birthday": {
+      const pin =
+        interaction.data?.options?.find(
+          option =>
+            option.name ===
+            "pin"
+        )?.value;
 
+      return handleBirthday(
+        env,
+        interaction,
+        userId,
+        pin
+      );
+    }
+
+    case "rename": {
       const name =
         interaction.data?.options?.find(
           option =>
@@ -4442,11 +5102,9 @@ async function handleCommand(
         userId,
         name
       );
-
     }
 
     case "give-sparkles": {
-
       const target =
         interaction.data?.options?.find(
           option =>
@@ -4467,30 +5125,24 @@ async function handleCommand(
         target,
         amount
       );
-
     }
 
     default:
-
       return sendText(
         env,
         interaction,
-
         "❌ Unknown command."
       );
-
   }
-
 }
 
 /* =========================================================
-   DISCORD SIGNATURE VERIFICATION
+   SIGNATURE VERIFICATION
 ========================================================= */
 
 function hexToUint8Array(
   hex
 ) {
-
   const bytes =
     new Uint8Array(
       hex.length / 2
@@ -4501,7 +5153,6 @@ function hexToUint8Array(
     i < bytes.length;
     i++
   ) {
-
     bytes[i] =
       parseInt(
         hex.substr(
@@ -4510,11 +5161,9 @@ function hexToUint8Array(
         ),
         16
       );
-
   }
 
   return bytes;
-
 }
 
 async function verifySignature(
@@ -4522,7 +5171,6 @@ async function verifySignature(
   body,
   publicKey
 ) {
-
   const signature =
     request.headers.get(
       "X-Signature-Ed25519"
@@ -4537,16 +5185,12 @@ async function verifySignature(
     !signature ||
     !timestamp
   ) {
-
     return false;
-
   }
 
   try {
-
     const key =
       await crypto.subtle.importKey(
-
         "raw",
 
         hexToUint8Array(
@@ -4554,19 +5198,21 @@ async function verifySignature(
         ),
 
         {
-          name: "Ed25519"
+          name:
+            "Ed25519"
         },
 
         false,
 
-        ["verify"]
-
+        [
+          "verify"
+        ]
       );
 
     return await crypto.subtle.verify(
-
       {
-        name: "Ed25519"
+        name:
+          "Ed25519"
       },
 
       key,
@@ -4576,17 +5222,13 @@ async function verifySignature(
       ),
 
       new TextEncoder().encode(
-        timestamp + body
+        timestamp +
+          body
       )
-
     );
-
   } catch {
-
     return false;
-
   }
-
 }
 
 /* =========================================================
@@ -4594,109 +5236,123 @@ async function verifySignature(
 ========================================================= */
 
 const COMMANDS = [
-
   {
     name: "tree",
-
     description:
       "View your magical tree"
   },
 
   {
     name: "water",
-
     description:
       "Water your tree"
   },
 
   {
     name: "catch",
-
     description:
       "Catch a sparkle"
   },
 
   {
-    name: "daily",
-
-    description:
-      "Claim your daily sparkles"
-  },
-
-  {
-    name: "daily-riddle",
+    name:
+      "daily-riddle",
 
     description:
       "Solve today's riddle for sparkles",
 
     options: [
-
       {
         type: 3,
 
-        name: "answer",
+        name:
+          "answer",
 
         description:
           "Your answer to today's riddle",
 
-        required: false
-
+        required:
+          false
       }
-
     ]
-
   },
 
   {
-    name: "shop",
+    name:
+      "shop",
 
     description:
       "Open the tree shop"
   },
 
   {
-    name: "customize",
+    name:
+      "customize",
 
     description:
       "Customize your tree"
   },
 
   {
-    name: "inventory",
+    name:
+      "inventory",
 
     description:
       "View your inventory"
   },
 
   {
-    name: "leaderboard",
+    name:
+      "leaderboard",
 
     description:
       "View the tree leaderboard"
   },
 
   {
-    name: "rename",
+    name:
+      "birthday",
+
+    description:
+      "Unlock a special birthday gift",
+
+    options: [
+      {
+        type: 3,
+
+        name:
+          "pin",
+
+        description:
+          "Enter the birthday PIN",
+
+        required:
+          true
+      }
+    ]
+  },
+
+  {
+    name:
+      "rename",
 
     description:
       "Rename your tree",
 
     options: [
-
       {
         type: 3,
 
-        name: "name",
+        name:
+          "name",
 
         description:
           "Your tree's new name",
 
-        required: true
-
+        required:
+          true
       }
-
     ]
-
   },
 
   {
@@ -4707,35 +5363,33 @@ const COMMANDS = [
       "Give a user sparkles",
 
     options: [
-
       {
         type: 6,
 
-        name: "user",
+        name:
+          "user",
 
         description:
           "User receiving sparkles",
 
-        required: true
-
+        required:
+          true
       },
 
       {
         type: 4,
 
-        name: "amount",
+        name:
+          "amount",
 
         description:
           "Amount of sparkles",
 
-        required: true
-
+        required:
+          true
       }
-
     ]
-
   }
-
 ];
 
 /* =========================================================
@@ -4745,37 +5399,28 @@ const COMMANDS = [
 async function registerCommands(
   env
 ) {
-
   const response =
     await fetch(
-
       `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
-
       {
-
         method: "PUT",
 
         headers: {
-
-          "Authorization":
+          Authorization:
             `Bot ${env.BOT_TOKEN}`,
 
           "Content-Type":
             "application/json"
-
         },
 
         body:
           JSON.stringify(
             COMMANDS
           )
-
       }
-
     );
 
   return response;
-
 }
 
 /* =========================================================
@@ -4783,47 +5428,35 @@ async function registerCommands(
 ========================================================= */
 
 export default {
-
   async fetch(
     request,
     env
   ) {
-
     const url =
       new URL(
         request.url
       );
 
-    /* -----------------------------------------
-       HOME
-    ----------------------------------------- */
-
     if (
-      request.method === "GET" &&
-      url.pathname === "/"
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/"
     ) {
-
       return new Response(
-
         "🌸 Werewives Tree Bot is alive! ✨",
-
         {
           status: 200
         }
-
       );
-
     }
 
-    /* -----------------------------------------
-       REGISTER
-    ----------------------------------------- */
-
     if (
-      request.method === "GET" &&
-      url.pathname === "/register"
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/register"
     ) {
-
       const response =
         await registerCommands(
           env
@@ -4833,37 +5466,25 @@ export default {
         await response.text();
 
       return new Response(
-
         text,
-
         {
-
           status:
             response.status,
 
           headers: {
-
             "Content-Type":
               "application/json"
-
           }
-
         }
-
       );
-
     }
 
-    /* -----------------------------------------
-       DISCORD INTERACTIONS
-    ----------------------------------------- */
-
     if (
-      request.method === "POST" &&
+      request.method ===
+        "POST" &&
       url.pathname ===
         "/interactions"
     ) {
-
       const body =
         await request.text();
 
@@ -4875,141 +5496,108 @@ export default {
         );
 
       if (!valid) {
-
         return new Response(
-
           "Invalid signature",
-
           {
             status: 401
           }
-
         );
-
       }
 
       let interaction;
 
       try {
-
         interaction =
           JSON.parse(
             body
           );
-
       } catch {
-
         return new Response(
-
           "Invalid JSON",
-
           {
             status: 400
           }
-
         );
-
       }
 
-      /* ---------------------------------------
-         PING
-      --------------------------------------- */
-
       if (
-        interaction.type === 1
+        interaction.type ===
+        1
       ) {
-
         return new Response(
-
           JSON.stringify({
             type: 1
           }),
 
           {
-
             headers: {
-
               "Content-Type":
                 "application/json"
-
             }
-
           }
-
         );
-
       }
 
-      /* ---------------------------------------
-         SLASH COMMAND
-      --------------------------------------- */
-
       if (
-        interaction.type === 2
+        interaction.type ===
+        2
       ) {
-
         return handleCommand(
           env,
           interaction
         );
-
       }
 
-      /* ---------------------------------------
-         BUTTON
-      --------------------------------------- */
-
       if (
-        interaction.type === 3
+        interaction.type ===
+        3
       ) {
-
         return handleComponent(
           env,
           interaction
         );
-
       }
 
       return new Response(
-
         JSON.stringify({
-
           type: 4,
 
           data: {
-
             content:
               "❌ Unsupported interaction."
-
           }
-
         }),
 
         {
-
           headers: {
-
             "Content-Type":
               "application/json"
-
           }
-
         }
-
       );
-
     }
 
     return new Response(
-
       "Not found",
-
       {
         status: 404
       }
-
     );
+  },
 
+  /* =======================================================
+     CLOUDFLARE CRON
+  ======================================================= */
+
+  async scheduled(
+    event,
+    env,
+    ctx
+  ) {
+    ctx.waitUntil(
+      processBirthdayEvent(
+        env
+      )
+    );
   }
-
 };
