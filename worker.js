@@ -17,6 +17,160 @@ const WATER_COOLDOWN = 60 * 60 * 1000;
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
 /* =========================================================
+   DAILY RIDDLE
+========================================================= */
+
+const DAILY_RIDDLE_START_REWARD = 100;
+const DAILY_RIDDLE_REWARD_INCREASE = 5;
+
+/*
+  Riddles are automatically selected by the day.
+  The pool can be expanded later without changing
+  the command itself.
+*/
+
+const DAILY_RIDDLES = [
+
+  {
+    question:
+      "🧩 I have branches, but no leaves. I have a trunk, but no bark. What am I?",
+    answers: [
+      "bank",
+      "a bank",
+      "banking"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has hands but cannot clap?",
+    answers: [
+      "clock",
+      "a clock"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What gets wetter the more it dries?",
+    answers: [
+      "towel",
+      "a towel"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has many keys but cannot open a single lock?",
+    answers: [
+      "piano",
+      "a piano"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What can travel around the world while staying in one corner?",
+    answers: [
+      "stamp",
+      "a stamp"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has one eye but cannot see?",
+    answers: [
+      "needle",
+      "a needle"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has a neck but no head?",
+    answers: [
+      "bottle",
+      "a bottle"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What belongs to you but other people use it more than you do?",
+    answers: [
+      "name",
+      "your name",
+      "my name"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has words but never speaks?",
+    answers: [
+      "book",
+      "a book"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has teeth but cannot bite?",
+    answers: [
+      "comb",
+      "a comb"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What goes up but never comes down?",
+    answers: [
+      "age",
+      "your age"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has a face and two hands but no arms or legs?",
+    answers: [
+      "clock",
+      "a clock"
+    ]
+  },
+
+  {
+    question:
+      "🧩 I’m tall when I’m young and short when I’m old. What am I?",
+    answers: [
+      "candle",
+      "a candle"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What has cities, roads, and rivers but no people, cars, or water?",
+    answers: [
+      "map",
+      "a map"
+    ]
+  },
+
+  {
+    question:
+      "🧩 What can you catch but never throw?",
+    answers: [
+      "cold",
+      "a cold"
+    ]
+  }
+
+];
+
+/* =========================================================
    BACKGROUNDS
 ========================================================= */
 
@@ -35,6 +189,17 @@ const TREE_IMAGE = "IMG_7259.png";
 const COTTON_CANDY_TREE = "IMG_7263.png";
 const COTTON_CANDY_PRICE = 1000;
 
+/* =========================================================
+   DECORATIONS
+========================================================= */
+
+const PUMPKIN_CAT_IMAGE = "IMG_7272.png";
+const PUMPKIN_CAT_PRICE = 250;
+
+/* =========================================================
+   R2
+========================================================= */
+
 const R2_BASE =
   "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/";
 
@@ -43,18 +208,15 @@ const R2_BASE =
 ========================================================= */
 
 /*
-  Move the tree vertically here.
+  Tree is intentionally low and centered.
+
+  The tree itself uses a smaller percentage
+  width so the entire image remains visible.
 
   Higher number = farther DOWN.
-
-  Current:
-  55%
-
-  Previously:
-  37%
 */
 
-const TREE_TOP_POSITION = 55;
+const TREE_TOP_POSITION = 78;
 
 /* =========================================================
    TREE STAGES
@@ -85,23 +247,7 @@ const LEVEL_REWARDS = {
    WEREWIVES CHAOS EVENTS
 ========================================================= */
 
-/*
-  EVERY CHAOS EVENT ONLY GIVES OR TAKES SPARKLES.
-
-  type:
-    "everyone" = everyone gets affected
-    "random"   = one random player gets affected
-
-  amount:
-    positive = gives sparkles
-    negative = takes sparkles
-*/
-
 const WEREWIVES_EVENTS = [
-
-  /* =======================================================
-     🧀 CHEESE EVENTS
-  ======================================================= */
 
   {
     type: "random",
@@ -155,10 +301,6 @@ const WEREWIVES_EVENTS = [
       "The cheese refuses to elaborate."
   },
 
-  /* =======================================================
-     🦝 RACCOON EVENTS
-  ======================================================= */
-
   {
     type: "random",
     amount: 75,
@@ -201,10 +343,6 @@ const WEREWIVES_EVENTS = [
       "A raccoon dropped a suspicious bag of sparkles."
   },
 
-  /* =======================================================
-     🐺 WEREWOLF EVENTS
-  ======================================================= */
-
   {
     type: "everyone",
     amount: 20,
@@ -244,10 +382,6 @@ const WEREWIVES_EVENTS = [
       "🐺 **LONE WOLF LUCK!**\n\n" +
       "One lucky Werewife has been spotted by the pack."
   },
-
-  /* =======================================================
-     💅 WEREWIVES EVENTS
-  ======================================================= */
 
   {
     type: "random",
@@ -299,10 +433,6 @@ const WEREWIVES_EVENTS = [
       "One random member has been crowned."
   },
 
-  /* =======================================================
-     🎃 HALLOWEEN CHAOS
-  ======================================================= */
-
   {
     type: "everyone",
     amount: 13,
@@ -343,6 +473,7 @@ const WEREWIVES_EVENTS = [
       "There is a spider.\n" +
       "Nobody is handling this well."
   }
+
 ];
 
 /* =========================================================
@@ -350,6 +481,7 @@ const WEREWIVES_EVENTS = [
 ========================================================= */
 
 const SPARKLE_TYPES = [
+
   {
     name: "Pink Sparkle",
     emoji: "💖",
@@ -373,6 +505,7 @@ const SPARKLE_TYPES = [
     emoji: "🌟",
     value: 50
   }
+
 ];
 
 /* =========================================================
@@ -380,7 +513,9 @@ const SPARKLE_TYPES = [
 ========================================================= */
 
 function defaultPlayer() {
+
   return {
+
     treeName: "Cherry Blossom",
 
     level: 1,
@@ -393,6 +528,22 @@ function defaultPlayer() {
 
     lastDaily: 0,
 
+    /* Daily riddle tracking */
+
+    dailyRiddleDate: "",
+
+    dailyRiddleReward: DAILY_RIDDLE_START_REWARD,
+
+    dailyRiddleCompleted: false,
+
+    dailyRiddleStreak: 0,
+
+    dailyRiddleIndex: 0,
+
+    /* Leaderboard identity */
+
+    username: "Unknown Werewife",
+
     sparklesOnTree: [],
 
     sceneMessage: "",
@@ -404,11 +555,17 @@ function defaultPlayer() {
     ],
 
     equipped: {
+
       decoration: null,
+
       theme: "cherry",
+
       tree: "cherry"
+
     }
+
   };
+
 }
 
 /* =========================================================
@@ -416,7 +573,9 @@ function defaultPlayer() {
 ========================================================= */
 
 function repairPlayer(player) {
-  const fresh = defaultPlayer();
+
+  const fresh =
+    defaultPlayer();
 
   if (
     !player ||
@@ -438,26 +597,70 @@ function repairPlayer(player) {
       Number(repaired.sparkle) || 0;
   }
 
-  repaired.level = Math.max(
-    1,
-    Number(repaired.level) || 1
-  );
+  repaired.level =
+    Math.max(
+      1,
+      Number(repaired.level) || 1
+    );
 
-  repaired.exp = Math.max(
-    0,
-    Number(repaired.exp) || 0
-  );
+  repaired.exp =
+    Math.max(
+      0,
+      Number(repaired.exp) || 0
+    );
 
-  repaired.sparkles = Math.max(
-    0,
-    Number(repaired.sparkles) || 0
-  );
+  repaired.sparkles =
+    Math.max(
+      0,
+      Number(repaired.sparkles) || 0
+    );
 
   repaired.lastWater =
     Number(repaired.lastWater) || 0;
 
   repaired.lastDaily =
     Number(repaired.lastDaily) || 0;
+
+  repaired.dailyRiddleReward =
+    Math.max(
+      DAILY_RIDDLE_START_REWARD,
+      Number(
+        repaired.dailyRiddleReward
+      ) ||
+        DAILY_RIDDLE_START_REWARD
+    );
+
+  repaired.dailyRiddleStreak =
+    Math.max(
+      0,
+      Number(
+        repaired.dailyRiddleStreak
+      ) || 0
+    );
+
+  repaired.dailyRiddleIndex =
+    Math.max(
+      0,
+      Number(
+        repaired.dailyRiddleIndex
+      ) || 0
+    );
+
+  repaired.dailyRiddleDate =
+    String(
+      repaired.dailyRiddleDate || ""
+    );
+
+  repaired.dailyRiddleCompleted =
+    Boolean(
+      repaired.dailyRiddleCompleted
+    );
+
+  repaired.username =
+    String(
+      repaired.username ||
+      "Unknown Werewife"
+    );
 
   if (
     !Array.isArray(
@@ -519,6 +722,14 @@ function repairPlayer(player) {
     repaired.equipped.tree = "cherry";
   }
 
+  if (
+    repaired.equipped.decoration !== null &&
+    repaired.equipped.decoration !==
+      "pumpkin_cat"
+  ) {
+    repaired.equipped.decoration = null;
+  }
+
   return repaired;
 }
 
@@ -530,20 +741,28 @@ async function getPlayer(
   env,
   userId
 ) {
+
   const raw =
-    await env.TREE_DATA.get(userId);
+    await env.TREE_DATA.get(
+      userId
+    );
 
   if (!raw) {
     return defaultPlayer();
   }
 
   try {
+
     return repairPlayer(
       JSON.parse(raw)
     );
+
   } catch {
+
     return defaultPlayer();
+
   }
+
 }
 
 async function savePlayer(
@@ -551,12 +770,41 @@ async function savePlayer(
   userId,
   player
 ) {
+
   await env.TREE_DATA.put(
     userId,
     JSON.stringify(
       repairPlayer(player)
     )
   );
+
+}
+
+/* =========================================================
+   SAVE DISCORD USERNAME
+========================================================= */
+
+function getInteractionUsername(
+  interaction
+) {
+
+  const user =
+    interaction.member?.user ||
+    interaction.user;
+
+  if (!user) {
+    return "Unknown Werewife";
+  }
+
+  if (user.global_name) {
+    return user.global_name;
+  }
+
+  if (user.username) {
+    return user.username;
+  }
+
+  return "Unknown Werewife";
 }
 
 /* =========================================================
@@ -567,10 +815,30 @@ function xpNeeded(level) {
   return level * 50;
 }
 
+function getTreeHeight(player) {
+
+  /*
+    Level 1 = 1 ft
+    Every additional level = +1 ft
+
+    So:
+    Level 1 = 1 ft
+    Level 2 = 2 ft
+    Level 10 = 10 ft
+    etc.
+  */
+
+  return Math.max(
+    1,
+    Number(player.level) || 1
+  );
+}
+
 function addExp(
   player,
   amount
 ) {
+
   const rewardMessages = [];
 
   player.exp += amount;
@@ -579,6 +847,7 @@ function addExp(
     player.exp >=
     xpNeeded(player.level)
   ) {
+
     player.exp -=
       xpNeeded(player.level);
 
@@ -589,6 +858,7 @@ function addExp(
         player.level
       ]
     ) {
+
       const reward =
         LEVEL_REWARDS[
           player.level
@@ -599,6 +869,7 @@ function addExp(
           player.level
         )
       ) {
+
         player.sparkles +=
           reward;
 
@@ -609,8 +880,11 @@ function addExp(
         rewardMessages.push(
           `🎉 Level ${player.level}! You received 💖 ${reward} sparkles!`
         );
+
       }
+
     }
+
   }
 
   return rewardMessages;
@@ -624,21 +898,119 @@ function randomInt(
   min,
   max
 ) {
+
   return (
     Math.floor(
       Math.random() *
         (max - min + 1)
     ) + min
   );
+
 }
 
 function randomItem(array) {
+
   return array[
     Math.floor(
       Math.random() *
         array.length
     )
   ];
+
+}
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
+function getDayKey() {
+
+  return new Date()
+    .toISOString()
+    .slice(0, 10);
+
+}
+
+/* =========================================================
+   DAILY RIDDLE SELECTION
+========================================================= */
+
+function getDailyRiddle(
+  date
+) {
+
+  let hash = 0;
+
+  for (
+    let i = 0;
+    i < date.length;
+    i++
+  ) {
+
+    hash =
+      (
+        hash * 31 +
+        date.charCodeAt(i)
+      ) >>> 0;
+
+  }
+
+  const index =
+    hash %
+    DAILY_RIDDLES.length;
+
+  return {
+    ...DAILY_RIDDLES[index],
+    index
+  };
+
+}
+
+/* =========================================================
+   NORMALIZE RIDDLE ANSWER
+========================================================= */
+
+function normalizeAnswer(
+  answer
+) {
+
+  return String(
+    answer || ""
+  )
+    .toLowerCase()
+    .trim()
+    .replace(
+      /[^a-z0-9\s]/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    );
+
+}
+
+/* =========================================================
+   RIDDLE ANSWER CHECK
+========================================================= */
+
+function isCorrectRiddleAnswer(
+  answer,
+  acceptedAnswers
+) {
+
+  const normalized =
+    normalizeAnswer(
+      answer
+    );
+
+  return acceptedAnswers.some(
+    accepted =>
+      normalizeAnswer(
+        accepted
+      ) === normalized
+  );
+
 }
 
 /* =========================================================
@@ -648,7 +1020,9 @@ function randomItem(array) {
 function cleanExpiredSparkles(
   player
 ) {
-  const now = Date.now();
+
+  const now =
+    Date.now();
 
   player.sparklesOnTree =
     player.sparklesOnTree.filter(
@@ -657,38 +1031,56 @@ function cleanExpiredSparkles(
           sparkle.createdAt <
         SPARKLE_LIFETIME
     );
+
 }
 
 function createSparkle() {
+
   const type =
     randomItem(
       SPARKLE_TYPES
     );
 
   return {
+
     id:
       Date.now().toString(36) +
       Math.random()
         .toString(36)
         .slice(2),
 
-    x: randomInt(12, 88),
+    x:
+      randomInt(
+        12,
+        88
+      ),
 
-    y: randomInt(15, 72),
+    y:
+      randomInt(
+        15,
+        72
+      ),
 
-    emoji: type.emoji,
+    emoji:
+      type.emoji,
 
-    name: type.name,
+    name:
+      type.name,
 
-    value: type.value,
+    value:
+      type.value,
 
-    createdAt: Date.now()
+    createdAt:
+      Date.now()
+
   };
+
 }
 
 function maybeSpawnSparkles(
   player
 ) {
+
   cleanExpiredSparkles(
     player
   );
@@ -711,6 +1103,7 @@ function maybeSpawnSparkles(
     i < amount;
     i++
   ) {
+
     if (
       player.sparklesOnTree.length >=
       MAX_ACTIVE_SPARKLES
@@ -721,7 +1114,9 @@ function maybeSpawnSparkles(
     player.sparklesOnTree.push(
       createSparkle()
     );
+
   }
+
 }
 
 /* =========================================================
@@ -731,6 +1126,7 @@ function maybeSpawnSparkles(
 function maybeChaosEvent(
   player
 ) {
+
   if (
     Math.random() > 0.20
   ) {
@@ -741,19 +1137,6 @@ function maybeChaosEvent(
     randomItem(
       WEREWIVES_EVENTS
     );
-
-  /*
-    The current interaction only has
-    the player who triggered the event.
-
-    So random events affect that player,
-    while everyone-events currently affect
-    the triggering player.
-
-    This keeps the system safe without
-    requiring a separate member database
-    or Discord server-member lookup.
-  */
 
   const amount =
     Number(event.amount) || 0;
@@ -773,27 +1156,32 @@ function maybeChaosEvent(
   if (
     actualChange > 0
   ) {
+
     return (
       `${event.message}\n\n` +
       `💖 **+${actualChange} sparkles!**\n` +
       `✨ You now have **${player.sparkles} ✨**`
     );
+
   }
 
   if (
     actualChange < 0
   ) {
+
     return (
       `${event.message}\n\n` +
       `💔 **${Math.abs(actualChange)} sparkles lost!**\n` +
       `✨ You now have **${player.sparkles} ✨**`
     );
+
   }
 
   return (
     `${event.message}\n\n` +
     `✨ No sparkles were lost because you had none to take.`
   );
+
 }
 
 /* =========================================================
@@ -803,6 +1191,7 @@ function maybeChaosEvent(
 function getBackground(
   player
 ) {
+
   const theme =
     player.equipped?.theme ||
     "cherry";
@@ -810,25 +1199,30 @@ function getBackground(
   if (
     theme === "halloween"
   ) {
+
     return (
       R2_BASE +
       HALLOWEEN_BACKGROUND
     );
+
   }
 
   if (
     theme === "candyland"
   ) {
+
     return (
       R2_BASE +
       CANDYLAND_BACKGROUND
     );
+
   }
 
   return (
     R2_BASE +
     NORMAL_BACKGROUND
   );
+
 }
 
 /* =========================================================
@@ -838,6 +1232,7 @@ function getBackground(
 function getTreeImage(
   player
 ) {
+
   const tree =
     player.equipped?.tree ||
     "cherry";
@@ -845,16 +1240,43 @@ function getTreeImage(
   if (
     tree === "cotton_candy"
   ) {
+
     return (
       R2_BASE +
       COTTON_CANDY_TREE
     );
+
   }
 
   return (
     R2_BASE +
     TREE_IMAGE
   );
+
+}
+
+/* =========================================================
+   DECORATION IMAGE
+========================================================= */
+
+function getDecorationImage(
+  player
+) {
+
+  if (
+    player.equipped?.decoration ===
+    "pumpkin_cat"
+  ) {
+
+    return (
+      R2_BASE +
+      PUMPKIN_CAT_IMAGE
+    );
+
+  }
+
+  return null;
+
 }
 
 /* =========================================================
@@ -865,6 +1287,7 @@ async function renderTree(
   env,
   player
 ) {
+
   cleanExpiredSparkles(
     player
   );
@@ -875,6 +1298,7 @@ async function renderTree(
     );
 
   try {
+
     const page =
       await browser.newPage();
 
@@ -883,6 +1307,11 @@ async function renderTree(
 
     const treeUrl =
       getTreeImage(player);
+
+    const decorationUrl =
+      getDecorationImage(
+        player
+      );
 
     const sparkleHtml =
       player.sparklesOnTree
@@ -900,6 +1329,16 @@ async function renderTree(
           `
         )
         .join("");
+
+    const decorationHtml =
+      decorationUrl
+        ? `
+          <img
+            class="decoration"
+            src="${decorationUrl}"
+          />
+        `
+        : "";
 
     const html = `
       <!DOCTYPE html>
@@ -941,22 +1380,62 @@ async function renderTree(
             background-position: center;
           }
 
+          /*
+            TREE
+
+            Centered horizontally.
+
+            Moved low in the scene.
+
+            Width is deliberately moderate so
+            the complete tree remains visible.
+          */
+
           .tree {
             position: absolute;
 
-            left: 44%;
+            left: 50%;
 
             top: ${TREE_TOP_POSITION}%;
 
             transform:
               translate(-50%, -50%);
 
-            width: 30%;
-            height: 30%;
+            width: 31%;
+
+            height: 38%;
 
             object-fit: contain;
 
+            object-position: center;
+
             z-index: 5;
+          }
+
+          /*
+            DECORATION
+
+            Far enough left to leave a visible gap,
+            but still comfortably inside the image.
+          */
+
+          .decoration {
+            position: absolute;
+
+            left: 25%;
+
+            top: 77%;
+
+            transform:
+              translate(-50%, -50%);
+
+            width: 15%;
+
+            height: 15%;
+
+            object-fit: contain;
+
+            z-index: 6;
           }
 
           .sparkle {
@@ -1027,6 +1506,8 @@ async function renderTree(
 
         <div class="scene">
 
+          ${decorationHtml}
+
           <img
             class="tree"
             src="${treeUrl}"
@@ -1062,6 +1543,7 @@ async function renderTree(
     });
 
     try {
+
       await page.waitForFunction(
         () =>
           Array.from(
@@ -1074,10 +1556,13 @@ async function renderTree(
           timeout: 5000
         }
       );
+
     } catch {
+
       console.log(
         "Image loading timed out; continuing render."
       );
+
     }
 
     return await page.screenshot({
@@ -1085,8 +1570,11 @@ async function renderTree(
     });
 
   } finally {
+
     await browser.close();
+
   }
+
 }
 
 /* =========================================================
@@ -1096,6 +1584,7 @@ async function renderTree(
 function buildTreeText(
   player
 ) {
+
   cleanExpiredSparkles(
     player
   );
@@ -1105,13 +1594,27 @@ function buildTreeText(
       player.level
     );
 
+  const height =
+    getTreeHeight(
+      player
+    );
+
   return (
+
     `🌸 **${player.treeName}**\n\n` +
+
     `🌱 Level: **${player.level}**\n` +
+
+    `📏 Height: **${height} ft**\n` +
+
     `✨ EXP: **${player.exp}/${needed}**\n` +
+
     `💖 Sparkles: **${player.sparkles}**\n\n` +
+
     `✨ Sparkles on tree: **${player.sparklesOnTree.length}**`
+
   );
+
 }
 
 /* =========================================================
@@ -1119,10 +1622,13 @@ function buildTreeText(
 ========================================================= */
 
 function treeButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 1,
@@ -1147,18 +1653,53 @@ function treeButtons() {
       {
         type: 2,
         style: 2,
+        label: "🧩 Riddle",
+        custom_id: "daily_riddle"
+      },
+
+      {
+        type: 2,
+        style: 2,
         label: "🛍️ Shop",
         custom_id: "shop"
-      },
+      }
+
+    ]
+
+  };
+
+}
+
+/* =========================================================
+   SECOND TREE BUTTON ROW
+========================================================= */
+
+function treeButtonsSecondRow() {
+
+  return {
+
+    type: 1,
+
+    components: [
 
       {
         type: 2,
         style: 2,
         label: "🎀 Customize",
         custom_id: "customize"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "🏆 Leaderboard",
+        custom_id: "leaderboard"
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
@@ -1169,9 +1710,11 @@ async function acknowledge(
   env,
   interaction
 ) {
+
   return fetch(
     `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
+
       method: "POST",
 
       headers: {
@@ -1182,8 +1725,10 @@ async function acknowledge(
       body: JSON.stringify({
         type: 5
       })
+
     }
   );
+
 }
 
 /* =========================================================
@@ -1195,6 +1740,7 @@ async function sendTree(
   interaction,
   player
 ) {
+
   const image =
     await renderTree(
       env,
@@ -1216,13 +1762,15 @@ async function sendTree(
   form.append(
     "payload_json",
     JSON.stringify({
+
       content:
         buildTreeText(
           player
         ),
 
       components: [
-        treeButtons()
+        treeButtons(),
+        treeButtonsSecondRow()
       ],
 
       attachments: [
@@ -1231,6 +1779,7 @@ async function sendTree(
           filename: "tree.png"
         }
       ]
+
     })
   );
 
@@ -1242,11 +1791,14 @@ async function sendTree(
   return fetch(
     `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
     {
+
       method: "PATCH",
 
       body: form
+
     }
   );
+
 }
 
 /* =========================================================
@@ -1259,9 +1811,11 @@ async function sendText(
   content,
   components = []
 ) {
+
   return fetch(
     `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
     {
+
       method: "POST",
 
       headers: {
@@ -1270,16 +1824,22 @@ async function sendText(
       },
 
       body: JSON.stringify({
+
         type: 4,
 
         data: {
+
           content,
 
           components
+
         }
+
       })
+
     }
   );
+
 }
 
 /* =========================================================
@@ -1287,10 +1847,13 @@ async function sendText(
 ========================================================= */
 
 function shopCategoryButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 2,
@@ -1321,8 +1884,11 @@ function shopCategoryButtons() {
         label: "❌ Close",
         custom_id: "tree"
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
@@ -1330,10 +1896,13 @@ function shopCategoryButtons() {
 ========================================================= */
 
 function backgroundShopButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 1,
@@ -1343,6 +1912,7 @@ function backgroundShopButtons() {
 
         custom_id:
           "buy_candyland"
+
       },
 
       {
@@ -1351,10 +1921,15 @@ function backgroundShopButtons() {
 
         label: "⬅️ Back",
 
-        custom_id: "shop"
+        custom_id:
+          "shop"
+
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
@@ -1362,10 +1937,13 @@ function backgroundShopButtons() {
 ========================================================= */
 
 function treeShopButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 1,
@@ -1375,6 +1953,7 @@ function treeShopButtons() {
 
         custom_id:
           "buy_cotton_candy"
+
       },
 
       {
@@ -1383,21 +1962,29 @@ function treeShopButtons() {
 
         label: "⬅️ Back",
 
-        custom_id: "shop"
+        custom_id:
+          "shop"
+
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
-   LIMITED SHOP MAIN BUTTONS
+   LIMITED SHOP MAIN
 ========================================================= */
 
 function limitedShopButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 1,
@@ -1429,19 +2016,25 @@ function limitedShopButtons() {
         custom_id:
           "shop"
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
-   LIMITED HALLOWEEN BUTTONS
+   LIMITED HALLOWEEN
 ========================================================= */
 
 function limitedHalloweenButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 4,
@@ -1451,30 +2044,51 @@ function limitedHalloweenButtons() {
 
         custom_id:
           "buy_halloween"
+
+      },
+
+      {
+        type: 2,
+        style: 1,
+
+        label:
+          `🐱 Pumpkin Cat — ${PUMPKIN_CAT_PRICE} ✨`,
+
+        custom_id:
+          "buy_pumpkin_cat"
+
       },
 
       {
         type: 2,
         style: 2,
 
-        label: "⬅️ Limited Shop",
+        label:
+          "⬅️ Limited Shop",
 
         custom_id:
           "limited_shop"
+
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
-   LIMITED SPECIAL SET BUTTONS
+   LIMITED SPECIAL
 ========================================================= */
 
 function limitedSpecialButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 2,
@@ -1490,19 +2104,25 @@ function limitedSpecialButtons() {
         custom_id:
           "limited_shop"
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
-   LIMITED HOLIDAY BUTTONS
+   LIMITED HOLIDAYS
 ========================================================= */
 
 function limitedHolidayButtons() {
+
   return {
+
     type: 1,
 
     components: [
+
       {
         type: 2,
         style: 2,
@@ -1518,8 +2138,11 @@ function limitedHolidayButtons() {
         custom_id:
           "limited_shop"
       }
+
     ]
+
   };
+
 }
 
 /* =========================================================
@@ -1530,6 +2153,7 @@ async function handleShop(
   env,
   interaction
 ) {
+
   return sendText(
     env,
     interaction,
@@ -1542,6 +2166,7 @@ async function handleShop(
       shopCategoryButtons()
     ]
   );
+
 }
 
 async function handleShopCategory(
@@ -1549,9 +2174,11 @@ async function handleShopCategory(
   interaction,
   category
 ) {
+
   if (
     category === "backgrounds"
   ) {
+
     return sendText(
       env,
       interaction,
@@ -1564,6 +2191,7 @@ async function handleShopCategory(
         backgroundShopButtons()
       ]
     );
+
   }
 
   return sendText(
@@ -1577,6 +2205,7 @@ async function handleShopCategory(
       treeShopButtons()
     ]
   );
+
 }
 
 /* =========================================================
@@ -1587,6 +2216,7 @@ async function handleLimitedShop(
   env,
   interaction
 ) {
+
   return sendText(
     env,
     interaction,
@@ -1601,6 +2231,7 @@ async function handleLimitedShop(
       limitedShopButtons()
     ]
   );
+
 }
 
 async function handleLimitedCategory(
@@ -1608,27 +2239,32 @@ async function handleLimitedCategory(
   interaction,
   category
 ) {
+
   if (
     category === "halloween"
   ) {
+
     return sendText(
       env,
       interaction,
 
       `🎃 **HALLOWEEN LIMITED SHOP**\n\n` +
       `👻 Spooky season has arrived!\n\n` +
-      `🎃 Halloween Background — **${HALLOWEEN_PRICE} ✨**\n\n` +
-      `⏳ *Limited-time item*`,
+      `🎃 Halloween Background — **${HALLOWEEN_PRICE} ✨**\n` +
+      `🐱 Pumpkin Cat Decoration — **${PUMPKIN_CAT_PRICE} ✨**\n\n` +
+      `⏳ *Limited-time items*`,
 
       [
         limitedHalloweenButtons()
       ]
     );
+
   }
 
   if (
     category === "special"
   ) {
+
     return sendText(
       env,
       interaction,
@@ -1641,6 +2277,7 @@ async function handleLimitedCategory(
         limitedSpecialButtons()
       ]
     );
+
   }
 
   return sendText(
@@ -1655,6 +2292,7 @@ async function handleLimitedCategory(
       limitedHolidayButtons()
     ]
   );
+
 }
 
 /* =========================================================
@@ -1666,6 +2304,7 @@ async function buyHalloween(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -1677,18 +2316,21 @@ async function buyHalloween(
       "halloween_background"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "🎃 You already own the Halloween background!"
     );
+
   }
 
   if (
     player.sparkles <
     HALLOWEEN_PRICE
   ) {
+
     return sendText(
       env,
       interaction,
@@ -1696,6 +2338,7 @@ async function buyHalloween(
       `❌ You need **${HALLOWEEN_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
+
   }
 
   player.sparkles -=
@@ -1718,6 +2361,7 @@ async function buyHalloween(
     "🎃 **Halloween background purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
+
 }
 
 /* =========================================================
@@ -1729,6 +2373,7 @@ async function buyCandyland(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -1740,18 +2385,21 @@ async function buyCandyland(
       "candyland_background"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "🍭 You already own the Candy Land background!"
     );
+
   }
 
   if (
     player.sparkles <
     CANDYLAND_PRICE
   ) {
+
     return sendText(
       env,
       interaction,
@@ -1759,6 +2407,7 @@ async function buyCandyland(
       `❌ You need **${CANDYLAND_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
+
   }
 
   player.sparkles -=
@@ -1781,6 +2430,7 @@ async function buyCandyland(
     "🍭 **Candy Land background purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
+
 }
 
 /* =========================================================
@@ -1792,6 +2442,7 @@ async function buyCottonCandy(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -1803,18 +2454,21 @@ async function buyCottonCandy(
       "cotton_candy_tree"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "🍭 You already own the Cotton Candy Tree!"
     );
+
   }
 
   if (
     player.sparkles <
     COTTON_CANDY_PRICE
   ) {
+
     return sendText(
       env,
       interaction,
@@ -1822,6 +2476,7 @@ async function buyCottonCandy(
       `❌ You need **${COTTON_CANDY_PRICE} ✨** to buy this.\n` +
       `You have **${player.sparkles} ✨**.`
     );
+
   }
 
   player.sparkles -=
@@ -1844,6 +2499,76 @@ async function buyCottonCandy(
     "🍭 **Cotton Candy Tree purchased!**\n\n" +
     "Use `/customize` to equip it!"
   );
+
+}
+
+/* =========================================================
+   BUY PUMPKIN CAT
+========================================================= */
+
+async function buyPumpkinCat(
+  env,
+  interaction,
+  userId
+) {
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  if (
+    player.inventory.includes(
+      "pumpkin_cat"
+    )
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      "🐱🎃 You already own the Pumpkin Cat!"
+    );
+
+  }
+
+  if (
+    player.sparkles <
+    PUMPKIN_CAT_PRICE
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      `❌ You need **${PUMPKIN_CAT_PRICE} ✨** to buy Pumpkin Cat.\n` +
+      `You have **${player.sparkles} ✨**.`
+    );
+
+  }
+
+  player.sparkles -=
+    PUMPKIN_CAT_PRICE;
+
+  player.inventory.push(
+    "pumpkin_cat"
+  );
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    "🐱🎃 **Pumpkin Cat purchased!**\n\n" +
+    "Go to `/customize` → **Decorations** to equip it!"
+  );
+
 }
 
 /* =========================================================
@@ -1855,10 +2580,16 @@ async function handleWater(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
       userId
+    );
+
+  player.username =
+    getInteractionUsername(
+      interaction
     );
 
   const now =
@@ -1868,6 +2599,7 @@ async function handleWater(
     now - player.lastWater <
     WATER_COOLDOWN
   ) {
+
     const remaining =
       WATER_COOLDOWN -
       (now - player.lastWater);
@@ -1884,6 +2616,7 @@ async function handleWater(
       `💧 Your tree has already been watered!\n` +
       `Try again in about **${minutes} minutes**.`
     );
+
   }
 
   player.lastWater =
@@ -1912,29 +2645,36 @@ async function handleWater(
 
   let message =
     `💧 You watered **${player.treeName}**!\n` +
-    `✨ +${EXP_PER_WATER} EXP`;
+    `✨ +${EXP_PER_WATER} EXP\n` +
+    `📏 Tree height: **${getTreeHeight(player)} ft**`;
 
   if (
     player.sparklesOnTree.length
   ) {
+
     message +=
       `\n✨ Sparkles appeared around your tree!`;
+
   }
 
   if (
     rewardMessages.length
   ) {
+
     message +=
       "\n\n" +
       rewardMessages.join(
         "\n"
       );
+
   }
 
   if (chaos) {
+
     message +=
       "\n\n" +
       chaos;
+
   }
 
   return sendText(
@@ -1942,6 +2682,7 @@ async function handleWater(
     interaction,
     message
   );
+
 }
 
 /* =========================================================
@@ -1953,6 +2694,7 @@ async function handleCatch(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -1967,6 +2709,7 @@ async function handleCatch(
     player.sparklesOnTree.length ===
     0
   ) {
+
     await savePlayer(
       env,
       userId,
@@ -1979,6 +2722,7 @@ async function handleCatch(
 
       "✨ There aren't any sparkles to catch right now!"
     );
+
   }
 
   const index =
@@ -2011,10 +2755,11 @@ async function handleCatch(
     `💖 +${sparkle.value} sparkles!\n` +
     `✨ You now have **${player.sparkles} ✨**`
   );
+
 }
 
 /* =========================================================
-   DAILY
+   OLD DAILY REWARD
 ========================================================= */
 
 async function handleDaily(
@@ -2022,6 +2767,7 @@ async function handleDaily(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -2035,6 +2781,7 @@ async function handleDaily(
     now - player.lastDaily <
     DAILY_COOLDOWN
   ) {
+
     const remaining =
       DAILY_COOLDOWN -
       (now - player.lastDaily);
@@ -2051,13 +2798,17 @@ async function handleDaily(
       `🎁 You already claimed your daily reward!\n` +
       `Come back in about **${hours} hours**.`
     );
+
   }
 
   player.lastDaily =
     now;
 
   const reward =
-    randomInt(25, 75);
+    randomInt(
+      25,
+      75
+    );
 
   player.sparkles +=
     reward;
@@ -2076,6 +2827,205 @@ async function handleDaily(
     `💖 You received **${reward} sparkles!**\n` +
     `✨ Total: **${player.sparkles} ✨**`
   );
+
+}
+
+/* =========================================================
+   DAILY RIDDLE COMMAND
+========================================================= */
+
+async function handleDailyRiddle(
+  env,
+  interaction,
+  userId,
+  suppliedAnswer = null
+) {
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  player.username =
+    getInteractionUsername(
+      interaction
+    );
+
+  const today =
+    getDayKey();
+
+  const riddle =
+    getDailyRiddle(
+      today
+    );
+
+  /*
+    New day:
+    reset today's completion state.
+  */
+
+  if (
+    player.dailyRiddleDate !==
+    today
+  ) {
+
+    player.dailyRiddleDate =
+      today;
+
+    player.dailyRiddleCompleted =
+      false;
+
+    player.dailyRiddleIndex =
+      riddle.index;
+
+    /*
+      The reward is calculated from
+      successful completions.
+
+      First successful riddle:
+      100
+
+      Then:
+      105
+      110
+      115...
+    */
+
+    player.dailyRiddleReward =
+      DAILY_RIDDLE_START_REWARD +
+      (
+        player.dailyRiddleStreak *
+        DAILY_RIDDLE_REWARD_INCREASE
+      );
+
+    await savePlayer(
+      env,
+      userId,
+      player
+    );
+
+  }
+
+  /* -----------------------------------------
+     ALREADY COMPLETED
+  ----------------------------------------- */
+
+  if (
+    player.dailyRiddleCompleted
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      `🧩 **Today's riddle is already solved!**\n\n` +
+      `💖 You earned **${player.dailyRiddleReward} ✨** today.\n` +
+      `🔥 Riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
+      `Come back tomorrow for a new riddle!`
+    );
+
+  }
+
+  /* -----------------------------------------
+     NO ANSWER = SHOW RIDDLE
+  ----------------------------------------- */
+
+  if (
+    !suppliedAnswer
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      `🧩 **DAILY RIDDLE**\n\n` +
+
+      `${riddle.question}\n\n` +
+
+      `💖 Correct answer reward: **${player.dailyRiddleReward} ✨**\n` +
+
+      `🔥 Current riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
+
+      `Use **/daily-riddle** and put your answer in the \`answer\` field!`
+    );
+
+  }
+
+  /* -----------------------------------------
+     CHECK ANSWER
+  ----------------------------------------- */
+
+  const correct =
+    isCorrectRiddleAnswer(
+      suppliedAnswer,
+      riddle.answers
+    );
+
+  if (!correct) {
+
+    await savePlayer(
+      env,
+      userId,
+      player
+    );
+
+    return sendText(
+      env,
+      interaction,
+
+      `❌ **Not quite!**\n\n` +
+      `🧩 Riddle:\n${riddle.question}\n\n` +
+      `Try again today! 💖\n` +
+      `The reward is still **${player.dailyRiddleReward} ✨**.`
+    );
+
+  }
+
+  /* -----------------------------------------
+     CORRECT
+  ----------------------------------------- */
+
+  const reward =
+    player.dailyRiddleReward;
+
+  player.sparkles +=
+    reward;
+
+  player.dailyRiddleCompleted =
+    true;
+
+  player.dailyRiddleStreak++;
+
+  /*
+    Next successful day gets +5.
+  */
+
+  player.dailyRiddleReward =
+    reward +
+    DAILY_RIDDLE_REWARD_INCREASE;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎉 **CORRECT!** 🧩✨\n\n` +
+
+    `💖 You earned **${reward} sparkles!**\n\n` +
+
+    `✨ Total sparkles: **${player.sparkles}**\n` +
+
+    `🔥 Riddle streak: **${player.dailyRiddleStreak} days**\n\n` +
+
+    `📈 Tomorrow's reward: **${player.dailyRiddleReward} ✨**`
+  );
+
 }
 
 /* =========================================================
@@ -2087,6 +3037,7 @@ async function handleInventory(
   interaction,
   userId
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -2100,9 +3051,11 @@ async function handleInventory(
       "pink_sky_background"
     )
   ) {
+
     items.push(
       "🌸 Pink Sky Background"
     );
+
   }
 
   if (
@@ -2110,9 +3063,11 @@ async function handleInventory(
       "halloween_background"
     )
   ) {
+
     items.push(
       "🎃 Halloween Background"
     );
+
   }
 
   if (
@@ -2120,9 +3075,11 @@ async function handleInventory(
       "candyland_background"
     )
   ) {
+
     items.push(
       "🍭 Candy Land Background"
     );
+
   }
 
   if (
@@ -2130,9 +3087,23 @@ async function handleInventory(
       "cotton_candy_tree"
     )
   ) {
+
     items.push(
       "🍭 Cotton Candy Tree"
     );
+
+  }
+
+  if (
+    player.inventory.includes(
+      "pumpkin_cat"
+    )
+  ) {
+
+    items.push(
+      "🐱🎃 Pumpkin Cat Decoration"
+    );
+
   }
 
   return sendText(
@@ -2149,23 +3120,69 @@ async function handleInventory(
 
     `\n\n💖 Sparkles: **${player.sparkles} ✨**`
   );
+
 }
 
 /* =========================================================
-   CUSTOMIZE BUTTONS
+   CUSTOMIZE MAIN
 ========================================================= */
 
-function customizeButtons(
+function customizeMainButtons() {
+
+  return {
+
+    type: 1,
+
+    components: [
+
+      {
+        type: 2,
+        style: 1,
+        label: "🌌 Backgrounds",
+        custom_id:
+          "customize_backgrounds"
+      },
+
+      {
+        type: 2,
+        style: 1,
+        label: "🌳 Trees",
+        custom_id:
+          "customize_trees"
+      },
+
+      {
+        type: 2,
+        style: 1,
+        label: "🎃 Decorations",
+        custom_id:
+          "customize_decorations"
+      }
+
+    ]
+
+  };
+
+}
+
+/* =========================================================
+   CUSTOMIZE BACKGROUND BUTTONS
+========================================================= */
+
+function customizeBackgroundButtons(
   player
 ) {
+
   const buttons = [];
 
   buttons.push({
+
     type: 2,
     style: 1,
     label: "🌸 Pink Sky",
     custom_id:
       "equip_theme_cherry"
+
   });
 
   if (
@@ -2173,13 +3190,17 @@ function customizeButtons(
       "halloween_background"
     )
   ) {
+
     buttons.push({
+
       type: 2,
       style: 1,
       label: "🎃 Halloween",
       custom_id:
         "equip_theme_halloween"
+
     });
+
   }
 
   if (
@@ -2187,20 +3208,63 @@ function customizeButtons(
       "candyland_background"
     )
   ) {
+
     buttons.push({
+
       type: 2,
       style: 1,
       label: "🍭 Candy Land",
       custom_id:
         "equip_theme_candyland"
+
     });
+
   }
 
-  const rows = [
+  return [
+
     {
       type: 1,
       components: buttons
+    },
+
+    {
+      type: 1,
+      components: [
+
+        {
+          type: 2,
+          style: 2,
+          label: "⬅️ Customize",
+          custom_id:
+            "customize"
+        }
+
+      ]
     }
+
+  ];
+
+}
+
+/* =========================================================
+   CUSTOMIZE TREE BUTTONS
+========================================================= */
+
+function customizeTreeButtons(
+  player
+) {
+
+  const buttons = [
+
+    {
+      type: 2,
+      style: 1,
+      label: "🌸 Cherry Tree",
+      custom_id:
+        "equip_tree_cherry"
+    }
+
   ];
 
   if (
@@ -2208,46 +3272,109 @@ function customizeButtons(
       "cotton_candy_tree"
     )
   ) {
-    rows.push({
-      type: 1,
 
+    buttons.push({
+
+      type: 2,
+      style: 1,
+      label:
+        "🍭 Cotton Candy",
+      custom_id:
+        "equip_tree_cotton_candy"
+
+    });
+
+  }
+
+  return [
+
+    {
+      type: 1,
+      components: buttons
+    },
+
+    {
+      type: 1,
       components: [
-        {
-          type: 2,
-          style: 1,
-          label:
-            "🍭 Cotton Candy Tree",
-          custom_id:
-            "equip_tree_cotton_candy"
-        },
 
         {
           type: 2,
           style: 2,
-          label:
-            "🌸 Cherry Tree",
+          label: "⬅️ Customize",
           custom_id:
-            "equip_tree_cherry"
+            "customize"
         }
+
       ]
+    }
+
+  ];
+
+}
+
+/* =========================================================
+   CUSTOMIZE DECORATIONS
+========================================================= */
+
+function customizeDecorationButtons(
+  player
+) {
+
+  const buttons = [];
+
+  if (
+    player.inventory.includes(
+      "pumpkin_cat"
+    )
+  ) {
+
+    buttons.push({
+
+      type: 2,
+      style: 1,
+      label:
+        "🐱🎃 Pumpkin Cat",
+      custom_id:
+        "equip_decoration_pumpkin_cat"
+
     });
+
   }
 
-  rows.push({
-    type: 1,
+  buttons.push({
 
-    components: [
-      {
-        type: 2,
-        style: 2,
-        label:
-          "🌳 Back to Tree",
-        custom_id: "tree"
-      }
-    ]
+    type: 2,
+    style: 2,
+    label: "❌ No Decoration",
+    custom_id:
+      "equip_decoration_none"
+
   });
 
-  return rows;
+  return [
+
+    {
+      type: 1,
+      components: buttons
+    },
+
+    {
+      type: 1,
+      components: [
+
+        {
+          type: 2,
+          style: 2,
+          label: "⬅️ Customize",
+          custom_id:
+            "customize"
+        }
+
+      ]
+    }
+
+  ];
+
 }
 
 /* =========================================================
@@ -2259,24 +3386,124 @@ async function handleCustomize(
   interaction,
   userId
 ) {
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎀 **CUSTOMIZE YOUR TREE**\n\n` +
+
+    `Choose what you want to customize!\n\n` +
+
+    `🌌 **Backgrounds**\n` +
+    `🌳 **Trees**\n` +
+    `🎃 **Decorations**`,
+
+    [
+      customizeMainButtons(),
+
+      {
+        type: 1,
+        components: [
+
+          {
+            type: 2,
+            style: 2,
+            label:
+              "🌳 Back to Tree",
+            custom_id:
+              "tree"
+          }
+
+        ]
+      }
+
+    ]
+  );
+
+}
+
+/* =========================================================
+   CUSTOMIZE CATEGORY
+========================================================= */
+
+async function handleCustomizeCategory(
+  env,
+  interaction,
+  userId,
+  category
+) {
+
   const player =
     await getPlayer(
       env,
       userId
     );
 
+  if (
+    category ===
+    "backgrounds"
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      `🌌 **BACKGROUND CUSTOMIZATION**\n\n` +
+
+      `Current: **${player.equipped.theme}**\n\n` +
+
+      `Choose your background:`,
+
+      customizeBackgroundButtons(
+        player
+      )
+    );
+
+  }
+
+  if (
+    category ===
+    "trees"
+  ) {
+
+    return sendText(
+      env,
+      interaction,
+
+      `🌳 **TREE CUSTOMIZATION**\n\n` +
+
+      `Current tree: **${player.equipped.tree}**\n` +
+
+      `📏 Current height: **${getTreeHeight(player)} ft**\n\n` +
+
+      `Choose your tree:`,
+
+      customizeTreeButtons(
+        player
+      )
+    );
+
+  }
+
   return sendText(
     env,
     interaction,
 
-    `🎀 **Customize Your Tree**\n\n` +
-    `Current background: **${player.equipped.theme}**\n` +
-    `Current tree: **${player.equipped.tree}**`,
+    `🎃 **DECORATION CUSTOMIZATION**\n\n` +
 
-    customizeButtons(
+    `Current decoration: **${
+      player.equipped.decoration ||
+      "None"
+    }**\n\n` +
+
+    `Decorations appear to the left of your tree with space between them!`,
+
+    customizeDecorationButtons(
       player
     )
   );
+
 }
 
 /* =========================================================
@@ -2289,6 +3516,7 @@ async function equipTheme(
   userId,
   theme
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -2301,12 +3529,14 @@ async function equipTheme(
       "halloween_background"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "❌ You don't own the Halloween background yet!"
     );
+
   }
 
   if (
@@ -2315,12 +3545,14 @@ async function equipTheme(
       "candyland_background"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "❌ You don't own the Candy Land background yet!"
     );
+
   }
 
   player.equipped.theme =
@@ -2338,6 +3570,7 @@ async function equipTheme(
 
     `✨ Background changed to **${theme}**!`
   );
+
 }
 
 /* =========================================================
@@ -2350,6 +3583,7 @@ async function equipTree(
   userId,
   tree
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -2362,12 +3596,14 @@ async function equipTree(
       "cotton_candy_tree"
     )
   ) {
+
     return sendText(
       env,
       interaction,
 
       "❌ You don't own the Cotton Candy Tree yet!"
     );
+
   }
 
   player.equipped.tree =
@@ -2385,24 +3621,85 @@ async function equipTree(
 
     `🌳 Tree changed to **${tree}**!`
   );
+
+}
+
+/* =========================================================
+   EQUIP DECORATION
+========================================================= */
+
+async function equipDecoration(
+  env,
+  interaction,
+  userId,
+  decoration
+) {
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  if (
+    decoration ===
+    "pumpkin_cat"
+  ) {
+
+    if (
+      !player.inventory.includes(
+        "pumpkin_cat"
+      )
+    ) {
+
+      return sendText(
+        env,
+        interaction,
+
+        "❌ You don't own Pumpkin Cat yet!"
+      );
+
+    }
+
+    player.equipped.decoration =
+      "pumpkin_cat";
+
+    await savePlayer(
+      env,
+      userId,
+      player
+    );
+
+    return sendText(
+      env,
+      interaction,
+
+      "🐱🎃 **Pumpkin Cat is now decorating your tree!**"
+    );
+
+  }
+
+  player.equipped.decoration =
+    null;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  return sendText(
+    env,
+    interaction,
+
+    "✨ Your tree decoration has been removed."
+  );
+
 }
 
 /* =========================================================
    RENAME
 ========================================================= */
-
-async function handleRename(
-  env,
-  interaction,
-  userId
-) {
-  return sendText(
-    env,
-    interaction,
-
-    "🌸 To rename your tree, use the `/rename` command followed by the new name."
-  );
-}
 
 async function renameTree(
   env,
@@ -2410,6 +3707,7 @@ async function renameTree(
   userId,
   name
 ) {
+
   const player =
     await getPlayer(
       env,
@@ -2422,16 +3720,23 @@ async function renameTree(
       .slice(0, 40);
 
   if (!cleanName) {
+
     return sendText(
       env,
       interaction,
 
       "❌ Please provide a name."
     );
+
   }
 
   player.treeName =
     cleanName;
+
+  player.username =
+    getInteractionUsername(
+      interaction
+    );
 
   await savePlayer(
     env,
@@ -2445,6 +3750,7 @@ async function renameTree(
 
     `🌸 Your tree is now named **${cleanName}**!`
   );
+
 }
 
 /* =========================================================
@@ -2455,13 +3761,162 @@ async function handleLeaderboard(
   env,
   interaction
 ) {
-  return sendText(
-    env,
-    interaction,
 
-    "🏆 **Werewives Tree Leaderboard**\n\n" +
-    "Leaderboard tracking is coming soon! ✨"
-  );
+  try {
+
+    const result =
+      await env.TREE_DATA.list({
+        limit: 1000
+      });
+
+    const players = [];
+
+    for (
+      const key of result.keys
+    ) {
+
+      try {
+
+        const raw =
+          await env.TREE_DATA.get(
+            key.name
+          );
+
+        if (!raw) {
+          continue;
+        }
+
+        const player =
+          repairPlayer(
+            JSON.parse(raw)
+          );
+
+        players.push({
+
+          username:
+            player.username ||
+            "Unknown Werewife",
+
+          treeName:
+            player.treeName ||
+            "Cherry Blossom",
+
+          sparkles:
+            Number(
+              player.sparkles
+            ) || 0,
+
+          level:
+            Number(
+              player.level
+            ) || 1,
+
+          height:
+            getTreeHeight(
+              player
+            )
+
+        });
+
+      } catch {
+        /* Ignore broken player records */
+      }
+
+    }
+
+    players.sort(
+      (a, b) => {
+
+        if (
+          b.sparkles !==
+          a.sparkles
+        ) {
+
+          return (
+            b.sparkles -
+            a.sparkles
+          );
+
+        }
+
+        return (
+          b.level -
+          a.level
+        );
+
+      }
+    );
+
+    const top =
+      players.slice(
+        0,
+        10
+      );
+
+    if (
+      top.length === 0
+    ) {
+
+      return sendText(
+        env,
+        interaction,
+
+        `🏆 **WEREWIVES TREE LEADERBOARD**\n\n` +
+        `Nobody has appeared yet! 🌸\n\n` +
+        `Use \`/tree\` and start growing!`
+      );
+
+    }
+
+    const lines =
+      top.map(
+        (player, index) => {
+
+          const medal =
+            index === 0
+              ? "🥇"
+              : index === 1
+                ? "🥈"
+                : index === 2
+                  ? "🥉"
+                  : `**${index + 1}.**`;
+
+          return (
+            `${medal} **${player.username}**\n` +
+            `　✨ ${player.sparkles} sparkles • ` +
+            `🌱 Level ${player.level} • ` +
+            `📏 ${player.height} ft`
+          );
+
+        }
+      );
+
+    return sendText(
+      env,
+      interaction,
+
+      `🏆 **WEREWIVES TREE LEADERBOARD**\n\n` +
+      lines.join("\n\n") +
+
+      `\n\n✨ Ranked by sparkles!`
+    );
+
+  } catch (error) {
+
+    console.error(
+      "LEADERBOARD ERROR:",
+      error
+    );
+
+    return sendText(
+      env,
+      interaction,
+
+      "❌ I couldn't load the leaderboard right now. Try again!"
+    );
+
+  }
+
 }
 
 /* =========================================================
@@ -2475,6 +3930,7 @@ async function handleGiveSparkles(
   targetId,
   amount
 ) {
+
   const callerId =
     interaction.member?.user?.id ||
     interaction.user?.id;
@@ -2482,12 +3938,14 @@ async function handleGiveSparkles(
   if (
     callerId !== env.OWNER_ID
   ) {
+
     return sendText(
       env,
       interaction,
 
       "❌ Only the bot owner can use this command."
     );
+
   }
 
   const number =
@@ -2497,12 +3955,14 @@ async function handleGiveSparkles(
     !Number.isFinite(number) ||
     number <= 0
   ) {
+
     return sendText(
       env,
       interaction,
 
       "❌ Please enter a valid positive amount."
     );
+
   }
 
   const player =
@@ -2526,6 +3986,7 @@ async function handleGiveSparkles(
 
     `✨ Gave **${Math.floor(number)} sparkles**!`
   );
+
 }
 
 /* =========================================================
@@ -2536,6 +3997,7 @@ async function handleTree(
   env,
   interaction
 ) {
+
   const userId =
     interaction.member?.user?.id ||
     interaction.user?.id;
@@ -2552,7 +4014,10 @@ async function handleTree(
       interaction
     );
 
-  if (!acknowledged.ok) {
+  if (
+    !acknowledged.ok
+  ) {
+
     console.error(
       "Discord acknowledgement failed:",
       acknowledged.status
@@ -2565,6 +4030,11 @@ async function handleTree(
     await getPlayer(
       env,
       userId
+    );
+
+  player.username =
+    getInteractionUsername(
+      interaction
     );
 
   cleanExpiredSparkles(
@@ -2582,6 +4052,7 @@ async function handleTree(
   );
 
   try {
+
     return await sendTree(
       env,
       interaction,
@@ -2589,6 +4060,7 @@ async function handleTree(
     );
 
   } catch (error) {
+
     console.error(
       "TREE RENDER ERROR:",
       error
@@ -2597,6 +4069,7 @@ async function handleTree(
     return fetch(
       `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
       {
+
         method: "PATCH",
 
         headers: {
@@ -2605,16 +4078,22 @@ async function handleTree(
         },
 
         body: JSON.stringify({
+
           content:
             "🌸 Your tree is alive, but I couldn't render the picture right now. Try again! ✨",
 
           components: [
-            treeButtons()
+            treeButtons(),
+            treeButtonsSecondRow()
           ]
+
         })
+
       }
     );
+
   }
+
 }
 
 /* =========================================================
@@ -2625,6 +4104,7 @@ async function handleComponent(
   env,
   interaction
 ) {
+
   const customId =
     interaction.data?.custom_id;
 
@@ -2656,6 +4136,13 @@ async function handleComponent(
 
     case "daily":
       return handleDaily(
+        env,
+        interaction,
+        userId
+      );
+
+    case "daily_riddle":
+      return handleDailyRiddle(
         env,
         interaction,
         userId
@@ -2738,11 +4225,42 @@ async function handleComponent(
         userId
       );
 
+    case "buy_pumpkin_cat":
+      return buyPumpkinCat(
+        env,
+        interaction,
+        userId
+      );
+
     case "customize":
       return handleCustomize(
         env,
         interaction,
         userId
+      );
+
+    case "customize_backgrounds":
+      return handleCustomizeCategory(
+        env,
+        interaction,
+        userId,
+        "backgrounds"
+      );
+
+    case "customize_trees":
+      return handleCustomizeCategory(
+        env,
+        interaction,
+        userId,
+        "trees"
+      );
+
+    case "customize_decorations":
+      return handleCustomizeCategory(
+        env,
+        interaction,
+        userId,
+        "decorations"
       );
 
     case "equip_theme_cherry":
@@ -2785,14 +4303,39 @@ async function handleComponent(
         "cotton_candy"
       );
 
+    case "equip_decoration_pumpkin_cat":
+      return equipDecoration(
+        env,
+        interaction,
+        userId,
+        "pumpkin_cat"
+      );
+
+    case "equip_decoration_none":
+      return equipDecoration(
+        env,
+        interaction,
+        userId,
+        "none"
+      );
+
+    case "leaderboard":
+      return handleLeaderboard(
+        env,
+        interaction
+      );
+
     default:
+
       return sendText(
         env,
         interaction,
 
         "❌ Unknown button."
       );
+
   }
+
 }
 
 /* =========================================================
@@ -2803,6 +4346,7 @@ async function handleCommand(
   env,
   interaction
 ) {
+
   const command =
     interaction.data?.name;
 
@@ -2839,6 +4383,24 @@ async function handleCommand(
         userId
       );
 
+    case "daily-riddle": {
+
+      const answer =
+        interaction.data?.options?.find(
+          option =>
+            option.name ===
+            "answer"
+        )?.value;
+
+      return handleDailyRiddle(
+        env,
+        interaction,
+        userId,
+        answer
+      );
+
+    }
+
     case "shop":
       return handleShop(
         env,
@@ -2866,6 +4428,7 @@ async function handleCommand(
       );
 
     case "rename": {
+
       const name =
         interaction.data?.options?.find(
           option =>
@@ -2879,9 +4442,11 @@ async function handleCommand(
         userId,
         name
       );
+
     }
 
     case "give-sparkles": {
+
       const target =
         interaction.data?.options?.find(
           option =>
@@ -2902,16 +4467,20 @@ async function handleCommand(
         target,
         amount
       );
+
     }
 
     default:
+
       return sendText(
         env,
         interaction,
 
         "❌ Unknown command."
       );
+
   }
+
 }
 
 /* =========================================================
@@ -2921,6 +4490,7 @@ async function handleCommand(
 function hexToUint8Array(
   hex
 ) {
+
   const bytes =
     new Uint8Array(
       hex.length / 2
@@ -2931,6 +4501,7 @@ function hexToUint8Array(
     i < bytes.length;
     i++
   ) {
+
     bytes[i] =
       parseInt(
         hex.substr(
@@ -2939,9 +4510,11 @@ function hexToUint8Array(
         ),
         16
       );
+
   }
 
   return bytes;
+
 }
 
 async function verifySignature(
@@ -2949,6 +4522,7 @@ async function verifySignature(
   body,
   publicKey
 ) {
+
   const signature =
     request.headers.get(
       "X-Signature-Ed25519"
@@ -2963,12 +4537,16 @@ async function verifySignature(
     !signature ||
     !timestamp
   ) {
+
     return false;
+
   }
 
   try {
+
     const key =
       await crypto.subtle.importKey(
+
         "raw",
 
         hexToUint8Array(
@@ -2982,9 +4560,11 @@ async function verifySignature(
         false,
 
         ["verify"]
+
       );
 
     return await crypto.subtle.verify(
+
       {
         name: "Ed25519"
       },
@@ -2998,11 +4578,15 @@ async function verifySignature(
       new TextEncoder().encode(
         timestamp + body
       )
+
     );
 
   } catch {
+
     return false;
+
   }
+
 }
 
 /* =========================================================
@@ -3040,6 +4624,30 @@ const COMMANDS = [
   },
 
   {
+    name: "daily-riddle",
+
+    description:
+      "Solve today's riddle for sparkles",
+
+    options: [
+
+      {
+        type: 3,
+
+        name: "answer",
+
+        description:
+          "Your answer to today's riddle",
+
+        required: false
+
+      }
+
+    ]
+
+  },
+
+  {
     name: "shop",
 
     description:
@@ -3074,6 +4682,7 @@ const COMMANDS = [
       "Rename your tree",
 
     options: [
+
       {
         type: 3,
 
@@ -3083,8 +4692,11 @@ const COMMANDS = [
           "Your tree's new name",
 
         required: true
+
       }
+
     ]
+
   },
 
   {
@@ -3095,6 +4707,7 @@ const COMMANDS = [
       "Give a user sparkles",
 
     options: [
+
       {
         type: 6,
 
@@ -3104,6 +4717,7 @@ const COMMANDS = [
           "User receiving sparkles",
 
         required: true
+
       },
 
       {
@@ -3115,9 +4729,13 @@ const COMMANDS = [
           "Amount of sparkles",
 
         required: true
+
       }
+
     ]
+
   }
+
 ];
 
 /* =========================================================
@@ -3127,29 +4745,37 @@ const COMMANDS = [
 async function registerCommands(
   env
 ) {
+
   const response =
     await fetch(
+
       `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
 
       {
+
         method: "PUT",
 
         headers: {
+
           "Authorization":
             `Bot ${env.BOT_TOKEN}`,
 
           "Content-Type":
             "application/json"
+
         },
 
         body:
           JSON.stringify(
             COMMANDS
           )
+
       }
+
     );
 
   return response;
+
 }
 
 /* =========================================================
@@ -3178,11 +4804,15 @@ export default {
     ) {
 
       return new Response(
+
         "🌸 Werewives Tree Bot is alive! ✨",
+
         {
           status: 200
         }
+
       );
+
     }
 
     /* -----------------------------------------
@@ -3203,18 +4833,25 @@ export default {
         await response.text();
 
       return new Response(
+
         text,
 
         {
+
           status:
             response.status,
 
           headers: {
+
             "Content-Type":
               "application/json"
+
           }
+
         }
+
       );
+
     }
 
     /* -----------------------------------------
@@ -3240,12 +4877,15 @@ export default {
       if (!valid) {
 
         return new Response(
+
           "Invalid signature",
 
           {
             status: 401
           }
+
         );
+
       }
 
       let interaction;
@@ -3260,12 +4900,15 @@ export default {
       } catch {
 
         return new Response(
+
           "Invalid JSON",
 
           {
             status: 400
           }
+
         );
+
       }
 
       /* ---------------------------------------
@@ -3277,17 +4920,24 @@ export default {
       ) {
 
         return new Response(
+
           JSON.stringify({
             type: 1
           }),
 
           {
+
             headers: {
+
               "Content-Type":
                 "application/json"
+
             }
+
           }
+
         );
+
       }
 
       /* ---------------------------------------
@@ -3302,6 +4952,7 @@ export default {
           env,
           interaction
         );
+
       }
 
       /* ---------------------------------------
@@ -3316,34 +4967,49 @@ export default {
           env,
           interaction
         );
+
       }
 
       return new Response(
 
         JSON.stringify({
+
           type: 4,
 
           data: {
+
             content:
               "❌ Unsupported interaction."
+
           }
+
         }),
 
         {
+
           headers: {
+
             "Content-Type":
               "application/json"
+
           }
+
         }
+
       );
+
     }
 
     return new Response(
+
       "Not found",
 
       {
         status: 404
       }
+
     );
+
   }
+
 };
