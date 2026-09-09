@@ -879,12 +879,6 @@ function treeButtons(player) {
    DISCORD RESPONSES
 ========================= */
 
-/*
-  IMPORTANT:
-  Discord gets an immediate acknowledgement first.
-  Then we edit the original response with the tree image.
-*/
-
 async function acknowledge(
   interaction
 ) {
@@ -904,6 +898,11 @@ async function acknowledge(
     }
   );
 }
+
+/*
+  Updates the original Discord message
+  with the rendered tree image.
+*/
 
 async function editOriginal(
   interaction,
@@ -962,6 +961,13 @@ async function editOriginal(
   return response;
 }
 
+/*
+  FIXED:
+  Instead of creating a separate follow-up,
+  this updates the original acknowledged
+  interaction response.
+*/
+
 async function sendText(
   interaction,
   content,
@@ -970,22 +976,33 @@ async function sendText(
   const flags =
     ephemeral ? 64 : 0;
 
-  return fetch(
-    `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
-    {
-      method: "POST",
+  const response =
+    await fetch(
+      `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
+      {
+        method: "PATCH",
 
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
 
-      body: JSON.stringify({
-        content,
-        flags
-      })
-    }
-  );
+        body: JSON.stringify({
+          content,
+          flags
+        })
+      }
+    );
+
+  if (!response.ok) {
+    console.error(
+      "Discord text edit error:",
+      response.status,
+      await response.text()
+    );
+  }
+
+  return response;
 }
 
 /* =========================
@@ -1868,7 +1885,6 @@ export default {
       ) {
 
         /*
-          IMPORTANT:
           Immediately acknowledge Discord.
         */
 
@@ -2024,6 +2040,11 @@ export default {
       if (
         interaction.type === 3
       ) {
+
+        /*
+          Immediately acknowledge
+          the button interaction.
+        */
 
         const ack =
           await acknowledge(
