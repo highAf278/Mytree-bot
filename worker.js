@@ -493,18 +493,11 @@ function treeImage(env, player) {
   const stage =
     getStage(player.level);
 
-  if (!env.ASSET_BASE_URL) {
-
-    return null;
-
-  }
-
   return (
-    `${env.ASSET_BASE_URL}/${stage.image}`
+    `https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/${stage.image}`
   );
 
 }
-
 // ============================================================
 // ✨ RANDOM SPARKLE
 // ============================================================
