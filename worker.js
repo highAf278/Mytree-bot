@@ -1,27 +1,39 @@
+```javascript
 // ============================================================
 // 🌳 PUBLIC DISCORD TREE BOT
 // Grow • Water • Catch Sparkles • Customize • Shop
+// Browser Run image generation
 // ============================================================
 //
-// ENVIRONMENT VARIABLES / SECRETS:
+// SECRETS:
+// BOT_TOKEN
+// CLIENT_ID
+// PUBLIC_KEY
 //
-// BOT_TOKEN   = Discord Bot Token
-// CLIENT_ID   = Discord Application ID
-// PUBLIC_KEY  = Discord Application Public Key
+// BINDINGS:
+// TREE_DATA = KV namespace
+// BROWSER   = Cloudflare Browser Run / Browser Rendering binding
 //
-// NO GUILD_ID.
-// This bot registers GLOBAL slash commands so it can be used
-// by any server that invites it.
-//
-// CLOUDFLARE KV binding:
-// TREE_DATA
-//
+// R2 PUBLIC IMAGES:
+// IMG_7244.png = tree
+// IMG_7247.png = pink sky
 // ============================================================
+
+import puppeteer from "@cloudflare/puppeteer";
 
 const EXP_PER_WATER = 10;
 const SPARKLE_CHANCE = 0.50;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 const WATER_COOLDOWN = 60 * 60 * 1000;
+
+const R2_PUBLIC =
+  "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev";
+
+const TREE_IMAGE =
+  `${R2_PUBLIC}/IMG_7244.png`;
+
+const PINK_SKY_IMAGE =
+  `${R2_PUBLIC}/IMG_7247.png`;
 
 // ============================================================
 // 🌳 TREE GROWTH STAGES
@@ -36,27 +48,27 @@ const TREE_STAGES = [
   {
     level: 5,
     name: "Young Tree",
-    image: "tree_young.png"
+    image: "IMG_7244.png"
   },
   {
     level: 10,
     name: "Growing Tree",
-    image: "tree_growing.png"
+    image: "IMG_7244.png"
   },
   {
     level: 20,
     name: "Mature Tree",
-    image: "tree_mature.png"
+    image: "IMG_7244.png"
   },
   {
     level: 35,
     name: "Enchanted Tree",
-    image: "tree_enchanted.png"
+    image: "IMG_7244.png"
   },
   {
     level: 50,
     name: "Legendary Tree",
-    image: "tree_legendary.png"
+    image: "IMG_7244.png"
   }
 ];
 
@@ -67,7 +79,6 @@ const TREE_STAGES = [
 const SHOP = {
 
   fertilizer: [
-
     {
       id: "basic_fertilizer",
       name: "Basic Fertilizer",
@@ -76,7 +87,6 @@ const SHOP = {
       exp: 25,
       description: "+25 EXP"
     },
-
     {
       id: "super_fertilizer",
       name: "Super Fertilizer",
@@ -85,7 +95,6 @@ const SHOP = {
       exp: 100,
       description: "+100 EXP"
     },
-
     {
       id: "royal_fertilizer",
       name: "Royal Fertilizer",
@@ -94,230 +103,195 @@ const SHOP = {
       exp: 300,
       description: "+300 EXP"
     }
-
   ],
 
   backgrounds: [
-
     {
       id: "pink_sky",
       name: "Pink Sky",
       emoji: "🌸",
       price: 500
     },
-
     {
       id: "moonlit",
       name: "Moonlit Night",
       emoji: "🌙",
       price: 750
     },
-
     {
       id: "enchanted_forest",
       name: "Enchanted Forest",
       emoji: "🧚",
       price: 1000
     },
-
     {
       id: "winter_wonderland",
       name: "Winter Wonderland",
       emoji: "❄️",
       price: 1250
     },
-
     {
       id: "sunset_lake",
       name: "Sunset Lake",
       emoji: "🌅",
       price: 1500
     },
-
     {
       id: "candy_land",
       name: "Candy Land",
       emoji: "🍭",
       price: 2000
     }
-
   ],
 
   tree_types: [
-
     {
       id: "cherry",
       name: "Cherry Blossom",
       emoji: "🌸",
       price: 1000
     },
-
     {
       id: "willow",
       name: "Moon Willow",
       emoji: "🌿",
       price: 1500
     },
-
     {
       id: "rainbow",
       name: "Rainbow Tree",
       emoji: "🌈",
       price: 2500
     },
-
     {
       id: "moonlight",
       name: "Moonlight Tree",
       emoji: "🌙",
       price: 3000
     },
-
     {
       id: "crystal",
       name: "Crystal Tree",
       emoji: "💎",
       price: 4000
     }
-
   ],
 
   decorations: [
-
     {
       id: "pink_bench",
       name: "Pink Bench",
       emoji: "🩷",
       price: 500
     },
-
     {
       id: "mushroom",
       name: "Cute Mushroom",
       emoji: "🍄",
       price: 400
     },
-
     {
       id: "birdhouse",
       name: "Birdhouse",
       emoji: "🏠",
       price: 600
     },
-
     {
       id: "fairy_lantern",
       name: "Fairy Lantern",
       emoji: "🏮",
       price: 800
     },
-
     {
       id: "butterfly",
       name: "Butterfly",
       emoji: "🦋",
       price: 750
     },
-
     {
       id: "garden_cat",
       name: "Garden Cat",
       emoji: "🐱",
       price: 1200
     },
-
     {
       id: "fountain",
       name: "Fairy Fountain",
       emoji: "⛲",
       price: 1800
     },
-
     {
       id: "fairy_house",
       name: "Fairy House",
       emoji: "🏡",
       price: 2500
     }
-
   ],
 
   effects: [
-
     {
       id: "sparkles",
       name: "Sparkles",
       emoji: "✨",
       price: 1000
     },
-
     {
       id: "floating_hearts",
       name: "Floating Hearts",
       emoji: "💖",
       price: 1250
     },
-
     {
       id: "butterfly_effect",
       name: "Butterfly Effect",
       emoji: "🦋",
       price: 1500
     },
-
     {
       id: "stardust",
       name: "Stardust",
       emoji: "🌟",
       price: 2000
     },
-
     {
       id: "rainbow_glow",
       name: "Rainbow Glow",
       emoji: "🌈",
       price: 3000
     }
-
   ],
 
   cosmetics: [
-
     {
       id: "tiny_crown",
       name: "Tiny Crown",
       emoji: "👑",
       price: 2000
     },
-
     {
       id: "heart_lights",
       name: "Heart Lights",
       emoji: "💕",
       price: 1750
     },
-
     {
       id: "moon_charm",
       name: "Moon Charm",
       emoji: "🌙",
       price: 2200
     },
-
     {
       id: "flower_crown",
       name: "Flower Crown",
       emoji: "🌺",
       price: 2500
     },
-
     {
       id: "fairy_wings",
       name: "Fairy Wings",
       emoji: "🧚",
       price: 3500
     }
-
   ]
 
 };
@@ -329,61 +303,38 @@ const SHOP = {
 function newPlayer(id, username) {
 
   return {
-
     id,
-
     username,
-
     name: "My Tree",
-
     level: 1,
-
     exp: 0,
-
     sparkles: 0,
-
     waterCount: 0,
-
     lastDaily: 0,
-
     dailyCount: 0,
+    lastWatered: 0,
 
+    // Active sparkle waiting to be caught.
+    // This does NOT appear on the normal tree image.
     sparkle: null,
 
     inventory: {
-
-      backgrounds: [
-        "pink_sky"
-      ],
-
-      tree_types: [
-        "cherry"
-      ],
-
+      backgrounds: ["pink_sky"],
+      tree_types: ["cherry"],
       decorations: [],
-
       effects: [],
-
       cosmetics: []
-
     },
 
     equipped: {
-
       background: "pink_sky",
-
       tree_type: "cherry",
-
       decoration: null,
-
       effect: null,
-
       cosmetic: null
-
     },
 
     createdAt: Date.now()
-
   };
 
 }
@@ -407,7 +358,6 @@ async function getPlayer(env, id, username) {
     await savePlayer(env, player);
 
     return player;
-
   }
 
   const player =
@@ -417,17 +367,13 @@ async function getPlayer(env, id, username) {
     username || player.username;
 
   return player;
-
 }
 
 async function savePlayer(env, player) {
 
   await env.TREE_DATA.put(
-
     `player:${player.id}`,
-
     JSON.stringify(player)
-
   );
 
 }
@@ -458,11 +404,9 @@ function addExp(player, amount) {
     player.level++;
 
     leveledUp = true;
-
   }
 
   return leveledUp;
-
 }
 
 function getStage(level) {
@@ -473,31 +417,29 @@ function getStage(level) {
   for (const item of TREE_STAGES) {
 
     if (level >= item.level) {
-
       stage = item;
-
     }
 
   }
 
   return stage;
-
 }
 
 // ============================================================
-// 🖼️ TREE IMAGE
+// 🖼️ TREE IMAGE URL
 // ============================================================
 
-function treeImage(env, player) {
+function treeImage(player) {
 
   const stage =
     getStage(player.level);
 
   return (
-    `https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/${stage.image}`
+    `${R2_PUBLIC}/${stage.image}`
   );
 
 }
+
 // ============================================================
 // ✨ RANDOM SPARKLE
 // ============================================================
@@ -513,11 +455,9 @@ function spawnSparkle(player) {
     ) {
 
       return false;
-
     }
 
     player.sparkle = null;
-
   }
 
   if (
@@ -526,7 +466,6 @@ function spawnSparkle(player) {
   ) {
 
     return false;
-
   }
 
   const sparkles = [
@@ -566,21 +505,309 @@ function spawnSparkle(player) {
     ];
 
   player.sparkle = {
-
     ...sparkle,
-
     time: Date.now()
-
   };
 
   return true;
+}
+
+// ============================================================
+// ✨ BROWSER RUN — CATCH IMAGE
+// ============================================================
+//
+// IMPORTANT:
+// The normal tree image never gets sparkles.
+//
+// This image is generated ONLY when the player catches
+// an active sparkle.
+//
+// The sparkle is positioned above/over the tree with
+// smaller falling sparkles around it to give the visual
+// impression of the sparkle falling toward the tree.
+// ============================================================
+
+async function createCatchImage(env, player, sparkle) {
+
+  if (!env.BROWSER) {
+    console.error("BROWSER binding is missing.");
+    return null;
+  }
+
+  let browser = null;
+
+  try {
+
+    browser =
+      await puppeteer.launch(env.BROWSER);
+
+    const page =
+      await browser.newPage();
+
+    await page.setViewport({
+      width: 900,
+      height: 900,
+      deviceScaleFactor: 1
+    });
+
+    const sparkleChar =
+      sparkle?.emoji || "✨";
+
+    // Randomize the falling positions every time.
+    const positions = [
+      { left: 18, top: 12, size: 28, rotate: -15 },
+      { left: 32, top: 27, size: 22, rotate: 12 },
+      { left: 52, top: 10, size: 24, rotate: -8 },
+      { left: 67, top: 23, size: 31, rotate: 18 },
+      { left: 79, top: 14, size: 20, rotate: -20 },
+      { left: 25, top: 42, size: 18, rotate: 10 },
+      { left: 72, top: 40, size: 19, rotate: -12 }
+    ];
+
+    const selected =
+      positions
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 4);
+
+    const fallingSparkles =
+      selected.map((p, index) => {
+
+        return `
+          <div
+            class="falling"
+            style="
+              left:${p.left}%;
+              top:${p.top}%;
+              font-size:${p.size}px;
+              transform:rotate(${p.rotate}deg);
+              animation-delay:${index * 0.12}s;
+            "
+          >${sparkleChar}</div>
+        `;
+
+      }).join("");
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<style>
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 900px;
+  height: 900px;
+  overflow: hidden;
+  background: #ffd6ec;
+}
+
+.scene {
+  position: relative;
+  width: 900px;
+  height: 900px;
+  overflow: hidden;
+  background-image: url("${PINK_SKY_IMAGE}");
+  background-size: cover;
+  background-position: center;
+}
+
+.tree {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  width: 720px;
+  max-height: 820px;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+.falling {
+  position: absolute;
+  z-index: 10;
+  font-family:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    sans-serif;
+
+  filter:
+    drop-shadow(0 0 7px rgba(255,255,255,.95))
+    drop-shadow(0 0 14px rgba(255,190,235,.8));
+
+  animation:
+    fall 0.9s ease-out forwards;
+}
+
+.catch {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+
+  font-family:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    sans-serif;
+
+  font-size: 72px;
+
+  filter:
+    drop-shadow(0 0 8px white)
+    drop-shadow(0 0 20px rgba(255,190,235,1));
+
+  animation:
+    catchPop 0.8s ease-out forwards;
+}
+
+@keyframes fall {
+
+  0% {
+    opacity: 0;
+    transform:
+      translateY(-35px)
+      scale(.55)
+      rotate(0deg);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+    transform:
+      translateY(95px)
+      scale(1)
+      rotate(18deg);
+  }
 
 }
 
-true;
+@keyframes catchPop {
+
+  0% {
+    opacity: 0;
+    transform:
+      translate(-50%, -50%)
+      scale(.2);
+  }
+
+  45% {
+    opacity: 1;
+    transform:
+      translate(-50%, -50%)
+      scale(1.35);
+  }
+
+  100% {
+    opacity: 1;
+    transform:
+      translate(-50%, -50%)
+      scale(1);
+  }
 
 }
 
+</style>
+</head>
+
+<body>
+
+<div class="scene">
+
+  <img
+    class="tree"
+    src="${TREE_IMAGE}"
+  />
+
+  ${fallingSparkles}
+
+  <div class="catch">
+    ${sparkleChar}
+  </div>
+
+</div>
+
+</body>
+</html>
+`;
+
+    await page.setContent(html, {
+      waitUntil: "networkidle0"
+    });
+
+    // Let the falling/catching animation reach its final
+    // visual state before taking the PNG.
+    await new Promise(
+      resolve => setTimeout(resolve, 950)
+    );
+
+    const screenshot =
+      await page.screenshot({
+        type: "png"
+      });
+
+    return screenshot;
+
+  } catch (error) {
+
+    console.error(
+      "Catch image generation failed:",
+      error
+    );
+
+    return null;
+
+  } finally {
+
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+    }
+
+  }
+
+}
+
+// ============================================================
+// 🖼️ NORMAL TREE EMBED
+// ============================================================
+
+function treeEmbed(env, player) {
+
+  const stage =
+    getStage(player.level);
+
+  return {
+
+    title:
+      `🌳 ${player.name}`,
+
+    description:
+
+      `🌱 **Level:** ${player.level}\n` +
+
+      `⭐ **EXP:** ${player.exp}/${expRequired(player.level)}\n` +
+
+      `💎 **Sparkles:** ${player.sparkles}\n\n` +
+
+      `🌸 **Stage:** ${stage.name}`,
+
+    image: {
+      url: PINK_SKY_IMAGE
+    },
+
+    color:
+      0xff9edb
+
+  };
+
+}
 
 // ============================================================
 // 🔤 ITEM NAME
@@ -589,9 +816,7 @@ true;
 function pretty(id) {
 
   if (!id) {
-
     return "None";
-
   }
 
   for (
@@ -605,9 +830,7 @@ function pretty(id) {
       );
 
     if (item) {
-
       return item.name;
-
     }
 
   }
@@ -618,7 +841,6 @@ function pretty(id) {
       /\b\w/g,
       c => c.toUpperCase()
     );
-
 }
 
 // ============================================================
@@ -634,11 +856,8 @@ function btn(
   return {
 
     type: 2,
-
     style,
-
     label,
-
     custom_id: id
 
   };
@@ -654,9 +873,7 @@ function treeButtons() {
   return [
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -684,13 +901,10 @@ function treeButtons() {
         )
 
       ]
-
     },
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -704,7 +918,6 @@ function treeButtons() {
         )
 
       ]
-
     }
 
   ];
@@ -720,9 +933,7 @@ function shopButtons() {
   return [
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -744,13 +955,10 @@ function shopButtons() {
         )
 
       ]
-
     },
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -772,13 +980,10 @@ function shopButtons() {
         )
 
       ]
-
     },
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -787,7 +992,6 @@ function shopButtons() {
         )
 
       ]
-
     }
 
   ];
@@ -823,7 +1027,8 @@ function shopEmbed() {
       "💖 **Cosmetics**\n" +
       "Give your tree extra personality!",
 
-    color: 0xff9edb
+    color:
+      0xff9edb
 
   };
 
@@ -861,7 +1066,8 @@ function shopCategory(category) {
 
       ).join("\n\n"),
 
-    color: 0xff9edb
+    color:
+      0xff9edb
 
   };
 
@@ -944,7 +1150,8 @@ function customizeEmbed(player) {
 
       "Choose what you want to customize!",
 
-    color: 0xff9edb
+    color:
+      0xff9edb
 
   };
 
@@ -955,9 +1162,7 @@ function customizeButtons() {
   return [
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -971,13 +1176,10 @@ function customizeButtons() {
         )
 
       ]
-
     },
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -996,13 +1198,10 @@ function customizeButtons() {
         )
 
       ]
-
     },
 
     {
-
       type: 1,
-
       components: [
 
         btn(
@@ -1011,7 +1210,6 @@ function customizeButtons() {
         )
 
       ]
-
     }
 
   ];
@@ -1068,7 +1266,8 @@ function inventoryEmbed(player) {
     description:
       text,
 
-    color: 0xff9edb
+    color:
+      0xff9edb
 
   };
 
@@ -1080,10 +1279,24 @@ function inventoryEmbed(player) {
 
 function formatDuration(ms) {
 
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  const totalSeconds =
+    Math.max(
+      0,
+      Math.ceil(ms / 1000)
+    );
+
+  const hours =
+    Math.floor(
+      totalSeconds / 3600
+    );
+
+  const minutes =
+    Math.floor(
+      (totalSeconds % 3600) / 60
+    );
+
+  const seconds =
+    totalSeconds % 60;
 
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
@@ -1117,28 +1330,49 @@ async function water(
       user.username
     );
 
-  const now = Date.now();
-  const lastWatered = Number(player.lastWatered || 0);
-  const timeSinceWater = now - lastWatered;
+  const now =
+    Date.now();
 
-  if (lastWatered > 0 && timeSinceWater < WATER_COOLDOWN) {
-    const remaining = WATER_COOLDOWN - timeSinceWater;
+  const lastWatered =
+    Number(
+      player.lastWatered || 0
+    );
+
+  const timeSinceWater =
+    now - lastWatered;
+
+  if (
+    lastWatered > 0 &&
+    timeSinceWater < WATER_COOLDOWN
+  ) {
+
+    const remaining =
+      WATER_COOLDOWN -
+      timeSinceWater;
+
     const data = {
+
       content:
         `💧 **${player.name}** is still soaking up the last watering! 🌸\n\n` +
         `⏰ You can water again in **${formatDuration(remaining)}**.`,
+
       embeds: [
         treeEmbed(env, player)
       ],
-      components: treeButtons()
+
+      components:
+        treeButtons()
+
     };
 
     if (edit) {
+
       return updateOriginal(
         env,
         interaction,
         data
       );
+
     }
 
     return respond(
@@ -1146,9 +1380,11 @@ async function water(
       interaction,
       data
     );
+
   }
 
-  player.lastWatered = now;
+  player.lastWatered =
+    now;
 
   const leveled =
     addExp(
@@ -1186,13 +1422,14 @@ async function water(
 
       `\n\n✨ **A SPARKLE APPEARED!**\n` +
 
-      `Quick! Use **/catch** to collect it!`;
+      `Quick! Use **✨ Catch** to collect it!`;
 
   }
 
   const data = {
 
-    content: message,
+    content:
+      message,
 
     embeds: [
       treeEmbed(env, player)
@@ -1265,7 +1502,8 @@ async function catchSparkle(
     SPARKLE_LIFETIME
   ) {
 
-    player.sparkle = null;
+    player.sparkle =
+      null;
 
     await savePlayer(
       env,
@@ -1291,28 +1529,51 @@ async function catchSparkle(
   const sparkle =
     player.sparkle;
 
+  // Generate the visual BEFORE clearing the sparkle.
+  // This is the ONLY point where the sparkle artwork appears.
+  const image =
+    await createCatchImage(
+      env,
+      player,
+      sparkle
+    );
+
   player.sparkles +=
     sparkle.amount;
 
-  player.sparkle = null;
+  player.sparkle =
+    null;
 
   await savePlayer(
     env,
     player
   );
 
+  const message =
+    `${sparkle.emoji} **You caught a ${sparkle.name}!**\n\n` +
+    `💎 +${sparkle.amount} sparkles\n` +
+    `💎 Balance: **${player.sparkles}**`;
+
+  if (image) {
+
+    return respondWithImage(
+      env,
+      interaction,
+      message,
+      image,
+      treeButtons()
+    );
+
+  }
+
+  // If Browser Run fails, the game still works.
   return respond(
     env,
     interaction,
     {
 
       content:
-
-        `${sparkle.emoji} **You caught a ${sparkle.name}!**\n\n` +
-
-        `💎 +${sparkle.amount} sparkles\n` +
-
-        `💎 Balance: **${player.sparkles}**`,
+        message,
 
       embeds: [
         treeEmbed(env, player)
@@ -1322,6 +1583,71 @@ async function catchSparkle(
         treeButtons()
 
     }
+  );
+
+}
+
+// ============================================================
+// 🖼️ DISCORD RESPONSE WITH PNG
+// ============================================================
+
+async function respondWithImage(
+  env,
+  interaction,
+  content,
+  image,
+  components
+) {
+
+  const payload = {
+
+    type: 4,
+
+    data: {
+
+      content,
+
+      components,
+
+      attachments: [
+        {
+          id: "0",
+          filename: "sparkle-catch.png"
+        }
+      ]
+
+    }
+
+  };
+
+  const form =
+    new FormData();
+
+  form.append(
+    "payload_json",
+    JSON.stringify(payload)
+  );
+
+  form.append(
+    "files[0]",
+    new File(
+      [image],
+      "sparkle-catch.png",
+      {
+        type: "image/png"
+      }
+    )
+  );
+
+  return fetch(
+
+    `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+
+    {
+      method: "POST",
+      body: form
+    }
+
   );
 
 }
@@ -1359,18 +1685,14 @@ async function buy(
       env,
       interaction,
       {
-
         content:
           "❌ Item not found.",
-
         flags: 64
-
       }
     );
 
   }
 
-  // Fertilizer is consumed immediately.
   if (
     category === "fertilizer"
   ) {
@@ -1384,12 +1706,9 @@ async function buy(
         env,
         interaction,
         {
-
           content:
             `💎 You need ${item.price} sparkles.`,
-
           flags: 64
-
         }
       );
 
@@ -1417,7 +1736,6 @@ async function buy(
         content:
 
           `🌱 You used **${item.name}**!\n\n` +
-
           `⭐ +${item.exp} EXP\n` +
 
           (
@@ -1447,12 +1765,9 @@ async function buy(
       env,
       interaction,
       {
-
         content:
           `💕 You already own **${item.name}**!`,
-
         flags: 64
-
       }
     );
 
@@ -1471,7 +1786,6 @@ async function buy(
         content:
 
           `💎 You need **${item.price}** sparkles.\n` +
-
           `You have **${player.sparkles}**.`,
 
         flags: 64
@@ -1500,11 +1814,8 @@ async function buy(
       content:
 
         `🎉 **Purchased!**\n\n` +
-
         `${item.emoji} ${item.name}\n` +
-
         `💎 -${item.price} sparkles\n` +
-
         `💎 Balance: ${player.sparkles}`,
 
       embeds: [
@@ -1594,15 +1905,14 @@ async function customizeCategory(
       embeds: [
 
         {
-
           title:
             `🎨 Choose ${pretty(category)}`,
 
           description:
             "Choose an item to equip.",
 
-          color: 0xff9edb
-
+          color:
+            0xff9edb
         }
 
       ],
@@ -1610,13 +1920,11 @@ async function customizeCategory(
       components: [
 
         {
-
           type: 1,
 
           components: [
 
             {
-
               type: 3,
 
               custom_id:
@@ -1634,7 +1942,6 @@ async function customizeCategory(
         },
 
         {
-
           type: 1,
 
           components: [
@@ -1915,7 +2222,8 @@ async function renameTree(
       user.username
     );
 
-  player.name = name;
+  player.name =
+    name;
 
   await savePlayer(
     env,
@@ -1961,19 +2269,14 @@ async function respond(
       method: "POST",
 
       headers: {
-
         "Content-Type":
           "application/json"
-
       },
 
       body:
         JSON.stringify({
-
           type: 4,
-
           data
-
         })
 
     }
@@ -1990,11 +2293,11 @@ async function updateOriginal(
 
   return fetch(
 
-    `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
 
     {
 
-      method: "POST",
+      method: "PATCH",
 
       headers: {
 
@@ -2004,10 +2307,7 @@ async function updateOriginal(
       },
 
       body:
-        JSON.stringify({
-          type: 7,
-          data
-        })
+        JSON.stringify(data)
 
     }
 
@@ -2087,7 +2387,8 @@ async function verifyRequest(
         ),
 
         {
-          name: "Ed25519"
+          name:
+            "Ed25519"
         },
 
         false,
@@ -2099,12 +2400,15 @@ async function verifyRequest(
     return crypto.subtle.verify(
 
       {
-        name: "Ed25519"
+        name:
+          "Ed25519"
       },
 
       key,
 
-      hexBytes(signature),
+      hexBytes(
+        signature
+      ),
 
       message
 
@@ -2122,7 +2426,10 @@ async function verifyRequest(
 // 🎁 DAILY REWARD
 // ============================================================
 
-async function daily(env, interaction) {
+async function daily(
+  env,
+  interaction
+) {
 
   const user =
     interaction.member?.user ||
@@ -2135,40 +2442,65 @@ async function daily(env, interaction) {
       user.username
     );
 
-  const now = Date.now();
-  const lastDaily = Number(player.lastDaily || 0);
-  const timeSinceDaily = now - lastDaily;
-  const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
+  const now =
+    Date.now();
 
-  if (lastDaily > 0 && timeSinceDaily < DAILY_COOLDOWN) {
+  const lastDaily =
+    Number(
+      player.lastDaily || 0
+    );
 
-    const remaining = DAILY_COOLDOWN - timeSinceDaily;
+  const timeSinceDaily =
+    now - lastDaily;
+
+  const DAILY_COOLDOWN =
+    24 * 60 * 60 * 1000;
+
+  if (
+    lastDaily > 0 &&
+    timeSinceDaily <
+    DAILY_COOLDOWN
+  ) {
+
+    const remaining =
+      DAILY_COOLDOWN -
+      timeSinceDaily;
 
     return respond(
       env,
       interaction,
       {
+
         content:
           `🎁 You already claimed today's reward!\n\n` +
           `⏰ Your next daily reward is available in **${formatDuration(remaining)}**.\n` +
           `✨ You're currently on daily reward **#${player.dailyCount}**.`,
+
         embeds: [
           treeEmbed(env, player)
         ],
-        components: treeButtons()
+
+        components:
+          treeButtons()
+
       }
     );
 
   }
 
   player.dailyCount =
-    Number(player.dailyCount || 0) + 1;
+    Number(
+      player.dailyCount || 0
+    ) + 1;
 
   const reward =
     player.dailyCount * 10;
 
-  player.sparkles += reward;
-  player.lastDaily = now;
+  player.sparkles +=
+    reward;
+
+  player.lastDaily =
+    now;
 
   await savePlayer(
     env,
@@ -2182,16 +2514,21 @@ async function daily(env, interaction) {
     env,
     interaction,
     {
+
       content:
         `🎁 **Daily Sparkle Reward!** ✨\n\n` +
         `You received **${reward} 💎 Sparkles!**\n\n` +
         `🌸 Daily reward **#${player.dailyCount}**\n` +
         `💎 You now have **${player.sparkles} Sparkles**.\n\n` +
         `✨ Come back tomorrow for **${nextReward} Sparkles!**`,
+
       embeds: [
         treeEmbed(env, player)
       ],
-      components: treeButtons()
+
+      components:
+        treeButtons()
+
     }
   );
 
@@ -2209,9 +2546,7 @@ async function handleCommand(
   const command =
     interaction.data.name;
 
-  if (
-    command === "tree"
-  ) {
+  if (command === "tree") {
 
     const user =
       interaction.member?.user ||
@@ -2241,9 +2576,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "water"
-  ) {
+  if (command === "water") {
 
     return water(
       env,
@@ -2252,9 +2585,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "daily"
-  ) {
+  if (command === "daily") {
 
     return daily(
       env,
@@ -2263,9 +2594,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "catch"
-  ) {
+  if (command === "catch") {
 
     return catchSparkle(
       env,
@@ -2274,9 +2603,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "shop"
-  ) {
+  if (command === "shop") {
 
     return respond(
       env,
@@ -2295,9 +2622,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "customize"
-  ) {
+  if (command === "customize") {
 
     const user =
       interaction.member?.user ||
@@ -2327,9 +2652,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "inventory"
-  ) {
+  if (command === "inventory") {
 
     const user =
       interaction.member?.user ||
@@ -2354,7 +2677,6 @@ async function handleCommand(
         components: [
 
           {
-
             type: 1,
 
             components: [
@@ -2375,9 +2697,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "leaderboard"
-  ) {
+  if (command === "leaderboard") {
 
     return leaderboard(
       env,
@@ -2386,9 +2706,7 @@ async function handleCommand(
 
   }
 
-  if (
-    command === "rename"
-  ) {
+  if (command === "rename") {
 
     return renameTree(
       env,
@@ -2411,9 +2729,7 @@ async function handleButton(
   const id =
     interaction.data.custom_id;
 
-  if (
-    id === "tree"
-  ) {
+  if (id === "tree") {
 
     const user =
       interaction.member?.user ||
@@ -2445,9 +2761,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "water"
-  ) {
+  if (id === "water") {
 
     return water(
       env,
@@ -2457,9 +2771,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "catch"
-  ) {
+  if (id === "catch") {
 
     return catchSparkle(
       env,
@@ -2468,9 +2780,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "shop"
-  ) {
+  if (id === "shop") {
 
     return updateOriginal(
       env,
@@ -2489,9 +2799,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "customize"
-  ) {
+  if (id === "customize") {
 
     const user =
       interaction.member?.user ||
@@ -2521,9 +2829,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "inventory"
-  ) {
+  if (id === "inventory") {
 
     const user =
       interaction.member?.user ||
@@ -2548,7 +2854,6 @@ async function handleButton(
         components: [
 
           {
-
             type: 1,
 
             components: [
@@ -2569,9 +2874,7 @@ async function handleButton(
 
   }
 
-  if (
-    id === "leaderboard"
-  ) {
+  if (id === "leaderboard") {
 
     return leaderboard(
       env,
@@ -2580,9 +2883,7 @@ async function handleButton(
 
   }
 
-  if (
-    id.startsWith("shop:")
-  ) {
+  if (id.startsWith("shop:")) {
 
     const category =
       id.split(":")[1];
@@ -2593,9 +2894,7 @@ async function handleButton(
       {
 
         embeds: [
-          shopCategory(
-            category
-          )
+          shopCategory(category)
         ],
 
         components:
@@ -2608,9 +2907,7 @@ async function handleButton(
 
   }
 
-  if (
-    id.startsWith("buy:")
-  ) {
+  if (id.startsWith("buy:")) {
 
     const [
       ,
@@ -2628,9 +2925,7 @@ async function handleButton(
 
   }
 
-  if (
-    id.startsWith("custom:")
-  ) {
+  if (id.startsWith("custom:")) {
 
     const category =
       id.split(":")[1];
@@ -2679,86 +2974,149 @@ async function handleSelect(
 }
 
 // ============================================================
-// 🚀 WORKER
+// 🚀 COMMAND REGISTRATION
 // ============================================================
+
 async function registerCommands(env) {
-  if (!env.BOT_TOKEN || !env.CLIENT_ID) {
+
+  if (
+    !env.BOT_TOKEN ||
+    !env.CLIENT_ID
+  ) {
+
     return {
       success: false,
-      error: "Missing BOT_TOKEN or CLIENT_ID secret."
+      error:
+        "Missing BOT_TOKEN or CLIENT_ID secret."
     };
+
   }
 
   const commands = [
+
     {
       name: "tree",
-      description: "View your tree"
+      description:
+        "View your tree"
     },
+
     {
       name: "water",
-      description: "Water your tree and earn EXP"
+      description:
+        "Water your tree and earn EXP"
     },
+
     {
       name: "daily",
-      description: "Claim your daily Sparkle reward"
+      description:
+        "Claim your daily Sparkle reward"
     },
+
     {
       name: "catch",
-      description: "Catch a sparkle"
+      description:
+        "Catch a sparkle"
     },
+
     {
       name: "shop",
-      description: "Open the tree shop"
+      description:
+        "Open the tree shop"
     },
+
     {
       name: "customize",
-      description: "Customize your tree"
+      description:
+        "Customize your tree"
     },
+
     {
       name: "inventory",
-      description: "View your inventory"
+      description:
+        "View your inventory"
     },
+
     {
       name: "leaderboard",
-      description: "View the tree leaderboard"
+      description:
+        "View the tree leaderboard"
     },
+
     {
       name: "rename",
-      description: "Rename your tree",
+      description:
+        "Rename your tree",
+
       options: [
+
         {
           name: "name",
-          description: "The new name for your tree",
+          description:
+            "The new name for your tree",
           type: 3,
           required: true
         }
+
       ]
+
     }
+
   ];
 
-  const response = await fetch(
-    `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
-    {
-      method: "PUT",
-      headers: {
-        "Authorization": `Bot ${env.BOT_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(commands)
-    }
-  );
+  const response =
+    await fetch(
+
+      `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+
+      {
+
+        method: "PUT",
+
+        headers: {
+
+          "Authorization":
+            `Bot ${env.BOT_TOKEN}`,
+
+          "Content-Type":
+            "application/json"
+
+        },
+
+        body:
+          JSON.stringify(commands)
+
+      }
+
+    );
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Discord command registration failed:", errorText);
+
+    const errorText =
+      await response.text();
+
+    console.error(
+      "Discord command registration failed:",
+      errorText
+    );
+
     return {
       success: false,
-      error: `HTTP ${response.status}: ${errorText}`
+      error:
+        `HTTP ${response.status}: ${errorText}`
     };
+
   }
 
-  return { success: true };
+  return {
+    success: true
+  };
+
 }
+
+// ============================================================
+// 🚀 WORKER
+// ============================================================
+
 export default {
 
   async fetch(
@@ -2793,31 +3151,26 @@ export default {
     // --------------------------------------------------------
     // GLOBAL COMMAND REGISTRATION
     // --------------------------------------------------------
-    //
-    // Visit:
-    // https://YOUR-WORKER.workers.dev/register
-    //
-    // --------------------------------------------------------
 
     if (
       request.method === "GET" &&
       url.pathname === "/register"
     ) {
 
-      const success =
-        await registerCommands(
-          env
-        );
+      const result =
+        await registerCommands(env);
 
       return new Response(
 
-        success
+        result.success
           ? "🌳 Global slash commands registered!"
-          : "❌ Command registration failed.",
+          : `❌ Command registration failed: ${result.error}`,
 
         {
           status:
-            success ? 200 : 500
+            result.success
+              ? 200
+              : 500
         }
 
       );
@@ -2930,21 +3283,32 @@ export default {
 
     return new Response(
       JSON.stringify({
+
         type: 4,
 
         data: {
+
           content:
             "✨ Something magical happened!"
+
         }
+
       }),
+
       {
+
         headers: {
+
           "Content-Type":
             "application/json"
+
         }
+
       }
+
     );
 
   }
 
 };
+```
