@@ -225,11 +225,6 @@ function repairPlayer(player) {
   };
 
 
-  /*
-    Make sure every existing player owns
-    the original Pink Sky background.
-  */
-
   if (
     !repaired.inventory.includes(
       "pink_sky_background"
@@ -241,10 +236,6 @@ function repairPlayer(player) {
   }
 
 
-  /*
-    Keep the theme valid.
-  */
-
   if (
     repaired.equipped.theme !== "halloween" &&
     repaired.equipped.theme !== "candyland" &&
@@ -253,10 +244,6 @@ function repairPlayer(player) {
     repaired.equipped.theme = "cherry";
   }
 
-
-  /*
-    Keep the tree valid.
-  */
 
   if (
     repaired.equipped.tree !== "cotton_candy" &&
@@ -580,13 +567,12 @@ body {
   position: absolute;
 
   /*
-    MOVED UP AND LEFT
-    AND SLIGHTLY LARGER
-    SO THE TREE IS NOT CUT OFF.
+    TREE POSITION
+    Moved RIGHT and UP.
   */
 
-  left: 45%;
-  top: 46%;
+  left: 55%;
+  top: 40%;
 
   transform:
     translate(-50%, -50%);
@@ -1091,10 +1077,6 @@ function shopItemButtons(
   const buttons = [];
 
 
-  /*
-    BACKGROUNDS
-  */
-
   if (
     category ===
     "backgrounds"
@@ -1144,10 +1126,6 @@ function shopItemButtons(
     }
   }
 
-
-  /*
-    TREES
-  */
 
   if (
     category ===
@@ -1341,10 +1319,6 @@ async function handleWater(
     now;
 
 
-  /*
-    NORMAL WATERING GIVES XP.
-  */
-
   const messages =
     addExp(
       player,
@@ -1352,17 +1326,8 @@ async function handleWater(
     );
 
 
-  /*
-    NORMAL RANDOM SPARKLE SPAWN.
-  */
-
   maybeSpawnSparkle(player);
 
-
-  /*
-    WEREWIVES CHAOS EVENT.
-    THIS GIVES SPARKLES ONLY.
-  */
 
   const chaosEvent =
     maybeChaosEvent(player);
@@ -1503,22 +1468,12 @@ async function handleCatch(
     ) || 1;
 
 
-  /*
-    Catching a sparkle adds
-    sparkle currency.
-  */
-
   player.sparkles +=
     sparkleValue;
 
   player.sparkle =
     null;
 
-
-  /*
-    Existing behavior:
-    catching a sparkle also gives XP.
-  */
 
   const messages =
     addExp(
@@ -2188,10 +2143,6 @@ function customizeButtons(player) {
   const buttons = [];
 
 
-  /*
-    PINK SKY
-  */
-
   buttons.push({
     type: 2,
 
@@ -2212,10 +2163,6 @@ function customizeButtons(player) {
     }
   });
 
-
-  /*
-    HALLOWEEN
-  */
 
   if (
     player.inventory.includes(
@@ -2244,10 +2191,6 @@ function customizeButtons(player) {
   }
 
 
-  /*
-    CANDY LAND
-  */
-
   if (
     player.inventory.includes(
       "candyland_background"
@@ -2274,10 +2217,6 @@ function customizeButtons(player) {
     });
   }
 
-
-  /*
-    COTTON CANDY TREE
-  */
 
   if (
     player.inventory.includes(
@@ -2975,10 +2914,6 @@ async function handleComponent(
       );
 
 
-    /*
-      SHOP CATEGORIES
-    */
-
     case "shop_category_backgrounds":
 
       return handleShopCategory(
@@ -3024,10 +2959,6 @@ async function handleComponent(
       );
 
 
-    /*
-      SHOP PURCHASES
-    */
-
     case "shop_buy_halloween":
 
       return handleBuyHalloween(
@@ -3051,10 +2982,6 @@ async function handleComponent(
         env
       );
 
-
-    /*
-      CUSTOMIZATION
-    */
 
     case "theme_halloween":
 
@@ -3326,7 +3253,6 @@ async function registerCommands(
           JSON.stringify(
             commands
           )
-        }
       }
     );
 
