@@ -94,40 +94,65 @@ const LEVEL_REWARDS = {
 
 
 /* =========================================================
-   WEREWIVES
+   WEREWIVES CHAOS EVENTS
 ========================================================= */
 
 const WEREWIVES_EVENTS = [
   {
     text:
       "🐺💅 A werewife dramatically appears and demands attention from your tree!",
-    xp: 5
+    sparkles: 5
   },
 
   {
     text:
       "💋🐺 A werewife has blessed your tree with chaotic wife energy!",
-    xp: 10
+    sparkles: 10
   },
 
   {
     text:
       "🌙🐺 A werewife zooms past your tree and leaves sparkles everywhere!",
-    xp: 15
+    sparkles: 15
   },
 
   {
     text:
       "💅🌸 A werewife inspected your tree and said it needs MORE DRAMA.",
-    xp: 5
+    sparkles: 5
   },
 
   {
     text:
       "🐺✨ A werewife accidentally made your tree sparkle!",
-    xp: 10
+    sparkles: 10
   }
 ];
+
+
+/*
+  20% chance for a Werewives chaos event.
+  Chaos events give SPARKLES ONLY.
+*/
+
+function maybeChaosEvent(player) {
+  if (!randomChance(0.20)) {
+    return null;
+  }
+
+  const event =
+    WEREWIVES_EVENTS[
+      random(
+        0,
+        WEREWIVES_EVENTS.length - 1
+      )
+    ];
+
+  player.sparkles +=
+    event.sparkles;
+
+  return event;
+}
 
 
 /* =========================================================
@@ -237,16 +262,6 @@ function repairPlayer(player) {
     repaired.equipped.tree !== "cotton_candy" &&
     repaired.equipped.tree !== "cherry"
   ) {
-    repaired.equipped.tree = "cherry";
-  }
-
-
-  /*
-    Older players receive the new tree setting
-    without changing anything they already own.
-  */
-
-  if (!repaired.equipped.tree) {
     repaired.equipped.tree = "cherry";
   }
 
@@ -484,7 +499,7 @@ function getBackground(player) {
 
 
 /* =========================================================
-   TREE IMAGE
+   TREE IMAGE RENDERING
 ========================================================= */
 
 async function renderTree(env, player) {
@@ -564,14 +579,20 @@ body {
 .tree {
   position: absolute;
 
-  left: 50%;
-  top: 58%;
+  /*
+    MOVED UP AND LEFT
+    AND SLIGHTLY LARGER
+    SO THE TREE IS NOT CUT OFF.
+  */
+
+  left: 45%;
+  top: 46%;
 
   transform:
     translate(-50%, -50%);
 
-  width: 58%;
-  height: 58%;
+  width: 65%;
+  height: 65%;
 
   object-fit: contain;
 }
@@ -968,83 +989,197 @@ async function sendText(
 
 
 /* =========================================================
-   SHOP BUTTONS
+   SHOP CATEGORY BUTTONS
 ========================================================= */
 
-function shopButtons(player) {
+function shopCategoryButtons() {
+  return [
+    {
+      type: 1,
+
+      components: [
+
+        {
+          type: 2,
+          style: 1,
+
+          custom_id:
+            "shop_category_backgrounds",
+
+          label:
+            "Backgrounds",
+
+          emoji: {
+            name: "🌸"
+          }
+        },
+
+        {
+          type: 2,
+          style: 1,
+
+          custom_id:
+            "shop_category_trees",
+
+          label:
+            "Trees",
+
+          emoji: {
+            name: "🌳"
+          }
+        },
+
+        {
+          type: 2,
+          style: 1,
+
+          custom_id:
+            "shop_category_decorations",
+
+          label:
+            "Decorations",
+
+          emoji: {
+            name: "🌷"
+          }
+        },
+
+        {
+          type: 2,
+          style: 1,
+
+          custom_id:
+            "shop_category_effects",
+
+          label:
+            "Effects",
+
+          emoji: {
+            name: "✨"
+          }
+        },
+
+        {
+          type: 2,
+          style: 1,
+
+          custom_id:
+            "shop_category_fertilizer",
+
+          label:
+            "Fertilizer",
+
+          emoji: {
+            name: "🌱"
+          }
+        }
+
+      ]
+    }
+  ];
+}
+
+
+/* =========================================================
+   SHOP ITEM BUTTONS
+========================================================= */
+
+function shopItemButtons(
+  player,
+  category
+) {
   const buttons = [];
 
-  const ownsHalloween =
-    player.inventory.includes(
-      "halloween_background"
-    );
 
-  const ownsCandyland =
-    player.inventory.includes(
-      "candyland_background"
-    );
+  /*
+    BACKGROUNDS
+  */
 
-  const ownsCottonCandy =
-    player.inventory.includes(
-      "cotton_candy_tree"
-    );
+  if (
+    category ===
+    "backgrounds"
+  ) {
+
+    if (
+      !player.inventory.includes(
+        "halloween_background"
+      )
+    ) {
+      buttons.push({
+        type: 2,
+        style: 1,
+
+        custom_id:
+          "shop_buy_halloween",
+
+        label:
+          `Halloween — ${HALLOWEEN_PRICE} ✨`,
+
+        emoji: {
+          name: "🎃"
+        }
+      });
+    }
 
 
-  if (!ownsHalloween) {
-    buttons.push({
-      type: 2,
-      style: 1,
+    if (
+      !player.inventory.includes(
+        "candyland_background"
+      )
+    ) {
+      buttons.push({
+        type: 2,
+        style: 1,
 
-      custom_id:
-        "shop_buy_halloween",
+        custom_id:
+          "shop_buy_candyland",
 
-      label:
-        `Halloween — ${HALLOWEEN_PRICE} ✨`,
+        label:
+          `Candy Land — ${CANDYLAND_PRICE} ✨`,
 
-      emoji: {
-        name: "🎃"
-      }
-    });
+        emoji: {
+          name: "🍭"
+        }
+      });
+    }
   }
 
 
-  if (!ownsCandyland) {
-    buttons.push({
-      type: 2,
-      style: 1,
+  /*
+    TREES
+  */
 
-      custom_id:
-        "shop_buy_candyland",
+  if (
+    category ===
+    "trees"
+  ) {
 
-      label:
-        `Candy Land — ${CANDYLAND_PRICE} ✨`,
+    if (
+      !player.inventory.includes(
+        "cotton_candy_tree"
+      )
+    ) {
+      buttons.push({
+        type: 2,
+        style: 1,
 
-      emoji: {
-        name: "🍭"
-      }
-    });
+        custom_id:
+          "shop_buy_cotton_candy",
+
+        label:
+          `Cotton Candy — ${COTTON_CANDY_TREE_PRICE} ✨`,
+
+        emoji: {
+          name: "🍭"
+        }
+      });
+    }
   }
 
 
-  if (!ownsCottonCandy) {
-    buttons.push({
-      type: 2,
-      style: 1,
-
-      custom_id:
-        "shop_buy_cotton_candy",
-
-      label:
-        `Cotton Candy Tree — ${COTTON_CANDY_TREE_PRICE} ✨`,
-
-      emoji: {
-        name: "🌳"
-      }
-    });
-  }
-
-
-  if (!buttons.length) {
+  if (
+    !buttons.length
+  ) {
     return [];
   }
 
@@ -1052,6 +1187,7 @@ function shopButtons(player) {
   return [
     {
       type: 1,
+
       components:
         buttons
     }
@@ -1060,136 +1196,32 @@ function shopButtons(player) {
 
 
 /* =========================================================
-   CUSTOMIZE BUTTONS
+   SHOP BACK BUTTON
 ========================================================= */
 
-function customizeButtons(player) {
-  const buttons = [];
-
-  const ownsHalloween =
-    player.inventory.includes(
-      "halloween_background"
-    );
-
-  const ownsCandyland =
-    player.inventory.includes(
-      "candyland_background"
-    );
-
-  const ownsCottonCandy =
-    player.inventory.includes(
-      "cotton_candy_tree"
-    );
-
-
-  /*
-    BACKGROUNDS
-  */
-
-  buttons.push({
-    type: 2,
-
-    style:
-      player.equipped.theme ===
-      "cherry"
-        ? 3
-        : 1,
-
-    custom_id:
-      "theme_cherry",
-
-    label:
-      "Pink Sky",
-
-    emoji: {
-      name: "🌸"
-    }
-  });
-
-
-  if (ownsHalloween) {
-    buttons.push({
-      type: 2,
-
-      style:
-        player.equipped.theme ===
-        "halloween"
-          ? 3
-          : 1,
-
-      custom_id:
-        "theme_halloween",
-
-      label:
-        "Halloween",
-
-      emoji: {
-        name: "🎃"
-      }
-    });
-  }
-
-
-  if (ownsCandyland) {
-    buttons.push({
-      type: 2,
-
-      style:
-        player.equipped.theme ===
-        "candyland"
-          ? 3
-          : 1,
-
-      custom_id:
-        "theme_candyland",
-
-      label:
-        "Candy Land",
-
-      emoji: {
-        name: "🍭"
-      }
-    });
-  }
-
-
-  /*
-    TREE
-  */
-
-  if (ownsCottonCandy) {
-    buttons.push({
-      type: 2,
-
-      style:
-        player.equipped.tree ===
-        "cotton_candy"
-          ? 3
-          : 1,
-
-      custom_id:
-        "tree_cotton_candy",
-
-      label:
-        "Cotton Candy Tree",
-
-      emoji: {
-        name: "🍭"
-      }
-    });
-  }
-
-
-  /*
-    Discord allows max 5 buttons
-    per row.
-  */
-
+function shopBackButton() {
   return [
     {
       type: 1,
-      components:
-        buttons
+
+      components: [
+
+        {
+          type: 2,
+          style: 2,
+
+          custom_id:
+            "tree_shop",
+
+          label:
+            "Back to Shop",
+
+          emoji: {
+            name: "🛍️"
+          }
+        }
+
+      ]
     }
   ];
 }
@@ -1264,12 +1296,14 @@ async function handleWater(
   const now =
     Date.now();
 
+
   if (
     player.lastWater &&
     now -
       player.lastWater <
       WATER_COOLDOWN
   ) {
+
     const remaining =
       WATER_COOLDOWN -
       (now - player.lastWater);
@@ -1302,8 +1336,14 @@ async function handleWater(
     );
   }
 
+
   player.lastWater =
     now;
+
+
+  /*
+    NORMAL WATERING GIVES XP.
+  */
 
   const messages =
     addExp(
@@ -1311,17 +1351,52 @@ async function handleWater(
       EXP_PER_WATER
     );
 
+
+  /*
+    NORMAL RANDOM SPARKLE SPAWN.
+  */
+
   maybeSpawnSparkle(player);
 
+
+  /*
+    WEREWIVES CHAOS EVENT.
+    THIS GIVES SPARKLES ONLY.
+  */
+
+  const chaosEvent =
+    maybeChaosEvent(player);
+
+
+  const sceneMessages = [];
+
+
   if (messages.length) {
-    player.sceneMessage =
-      messages.join(
-        " • "
-      );
-  } else {
-    player.sceneMessage =
-      `💧🌸 Your tree loved that! +${EXP_PER_WATER} XP`;
+    sceneMessages.push(
+      ...messages
+    );
   }
+
+
+  if (chaosEvent) {
+    sceneMessages.push(
+      `${chaosEvent.text} +${chaosEvent.sparkles} ✨`
+    );
+  }
+
+
+  if (!sceneMessages.length) {
+    sceneMessages.push(
+      `💧🌸 Your tree loved that! +${EXP_PER_WATER} XP`
+    );
+  }
+
+
+  player.sceneMessage =
+    sceneMessages.join(
+      " • "
+    );
+
 
   await savePlayer(
     env,
@@ -1329,11 +1404,13 @@ async function handleWater(
     player
   );
 
+
   const screenshot =
     await renderTree(
       env,
       player
     );
+
 
   return sendTree(
     interaction,
@@ -1390,6 +1467,7 @@ async function handleCatch(
         buttonSparkleTime
       )
   ) {
+
     player.sparkle = null;
 
     player.sceneMessage =
@@ -1424,11 +1502,23 @@ async function handleCatch(
       sparkle.value
     ) || 1;
 
+
+  /*
+    Catching a sparkle adds
+    sparkle currency.
+  */
+
   player.sparkles +=
     sparkleValue;
 
   player.sparkle =
     null;
+
+
+  /*
+    Existing behavior:
+    catching a sparkle also gives XP.
+  */
 
   const messages =
     addExp(
@@ -1436,8 +1526,10 @@ async function handleCatch(
       sparkleValue
     );
 
+
   player.sceneMessage =
     `${sparkle.emoji || "✨"} You caught a ${sparkle.name || "sparkle"}! +${sparkleValue} ✨`;
+
 
   if (messages.length) {
     player.sceneMessage +=
@@ -1460,6 +1552,7 @@ async function handleCatch(
       env,
       player
     );
+
 
   return sendTree(
     interaction,
@@ -1490,12 +1583,14 @@ async function handleDaily(
   const now =
     Date.now();
 
+
   if (
     player.lastDaily &&
     now -
       player.lastDaily <
       DAILY_COOLDOWN
   ) {
+
     const remaining =
       DAILY_COOLDOWN -
       (now - player.lastDaily);
@@ -1512,14 +1607,18 @@ async function handleDaily(
     );
   }
 
+
   player.lastDaily =
     now;
+
 
   const xp = 25;
   const sparkleReward = 3;
 
+
   player.sparkles +=
     sparkleReward;
+
 
   const messages =
     addExp(
@@ -1527,14 +1626,17 @@ async function handleDaily(
       xp
     );
 
+
   player.sceneMessage =
     `🎁 Daily reward! +${xp} XP and +${sparkleReward} ✨`;
+
 
   await savePlayer(
     env,
     userId,
     player
   );
+
 
   let response =
     `🎁 **Daily Reward!**\n\n`;
@@ -1545,10 +1647,12 @@ async function handleDaily(
   response +=
     `✨ +${sparkleReward} sparkles\n`;
 
+
   if (messages.length) {
     response +=
       `\n${messages.join("\n")}`;
   }
+
 
   return sendText(
     interaction,
@@ -1575,6 +1679,7 @@ async function handleInventory(
       userId
     );
 
+
   let text =
     `🎒 **Your Inventory**\n\n`;
 
@@ -1585,6 +1690,7 @@ async function handleInventory(
   text +=
     `• 🌸 Pink Sky Background`;
 
+
   if (
     player.inventory.includes(
       "halloween_background"
@@ -1593,6 +1699,7 @@ async function handleInventory(
     text +=
       `\n• 🎃 Halloween Background`;
   }
+
 
   if (
     player.inventory.includes(
@@ -1606,6 +1713,7 @@ async function handleInventory(
 
   text +=
     `\n\n🌳 **Trees**\n`;
+
 
   if (
     player.inventory.includes(
@@ -1691,188 +1799,155 @@ async function handleShop(
     );
 
 
-  const ownsHalloween =
-    player.inventory.includes(
-      "halloween_background"
+  const text =
+    `🛍️ **TREE SHOP** 🛍️\n\n` +
+    `✨ You have **${player.sparkles} sparkles**.\n\n` +
+    `Choose a category below! 💗`;
+
+
+  return sendText(
+    interaction,
+    text,
+    shopCategoryButtons()
+  );
+}
+
+
+/* =========================================================
+   SHOP CATEGORY
+========================================================= */
+
+async function handleShopCategory(
+  interaction,
+  env,
+  category
+) {
+  const userId =
+    interaction.member?.user?.id ||
+    interaction.user?.id;
+
+  const player =
+    await getPlayer(
+      env,
+      userId
     );
 
-  const ownsCandyland =
-    player.inventory.includes(
-      "candyland_background"
-    );
 
-  const ownsCottonCandy =
-    player.inventory.includes(
-      "cotton_candy_tree"
-    );
+  let text = "";
 
 
-  let text =
-    `🛍️ **TREE SHOP** 🛍️\n\n`;
+  switch (category) {
 
-  text +=
-    `✨ You have **${player.sparkles} sparkles**.\n\n`;
+    case "backgrounds":
 
+      text =
+        `🌸 **BACKGROUNDS** 🌸\n\n` +
+        `✨ You have **${player.sparkles} sparkles**.\n\n` +
 
-  /* -------------------------
-     BACKGROUNDS
-  ------------------------- */
+        `🌸 **Pink Sky**\n` +
+        `💗 Free — already owned\n\n` +
 
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n`;
+        `🎃 **Halloween Background**\n` +
+        `🖤 Spooky orange & black night\n` +
+        `✨ ${HALLOWEEN_PRICE} sparkles\n` +
+        `${
+          player.inventory.includes(
+            "halloween_background"
+          )
+            ? "✅ OWNED"
+            : "🛍️ Available to purchase"
+        }\n\n` +
 
-  text +=
-    `🌸 **BACKGROUNDS**\n`;
+        `🍭 **Candy Land Background**\n` +
+        `🍬 A sugary candy-filled world!\n` +
+        `✨ ${CANDYLAND_PRICE} sparkles\n` +
+        `${
+          player.inventory.includes(
+            "candyland_background"
+          )
+            ? "✅ OWNED"
+            : "🛍️ Available to purchase"
+        }`;
 
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n\n`;
-
-  text +=
-    `🌸 **Pink Sky Background**\n`;
-
-  text +=
-    `💗 Original starter background\n`;
-
-  text +=
-    `✨ **FREE — Owned forever**\n\n`;
-
-
-  text +=
-    `🎃 **Halloween Background**\n`;
-
-  text +=
-    `🖤 Spooky orange & black night\n`;
-
-  text +=
-    `✨ **${HALLOWEEN_PRICE} sparkles**\n`;
-
-  text +=
-    ownsHalloween
-      ? `✅ **OWNED**\n\n`
-      : `\n`;
+      break;
 
 
-  text +=
-    `🍭 **Candy Land Background**\n`;
+    case "trees":
 
-  text +=
-    `🍬 A sugary candy-filled world!\n`;
+      text =
+        `🌳 **TREES** 🌳\n\n` +
+        `✨ You have **${player.sparkles} sparkles**.\n\n` +
 
-  text +=
-    `✨ **${CANDYLAND_PRICE} sparkles**\n`;
+        `🌸 **Cherry Tree**\n` +
+        `💗 Free — already owned\n\n` +
 
-  text +=
-    ownsCandyland
-      ? `✅ **OWNED**\n\n`
-      : `\n`;
+        `🍭🌳 **Cotton Candy Tree**\n` +
+        `🍬 A magical cotton-candy tree!\n` +
+        `✨ ${COTTON_CANDY_TREE_PRICE} sparkles\n` +
+        `${
+          player.inventory.includes(
+            "cotton_candy_tree"
+          )
+            ? "✅ OWNED"
+            : "🛍️ Available to purchase"
+        }`;
 
-
-  /* -------------------------
-     EFFECTS
-  ------------------------- */
-
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n`;
-
-  text +=
-    `✨ **EFFECTS**\n`;
-
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n\n`;
-
-  text +=
-    `Coming soon! ✨`;
+      break;
 
 
-  /* -------------------------
-     DECORATIONS
-  ------------------------- */
+    case "decorations":
 
-  text +=
-    `\n\n━━━━━━━━━━━━━━━━━━\n`;
+      text =
+        `🌷 **DECORATIONS** 🌷\n\n` +
+        `✨ You have **${player.sparkles} sparkles**.\n\n` +
+        `Nothing here yet! 🌸\n\n` +
+        `More cute tree decorations are coming soon! 💗`;
 
-  text +=
-    `🌷 **DECORATIONS**\n`;
-
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n\n`;
-
-  text +=
-    `Coming soon! 🌸`;
+      break;
 
 
-  /* -------------------------
-     TREES
-  ------------------------- */
+    case "effects":
 
-  text +=
-    `\n\n━━━━━━━━━━━━━━━━━━\n`;
+      text =
+        `✨ **EFFECTS** ✨\n\n` +
+        `✨ You have **${player.sparkles} sparkles**.\n\n` +
+        `Nothing here yet! ✨\n\n` +
+        `Magical effects are coming soon! 💫`;
 
-  text +=
-    `🌳 **TREES**\n`;
-
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n\n`;
-
-  text +=
-    `🌸 **Cherry Tree**\n`;
-
-  text +=
-    `💗 Your original tree\n`;
-
-  text +=
-    `✨ **FREE — Owned forever**\n\n`;
+      break;
 
 
-  text +=
-    `🍭🌳 **Cotton Candy Tree**\n`;
+    case "fertilizer":
 
-  text +=
-    `🍬 A magical cotton-candy tree!\n`;
+      text =
+        `🌱 **FERTILIZER** 🌱\n\n` +
+        `✨ You have **${player.sparkles} sparkles**.\n\n` +
+        `Nothing here yet! 🌱\n\n` +
+        `Fertilizer items are coming soon! 🌸`;
 
-  text +=
-    `✨ **${COTTON_CANDY_TREE_PRICE} sparkles**\n`;
-
-  text +=
-    ownsCottonCandy
-      ? `✅ **OWNED**\n\n`
-      : `\n`;
+      break;
 
 
-  /* -------------------------
-     FERTILIZER
-  ------------------------- */
+    default:
 
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n`;
-
-  text +=
-    `🌱 **FERTILIZER**\n`;
-
-  text +=
-    `━━━━━━━━━━━━━━━━━━\n\n`;
-
-  text +=
-    `Coming soon! 🌱`;
-
-
-  if (
-    ownsHalloween &&
-    ownsCandyland &&
-    ownsCottonCandy
-  ) {
-    text +=
-      `\n\n🎀 **You own everything currently available!**`;
-  } else {
-    text +=
-      `\n\n💗 Choose something below to add it to your collection!`;
+      return handleShop(
+        interaction,
+        env
+      );
   }
 
 
   return sendText(
     interaction,
     text,
-    shopButtons(player)
+    [
+      ...shopItemButtons(
+        player,
+        category
+      ),
+
+      ...shopBackButton()
+    ]
   );
 }
 
@@ -1922,9 +1997,11 @@ async function handleBuyHalloween(
   player.sparkles -=
     HALLOWEEN_PRICE;
 
+
   player.inventory.push(
     "halloween_background"
   );
+
 
   player.sceneMessage =
     `🎃 You bought the Halloween Background! Go to Customize to equip it.`;
@@ -1941,8 +2018,11 @@ async function handleBuyHalloween(
     interaction,
 
     `🎃 **Purchase Complete!**\n\n` +
+
     `You bought the **Halloween Background** for **${HALLOWEEN_PRICE} ✨**.\n\n` +
+
     `🌸 Your Pink Sky Background is still safely in your inventory!\n\n` +
+
     `🎀 Press **Customize** on your tree to equip it!`
   );
 }
@@ -1993,9 +2073,11 @@ async function handleBuyCandyland(
   player.sparkles -=
     CANDYLAND_PRICE;
 
+
   player.inventory.push(
     "candyland_background"
   );
+
 
   player.sceneMessage =
     `🍭 You bought the Candy Land Background! Go to Customize to equip it.`;
@@ -2012,8 +2094,11 @@ async function handleBuyCandyland(
     interaction,
 
     `🍭 **Purchase Complete!**\n\n` +
+
     `You bought the **Candy Land Background** for **${CANDYLAND_PRICE} ✨**.\n\n` +
+
     `🌸 Your Pink Sky Background is still safely in your inventory!\n\n` +
+
     `🎀 Press **Customize** on your tree to equip it!`
   );
 }
@@ -2064,9 +2149,11 @@ async function handleBuyCottonCandyTree(
   player.sparkles -=
     COTTON_CANDY_TREE_PRICE;
 
+
   player.inventory.push(
     "cotton_candy_tree"
   );
+
 
   player.sceneMessage =
     `🍭🌳 You bought the Cotton Candy Tree! Go to Customize to equip it.`;
@@ -2083,10 +2170,150 @@ async function handleBuyCottonCandyTree(
     interaction,
 
     `🍭🌳 **Purchase Complete!**\n\n` +
+
     `You bought the **Cotton Candy Tree** for **${COTTON_CANDY_TREE_PRICE} ✨**.\n\n` +
+
     `🌸 Your original Cherry Tree is still safely available!\n\n` +
+
     `🎀 Press **Customize** to equip your new tree!`
   );
+}
+
+
+/* =========================================================
+   CUSTOMIZE BUTTONS
+========================================================= */
+
+function customizeButtons(player) {
+  const buttons = [];
+
+
+  /*
+    PINK SKY
+  */
+
+  buttons.push({
+    type: 2,
+
+    style:
+      player.equipped.theme ===
+      "cherry"
+        ? 3
+        : 1,
+
+    custom_id:
+      "theme_cherry",
+
+    label:
+      "Pink Sky",
+
+    emoji: {
+      name: "🌸"
+    }
+  });
+
+
+  /*
+    HALLOWEEN
+  */
+
+  if (
+    player.inventory.includes(
+      "halloween_background"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+
+      style:
+        player.equipped.theme ===
+        "halloween"
+          ? 3
+          : 1,
+
+      custom_id:
+        "theme_halloween",
+
+      label:
+        "Halloween",
+
+      emoji: {
+        name: "🎃"
+      }
+    });
+  }
+
+
+  /*
+    CANDY LAND
+  */
+
+  if (
+    player.inventory.includes(
+      "candyland_background"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+
+      style:
+        player.equipped.theme ===
+        "candyland"
+          ? 3
+          : 1,
+
+      custom_id:
+        "theme_candyland",
+
+      label:
+        "Candy Land",
+
+      emoji: {
+        name: "🍭"
+      }
+    });
+  }
+
+
+  /*
+    COTTON CANDY TREE
+  */
+
+  if (
+    player.inventory.includes(
+      "cotton_candy_tree"
+    )
+  ) {
+    buttons.push({
+      type: 2,
+
+      style:
+        player.equipped.tree ===
+        "cotton_candy"
+          ? 3
+          : 1,
+
+      custom_id:
+        "tree_cotton_candy",
+
+      label:
+        "Cotton Candy Tree",
+
+      emoji: {
+        name: "🍭"
+      }
+    });
+  }
+
+
+  return [
+    {
+      type: 1,
+
+      components:
+        buttons
+    }
+  ];
 }
 
 
@@ -2128,6 +2355,7 @@ async function handleCustomize(
 
   let text =
     `🎀 **Tree Customization**\n\n`;
+
 
   text +=
     `🎀 **Background:** ${currentTheme}\n`;
@@ -2228,6 +2456,7 @@ async function handleThemeHalloween(
       player
     );
 
+
   return sendTree(
     interaction,
     player,
@@ -2287,6 +2516,7 @@ async function handleThemeCandyland(
       player
     );
 
+
   return sendTree(
     interaction,
     player,
@@ -2344,6 +2574,7 @@ async function handleThemeCherry(
       env,
       player
     );
+
 
   return sendTree(
     interaction,
@@ -2403,6 +2634,7 @@ async function handleCottonCandyTree(
       env,
       player
     );
+
 
   return sendTree(
     interaction,
@@ -2513,6 +2745,7 @@ async function handleRenameModal(
       userId
     );
 
+
   let newName =
     getModalValue(
       interaction
@@ -2533,8 +2766,10 @@ async function handleRenameModal(
       40
     );
 
+
   player.treeName =
     newName;
+
 
   player.sceneMessage =
     `💗 Your tree is now named **${newName}**!`;
@@ -2552,6 +2787,7 @@ async function handleRenameModal(
       env,
       player
     );
+
 
   return sendTree(
     interaction,
@@ -2606,11 +2842,13 @@ async function handleGiveSparkles(
         option.name === "user"
     )?.value;
 
+
   const amount =
     interaction.data?.options?.find(
       option =>
         option.name === "amount"
     )?.value;
+
 
   const sparkleAmount =
     Number(amount);
@@ -2646,8 +2884,10 @@ async function handleGiveSparkles(
       target
     );
 
+
   player.sparkles +=
     sparkleAmount;
+
 
   player.sceneMessage =
     `✨ You received **${sparkleAmount} sparkles** from the Tree Keeper!`;
@@ -2696,6 +2936,7 @@ async function handleComponent(
   switch (id) {
 
     case "tree_water":
+
       return handleWater(
         interaction,
         env
@@ -2703,6 +2944,7 @@ async function handleComponent(
 
 
     case "tree_daily":
+
       return handleDaily(
         interaction,
         env
@@ -2710,6 +2952,7 @@ async function handleComponent(
 
 
     case "tree_inventory":
+
       return handleInventory(
         interaction,
         env
@@ -2717,6 +2960,7 @@ async function handleComponent(
 
 
     case "tree_shop":
+
       return handleShop(
         interaction,
         env
@@ -2724,13 +2968,68 @@ async function handleComponent(
 
 
     case "tree_customize":
+
       return handleCustomize(
         interaction,
         env
       );
 
 
+    /*
+      SHOP CATEGORIES
+    */
+
+    case "shop_category_backgrounds":
+
+      return handleShopCategory(
+        interaction,
+        env,
+        "backgrounds"
+      );
+
+
+    case "shop_category_trees":
+
+      return handleShopCategory(
+        interaction,
+        env,
+        "trees"
+      );
+
+
+    case "shop_category_decorations":
+
+      return handleShopCategory(
+        interaction,
+        env,
+        "decorations"
+      );
+
+
+    case "shop_category_effects":
+
+      return handleShopCategory(
+        interaction,
+        env,
+        "effects"
+      );
+
+
+    case "shop_category_fertilizer":
+
+      return handleShopCategory(
+        interaction,
+        env,
+        "fertilizer"
+      );
+
+
+    /*
+      SHOP PURCHASES
+    */
+
     case "shop_buy_halloween":
+
       return handleBuyHalloween(
         interaction,
         env
@@ -2738,6 +3037,7 @@ async function handleComponent(
 
 
     case "shop_buy_candyland":
+
       return handleBuyCandyland(
         interaction,
         env
@@ -2745,13 +3045,19 @@ async function handleComponent(
 
 
     case "shop_buy_cotton_candy":
+
       return handleBuyCottonCandyTree(
         interaction,
         env
       );
 
 
+    /*
+      CUSTOMIZATION
+    */
+
     case "theme_halloween":
+
       return handleThemeHalloween(
         interaction,
         env
@@ -2759,6 +3065,7 @@ async function handleComponent(
 
 
     case "theme_candyland":
+
       return handleThemeCandyland(
         interaction,
         env
@@ -2766,6 +3073,7 @@ async function handleComponent(
 
 
     case "theme_cherry":
+
       return handleThemeCherry(
         interaction,
         env
@@ -2773,6 +3081,7 @@ async function handleComponent(
 
 
     case "tree_cotton_candy":
+
       return handleCottonCandyTree(
         interaction,
         env
@@ -2780,6 +3089,7 @@ async function handleComponent(
 
 
     default:
+
       return sendText(
         interaction,
         "🌸 That button isn't connected yet!"
@@ -2803,6 +3113,7 @@ async function handleCommand(
   switch (command) {
 
     case "tree":
+
       return handleTree(
         interaction,
         env
@@ -2810,6 +3121,7 @@ async function handleCommand(
 
 
     case "water":
+
       return handleWater(
         interaction,
         env
@@ -2817,6 +3129,7 @@ async function handleCommand(
 
 
     case "catch":
+
       return handleCatch(
         interaction,
         env
@@ -2824,6 +3137,7 @@ async function handleCommand(
 
 
     case "daily":
+
       return handleDaily(
         interaction,
         env
@@ -2831,6 +3145,7 @@ async function handleCommand(
 
 
     case "shop":
+
       return handleShop(
         interaction,
         env
@@ -2838,6 +3153,7 @@ async function handleCommand(
 
 
     case "customize":
+
       return handleCustomize(
         interaction,
         env
@@ -2845,6 +3161,7 @@ async function handleCommand(
 
 
     case "inventory":
+
       return handleInventory(
         interaction,
         env
@@ -2852,6 +3169,7 @@ async function handleCommand(
 
 
     case "leaderboard":
+
       return handleLeaderboard(
         interaction,
         env
@@ -2859,12 +3177,14 @@ async function handleCommand(
 
 
     case "rename":
+
       return showRenameModal(
         interaction
       );
 
 
     case "give-sparkles":
+
       return handleGiveSparkles(
         interaction,
         env
@@ -2872,6 +3192,7 @@ async function handleCommand(
 
 
     default:
+
       return sendText(
         interaction,
         "🌸 Unknown command."
@@ -2989,6 +3310,7 @@ async function registerCommands(
   const response =
     await fetch(
       `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+
       {
         method: "PUT",
 
@@ -3004,6 +3326,7 @@ async function registerCommands(
           JSON.stringify(
             commands
           )
+        }
       }
     );
 
@@ -3058,6 +3381,7 @@ async function verifyDiscordRequest(
         {
           name:
             "Ed25519",
+
           namedCurve:
             "Ed25519"
         },
@@ -3103,6 +3427,7 @@ function hexToBytes(hex) {
     i < bytes.length;
     i++
   ) {
+
     bytes[i] =
       parseInt(
         hex.substr(
@@ -3143,6 +3468,7 @@ export default {
       request.method === "GET" &&
       url.pathname === "/"
     ) {
+
       return new Response(
         "🌸 My Tree Bot is alive!",
         {
@@ -3160,6 +3486,7 @@ export default {
       request.method === "GET" &&
       url.pathname === "/register"
     ) {
+
       const result =
         await registerCommands(
           env
@@ -3167,6 +3494,7 @@ export default {
 
 
       if (result.ok) {
+
         return new Response(
           "🎀 Commands registered successfully!",
           {
@@ -3182,6 +3510,7 @@ export default {
 
       return new Response(
         `Command registration failed:\n${error}`,
+
         {
           status: 500
         }
@@ -3198,6 +3527,7 @@ export default {
       url.pathname !==
         "/interactions"
     ) {
+
       return new Response(
         "Not Found",
         {
@@ -3219,6 +3549,7 @@ export default {
 
 
     if (!valid) {
+
       return new Response(
         "Invalid request signature",
         {
@@ -3239,6 +3570,7 @@ export default {
     if (
       interaction.type === 1
     ) {
+
       return Response.json({
         type: 1
       });
@@ -3257,6 +3589,7 @@ export default {
         interaction.data?.name ===
         "rename"
       ) {
+
         return showRenameModal(
           interaction
         );
@@ -3328,6 +3661,7 @@ export default {
         interaction.data?.custom_id ===
         "rename_tree_modal"
       ) {
+
         await handleRenameModal(
           interaction,
           env
