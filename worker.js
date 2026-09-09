@@ -1076,18 +1076,58 @@ async function water(
     interaction.member?.user ||
     interaction.user;
 
-  const player =
+const player =
     await getPlayer(
       env,
       user.id,
       user.username
     );
 
-  const leveled =
-    addExp(
-      player,
-      EXP_PER_WATER
+// Check watering cooldown
+const now = Date.now();
+
+if (
+  player.lastWatered &&
+  now - player.lastWatered < WATER_COOLDOWN
+) {
+
+  const remaining =
+    WATER_COOLDOWN -
+    (now - player.lastWatered);
+
+  const minutes =
+    Math.ceil(
+      remaining / 60000
     );
+
+  return updateOriginal(
+    env,
+    interaction,
+    {
+
+      content:
+        `💧 **${player.name}** has already been watered!\n\n` +
+        `⏰ You can water your tree again in **${minutes} minute${minutes === 1 ? "" : "s"}**. 🌸`,
+
+      embeds: [
+        treeEmbed(env, player)
+      ],
+
+      components:
+        treeButtons()
+
+    }
+  );
+
+}
+
+const leveled =
+  addExp(
+    player,
+    EXP_PER_WATER
+  );
+
+player.lastWatered = now;
 
   player.waterCount++;
 
