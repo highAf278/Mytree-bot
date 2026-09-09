@@ -5,13 +5,17 @@ import puppeteer from "@cloudflare/puppeteer";
 ========================================================= */
 
 const EXP_PER_WATER = 10;
+
 const SPARKLE_CHANCE = 0.50;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 
 const WATER_COOLDOWN = 60 * 60 * 1000;
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
-const BACKGROUND_IMAGE = "IMG_7251.jpeg";
+const HALLOWEEN_BACKGROUND = "IMG_7254.jpeg";
+const NORMAL_BACKGROUND = "IMG_7251.jpeg";
+
+const HALLOWEEN_PRICE = 150;
 
 const R2_BASE =
   "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/";
@@ -73,27 +77,32 @@ const LEVEL_REWARDS = {
 
 const WEREWIVES_EVENTS = [
   {
-    text: "🐺💅 A werewife dramatically appears and demands attention from your tree!",
+    text:
+      "🐺💅 A werewife dramatically appears and demands attention from your tree!",
     xp: 5
   },
 
   {
-    text: "💋🐺 A werewife has blessed your tree with chaotic wife energy!",
+    text:
+      "💋🐺 A werewife has blessed your tree with chaotic wife energy!",
     xp: 10
   },
 
   {
-    text: "🌙🐺 A werewife zooms past your tree and leaves sparkles everywhere!",
+    text:
+      "🌙🐺 A werewife zooms past your tree and leaves sparkles everywhere!",
     xp: 15
   },
 
   {
-    text: "💅🌸 A werewife inspected your tree and said it needs MORE DRAMA.",
+    text:
+      "💅🌸 A werewife inspected your tree and said it needs MORE DRAMA.",
     xp: 5
   },
 
   {
-    text: "🐺✨ A werewife accidentally made your tree sparkle!",
+    text:
+      "🐺✨ A werewife accidentally made your tree sparkle!",
     xp: 10
   }
 ];
@@ -125,7 +134,8 @@ function createPlayer() {
     inventory: [],
 
     equipped: {
-      decoration: null
+      decoration: null,
+      theme: "cherry"
     }
   };
 }
@@ -138,7 +148,7 @@ function repairPlayer(player) {
     return fresh;
   }
 
-  return {
+  const repaired = {
     ...fresh,
     ...player,
 
@@ -163,6 +173,15 @@ function repairPlayer(player) {
         ? player.inventory
         : []
   };
+
+  if (
+    repaired.equipped.theme !== "halloween" &&
+    repaired.equipped.theme !== "cherry"
+  ) {
+    repaired.equipped.theme = "cherry";
+  }
+
+  return repaired;
 }
 
 
@@ -307,7 +326,10 @@ function sparkleInfo() {
   ];
 
   return types[
-    random(0, types.length - 1)
+    random(
+      0,
+      types.length - 1
+    )
   ];
 }
 
@@ -319,7 +341,7 @@ function cleanExpiredSparkle(player) {
 
   if (
     Date.now() -
-      player.sparkle.createdAt >
+      Number(player.sparkle.createdAt || 0) >
     SPARKLE_LIFETIME
   ) {
     player.sparkle = null;
@@ -357,9 +379,23 @@ function maybeSpawnSparkle(player) {
 
 
 /* =========================================================
+   BACKGROUND
+========================================================= */
+
+function getBackground(player) {
+  if (
+    player.equipped?.theme ===
+    "halloween"
+  ) {
+    return HALLOWEEN_BACKGROUND;
+  }
+
+  return NORMAL_BACKGROUND;
+}
+
+
+/* =========================================================
    TREE IMAGE
-   IMPORTANT:
-   Stats are NOT placed in the image.
 ========================================================= */
 
 async function renderTree(env, player) {
@@ -378,7 +414,7 @@ async function renderTree(env, player) {
 
   const backgroundUrl =
     R2_BASE +
-    BACKGROUND_IMAGE;
+    getBackground(player);
 
   const treeUrl =
     R2_BASE +
@@ -533,13 +569,10 @@ body {
     }
   );
 
-  await new Promise(
-    resolve =>
-      setTimeout(
-        resolve,
-        1200
-      )
-  );
+  /*
+    Removed the old 1200ms artificial delay.
+    This should make Water/Catch noticeably faster.
+  */
 
   const screenshot =
     await page.screenshot({
@@ -571,30 +604,47 @@ function buildTreeText(player) {
       player.lastWater >=
       WATER_COOLDOWN;
 
+  const theme =
+    player.equipped?.theme ===
+    "halloween"
+      ? "🎃 Halloween"
+      : "🌸 Cherry Blossom";
+
   let text = "";
 
-  text += `🌸 **${player.treeName}** 🌸\n\n`;
+  text +=
+    `🌸 **${player.treeName}** 🌸\n\n`;
 
-  text += `🌱 **Level:** ${player.level}\n`;
+  text +=
+    `🌱 **Level:** ${player.level}\n`;
 
-  text += `📊 **XP:** ${player.exp} / ${needed}\n`;
+  text +=
+    `📊 **XP:** ${player.exp} / ${needed}\n`;
 
-  text += `✨ **Sparkles:** ${player.sparkles}\n`;
+  text +=
+    `✨ **Sparkles:** ${player.sparkles}\n`;
 
-  text += `🌳 **Stage:** ${stage.name}\n`;
+  text +=
+    `🌳 **Stage:** ${stage.name}\n`;
 
-  text += `💧 **Water:** ${
-    waterReady
-      ? "Ready!"
-      : "Cooling down"
-  }\n`;
+  text +=
+    `🎀 **Theme:** ${theme}\n`;
+
+  text +=
+    `💧 **Water:** ${
+      waterReady
+        ? "Ready!"
+        : "Cooling down"
+    }\n`;
 
   if (player.sparkle) {
-    text += `\n✨ **A sparkle appeared! Catch it!**\n`;
+    text +=
+      `\n✨ **A sparkle appeared! Catch it!**\n`;
   }
 
   if (player.sceneMessage) {
-    text += `\n${player.sceneMessage}`;
+    text +=
+      `\n${player.sceneMessage}`;
   }
 
   return text;
@@ -602,7 +652,7 @@ function buildTreeText(player) {
 
 
 /* =========================================================
-   BUTTONS
+   TREE BUTTONS
 ========================================================= */
 
 function treeButtons(player) {
@@ -718,10 +768,6 @@ async function acknowledge(interaction) {
 }
 
 
-/*
-  Button interactions need TYPE 6.
-*/
-
 async function acknowledgeButton(
   interaction
 ) {
@@ -744,7 +790,7 @@ async function acknowledgeButton(
 
 
 /* =========================================================
-   SEND TREE MESSAGE
+   SEND TREE
 ========================================================= */
 
 async function sendTree(
@@ -802,7 +848,8 @@ async function sendTree(
 
 async function sendText(
   interaction,
-  content
+  content,
+  components = []
 ) {
   return fetch(
     `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
@@ -816,10 +863,96 @@ async function sendText(
       },
 
       body: JSON.stringify({
-        content
+        content,
+        components
       })
     }
   );
+}
+
+
+/* =========================================================
+   SHOP BUTTONS
+========================================================= */
+
+function shopButtons() {
+  return [
+    {
+      type: 1,
+
+      components: [
+
+        {
+          type: 2,
+          style: 1,
+          custom_id:
+            "shop_buy_halloween",
+          label:
+            `Buy Halloween — ${HALLOWEEN_PRICE} ✨`,
+          emoji: {
+            name: "🎃"
+          }
+        }
+
+      ]
+    }
+  ];
+}
+
+
+/* =========================================================
+   CUSTOMIZE BUTTONS
+========================================================= */
+
+function customizeButtons(player) {
+  const buttons = [];
+
+  const ownsHalloween =
+    player.inventory.includes(
+      "halloween_background"
+    );
+
+  if (ownsHalloween) {
+    buttons.push({
+      type: 2,
+      style:
+        player.equipped.theme ===
+        "halloween"
+          ? 3
+          : 1,
+      custom_id:
+        "theme_halloween",
+      label:
+        "Halloween",
+      emoji: {
+        name: "🎃"
+      }
+    });
+  }
+
+  buttons.push({
+    type: 2,
+    style:
+      player.equipped.theme ===
+      "cherry"
+        ? 3
+        : 1,
+    custom_id:
+      "theme_cherry",
+    label:
+      "Cherry Blossom",
+    emoji: {
+      name: "🌸"
+    }
+  });
+
+  return [
+    {
+      type: 1,
+      components:
+        buttons
+    }
+  ];
 }
 
 
@@ -941,9 +1074,7 @@ async function handleWater(
 
   maybeSpawnSparkle(player);
 
-  if (
-    messages.length
-  ) {
+  if (messages.length) {
     player.sceneMessage =
       messages.join(
         " • "
@@ -991,11 +1122,17 @@ async function handleCatch(
       userId
     );
 
-  cleanExpiredSparkle(
-    player
-  );
+  cleanExpiredSparkle(player);
 
-  if (!player.sparkle) {
+  if (
+    !player.sparkle ||
+    typeof player.sparkle !==
+      "object" ||
+    typeof player.sparkle.value !==
+      "number"
+  ) {
+    player.sparkle = null;
+
     player.sceneMessage =
       "✨ There isn't a sparkle to catch right now.";
 
@@ -1018,11 +1155,17 @@ async function handleCatch(
     );
   }
 
-  const sparkle =
-    player.sparkle;
+  const sparkle = {
+    ...player.sparkle
+  };
+
+  const sparkleValue =
+    Number(
+      sparkle.value
+    ) || 1;
 
   player.sparkles +=
-    sparkle.value;
+    sparkleValue;
 
   player.sparkle =
     null;
@@ -1030,15 +1173,13 @@ async function handleCatch(
   const messages =
     addExp(
       player,
-      sparkle.value
+      sparkleValue
     );
 
   player.sceneMessage =
-    `${sparkle.emoji} You caught a ${sparkle.name}! +${sparkle.value} sparkle(s)`;
+    `${sparkle.emoji || "✨"} You caught a ${sparkle.name || "sparkle"}! +${sparkleValue} sparkle(s)`;
 
-  if (
-    messages.length
-  ) {
+  if (messages.length) {
     player.sceneMessage +=
       " • " +
       messages.join(
@@ -1142,9 +1283,7 @@ async function handleDaily(
   response +=
     `✨ +${sparkleReward} sparkles\n`;
 
-  if (
-    messages.length
-  ) {
+  if (messages.length) {
     response +=
       `\n${messages.join("\n")}`;
   }
@@ -1174,25 +1313,40 @@ async function handleInventory(
       userId
     );
 
-  if (
-    !player.inventory.length
-  ) {
-    return sendText(
-      interaction,
-      `🎒 **Your Inventory**\n\nIt's empty for now! 🌸`
-    );
+  let text =
+    `🎒 **Your Inventory**\n\n`;
+
+  if (!player.inventory.length) {
+    text +=
+      `It's empty for now! 🌸`;
+  } else {
+    text +=
+      player.inventory
+        .map(item => {
+          if (
+            item ===
+            "halloween_background"
+          ) {
+            return "• 🎃 Halloween Background";
+          }
+
+          return `• ${item}`;
+        })
+        .join("\n");
   }
+
+  text +=
+    `\n\n🎀 **Equipped Theme:** ` +
+    (
+      player.equipped.theme ===
+      "halloween"
+        ? "🎃 Halloween"
+        : "🌸 Cherry Blossom"
+    );
 
   return sendText(
     interaction,
-
-    `🎒 **Your Inventory**\n\n` +
-      player.inventory
-        .map(
-          item =>
-            `• ${item}`
-        )
-        .join("\n")
+    text
   );
 }
 
@@ -1215,12 +1369,111 @@ async function handleShop(
       userId
     );
 
+  const ownsHalloween =
+    player.inventory.includes(
+      "halloween_background"
+    );
+
+  let text =
+    `🛍️ **Tree Shop**\n\n`;
+
+  text +=
+    `✨ You have **${player.sparkles}** sparkles.\n\n`;
+
+  text +=
+    `🎃 **Halloween Background**\n`;
+
+  text +=
+    `🖤 Spooky orange & black Halloween night\n`;
+
+  text +=
+    `✨ Price: **${HALLOWEEN_PRICE} sparkles**\n\n`;
+
+  if (ownsHalloween) {
+    text +=
+      `✅ **You already own this!**\n\n`;
+
+    text +=
+      `Go to 🎀 **Customize** to equip it.`;
+
+    return sendText(
+      interaction,
+      text
+    );
+  }
+
+  text +=
+    `Press the button below to buy it! 🎃`;
+
+  return sendText(
+    interaction,
+    text,
+    shopButtons()
+  );
+}
+
+
+/* =========================================================
+   BUY HALLOWEEN
+========================================================= */
+
+async function handleBuyHalloween(
+  interaction,
+  env
+) {
+  const userId =
+    interaction.member?.user?.id ||
+    interaction.user?.id;
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  if (
+    player.inventory.includes(
+      "halloween_background"
+    )
+  ) {
+    return sendText(
+      interaction,
+      `🎃 You already own the **Halloween Background**!`
+    );
+  }
+
+  if (
+    player.sparkles <
+    HALLOWEEN_PRICE
+  ) {
+    return sendText(
+      interaction,
+      `😭 You need **${HALLOWEEN_PRICE} sparkles**, but you only have **${player.sparkles}**.`
+    );
+  }
+
+  player.sparkles -=
+    HALLOWEEN_PRICE;
+
+  player.inventory.push(
+    "halloween_background"
+  );
+
+  player.sceneMessage =
+    `🎃 You bought the Halloween Background! Go to Customize to equip it.`;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
   return sendText(
     interaction,
 
-    `🛍️ **Tree Shop**\n\n` +
-      `✨ You have **${player.sparkles}** sparkles.\n\n` +
-      `🌸 More decorations coming soon!`
+    `🎃 **Purchase Complete!**\n\n` +
+    `You bought the **Halloween Background** for **${HALLOWEEN_PRICE} ✨**.\n\n` +
+    `🎀 Press **Customize** on your tree to equip it!`
   );
 }
 
@@ -1243,12 +1496,133 @@ async function handleCustomize(
       userId
     );
 
+  const current =
+    player.equipped.theme ===
+    "halloween"
+      ? "🎃 Halloween"
+      : "🌸 Cherry Blossom";
+
+  let text =
+    `🎀 **Tree Customization**\n\n`;
+
+  text +=
+    `Current theme: **${current}**\n\n`;
+
+  text +=
+    `Choose a background theme below.`;
+
+  if (
+    !player.inventory.includes(
+      "halloween_background"
+    )
+  ) {
+    text +=
+      `\n\n🔒 **Halloween** is locked.\nBuy it in 🛍️ Shop!`;
+  }
+
   return sendText(
     interaction,
+    text,
+    customizeButtons(player)
+  );
+}
 
-    `🎀 **Tree Customization**\n\n` +
-      `🌸 Current tree: **${getStage(player.level).name}**\n\n` +
-      `✨ Customization options are coming soon!`
+
+/* =========================================================
+   EQUIP HALLOWEEN
+========================================================= */
+
+async function handleThemeHalloween(
+  interaction,
+  env
+) {
+  const userId =
+    interaction.member?.user?.id ||
+    interaction.user?.id;
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  if (
+    !player.inventory.includes(
+      "halloween_background"
+    )
+  ) {
+    return sendText(
+      interaction,
+      `🔒 You don't own the Halloween Background yet! Buy it in 🛍️ Shop.`
+    );
+  }
+
+  player.equipped.theme =
+    "halloween";
+
+  player.sceneMessage =
+    `🎃🖤 Halloween mode activated!`;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  const screenshot =
+    await renderTree(
+      env,
+      player
+    );
+
+  return sendTree(
+    interaction,
+    player,
+    screenshot
+  );
+}
+
+
+/* =========================================================
+   EQUIP CHERRY
+========================================================= */
+
+async function handleThemeCherry(
+  interaction,
+  env
+) {
+  const userId =
+    interaction.member?.user?.id ||
+    interaction.user?.id;
+
+  const player =
+    await getPlayer(
+      env,
+      userId
+    );
+
+  player.equipped.theme =
+    "cherry";
+
+  player.sceneMessage =
+    `🌸 Cherry Blossom mode activated!`;
+
+  await savePlayer(
+    env,
+    userId,
+    player
+  );
+
+  const screenshot =
+    await renderTree(
+      env,
+      player
+    );
+
+  return sendTree(
+    interaction,
+    player,
+    screenshot
   );
 }
 
@@ -1414,6 +1788,96 @@ async function handleLeaderboard(
 
 
 /* =========================================================
+   GIVE SPARKLES
+========================================================= */
+
+async function handleGiveSparkles(
+  interaction,
+  env
+) {
+  const senderId =
+    interaction.member?.user?.id ||
+    interaction.user?.id;
+
+  /*
+    ONLY OWNER_ID can use this command.
+  */
+
+  if (
+    !env.OWNER_ID ||
+    senderId !== env.OWNER_ID
+  ) {
+    return sendText(
+      interaction,
+      `🚫 You don't have permission to use **/give-sparkles**.`
+    );
+  }
+
+  const target =
+    interaction.data?.options?.find(
+      option =>
+        option.name === "user"
+    )?.value;
+
+  const amount =
+    interaction.data?.options?.find(
+      option =>
+        option.name === "amount"
+    )?.value;
+
+  const sparkleAmount =
+    Number(amount);
+
+  if (
+    !target ||
+    !Number.isInteger(
+      sparkleAmount
+    ) ||
+    sparkleAmount <= 0
+  ) {
+    return sendText(
+      interaction,
+      `❌ Please provide a valid user and a positive sparkle amount.`
+    );
+  }
+
+  if (
+    sparkleAmount > 10000
+  ) {
+    return sendText(
+      interaction,
+      `❌ You can give at most **10,000 sparkles** at once.`
+    );
+  }
+
+  const player =
+    await getPlayer(
+      env,
+      target
+    );
+
+  player.sparkles +=
+    sparkleAmount;
+
+  player.sceneMessage =
+    `✨ You received **${sparkleAmount} sparkles** from the Tree Keeper!`;
+
+  await savePlayer(
+    env,
+    target,
+    player
+  );
+
+  return sendText(
+    interaction,
+
+    `✨ **Sparkles Given!**\n\n` +
+    `You gave <@${target}> **${sparkleAmount} ✨**.`
+  );
+}
+
+
+/* =========================================================
    COMPONENT ROUTER
 ========================================================= */
 
@@ -1458,6 +1922,24 @@ async function handleComponent(
 
     case "tree_customize":
       return handleCustomize(
+        interaction,
+        env
+      );
+
+    case "shop_buy_halloween":
+      return handleBuyHalloween(
+        interaction,
+        env
+      );
+
+    case "theme_halloween":
+      return handleThemeHalloween(
+        interaction,
+        env
+      );
+
+    case "theme_cherry":
+      return handleThemeCherry(
         interaction,
         env
       );
@@ -1537,12 +2019,148 @@ async function handleCommand(
         interaction
       );
 
+    case "give-sparkles":
+      return handleGiveSparkles(
+        interaction,
+        env
+      );
+
     default:
       return sendText(
         interaction,
         "🌸 Unknown command."
       );
   }
+}
+
+
+/* =========================================================
+   COMMAND REGISTRATION
+========================================================= */
+
+async function registerCommands(
+  env
+) {
+  const commands = [
+
+    {
+      name: "tree",
+      description:
+        "View your tree"
+    },
+
+    {
+      name: "water",
+      description:
+        "Water your tree"
+    },
+
+    {
+      name: "catch",
+      description:
+        "Catch a sparkle"
+    },
+
+    {
+      name: "daily",
+      description:
+        "Claim your daily reward"
+    },
+
+    {
+      name: "shop",
+      description:
+        "Open the tree shop"
+    },
+
+    {
+      name: "customize",
+      description:
+        "Customize your tree"
+    },
+
+    {
+      name: "inventory",
+      description:
+        "View your tree inventory"
+    },
+
+    {
+      name: "leaderboard",
+      description:
+        "View the tree leaderboard"
+    },
+
+    {
+      name: "rename",
+      description:
+        "Rename your tree"
+    },
+
+    {
+      name:
+        "give-sparkles",
+
+      description:
+        "Give sparkles to another user",
+
+      options: [
+
+        {
+          name:
+            "user",
+
+          description:
+            "The user receiving the sparkles",
+
+          type: 6,
+
+          required: true
+        },
+
+        {
+          name:
+            "amount",
+
+          description:
+            "Amount of sparkles to give",
+
+          type: 4,
+
+          required: true,
+
+          min_value: 1,
+
+          max_value: 10000
+        }
+
+      ]
+    }
+
+  ];
+
+  const response =
+    await fetch(
+      `https://discord.com/api/v10/applications/${env.CLIENT_ID}/commands`,
+      {
+        method: "PUT",
+
+        headers: {
+          "Authorization":
+            `Bot ${env.BOT_TOKEN}`,
+
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify(
+            commands
+          )
+      }
+    );
+
+  return response;
 }
 
 
@@ -1681,17 +2299,34 @@ export default {
 
 
     /* -------------------------
-       REGISTER
+       REGISTER COMMANDS
     ------------------------- */
 
     if (
       request.method === "GET" &&
       url.pathname === "/register"
     ) {
+      const result =
+        await registerCommands(
+          env
+        );
+
+      if (result.ok) {
+        return new Response(
+          "🎀 Commands registered successfully!",
+          {
+            status: 200
+          }
+        );
+      }
+
+      const error =
+        await result.text();
+
       return new Response(
-        "Commands are already registered.",
+        `Command registration failed:\n${error}`,
         {
-          status: 200
+          status: 500
         }
       );
     }
@@ -1761,8 +2396,8 @@ export default {
     ) {
 
       /*
-        Rename needs to open a modal,
-        so it must NOT be deferred first.
+        Rename opens a modal,
+        so it must not be deferred.
       */
 
       if (
@@ -1825,12 +2460,6 @@ export default {
     if (
       interaction.type === 5
     ) {
-
-      /*
-        Modal submissions are
-        acknowledged before updating
-        the original tree message.
-      */
 
       await acknowledge(
         interaction
