@@ -19,7 +19,7 @@
 // ============================================================
 
 const EXP_PER_WATER = 10;
-const SPARKLE_CHANCE = 0.20;
+const SPARKLE_CHANCE = 0.50;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 const WATER_COOLDOWN = 60 * 60 * 1000;
 
