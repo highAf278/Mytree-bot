@@ -9,6 +9,15 @@ const EXP_PER_WATER = 10;
 const SPARKLE_CHANCE = 0.50;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 
+/*
+  MULTIPLE SPARKLES
+  A successful spawn creates 2–4 sparkles.
+  Up to 5 can exist at once.
+*/
+const MIN_SPARKLES_PER_SPAWN = 2;
+const MAX_SPARKLES_PER_SPAWN = 4;
+const MAX_ACTIVE_SPARKLES = 5;
+
 const WATER_COOLDOWN = 60 * 60 * 1000;
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
@@ -171,7 +180,11 @@ function createPlayer() {
     lastWater: 0,
     lastDaily: 0,
 
-    sparkle: null,
+    /*
+      NEW:
+      Multiple sparkles are stored here.
+    */
+    sparklesOnTree: [],
 
     sceneMessage:
       "🌱 Your little tree is waiting for some love!",
@@ -190,6 +203,10 @@ function createPlayer() {
   };
 }
 
+
+/* =========================================================
+   PLAYER REPAIR
+========================================================= */
 
 function repairPlayer(player) {
   const fresh = createPlayer();
@@ -221,8 +238,51 @@ function repairPlayer(player) {
     inventory:
       Array.isArray(player.inventory)
         ? [...player.inventory]
+        : [],
+
+    sparklesOnTree:
+      Array.isArray(player.sparklesOnTree)
+        ? [...player.sparklesOnTree]
         : []
   };
+
+
+  /*
+    BACKWARD COMPATIBILITY
+
+    If an older player still has the old
+    single "sparkle" property, convert it
+    into the new multiple-sparkle system.
+  */
+
+  if (
+    repaired.sparklesOnTree.length === 0 &&
+    player.sparkle &&
+    typeof player.sparkle === "object"
+  ) {
+    repaired.sparklesOnTree = [
+      {
+        ...player.sparkle,
+        id:
+          String(
+            player.sparkle.createdAt ||
+            Date.now()
+          ) +
+          "_" +
+          Math.random()
+            .toString(36)
+            .slice(2, 8)
+      }
+    ];
+  }
+
+
+  /*
+    Remove the old property so the new system
+    is the only one being used.
+  */
+
+  delete repaired.sparkle;
 
 
   if (
@@ -366,7 +426,7 @@ function getTreeImage(player) {
 
 
 /* =========================================================
-   SPARKLES
+   RANDOM
 ========================================================= */
 
 function random(min, max) {
@@ -382,6 +442,19 @@ function randomChance(chance) {
 }
 
 
+/* =========================================================
+   SPARKLE TYPES
+========================================================= */
+
+/*
+  VALUES DOUBLED:
+  
+  💗 Pink = 10
+  🌈 Rainbow = 20
+  🌙 Moon = 30
+  ⭐ Rare Star = 50
+*/
+
 function sparkleInfo() {
   const types = [
     {
@@ -393,19 +466,19 @@ function sparkleInfo() {
     {
       name: "Rainbow Sparkle",
       emoji: "🌈",
-      value: 25
+      value: 20
     },
 
     {
       name: "Moon Sparkle",
       emoji: "🌙",
-      value: 40
+      value: 30
     },
 
     {
       name: "Rare Star",
       emoji: "⭐",
-      value: 75
+      value: 50
     }
   ];
 
@@ -418,25 +491,90 @@ function sparkleInfo() {
 }
 
 
-function cleanExpiredSparkle(player) {
-  if (!player.sparkle) {
+/* =========================================================
+   SPARKLE CLEANUP
+========================================================= */
+
+function cleanExpiredSparkles(player) {
+  if (
+    !Array.isArray(
+      player.sparklesOnTree
+    )
+  ) {
+    player.sparklesOnTree = [];
     return;
   }
 
-  if (
-    Date.now() -
-      Number(player.sparkle.createdAt || 0) >
-    SPARKLE_LIFETIME
-  ) {
-    player.sparkle = null;
-  }
+  const now =
+    Date.now();
+
+  player.sparklesOnTree =
+    player.sparklesOnTree.filter(
+      sparkle => {
+
+        if (
+          !sparkle ||
+          typeof sparkle !== "object"
+        ) {
+          return false;
+        }
+
+        const createdAt =
+          Number(
+            sparkle.createdAt || 0
+          );
+
+        if (!createdAt) {
+          return false;
+        }
+
+        return (
+          now - createdAt <=
+          SPARKLE_LIFETIME
+        );
+      }
+    );
 }
 
 
-function maybeSpawnSparkle(player) {
-  cleanExpiredSparkle(player);
+/* =========================================================
+   CREATE SPARKLE
+========================================================= */
 
-  if (player.sparkle) {
+function createSparkle() {
+  const sparkle =
+    sparkleInfo();
+
+  return {
+    ...sparkle,
+
+    id:
+      Date.now().toString() +
+      "_" +
+      Math.random()
+        .toString(36)
+        .slice(2, 10),
+
+    x: random(12, 88),
+    y: random(15, 72),
+
+    createdAt:
+      Date.now()
+  };
+}
+
+
+/* =========================================================
+   MULTIPLE SPARKLE SPAWNING
+========================================================= */
+
+function maybeSpawnSparkles(player) {
+  cleanExpiredSparkles(player);
+
+  if (
+    player.sparklesOnTree.length >=
+    MAX_ACTIVE_SPARKLES
+  ) {
     return;
   }
 
@@ -448,17 +586,28 @@ function maybeSpawnSparkle(player) {
     return;
   }
 
-  const sparkle =
-    sparkleInfo();
+  const availableSlots =
+    MAX_ACTIVE_SPARKLES -
+    player.sparklesOnTree.length;
 
-  player.sparkle = {
-    ...sparkle,
+  const amountToSpawn =
+    Math.min(
+      random(
+        MIN_SPARKLES_PER_SPAWN,
+        MAX_SPARKLES_PER_SPAWN
+      ),
+      availableSlots
+    );
 
-    x: random(15, 85),
-    y: random(20, 70),
-
-    createdAt: Date.now()
-  };
+  for (
+    let i = 0;
+    i < amountToSpawn;
+    i++
+  ) {
+    player.sparklesOnTree.push(
+      createSparkle()
+    );
+  }
 }
 
 
@@ -490,7 +639,7 @@ function getBackground(player) {
 ========================================================= */
 
 async function renderTree(env, player) {
-  cleanExpiredSparkle(player);
+  cleanExpiredSparkles(player);
 
   const browser =
     await puppeteer.launch(
@@ -508,21 +657,31 @@ async function renderTree(env, player) {
     R2_BASE +
     getTreeImage(player);
 
+
+  /*
+    RENDER ALL ACTIVE SPARKLES
+  */
+
   let sparkleHTML = "";
 
-  if (player.sparkle) {
-    sparkleHTML = `
+  for (
+    const sparkle of
+    player.sparklesOnTree
+  ) {
+
+    sparkleHTML += `
       <div
         class="sparkle"
         style="
-          left:${player.sparkle.x}%;
-          top:${player.sparkle.y}%;
+          left:${sparkle.x}%;
+          top:${sparkle.y}%;
         "
       >
-        ${player.sparkle.emoji}
+        ${sparkle.emoji}
       </div>
     `;
   }
+
 
   const html = `
 <!DOCTYPE html>
@@ -568,17 +727,25 @@ body {
 
   /*
     TREE POSITION
-    Moved RIGHT and UP.
+
+    Smaller:
+    58% instead of 65%
+
+    More left:
+    52% instead of 55%
+
+    More up:
+    37% instead of 40%
   */
 
-  left: 55%;
-  top: 40%;
+  left: 52%;
+  top: 37%;
 
   transform:
     translate(-50%, -50%);
 
-  width: 65%;
-  height: 65%;
+  width: 58%;
+  height: 58%;
 
   object-fit: contain;
 }
@@ -678,7 +845,7 @@ body {
 ========================================================= */
 
 function buildTreeText(player) {
-  cleanExpiredSparkle(player);
+  cleanExpiredSparkles(player);
 
   const needed =
     xpNeeded(player.level);
@@ -734,10 +901,18 @@ function buildTreeText(player) {
         : "Cooling down"
     }\n`;
 
-  if (player.sparkle) {
+
+  if (
+    player.sparklesOnTree.length
+  ) {
     text +=
-      `\n✨ **A sparkle appeared! Catch it!**\n`;
+      `\n✨ **${player.sparklesOnTree.length} sparkle${
+        player.sparklesOnTree.length === 1
+          ? ""
+          : "s"
+      } appeared! Catch them!**\n`;
   }
+
 
   if (player.sceneMessage) {
     text +=
@@ -753,25 +928,70 @@ function buildTreeText(player) {
 ========================================================= */
 
 function treeButtons(player) {
-  cleanExpiredSparkle(player);
+  cleanExpiredSparkles(player);
 
-  const firstButton =
-    player.sparkle
-      ? {
-          type: 2,
-          style: 1,
+  const rows = [];
 
-          custom_id:
-            `tree_catch_${player.sparkle.createdAt}`,
 
-          label:
-            "Catch Sparkle",
+  /*
+    CATCH BUTTONS
 
-          emoji: {
-            name: "✨"
+    Discord allows up to 5 buttons per row.
+    We can have up to 5 active sparkles,
+    so all sparkle buttons fit in one row.
+  */
+
+  if (
+    player.sparklesOnTree.length
+  ) {
+
+    const catchButtons =
+      player.sparklesOnTree
+        .slice(
+          0,
+          MAX_ACTIVE_SPARKLES
+        )
+        .map(
+          (sparkle, index) => {
+
+            return {
+              type: 2,
+              style: 1,
+
+              custom_id:
+                `tree_catch_${sparkle.id}`,
+
+              label:
+                `Catch ${sparkle.emoji} +${sparkle.value}`,
+
+              emoji: {
+                name:
+                  sparkle.emoji
+              }
+            };
           }
-        }
-      : {
+        );
+
+
+    rows.push({
+      type: 1,
+      components:
+        catchButtons
+    });
+
+  } else {
+
+    /*
+      No sparkles currently active,
+      so the first button is Water Tree.
+    */
+
+    rows.push({
+      type: 1,
+
+      components: [
+
+        {
           type: 2,
           style: 1,
 
@@ -784,67 +1004,121 @@ function treeButtons(player) {
           emoji: {
             name: "💧"
           }
-        };
+        }
 
-  return [
-    {
+      ]
+    });
+  }
+
+
+  /*
+    MAIN NAVIGATION ROW
+  */
+
+  rows.push({
+    type: 1,
+
+    components: [
+
+      {
+        type: 2,
+        style: 2,
+
+        custom_id:
+          "tree_daily",
+
+        label:
+          "Daily",
+
+        emoji: {
+          name: "🎁"
+        }
+      },
+
+      {
+        type: 2,
+        style: 2,
+
+        custom_id:
+          "tree_inventory",
+
+        label:
+          "Inventory",
+
+        emoji: {
+          name: "🎒"
+        }
+      },
+
+      {
+        type: 2,
+        style: 2,
+
+        custom_id:
+          "tree_shop",
+
+        label:
+          "Shop",
+
+        emoji: {
+          name: "🛍️"
+        }
+      },
+
+      {
+        type: 2,
+        style: 2,
+
+        custom_id:
+          "tree_customize",
+
+        label:
+          "Customize",
+
+        emoji: {
+          name: "🎀"
+        }
+      }
+
+    ]
+  });
+
+
+  /*
+    When sparkles exist, Water Tree gets
+    its own button so it isn't removed.
+  */
+
+  if (
+    player.sparklesOnTree.length
+  ) {
+
+    rows.push({
       type: 1,
 
       components: [
 
-        firstButton,
-
         {
           type: 2,
-          style: 2,
-          custom_id:
-            "tree_daily",
-          label:
-            "Daily",
-          emoji: {
-            name: "🎁"
-          }
-        },
+          style: 1,
 
-        {
-          type: 2,
-          style: 2,
           custom_id:
-            "tree_inventory",
-          label:
-            "Inventory",
-          emoji: {
-            name: "🎒"
-          }
-        },
+            "tree_water",
 
-        {
-          type: 2,
-          style: 2,
-          custom_id:
-            "tree_shop",
           label:
-            "Shop",
-          emoji: {
-            name: "🛍️"
-          }
-        },
+            "Water Tree",
 
-        {
-          type: 2,
-          style: 2,
-          custom_id:
-            "tree_customize",
-          label:
-            "Customize",
           emoji: {
-            name: "🎀"
+            name: "💧"
           }
         }
 
       ]
-    }
-  ];
+    });
+  }
+
+
+  return rows;
 }
 
 
@@ -1223,11 +1497,17 @@ async function handleTree(
       userId
     );
 
-  maybeSpawnSparkle(player);
+  maybeSpawnSparkles(player);
 
-  if (player.sparkle) {
+  if (
+    player.sparklesOnTree.length
+  ) {
     player.sceneMessage =
-      "✨ A sparkle appeared! Catch it!";
+      `✨ ${player.sparklesOnTree.length} sparkle${
+        player.sparklesOnTree.length === 1
+          ? ""
+          : "s"
+      } appeared! Catch them!`;
   } else {
     player.sceneMessage =
       "🌱 Give your tree some love!";
@@ -1326,7 +1606,7 @@ async function handleWater(
     );
 
 
-  maybeSpawnSparkle(player);
+  maybeSpawnSparkles(player);
 
 
   const chaosEvent =
@@ -1353,6 +1633,19 @@ async function handleWater(
   if (!sceneMessages.length) {
     sceneMessages.push(
       `💧🌸 Your tree loved that! +${EXP_PER_WATER} XP`
+    );
+  }
+
+
+  if (
+    player.sparklesOnTree.length
+  ) {
+    sceneMessages.push(
+      `✨ ${player.sparklesOnTree.length} sparkle${
+        player.sparklesOnTree.length === 1
+          ? ""
+          : "s"
+      } are waiting to be caught!`
     );
   }
 
@@ -1403,12 +1696,18 @@ async function handleCatch(
       userId
     );
 
-  cleanExpiredSparkle(player);
+  cleanExpiredSparkles(player);
 
   const buttonId =
     interaction.data?.custom_id || "";
 
-  const buttonSparkleTime =
+
+  /*
+    Get the unique sparkle ID from:
+    tree_catch_SPARKLE_ID
+  */
+
+  const sparkleId =
     buttonId.startsWith(
       "tree_catch_"
     )
@@ -1419,24 +1718,10 @@ async function handleCatch(
 
 
   if (
-    !player.sparkle ||
-    typeof player.sparkle !==
-      "object" ||
-    typeof player.sparkle.value !==
-      "number" ||
-    !buttonSparkleTime ||
-    String(
-      player.sparkle.createdAt
-    ) !==
-      String(
-        buttonSparkleTime
-      )
+    !sparkleId
   ) {
-
-    player.sparkle = null;
-
     player.sceneMessage =
-      "✨ That sparkle has already been caught!";
+      "✨ That sparkle button isn't valid anymore.";
 
     await savePlayer(
       env,
@@ -1458,9 +1743,59 @@ async function handleCatch(
   }
 
 
-  const sparkle = {
-    ...player.sparkle
-  };
+  const sparkleIndex =
+    player.sparklesOnTree.findIndex(
+      sparkle =>
+        String(
+          sparkle.id
+        ) ===
+        String(
+          sparkleId
+        )
+    );
+
+
+  /*
+    If the sparkle was already caught,
+    only that button becomes invalid.
+    Other sparkles remain untouched.
+  */
+
+  if (
+    sparkleIndex === -1
+  ) {
+
+    player.sceneMessage =
+      "✨ That sparkle has already been caught or expired!";
+
+    await savePlayer(
+      env,
+      userId,
+      player
+    );
+
+    const screenshot =
+      await renderTree(
+        env,
+        player
+      );
+
+    return sendTree(
+      interaction,
+      player,
+      screenshot
+    );
+  }
+
+
+  /*
+    Remove ONLY the sparkle that was clicked.
+  */
+
+  const sparkle =
+    player.sparklesOnTree[
+      sparkleIndex
+    ];
 
   const sparkleValue =
     Number(
@@ -1471,8 +1806,11 @@ async function handleCatch(
   player.sparkles +=
     sparkleValue;
 
-  player.sparkle =
-    null;
+
+  player.sparklesOnTree.splice(
+    sparkleIndex,
+    1
+  );
 
 
   const messages =
@@ -1484,6 +1822,18 @@ async function handleCatch(
 
   player.sceneMessage =
     `${sparkle.emoji || "✨"} You caught a ${sparkle.name || "sparkle"}! +${sparkleValue} ✨`;
+
+
+  if (
+    player.sparklesOnTree.length
+  ) {
+    player.sceneMessage +=
+      ` • ✨ ${player.sparklesOnTree.length} sparkle${
+        player.sparklesOnTree.length === 1
+          ? ""
+          : "s"
+      } still waiting!`;
+  }
 
 
   if (messages.length) {
