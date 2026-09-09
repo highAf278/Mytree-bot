@@ -16,6 +16,10 @@ const MAX_ACTIVE_SPARKLES = 5;
 const WATER_COOLDOWN = 60 * 60 * 1000;
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
+/* =========================================================
+   BACKGROUNDS
+========================================================= */
+
 const HALLOWEEN_BACKGROUND = "IMG_7254.jpeg";
 const NORMAL_BACKGROUND = "IMG_7251.jpeg";
 const CANDYLAND_BACKGROUND = "IMG_7261.jpeg";
@@ -23,12 +27,34 @@ const CANDYLAND_BACKGROUND = "IMG_7261.jpeg";
 const HALLOWEEN_PRICE = 150;
 const CANDYLAND_PRICE = 500;
 
+/* =========================================================
+   TREES
+========================================================= */
+
 const TREE_IMAGE = "IMG_7259.png";
 const COTTON_CANDY_TREE = "IMG_7263.png";
 const COTTON_CANDY_PRICE = 1000;
 
 const R2_BASE =
   "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/";
+
+/* =========================================================
+   TREE POSITION
+========================================================= */
+
+/*
+  Move the tree vertically here.
+
+  Higher number = farther DOWN.
+
+  Current:
+  55%
+
+  Previously:
+  37%
+*/
+
+const TREE_TOP_POSITION = 55;
 
 /* =========================================================
    TREE STAGES
@@ -59,36 +85,263 @@ const LEVEL_REWARDS = {
    WEREWIVES CHAOS EVENTS
 ========================================================= */
 
+/*
+  EVERY CHAOS EVENT ONLY GIVES OR TAKES SPARKLES.
+
+  type:
+    "everyone" = everyone gets affected
+    "random"   = one random player gets affected
+
+  amount:
+    positive = gives sparkles
+    negative = takes sparkles
+*/
+
 const WEREWIVES_EVENTS = [
+
+  /* =======================================================
+     🧀 CHEESE EVENTS
+  ======================================================= */
+
   {
+    type: "random",
+    amount: 100,
     message:
-      "🦝 A WEREWIFE RACCOON HAS STOLEN SOME SPARKLES!",
-    reward: 15
+      "🧀 **THE CHEESE KNOWS EVERYTHING.**\n\n" +
+      "The cheese has selected its champion.\n" +
+      "*The cheese will not explain itself.*"
   },
+
   {
+    type: "everyone",
+    amount: 15,
     message:
-      "💅 THE WEREWIVES HAVE DECLARED CHAOS HOUR!",
-    reward: 20
+      "🚨🧀 **CHEESE EMERGENCY!**\n\n" +
+      "The cheese has escaped!\n" +
+      "Nobody actually helped."
   },
+
   {
+    type: "random",
+    amount: -25,
     message:
-      "🌙 A MYSTERIOUS WEREWIFE HAS LEFT SPARKLES UNDER THE TREE!",
-    reward: 25
+      "🧀 **THE CHEESE TAX IS DUE.**\n\n" +
+      "The cheese demands tribute."
   },
+
   {
+    type: "everyone",
+    amount: 5,
     message:
-      "✨ THE TREE HAS BEEN BLESSED BY THE WEREWIVES!",
-    reward: 30
+      "🔮🧀 **THE CHEESE HAS SPOKEN.**\n\n" +
+      "Nobody understands the prophecy."
   },
+
   {
+    type: "random",
+    amount: -15,
     message:
-      "🍬 SOMEONE DROPPED A BAG OF MAGICAL SPARKLES!",
-    reward: 20
+      "🧀 **FORBIDDEN CHEESE.**\n\n" +
+      "Someone looked behind the couch.\n" +
+      "They found the cheese."
   },
+
   {
+    type: "everyone",
+    amount: -10,
     message:
-      "🧚 THE FAIRIES HAVE VISITED THE WEREWIVES TREE!",
-    reward: 25
+      "🧀 **THE CHEESE IS ANGRY.**\n\n" +
+      "Nobody knows what happened.\n" +
+      "The cheese refuses to elaborate."
+  },
+
+  /* =======================================================
+     🦝 RACCOON EVENTS
+  ======================================================= */
+
+  {
+    type: "random",
+    amount: 75,
+    message:
+      "🦝 **THE RACCOON COUNCIL HAS CHOSEN.**\n\n" +
+      "One Werewife has been blessed by the raccoons."
+  },
+
+  {
+    type: "random",
+    amount: -30,
+    message:
+      "🦝 **RACCOON ROBBERY!**\n\n" +
+      "A raccoon has stolen someone's sparkles.\n" +
+      "Nobody saw anything."
+  },
+
+  {
+    type: "everyone",
+    amount: 10,
+    message:
+      "🦝 **RACCOON PARADE!**\n\n" +
+      "The raccoons are celebrating.\n" +
+      "You have been invited."
+  },
+
+  {
+    type: "everyone",
+    amount: -10,
+    message:
+      "🦝 **THE RACCOONS HAVE DISCOVERED THE SPARKLE VAULT.**\n\n" +
+      "This is not good."
+  },
+
+  {
+    type: "random",
+    amount: 50,
+    message:
+      "🦝 **MYSTERIOUS RACCOON DONATION.**\n\n" +
+      "A raccoon dropped a suspicious bag of sparkles."
+  },
+
+  /* =======================================================
+     🐺 WEREWOLF EVENTS
+  ======================================================= */
+
+  {
+    type: "everyone",
+    amount: 20,
+    message:
+      "🐺 **WEREWOLF PACK MEETING!**\n\n" +
+      "The meeting accomplished absolutely nothing."
+  },
+
+  {
+    type: "random",
+    amount: 80,
+    message:
+      "🐺 **THE ALPHA HAS CHOSEN A FAVORITE.**\n\n" +
+      "One Werewife has received the pack's blessing."
+  },
+
+  {
+    type: "random",
+    amount: -40,
+    message:
+      "🐺 **WEREWOLF TAX!**\n\n" +
+      "The pack requires payment."
+  },
+
+  {
+    type: "everyone",
+    amount: -15,
+    message:
+      "🌕 **FULL MOON CHAOS!**\n\n" +
+      "Nobody is behaving normally tonight."
+  },
+
+  {
+    type: "random",
+    amount: 60,
+    message:
+      "🐺 **LONE WOLF LUCK!**\n\n" +
+      "One lucky Werewife has been spotted by the pack."
+  },
+
+  /* =======================================================
+     💅 WEREWIVES EVENTS
+  ======================================================= */
+
+  {
+    type: "random",
+    amount: 50,
+    message:
+      "💅 **WIFE PRIVILEGE ACTIVATED.**\n\n" +
+      "Someone has been chosen."
+  },
+
+  {
+    type: "everyone",
+    amount: 10,
+    message:
+      "💅 **WEREWIVES CHAOS HOUR!**\n\n" +
+      "The server has officially lost control."
+  },
+
+  {
+    type: "random",
+    amount: -20,
+    message:
+      "🚨 **GIRL, WHAT HAPPENED?!**\n\n" +
+      "Nobody knows.\n" +
+      "Someone is paying for it."
+  },
+
+  {
+    type: "everyone",
+    amount: 15,
+    message:
+      "✨ **THE TREE HAS BEEN BLESSED.**\n\n" +
+      "The Werewives have decided everyone deserves sparkles."
+  },
+
+  {
+    type: "everyone",
+    amount: -5,
+    message:
+      "🧍 **THE SILENCE.**\n\n" +
+      "Something happened.\n" +
+      "Nobody is talking about it."
+  },
+
+  {
+    type: "random",
+    amount: 100,
+    message:
+      "👑 **WEREWIFE ROYALTY!**\n\n" +
+      "One random member has been crowned."
+  },
+
+  /* =======================================================
+     🎃 HALLOWEEN CHAOS
+  ======================================================= */
+
+  {
+    type: "everyone",
+    amount: 13,
+    message:
+      "🎃 **JACK-O'-CHAOS!**\n\n" +
+      "The pumpkins have escaped."
+  },
+
+  {
+    type: "everyone",
+    amount: -13,
+    message:
+      "🎃 **PUMPKIN HEIST!**\n\n" +
+      "The pumpkins have stolen the sparkles."
+  },
+
+  {
+    type: "random",
+    amount: 75,
+    message:
+      "🧙 **WITCH'S BLESSING!**\n\n" +
+      "A mysterious witch has chosen a favorite."
+  },
+
+  {
+    type: "everyone",
+    amount: 20,
+    message:
+      "👻 **GHOSTLY DONATION!**\n\n" +
+      "A ghost has decided to be unusually generous."
+  },
+
+  {
+    type: "random",
+    amount: -15,
+    message:
+      "🕷️ **SPIDER INCIDENT!**\n\n" +
+      "There is a spider.\n" +
+      "Nobody is handling this well."
   }
 ];
 
@@ -102,16 +355,19 @@ const SPARKLE_TYPES = [
     emoji: "💖",
     value: 10
   },
+
   {
     name: "Rainbow Sparkle",
     emoji: "🌈",
     value: 20
   },
+
   {
     name: "Moon Sparkle",
     emoji: "🌙",
     value: 30
   },
+
   {
     name: "Rare Star",
     emoji: "🌟",
@@ -486,12 +742,57 @@ function maybeChaosEvent(
       WEREWIVES_EVENTS
     );
 
-  player.sparkles +=
-    event.reward;
+  /*
+    The current interaction only has
+    the player who triggered the event.
+
+    So random events affect that player,
+    while everyone-events currently affect
+    the triggering player.
+
+    This keeps the system safe without
+    requiring a separate member database
+    or Discord server-member lookup.
+  */
+
+  const amount =
+    Number(event.amount) || 0;
+
+  const before =
+    player.sparkles;
+
+  player.sparkles =
+    Math.max(
+      0,
+      player.sparkles + amount
+    );
+
+  const actualChange =
+    player.sparkles - before;
+
+  if (
+    actualChange > 0
+  ) {
+    return (
+      `${event.message}\n\n` +
+      `💖 **+${actualChange} sparkles!**\n` +
+      `✨ You now have **${player.sparkles} ✨**`
+    );
+  }
+
+  if (
+    actualChange < 0
+  ) {
+    return (
+      `${event.message}\n\n` +
+      `💔 **${Math.abs(actualChange)} sparkles lost!**\n` +
+      `✨ You now have **${player.sparkles} ✨**`
+    );
+  }
 
   return (
-    `${event.message}\n` +
-    `💖 +${event.reward} sparkles!`
+    `${event.message}\n\n` +
+    `✨ No sparkles were lost because you had none to take.`
   );
 }
 
@@ -644,7 +945,8 @@ async function renderTree(
             position: absolute;
 
             left: 44%;
-            top: 37%;
+
+            top: ${TREE_TOP_POSITION}%;
 
             transform:
               translate(-50%, -50%);
@@ -758,12 +1060,6 @@ async function renderTree(
       width: 1024,
       height: 1024
     });
-
-    /*
-      Give images up to 5 seconds to load.
-      If they don't, continue instead of
-      hanging the Discord interaction.
-    */
 
     try {
       await page.waitForFunction(
@@ -987,7 +1283,7 @@ async function sendText(
 }
 
 /* =========================================================
-   SHOP CATEGORY BUTTONS
+   REGULAR SHOP BUTTONS
 ========================================================= */
 
 function shopCategoryButtons() {
@@ -1013,6 +1309,14 @@ function shopCategoryButtons() {
 
       {
         type: 2,
+        style: 1,
+        label: "⏳ Limited Shop",
+        custom_id:
+          "limited_shop"
+      },
+
+      {
+        type: 2,
         style: 4,
         label: "❌ Close",
         custom_id: "tree"
@@ -1022,7 +1326,7 @@ function shopCategoryButtons() {
 }
 
 /* =========================================================
-   BACKGROUND SHOP BUTTONS
+   REGULAR BACKGROUND SHOP
 ========================================================= */
 
 function backgroundShopButtons() {
@@ -1030,17 +1334,6 @@ function backgroundShopButtons() {
     type: 1,
 
     components: [
-      {
-        type: 2,
-        style: 1,
-
-        label:
-          `🎃 Halloween — ${HALLOWEEN_PRICE} ✨`,
-
-        custom_id:
-          "buy_halloween"
-      },
-
       {
         type: 2,
         style: 1,
@@ -1097,6 +1390,139 @@ function treeShopButtons() {
 }
 
 /* =========================================================
+   LIMITED SHOP MAIN BUTTONS
+========================================================= */
+
+function limitedShopButtons() {
+  return {
+    type: 1,
+
+    components: [
+      {
+        type: 2,
+        style: 1,
+        label: "🎃 Halloween",
+        custom_id:
+          "limited_halloween"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "⭐ Special Sets",
+        custom_id:
+          "limited_special"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "🎁 Holiday Items",
+        custom_id:
+          "limited_holidays"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "⬅️ Regular Shop",
+        custom_id:
+          "shop"
+      }
+    ]
+  };
+}
+
+/* =========================================================
+   LIMITED HALLOWEEN BUTTONS
+========================================================= */
+
+function limitedHalloweenButtons() {
+  return {
+    type: 1,
+
+    components: [
+      {
+        type: 2,
+        style: 4,
+
+        label:
+          `🎃 Halloween Background — ${HALLOWEEN_PRICE} ✨`,
+
+        custom_id:
+          "buy_halloween"
+      },
+
+      {
+        type: 2,
+        style: 2,
+
+        label: "⬅️ Limited Shop",
+
+        custom_id:
+          "limited_shop"
+      }
+    ]
+  };
+}
+
+/* =========================================================
+   LIMITED SPECIAL SET BUTTONS
+========================================================= */
+
+function limitedSpecialButtons() {
+  return {
+    type: 1,
+
+    components: [
+      {
+        type: 2,
+        style: 2,
+        label: "⭐ Coming Soon",
+        custom_id:
+          "limited_coming_soon"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "⬅️ Limited Shop",
+        custom_id:
+          "limited_shop"
+      }
+    ]
+  };
+}
+
+/* =========================================================
+   LIMITED HOLIDAY BUTTONS
+========================================================= */
+
+function limitedHolidayButtons() {
+  return {
+    type: 1,
+
+    components: [
+      {
+        type: 2,
+        style: 2,
+        label: "🎁 Coming Soon",
+        custom_id:
+          "limited_coming_soon"
+      },
+
+      {
+        type: 2,
+        style: 2,
+        label: "⬅️ Limited Shop",
+        custom_id:
+          "limited_shop"
+      }
+    ]
+  };
+}
+
+/* =========================================================
    SHOP
 ========================================================= */
 
@@ -1109,7 +1535,8 @@ async function handleShop(
     interaction,
 
     `🛍️ **Werewives Tree Shop**\n\n` +
-    `Choose a category!`,
+    `Choose a category!\n\n` +
+    `⏳ Limited items are found in the Limited Shop!`,
 
     [
       shopCategoryButtons()
@@ -1130,8 +1557,8 @@ async function handleShopCategory(
       interaction,
 
       `🌌 **Background Shop**\n\n` +
-      `🎃 Halloween Background — **${HALLOWEEN_PRICE} ✨**\n` +
-      `🍭 Candy Land Background — **${CANDYLAND_PRICE} ✨**`,
+      `🍭 Candy Land Background — **${CANDYLAND_PRICE} ✨**\n\n` +
+      `🎃 Halloween has moved to the **Limited Shop!**`,
 
       [
         backgroundShopButtons()
@@ -1148,6 +1575,84 @@ async function handleShopCategory(
 
     [
       treeShopButtons()
+    ]
+  );
+}
+
+/* =========================================================
+   LIMITED SHOP
+========================================================= */
+
+async function handleLimitedShop(
+  env,
+  interaction
+) {
+  return sendText(
+    env,
+    interaction,
+
+    `⏳ **WEREWIVES LIMITED SHOP**\n\n` +
+    `Special items, holiday collections, and limited-time sets live here! ✨\n\n` +
+    `🎃 Halloween\n` +
+    `⭐ Special Sets\n` +
+    `🎁 Holiday Items`,
+
+    [
+      limitedShopButtons()
+    ]
+  );
+}
+
+async function handleLimitedCategory(
+  env,
+  interaction,
+  category
+) {
+  if (
+    category === "halloween"
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      `🎃 **HALLOWEEN LIMITED SHOP**\n\n` +
+      `👻 Spooky season has arrived!\n\n` +
+      `🎃 Halloween Background — **${HALLOWEEN_PRICE} ✨**\n\n` +
+      `⏳ *Limited-time item*`,
+
+      [
+        limitedHalloweenButtons()
+      ]
+    );
+  }
+
+  if (
+    category === "special"
+  ) {
+    return sendText(
+      env,
+      interaction,
+
+      `⭐ **SPECIAL SETS**\n\n` +
+      `Exclusive themed sets will appear here!\n\n` +
+      `✨ **Coming soon...**`,
+
+      [
+        limitedSpecialButtons()
+      ]
+    );
+  }
+
+  return sendText(
+    env,
+    interaction,
+
+    `🎁 **HOLIDAY ITEMS**\n\n` +
+    `Seasonal holiday collections will appear here!\n\n` +
+    `✨ **Coming soon...**`,
+
+    [
+      limitedHolidayButtons()
     ]
   );
 }
@@ -2174,6 +2679,42 @@ async function handleComponent(
         env,
         interaction,
         "trees"
+      );
+
+    case "limited_shop":
+      return handleLimitedShop(
+        env,
+        interaction
+      );
+
+    case "limited_halloween":
+      return handleLimitedCategory(
+        env,
+        interaction,
+        "halloween"
+      );
+
+    case "limited_special":
+      return handleLimitedCategory(
+        env,
+        interaction,
+        "special"
+      );
+
+    case "limited_holidays":
+      return handleLimitedCategory(
+        env,
+        interaction,
+        "holidays"
+      );
+
+    case "limited_coming_soon":
+      return sendText(
+        env,
+        interaction,
+
+        "✨ **Coming soon!**\n\n" +
+        "We're cooking up something chaotic. 🧀🦝🐺"
       );
 
     case "buy_halloween":
