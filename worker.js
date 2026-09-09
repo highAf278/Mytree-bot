@@ -577,90 +577,10 @@ function spawnSparkle(player) {
 
 }
 
-// ============================================================
-// 🌳 TREE EMBED
-// ============================================================
-
-function treeEmbed(env, player) {
-
-  const stage =
-    getStage(player.level);
-
-  const needed =
-    expRequired(player.level);
-
-  const percent =
-    Math.floor(
-      (player.exp / needed) * 100
-    );
-
-  const filled =
-    Math.floor(
-      percent / 10
-    );
-
-  const bar =
-    "▰".repeat(filled) +
-    "▱".repeat(
-      10 - filled
-    );
-
-  const embed = {
-
-    title:
-      `🌳 ${player.name}`,
-
-    description:
-
-      `**${stage.name}**\n\n` +
-
-      `✨ Level **${player.level}**\n` +
-
-      `${bar} ${percent}%\n` +
-
-      `⭐ ${player.exp} / ${needed} EXP\n\n` +
-
-      `💧 Watered **${player.waterCount}** times\n` +
-
-      `💎 Sparkles: **${player.sparkles}**\n\n` +
-
-      `🌸 Background: **${pretty(player.equipped.background)}**\n` +
-
-      `🌳 Tree: **${pretty(player.equipped.tree_type)}**\n` +
-
-      `🪴 Decoration: **${pretty(player.equipped.decoration)}**\n` +
-
-      `✨ Effect: **${pretty(player.equipped.effect)}**\n` +
-
-      `💖 Cosmetic: **${pretty(player.equipped.cosmetic)}**`,
-
-    color: 0xff9edb,
-
-    footer: {
-
-      text:
-        "✨ Grow • Collect • Customize • Make it yours ✨"
-
-    }
-
-  };
-
-  const image =
-    treeImage(env, player);
-
-  if (image) {
-
-    embed.image = {
-
-      url: image
-
-    };
-
-  }
-
-  return embed;
+true;
 
 }
+
 
 // ============================================================
 // 🔤 ITEM NAME
