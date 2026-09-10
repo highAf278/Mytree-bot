@@ -1980,25 +1980,20 @@ async function handleWater(
     );
 
     /*
-      Only render when the picture actually changed.
-    */
+      WATER NEVER REQUIRES BROWSER RENDERING.
 
-    if (
-      spawned > 0 ||
-      cleaned > 0
-    ) {
-      await sendTree(
-        env,
-        interaction,
-        player
-      );
-    } else {
-      await updateTreeMessage(
-        env,
-        interaction,
-        player
-      );
-    }
+      This is intentional: Cloudflare Browser Rendering can
+      temporarily return HTTP 429. Watering, XP, level-ups,
+      sparkle spawning, and sparkle cleanup must still succeed
+      even when the picture renderer is unavailable.
+
+      The next /tree render will show the current sparkle state.
+    */
+    await updateTreeMessage(
+      env,
+      interaction,
+      player
+    );
   } catch (error) {
     console.error(
       "Water error:",
@@ -2009,47 +2004,18 @@ async function handleWater(
       error?.message ||
       "Unknown error";
 
-    if (
-      message.toLowerCase().includes("rate limit") ||
-      message.includes("429")
-    ) {
-      player.sceneMessage =
-        `💧 You watered your tree! +${EXP_PER_WATER} EXP.\\n` +
-        (spawned > 0
-          ? `✨ ${spawned} sparkles appeared and are waiting on your tree!`
-          : `✨ Your tree is growing nicely!`);
-
-      await savePlayer(
-        env,
-        player
-      );
-
-      await editOriginalResponse(
-        env,
-        interaction,
-        {
-          content:
-            `${buildTreeStats(player)}\\n\\n${player.sceneMessage}\\n\\n` +
-            `🛠️ The tree picture is temporarily rate-limited by Cloudflare, but your watering was saved successfully. 💖`,
-          components:
-            treeButtons()
-        }
-      );
-
-      return;
-    }
-
     await editOriginalResponse(
       env,
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\\n\\n${message}`,
+          `❌ Water couldn't be completed.\n\n${message}`,
         components:
           treeButtons()
       }
     );
   }
+}
 }
 
 /* =========================================================
@@ -2168,7 +2134,7 @@ async function handleCatch(
       disappeared, so the image MUST be rendered.
     */
 
-    await sendTree(
+    await updateTreeMessage(
       env,
       interaction,
       player
