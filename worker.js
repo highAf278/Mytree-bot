@@ -30,7 +30,7 @@ const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
   The scheduled Worker checks every 5 minutes.
   Each guild receives a chaos event every 5 minutes.
 */
-const CHAOS_INTERVAL = 5 * 60 * 1000;
+const CHAOS_INTERVAL = 1 * 60 * 1000;
 const CHAOS_SCHEDULE_VERSION = 4;
 const STONED_GIFT_SPARKLES = 300;
 
@@ -260,7 +260,56 @@ const CHAOS_EVENTS = [
     max: 35,
     message:
       "💅 WEREWIFE ENERGY! Your tree received a surprise sparkle boost!"
+  },  {
+    type: "everyone",
+    min: 15,
+    max: 75,
+    message:
+      "🚨 RACCOON EMERGENCY! Nobody knows what happened, but everyone got paid!"
   },
+  {
+    type: "everyone",
+    min: 5,
+    max: 60,
+    message:
+      "🦝 RACCOON PARADE! The raccoons are marching through Werewives and dropping sparkles everywhere!"
+  },
+  {
+    type: "everyone",
+    min: 10,
+    max: 80,
+    message:
+      "🧀 THE CHEESE MOON IS FULL! The cheese council has thrown sparkles at everyone!"
+  },
+  {
+    type: "player",
+    min: 20,
+    max: 100,
+    message:
+      "🦝 A raccoon wearing a tiny business suit audited your tree and approved a suspicious bonus!"
+  },
+  {
+    type: "player",
+    min: -50,
+    max: -10,
+    message:
+      "🧾 TAX AUDIT! Your tree has been fined for excessive sparkle possession!"
+  },
+  {
+    type: "player",
+    min: 10,
+    max: 75,
+    message:
+      "🍝 SPAGHETTI INCIDENT! Somehow your tree has become financially involved in pasta."
+  },
+  {
+    type: "player",
+    min: -25,
+    max: 60,
+    message:
+      "🎰 THE CHAOS SLOT MACHINE! Nobody knows whether this is a reward or a mistake."
+  },
+
   {
     type: "player",
     min: -20,
@@ -1448,10 +1497,10 @@ async function renderTree(
           #tree {
             position: absolute;
             left: 50%;
-            top: 76%;
+            top: 72%;
             transform: translate(-50%, -50%);
-            width: 62%;
-            height: 62%;
+            width: 82%;
+            height: 82%;
             object-fit: contain;
             z-index: 3;
           }
@@ -1832,7 +1881,7 @@ async function runRandomChaosEvent(
     await announceChaos(
       env,
       guildId,
-      `${event.message} **+${amount} sparkles** to the Werewives! ✨\n\n🦝 The raccoon chaos was announced even though Discord did not return the member list.`
+      `${event.message} **+${amount} sparkles** to the Werewives! ✨`
     );
     console.log(`Chaos fallback announcement for guild ${guildId}`);
     return true;
@@ -4623,7 +4672,7 @@ async function handleAnnouncements(
   await sendText(
     env,
     interaction,
-    `📢 Announcement channel set to **#${channel.name}**!\n\nWerewives chaos events and birthday hunt announcements will use this channel. 💖`
+    `📢 Announcement channel set to **#${channel.name}**!\n\nWerewives chaos events will use this channel. 💖`
   );
 }
 
@@ -5084,34 +5133,6 @@ async function handleComponent(
     return;
   }
 
-  if (
-    id ===
-    "open_birthday_gift"
-  ) {
-    await openBirthdayGift(
-      env,
-      interaction
-    );
-
-    return;
-  }
-
-  if (
-    id.startsWith(
-      "claim_hunt_gift:"
-    )
-  ) {
-    await claimHuntGift(
-      env,
-      interaction,
-      id.substring(
-        "claim_hunt_gift:"
-          .length
-      )
-    );
-
-    return;
-  }
 
   await sendText(
     env,
@@ -5319,6 +5340,15 @@ const HEIST_ROLE_DEFINITIONS = {
     actionLabel: "👻 Haunt"
   },
 
+  lookout: {
+    name: "👀 The Lookout",
+    team: "hunters",
+    description:
+      "Watch one player during the night and learn what action they performed. Built for small games.",
+    action: "watch",
+    actionLabel: "👀 Watch"
+  },
+
   magician: {
     name: "🪄 The Magician",
     team: "neutral",
@@ -5355,7 +5385,8 @@ const HEIST_OPTIONAL_ROLES = [
   "raccoon_royalty",
   "ghost",
   "magician",
-  "patient_zero"
+  "patient_zero",
+  "lookout"
 ];
 
 function shuffleArray(array) {
@@ -5460,13 +5491,31 @@ function heistRolesForCount(count) {
     return [];
   }
 
+  /* Curated setups for tiny games keep every player useful. */
+  if (count === 3) {
+    return shuffleArray([
+      "thief",
+      "detective",
+      "lookout"
+    ]);
+  }
+
+  if (count === 4) {
+    return shuffleArray([
+      "thief",
+      "detective",
+      "guard",
+      "lookout"
+    ]);
+  }
+
   const roles = [
     "thief",
     "detective",
     "rabid_raccoon"
   ];
 
-  if (count >= 4) {
+  if (count >= 5) {
     roles.push("guard");
   }
 
@@ -5978,21 +6027,11 @@ async function startHeistNight(
     player.lastAction = null;
   }
 
-  const locked =
-    await setHeistChannelLock(
-      env,
-      game,
-      true
-    );
-
-  if (!locked) {
-    return false;
-  }
 
   const intro =
     openingText ||
     `🌙 **NIGHT ${game.round} HAS FALLEN**\n\n` +
-    `🔒 The heist channel is now locked for typing.\n\n` +
+    `💬 The heist channel stays open — use the private buttons for secret actions.\n\n` +
     `Everyone has a secret role. Perform your action using the private buttons below.\n\n` +
     `💰 Vault: **${game.vault} ✨**\n` +
     `⏳ Night ends when everyone acts or the timer expires.`;
@@ -6969,18 +7008,6 @@ async function resolveHeistNight(
     HEIST_VOTE_DURATION;
   game.votes = {};
 
-  const unlocked =
-    await setHeistChannelLock(
-      env,
-      game,
-      false
-    );
-
-  if (!unlocked) {
-    console.error(
-      "Heist channel could not be unlocked."
-    );
-  }
 
   await heistSendPublic(
     env,
@@ -7370,11 +7397,6 @@ async function finishHeist(
     reason || "The heist ended.";
   game.phaseEndsAt = 0;
 
-  await setHeistChannelLock(
-    env,
-    game,
-    false
-  );
 
   const thief =
     Object.values(game.players).find(
@@ -7880,31 +7902,6 @@ async function handleHeistStart(
     state
   );
 
-  const locked =
-    await setHeistChannelLock(
-      env,
-      game,
-      true
-    );
-
-  if (!locked) {
-    game.status = "lobby";
-    state.heist = game;
-
-    await saveGuildState(
-      env,
-      interaction.guild_id,
-      state
-    );
-
-    await sendText(
-      env,
-      interaction,
-      "❌ I couldn't lock the game channel. Please give Tree Bot **Manage Channels** permission, then try `/heist start` again."
-    );
-
-    return;
-  }
 
   await sendText(
     env,
@@ -7930,7 +7927,7 @@ async function handleHeistStart(
     `🦝💰 **RACCOON HEIST HAS BEGUN!**\n\n` +
       `👥 Players: **${count}**\n` +
       `💰 Starting vault: **${game.vault} ✨**\n\n` +
-      `🌙 **NIGHT 1**\n🔒 The channel is now locked for typing.\n\n` +
+      `🌙 **NIGHT 1**\n💬 The channel stays open for everyone.\n\n` +
       `Everyone has received a secret role. Click **🌙 Open My Secret Actions** to see your private action buttons.\n\n` +
       `🚨 Find the Thief. Trust absolutely nobody.`
   );
@@ -9476,7 +9473,6 @@ export default {
    Every minute we check:
    - Raccoon Heist timers (60-second Night timeout)
    - Chaos events (their own 5-minute schedule)
-   - Birthday hunt
 ======================================================= */
 
   async scheduled(
@@ -9487,9 +9483,6 @@ export default {
     ctx.waitUntil(
       Promise.all([
         processChaosEvents(
-          env
-        ),
-        processBirthdayEvent(
           env
         ),
         processHeistTimers(
