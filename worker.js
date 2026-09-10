@@ -28,9 +28,10 @@ const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
   CHAOS IS NO LONGER TRIGGERED BY WATER.
 
   The scheduled Worker checks every 5 minutes.
-  Each guild receives a chaos event every 15 minutes.
+  Each guild receives a chaos event every 5 minutes.
 */
-const CHAOS_INTERVAL = 15 * 60 * 1000;
+const CHAOS_INTERVAL = 5 * 60 * 1000;
+const CHAOS_SCHEDULE_VERSION = 2;
 const STONED_GIFT_SPARKLES = 300;
 
 const BASE_URL =
@@ -442,12 +443,11 @@ async function rememberGuild(env, guildId) {
     get one automatically.
   */
   if (
-    state.chaosScheduleVersion !== 1
+    state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION
   ) {
-    state.chaosScheduleVersion = 1;
+    state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
     state.nextChaosAt =
-      Date.now() +
-      CHAOS_INTERVAL;
+      Date.now();
     changed = true;
   } else if (
     !state.nextChaosAt ||
@@ -1185,7 +1185,7 @@ async function renderTree(
               left:${left}%;
               top:${top}%;
               transform:translate(-50%,-50%);
-              font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", sans-serif;
+              font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
               font-size:34px;
               animation: sparkleFall ${randomInt(2200, 4200)}ms ease-in-out infinite;
               line-height:1;
@@ -1242,7 +1242,7 @@ async function renderTree(
           }
 
           .emoji {
-            font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", sans-serif;
+            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
             font-variant-emoji: emoji;
           }
 
@@ -1724,20 +1724,15 @@ async function processChaosEvents(
       */
 
       if (
-        state.chaosScheduleVersion !== 1
+        state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION
       ) {
-        state.chaosScheduleVersion = 1;
-        state.nextChaosAt =
-          now +
-          CHAOS_INTERVAL;
-
+        state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
+        state.nextChaosAt = now;
         await saveGuildState(
           env,
           guildId,
           state
         );
-
-        continue;
       }
 
       if (
@@ -2010,12 +2005,46 @@ async function handleWater(
       error
     );
 
+    const message =
+      error?.message ||
+      "Unknown error";
+
+    if (
+      message.toLowerCase().includes("rate limit") ||
+      message.includes("429")
+    ) {
+      player.sceneMessage =
+        `💧 You watered your tree! +${EXP_PER_WATER} EXP.\\n` +
+        (spawned > 0
+          ? `✨ ${spawned} sparkles appeared and are waiting on your tree!`
+          : `✨ Your tree is growing nicely!`);
+
+      await savePlayer(
+        env,
+        player
+      );
+
+      await editOriginalResponse(
+        env,
+        interaction,
+        {
+          content:
+            `${buildTreeStats(player)}\\n\\n${player.sceneMessage}\\n\\n` +
+            `🛠️ The tree picture is temporarily rate-limited by Cloudflare, but your watering was saved successfully. 💖`,
+          components:
+            treeButtons()
+        }
+      );
+
+      return;
+    }
+
     await editOriginalResponse(
       env,
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
+          `❌ Water couldn't be completed.\\n\\n${message}`,
         components:
           treeButtons()
       }
@@ -4253,7 +4282,7 @@ async function handleAnnouncements(
     state.nextChaosAt =
       Date.now() +
       CHAOS_INTERVAL;
-    state.chaosScheduleVersion = 1;
+    state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
   }
 
   await saveGuildState(
@@ -4353,6 +4382,16 @@ async function handleComponent(
   const id =
     interaction.data?.custom_id ||
     "";
+
+  if (
+    id.startsWith("heist:")
+  ) {
+    await handleHeistComponent(
+      env,
+      interaction
+    );
+    return;
+  }
 
   if (id === "water") {
     await handleWater(
@@ -4641,6 +4680,3356 @@ async function handleComponent(
   );
 }
 
+
+/* =========================================================
+   RACCOON HEIST
+   3-12 PLAYER DISCORD SOCIAL DEDUCTION GAME
+
+   The game is stored inside the existing guild state so no
+   additional Cloudflare binding is required.
+
+   Night actions are private button interactions.
+   The public game channel is locked during Night.
+========================================================= */
+
+const HEIST_MIN_PLAYERS = 3;
+const HEIST_MAX_PLAYERS = 12;
+const HEIST_NIGHT_DURATION = 2 * 60 * 1000;
+const HEIST_VOTE_DURATION = 3 * 60 * 1000;
+const HEIST_STARTING_VAULT = 10000;
+const HEIST_STEAL_MIN = 500;
+const HEIST_STEAL_MAX = 1500;
+
+const HEIST_PERMISSIONS = {
+  SEND_MESSAGES: 2048n,
+  SEND_MESSAGES_IN_THREADS: 274877906944n,
+  CREATE_PUBLIC_THREADS: 34359738368n,
+  CREATE_PRIVATE_THREADS: 68719476736n
+};
+
+const HEIST_ROLE_DEFINITIONS = {
+  thief: {
+    name: "🦝 The Thief",
+    team: "thief",
+    description:
+      "Steal from the vault and survive the vote. You are the one everyone is hunting.",
+    action: "steal",
+    actionLabel: "💰 Steal"
+  },
+
+  detective: {
+    name: "🕵️ The Detective",
+    team: "hunters",
+    description:
+      "Investigate players and help discover who the Thief is.",
+    action: "investigate",
+    actionLabel: "🔎 Investigate"
+  },
+
+  guard: {
+    name: "🛡️ The Guard",
+    team: "hunters",
+    description:
+      "Protect a player or the vault from certain night actions.",
+    action: "protect",
+    actionLabel: "🛡️ Protect"
+  },
+
+  rabid_raccoon: {
+    name: "🦝💢 The Rabid Raccoon",
+    team: "rabid",
+    description:
+      "Bite everyone. Spread rabies to every other living player.",
+    action: "bite",
+    actionLabel: "🦷 BITE"
+  },
+
+  con_artist: {
+    name: "🎭 The Con Artist",
+    team: "neutral",
+    description:
+      "Plant suspicious evidence on another player and cause confusion.",
+    action: "frame",
+    actionLabel: "🎭 Frame"
+  },
+
+  locksmith: {
+    name: "🔐 The Locksmith",
+    team: "hunters",
+    description:
+      "Jam the vault or a player so a night action cannot work.",
+    action: "jam",
+    actionLabel: "🔐 Jam"
+  },
+
+  banker: {
+    name: "💰 The Banker",
+    team: "hunters",
+    description:
+      "Move part of the vault into a protected reserve.",
+    action: "secure",
+    actionLabel: "🏦 Secure"
+  },
+
+  undercover: {
+    name: "🥸 The Undercover Raccoon",
+    team: "hunters",
+    description:
+      "Hide your identity from investigations for the night.",
+    action: "hide",
+    actionLabel: "🥸 Disguise"
+  },
+
+  saboteur: {
+    name: "🧨 The Saboteur",
+    team: "neutral",
+    description:
+      "Cancel another player's night action.",
+    action: "sabotage",
+    actionLabel: "🧨 Sabotage"
+  },
+
+  trapper: {
+    name: "🪤 The Trapper",
+    team: "hunters",
+    description:
+      "Place a trap and learn whether your target acted during the night.",
+    action: "trap",
+    actionLabel: "🪤 Trap"
+  },
+
+  spy: {
+    name: "🕶️ The Spy",
+    team: "hunters",
+    description:
+      "Watch another player and learn what action they performed.",
+    action: "watch",
+    actionLabel: "🕶️ Watch"
+  },
+
+  cleaner: {
+    name: "🧹 The Cleaner",
+    team: "thief",
+    description:
+      "Erase useful evidence from the night's events. Help the Thief stay hidden.",
+    action: "clean",
+    actionLabel: "🧹 Clean"
+  },
+
+  informant: {
+    name: "🐀 The Informant",
+    team: "neutral",
+    description:
+      "Eavesdrop on a player and receive a useful clue about their activity.",
+    action: "eavesdrop",
+    actionLabel: "👂 Eavesdrop"
+  },
+
+  gambler: {
+    name: "🎲 The Gambler",
+    team: "neutral",
+    description:
+      "Risk your luck for heist loot. Reach 2,000 gamble points to complete your secret goal.",
+    action: "gamble",
+    actionLabel: "🎲 Gamble"
+  },
+
+  ringleader: {
+    name: "👑 The Ringleader",
+    team: "thief",
+    description:
+      "Help the Thief by distracting players. If the Thief wins, you win too.",
+    action: "distract",
+    actionLabel: "👑 Distract"
+  },
+
+  escape_artist: {
+    name: "🦊 The Escape Artist",
+    team: "neutral",
+    description:
+      "Prepare one escape. If you are voted out later, your escape can save you once.",
+    action: "escape",
+    actionLabel: "🦊 Prepare Escape"
+  },
+
+  cheese_goblin: {
+    name: "🧀 The Cheese Goblin",
+    team: "neutral",
+    description:
+      "Ignore the robbery. Collect three pieces of cheese before the game ends.",
+    action: "scavenge",
+    actionLabel: "🧀 Scavenge"
+  },
+
+  raccoon_royalty: {
+    name: "🦝👑 Raccoon Royalty",
+    team: "neutral",
+    description:
+      "Prepare royal protection. Your first vote against you can be cancelled.",
+    action: "crown",
+    actionLabel: "👑 Raise the Crown"
+  },
+
+  ghost: {
+    name: "👻 The Ghost",
+    team: "neutral",
+    description:
+      "If eliminated, haunt a living player and receive a clue from beyond the trash can.",
+    action: "haunt",
+    actionLabel: "👻 Haunt"
+  },
+
+  magician: {
+    name: "🪄 The Magician",
+    team: "neutral",
+    description:
+      "Create an illusion that can make the next investigation of a player misleading.",
+    action: "illusion",
+    actionLabel: "🪄 Illusion"
+  },
+
+  patient_zero: {
+    name: "🦠 Patient Zero",
+    team: "rabid",
+    description:
+      "Start infected and spread rabies. Infect three living players to complete your secret goal.",
+    action: "bite",
+    actionLabel: "🦷 Infect"
+  }
+};
+
+const HEIST_OPTIONAL_ROLES = [
+  "spy",
+  "locksmith",
+  "con_artist",
+  "saboteur",
+  "trapper",
+  "banker",
+  "undercover",
+  "cleaner",
+  "informant",
+  "gambler",
+  "ringleader",
+  "escape_artist",
+  "cheese_goblin",
+  "raccoon_royalty",
+  "ghost",
+  "magician",
+  "patient_zero"
+];
+
+function shuffleArray(array) {
+  const copy = [...array];
+
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = randomInt(0, i);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+
+  return copy;
+}
+
+function makeHeistGame(guildId, channelId, hostId) {
+  return {
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 8),
+    guildId,
+    channelId,
+    hostId,
+    status: "lobby",
+    round: 0,
+    maxRounds: 8,
+    vault: HEIST_STARTING_VAULT,
+    reserve: 0,
+    totalStolen: 0,
+    createdAt: Date.now(),
+    phaseEndsAt: 0,
+    players: {},
+    votes: {},
+    nightActions: {},
+    nightResults: {},
+    publicEvents: [],
+    originalPermissionOverwrites: null,
+    botRoleId: null
+  };
+}
+
+function heistPlayerCount(game) {
+  return Object.values(game.players || {}).length;
+}
+
+function heistAlivePlayers(game) {
+  return Object.values(game.players || {}).filter(
+    player => player.alive
+  );
+}
+
+function heistPlayer(game, userId) {
+  return game.players?.[userId] || null;
+}
+
+function heistDisplayName(player) {
+  return (
+    player?.displayName ||
+    player?.username ||
+    "Werewife"
+  );
+}
+
+function heistRole(game, userId) {
+  return HEIST_ROLE_DEFINITIONS[
+    game.players?.[userId]?.role
+  ];
+}
+
+function heistRoleName(game, userId) {
+  return (
+    heistRole(game, userId)?.name ||
+    "Unknown Role"
+  );
+}
+
+function heistActionName(action) {
+  const names = {
+    steal: "💰 Steal",
+    investigate: "🔎 Investigate",
+    protect: "🛡️ Protect",
+    bite: "🦷 Bite",
+    frame: "🎭 Frame",
+    jam: "🔐 Jam",
+    secure: "🏦 Secure",
+    hide: "🥸 Disguise",
+    sabotage: "🧨 Sabotage",
+    trap: "🪤 Trap",
+    watch: "🕶️ Watch",
+    clean: "🧹 Clean",
+    eavesdrop: "👂 Eavesdrop",
+    gamble: "🎲 Gamble",
+    distract: "👑 Distract",
+    escape: "🦊 Prepare Escape",
+    scavenge: "🧀 Scavenge",
+    crown: "👑 Raise the Crown",
+    haunt: "👻 Haunt",
+    illusion: "🪄 Illusion"
+  };
+
+  return names[action] || action;
+}
+
+function heistRolesForCount(count) {
+  if (count < HEIST_MIN_PLAYERS || count > HEIST_MAX_PLAYERS) {
+    return [];
+  }
+
+  const roles = [
+    "thief",
+    "detective",
+    "rabid_raccoon"
+  ];
+
+  if (count >= 4) {
+    roles.push("guard");
+  }
+
+  const needed = count - roles.length;
+  const optional = shuffleArray(HEIST_OPTIONAL_ROLES);
+
+  for (let i = 0; i < needed; i++) {
+    roles.push(optional[i]);
+  }
+
+  return roles;
+}
+
+function heistRoleListText(game) {
+  return heistAlivePlayers(game)
+    .map(
+      player =>
+        `• ${heistDisplayName(player)} — ${
+          player.alive ? "🟢 Alive" : "💀 Out"
+        }`
+    )
+    .join("\n");
+}
+
+function heistLobbyButtons(game) {
+  return [
+    row(
+      button(
+        "🦝 Join Heist",
+        `heist:lobbyjoin:${game.id}`,
+        1
+      ),
+      button(
+        "🚪 Leave",
+        `heist:lobbyleave:${game.id}`,
+        2
+      ),
+      button(
+        "📋 Status",
+        `heist:lobbystatus:${game.id}`,
+        2
+      )
+    )
+  ];
+}
+
+function heistNightOpenButton(game) {
+  return [
+    row(
+      button(
+        "🌙 Open My Secret Actions",
+        `heist:open:${game.id}`,
+        1
+      )
+    )
+  ];
+}
+
+function heistActionButtons(game, player) {
+  const buttons = [];
+  const role = player.role;
+
+  if (role === "ghost" && !player.alive) {
+    buttons.push(
+      button(
+        "👻 Haunt",
+        `heist:action:${game.id}:haunt`,
+        2
+      )
+    );
+  } else if (player.alive) {
+    const definition =
+      HEIST_ROLE_DEFINITIONS[role];
+
+    if (
+      definition?.action &&
+      !(
+        role === "ghost" &&
+        definition.action === "haunt"
+      )
+    ) {
+      buttons.push(
+        button(
+          definition.actionLabel,
+          `heist:action:${game.id}:${definition.action}`,
+          1
+        )
+      );
+    }
+
+    if (player.rabies && role !== "rabid_raccoon") {
+      buttons.push(
+        button(
+          "🦷 Spread Rabies",
+          `heist:action:${game.id}:bite`,
+          4
+        )
+      );
+    }
+
+    buttons.push(
+      button(
+        "💤 Do Nothing",
+        `heist:action:${game.id}:wait`,
+        2
+      )
+    );
+  }
+
+  const rows = [];
+
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(
+      row(...buttons.slice(i, i + 5))
+    );
+  }
+
+  return rows;
+}
+
+function heistNeedsTarget(action) {
+  return [
+    "investigate",
+    "protect",
+    "bite",
+    "frame",
+    "jam",
+    "sabotage",
+    "trap",
+    "watch",
+    "eavesdrop",
+    "distract",
+    "haunt",
+    "illusion"
+  ].includes(action);
+}
+
+function heistTargetButtons(game, action, userId) {
+  const targets = heistAlivePlayers(game).filter(
+    player => player.id !== userId
+  );
+
+  const rows = [];
+
+  if (
+    action === "protect" ||
+    action === "jam"
+  ) {
+    targets.unshift({
+      id: "vault",
+      displayName: "THE VAULT"
+    });
+  }
+
+  for (let i = 0; i < targets.length; i += 5) {
+    rows.push(
+      row(
+        ...targets
+          .slice(i, i + 5)
+          .map(target =>
+            button(
+              target.id === "vault"
+                ? "💰 Vault"
+                : `🎯 ${heistDisplayName(target).slice(0, 70)}`,
+              `heist:target:${game.id}:${action}:${target.id}`,
+              target.id === "vault" ? 1 : 2
+            )
+          )
+      )
+    );
+  }
+
+  rows.push(
+    row(
+      button(
+        "💤 Cancel",
+        `heist:cancel:${game.id}`,
+        2
+      )
+    )
+  );
+
+  return rows;
+}
+
+function heistVoteButtons(game) {
+  const players = heistAlivePlayers(game);
+  const rows = [];
+
+  for (let i = 0; i < players.length; i += 5) {
+    rows.push(
+      row(
+        ...players.slice(i, i + 5).map(player =>
+          button(
+            `🗳️ ${heistDisplayName(player).slice(0, 70)}`,
+            `heist:vote:${game.id}:${player.id}`,
+            2
+          )
+        )
+      )
+    );
+  }
+
+  return rows;
+}
+
+async function getHeistBotRoleId(
+  env,
+  guildId
+) {
+  try {
+    const meResponse =
+      await discordRequest(
+        env,
+        "/users/@me"
+      );
+
+    if (!meResponse.ok) {
+      return null;
+    }
+
+    const me =
+      await meResponse.json();
+
+    const memberResponse =
+      await discordRequest(
+        env,
+        `/guilds/${guildId}/members/${me.id}`
+      );
+
+    if (!memberResponse.ok) {
+      return null;
+    }
+
+    const member =
+      await memberResponse.json();
+
+    if (!Array.isArray(member.roles) || !member.roles.length) {
+      return null;
+    }
+
+    const rolesResponse =
+      await discordRequest(
+        env,
+        `/guilds/${guildId}/roles`
+      );
+
+    if (!rolesResponse.ok) {
+      return member.roles[0];
+    }
+
+    const roles =
+      await rolesResponse.json();
+
+    const botRoles =
+      roles
+        .filter(role =>
+          member.roles.includes(role.id)
+        )
+        .sort(
+          (a, b) =>
+            Number(b.position || 0) -
+            Number(a.position || 0)
+        );
+
+    return botRoles[0]?.id || member.roles[0];
+  } catch (error) {
+    console.error(
+      "Could not determine bot role:",
+      error
+    );
+
+    return null;
+  }
+}
+
+async function setHeistChannelLock(
+  env,
+  game,
+  locked
+) {
+  if (
+    !game?.guildId ||
+    !game?.channelId
+  ) {
+    return false;
+  }
+
+  try {
+    const channelResponse =
+      await discordRequest(
+        env,
+        `/channels/${game.channelId}`
+      );
+
+    if (!channelResponse.ok) {
+      console.error(
+        "Heist channel lookup failed:",
+        channelResponse.status,
+        await channelResponse.text()
+      );
+      return false;
+    }
+
+    const channel =
+      await channelResponse.json();
+
+    if (locked) {
+      if (!game.originalPermissionOverwrites) {
+        const current =
+          Array.isArray(channel.permission_overwrites)
+            ? channel.permission_overwrites
+            : [];
+
+        const botRoleId =
+          await getHeistBotRoleId(
+            env,
+            game.guildId
+          );
+
+        game.botRoleId =
+          botRoleId || null;
+
+        game.originalPermissionOverwrites = {
+          everyone:
+            current.find(
+              overwrite =>
+                overwrite.id === game.guildId &&
+                overwrite.type === 0
+            ) || null,
+          bot:
+            botRoleId
+              ? current.find(
+                  overwrite =>
+                    overwrite.id === botRoleId &&
+                    overwrite.type === 0
+                ) || null
+              : null
+        };
+      }
+
+      const deny =
+        (
+          HEIST_PERMISSIONS.SEND_MESSAGES |
+          HEIST_PERMISSIONS.SEND_MESSAGES_IN_THREADS |
+          HEIST_PERMISSIONS.CREATE_PUBLIC_THREADS |
+          HEIST_PERMISSIONS.CREATE_PRIVATE_THREADS
+        ).toString();
+
+      let allow =
+        (
+          HEIST_PERMISSIONS.SEND_MESSAGES |
+          HEIST_PERMISSIONS.SEND_MESSAGES_IN_THREADS
+        ).toString();
+
+      const everyoneResponse =
+        await discordRequest(
+          env,
+          `/channels/${game.channelId}/permissions/${game.guildId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              type: 0,
+              deny,
+              allow: "0"
+            })
+          }
+        );
+
+      if (!everyoneResponse.ok) {
+        console.error(
+          "Could not lock heist channel:",
+          everyoneResponse.status,
+          await everyoneResponse.text()
+        );
+        return false;
+      }
+
+      if (game.botRoleId) {
+        const botResponse =
+          await discordRequest(
+            env,
+            `/channels/${game.channelId}/permissions/${game.botRoleId}`,
+            {
+              method: "PUT",
+              body: JSON.stringify({
+                type: 0,
+                deny: "0",
+                allow
+              })
+            }
+          );
+
+        if (!botResponse.ok) {
+          console.error(
+            "Could not allow bot during heist lock:",
+            botResponse.status,
+            await botResponse.text()
+          );
+        }
+      }
+
+      return true;
+    }
+
+    const originals =
+      game.originalPermissionOverwrites;
+
+    if (originals?.everyone) {
+      await discordRequest(
+        env,
+        `/channels/${game.channelId}/permissions/${game.guildId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(
+            originals.everyone
+          )
+        }
+      );
+    } else {
+      await discordRequest(
+        env,
+        `/channels/${game.channelId}/permissions/${game.guildId}`,
+        {
+          method: "DELETE"
+        }
+      );
+    }
+
+    if (game.botRoleId) {
+      if (originals?.bot) {
+        await discordRequest(
+          env,
+          `/channels/${game.channelId}/permissions/${game.botRoleId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify(
+              originals.bot
+            )
+          }
+        );
+      } else {
+        await discordRequest(
+          env,
+          `/channels/${game.channelId}/permissions/${game.botRoleId}`,
+          {
+            method: "DELETE"
+          }
+        );
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Heist channel lock error:",
+      error
+    );
+    return false;
+  }
+}
+
+async function heistSendPublic(
+  env,
+  game,
+  content,
+  components = []
+) {
+  return sendChannelMessage(
+    env,
+    game.channelId,
+    content,
+    components
+  );
+}
+
+async function heistSendPrivate(
+  env,
+  interaction,
+  content,
+  components = []
+) {
+  return sendText(
+    env,
+    interaction,
+    content,
+    components
+  );
+}
+
+async function startHeistNight(
+  env,
+  game,
+  openingText = ""
+) {
+  game.status = "night";
+  game.round += 1;
+  game.phaseEndsAt =
+    Date.now() +
+    HEIST_NIGHT_DURATION;
+  game.nightActions = {};
+  game.nightResults = {};
+  game.votes = {};
+
+  for (const player of Object.values(game.players)) {
+    player.submitted = false;
+    player.currentAction = null;
+    player.currentTarget = null;
+    player.lastAction = null;
+  }
+
+  const locked =
+    await setHeistChannelLock(
+      env,
+      game,
+      true
+    );
+
+  if (!locked) {
+    return false;
+  }
+
+  const intro =
+    openingText ||
+    `🌙 **NIGHT ${game.round} HAS FALLEN**\n\n` +
+    `🔒 The heist channel is now locked for typing.\n\n` +
+    `Everyone has a secret role. Perform your action using the private buttons below.\n\n` +
+    `💰 Vault: **${game.vault} ✨**\n` +
+    `⏳ Night ends when everyone acts or the timer expires.`;
+
+  await heistSendPublic(
+    env,
+    game,
+    intro,
+    heistNightOpenButton(game)
+  );
+
+  return true;
+}
+
+function heistActionAllowed(
+  game,
+  player,
+  action
+) {
+  if (!player) return false;
+
+  if (action === "wait") {
+    return Boolean(
+      player.alive
+    );
+  }
+
+  if (
+    action === "haunt" &&
+    player.role === "ghost" &&
+    !player.alive
+  ) {
+    return true;
+  }
+
+  if (!player.alive) return false;
+
+  if (
+    action === "bite" &&
+    player.rabies
+  ) {
+    return true;
+  }
+
+  return (
+    HEIST_ROLE_DEFINITIONS[player.role]?.action ===
+    action
+  );
+}
+
+function heistTargetAllowed(
+  game,
+  userId,
+  targetId,
+  action
+) {
+  if (targetId === "vault") {
+    return (
+      action === "protect" ||
+      action === "jam"
+    );
+  }
+
+  const target =
+    heistPlayer(
+      game,
+      targetId
+    );
+
+  if (!target?.alive) return false;
+  if (targetId === userId) return false;
+
+  return heistNeedsTarget(action);
+}
+
+async function handleHeistAction(
+  env,
+  interaction,
+  game,
+  userId,
+  action,
+  targetId = null
+) {
+  const player =
+    heistPlayer(
+      game,
+      userId
+    );
+
+  if (
+    !player ||
+    !heistActionAllowed(
+      game,
+      player,
+      action
+    )
+  ) {
+    await heistSendPrivate(
+      env,
+      interaction,
+      "❌ That is not an action available to you."
+    );
+    return;
+  }
+
+  if (game.status !== "night") {
+    await heistSendPrivate(
+      env,
+      interaction,
+      "❌ It isn't Night anymore."
+    );
+    return;
+  }
+
+  if (
+    player.submitted
+  ) {
+    await heistSendPrivate(
+      env,
+      interaction,
+      "🌙 You already submitted your night action."
+    );
+    return;
+  }
+
+  if (
+    heistNeedsTarget(action)
+  ) {
+    if (!targetId) {
+      await heistSendPrivate(
+        env,
+        interaction,
+        `🌙 **${heistActionName(action)}**\n\nChoose your target:`,
+        heistTargetButtons(
+          game,
+          action,
+          userId
+        )
+      );
+      return;
+    }
+
+    if (
+      !heistTargetAllowed(
+        game,
+        userId,
+        targetId,
+        action
+      )
+    ) {
+      await heistSendPrivate(
+        env,
+        interaction,
+        "❌ That target isn't available."
+      );
+      return;
+    }
+  }
+
+  player.submitted = true;
+  player.currentAction = action;
+  player.currentTarget = targetId;
+  game.nightActions[userId] = {
+    action,
+    targetId,
+    submittedAt: Date.now()
+  };
+
+  const currentState =
+    await getGuildState(
+      env,
+      game.guildId
+    );
+
+  currentState.heist = game;
+
+  await saveGuildState(
+    env,
+    game.guildId,
+    currentState
+  );
+
+  const submittedCount =
+    Object.values(game.players).filter(
+      p =>
+        p.alive &&
+        p.submitted
+    ).length;
+
+  await heistSendPrivate(
+    env,
+    interaction,
+    `✅ **${heistActionName(action)}** submitted.\n\nYour action is secret. Results will be revealed at dawn. 🌙🦝`
+  );
+
+  if (
+    submittedCount >=
+    heistAlivePlayers(game).length
+  ) {
+    await resolveHeistNight(
+      env,
+      game
+    );
+  }
+}
+
+function heistCancelAction(
+  game,
+  userId
+) {
+  const player =
+    heistPlayer(
+      game,
+      userId
+    );
+
+  if (!player || game.status !== "night") {
+    return;
+  }
+
+  player.currentAction = null;
+  player.currentTarget = null;
+}
+
+function heistActionWasSubmitted(
+  game,
+  userId
+) {
+  return Boolean(
+    game.nightActions?.[userId]
+  );
+}
+
+async function sendHeistPrivateResults(
+  env,
+  game
+) {
+  for (const player of Object.values(game.players)) {
+    const result =
+      game.nightResults?.[player.id];
+
+    if (!result) continue;
+
+    if (
+      player.id === game.hostId &&
+      false
+    ) {
+      continue;
+    }
+
+    const fakeInteraction = null;
+
+    /*
+      Results are also exposed through /heist status.
+      This avoids requiring DMs to be enabled.
+    */
+
+    player.lastPrivateResult =
+      result;
+  }
+}
+
+function heistPublicReport(game) {
+  const events =
+    Array.isArray(game.publicEvents)
+      ? game.publicEvents
+      : [];
+
+  const lines = [
+    `☀️ **DAWN — ROUND ${game.round}**`,
+    "",
+    `💰 Vault remaining: **${game.vault} ✨**`,
+    `🏦 Protected reserve: **${game.reserve} ✨**`
+  ];
+
+  if (events.length) {
+    lines.push(
+      "",
+      ...events.slice(-12)
+    );
+  } else {
+    lines.push(
+      "",
+      "🌙 Nothing obvious happened overnight..."
+    );
+  }
+
+  lines.push(
+    "",
+    "🔓 The channel is unlocked for discussion.",
+    "",
+    "🗳️ When you're ready, vote for the person you think is the Thief."
+  );
+
+  return lines.join("\n");
+}
+
+function heistActionWasCanceled(
+  game,
+  userId,
+  canceled
+) {
+  return canceled.has(userId);
+}
+
+async function resolveHeistNight(
+  env,
+  game
+) {
+  if (
+    game.status !== "night"
+  ) {
+    return;
+  }
+
+  const alive =
+    heistAlivePlayers(game);
+
+  const actions =
+    game.nightActions || {};
+
+  const canceled =
+    new Set();
+
+  const publicEvents = [];
+
+  const vaultJammed =
+    Object.entries(actions).some(
+      ([userId, action]) =>
+        action.action === "jam" &&
+        action.targetId === "vault" &&
+        heistPlayer(game, userId)?.alive &&
+        !canceled.has(userId)
+    );
+
+  /*
+    Apply targeted interference first.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (!actor?.alive) continue;
+
+    if (
+      action.action === "sabotage" ||
+      action.action === "distract"
+    ) {
+      const target =
+        heistPlayer(
+          game,
+          action.targetId
+        );
+
+      if (
+        target?.alive &&
+        target.id !== userId
+      ) {
+        canceled.add(
+          target.id
+        );
+      }
+    }
+  }
+
+  const escapeArtists =
+    new Set();
+
+  for (const player of alive) {
+    if (
+      player.escapeReady &&
+      player.role === "escape_artist"
+    ) {
+      escapeArtists.add(player.id);
+    }
+  }
+
+  /*
+    A player protected by the Guard is protected from
+    targeted negative actions for this night.
+  */
+  const protectedPlayers =
+    new Set();
+
+  let protectedVault = false;
+
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "protect" ||
+      heistActionWasCanceled(
+        game,
+        userId,
+        canceled
+      )
+    ) {
+      continue;
+    }
+
+    if (action.targetId === "vault") {
+      protectedVault = true;
+    } else if (action.targetId) {
+      protectedPlayers.add(
+        action.targetId
+      );
+    }
+  }
+
+  /*
+    Framing.
+  */
+  const framed =
+    new Set();
+
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      action.action === "frame" &&
+      !canceled.has(userId) &&
+      action.targetId
+    ) {
+      framed.add(
+        action.targetId
+      );
+    }
+  }
+
+  const hidden =
+    new Set();
+
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      action.action === "hide" &&
+      !canceled.has(userId)
+    ) {
+      hidden.add(userId);
+    }
+  }
+
+  let evidenceCleaned = false;
+
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      action.action === "clean" &&
+      !canceled.has(userId)
+    ) {
+      evidenceCleaned = true;
+    }
+  }
+
+  const illusions =
+    new Set();
+
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      action.action === "illusion" &&
+      !canceled.has(userId) &&
+      action.targetId
+    ) {
+      illusions.add(
+        action.targetId
+      );
+    }
+  }
+
+  /*
+    Record each player's performed action for Spy/Informant/Trap.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (!actor) continue;
+
+    actor.lastAction =
+      action.action;
+  }
+
+  /*
+    Thief.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      actor.role !== "thief" ||
+      action.action !== "steal" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    if (
+      vaultJammed ||
+      protectedVault
+    ) {
+      publicEvents.push(
+        "🔐 **THE VAULT WAS TARGETED!** Security held strong and no loot was stolen."
+      );
+      continue;
+    }
+
+    const amount =
+      Math.min(
+        game.vault,
+        randomInt(
+          HEIST_STEAL_MIN,
+          HEIST_STEAL_MAX
+        )
+      );
+
+    game.vault -= amount;
+    game.totalStolen += amount;
+    actor.loot =
+      Number(actor.loot || 0) +
+      amount;
+
+    publicEvents.push(
+      `🚨 **THE VAULT WAS ROBBED!** Someone stole **${amount} ✨**.`
+    );
+  }
+
+  /*
+    Banker secures loot.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "secure" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const amount =
+      Math.min(
+        1000,
+        game.vault
+      );
+
+    game.vault -= amount;
+    game.reserve += amount;
+
+    publicEvents.push(
+      `🏦 **THE BANKER MOVED ${amount} ✨ INTO A PROTECTED RESERVE.**`
+    );
+  }
+
+  /*
+    Rabies.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "bite" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    if (
+      target?.alive &&
+      target.id !== userId &&
+      !protectedPlayers.has(target.id) &&
+      !escapeArtists.has(target.id)
+    ) {
+      const wasAlreadyRabid =
+        Boolean(target.rabies);
+
+      target.rabies = true;
+      target.rabiesRounds =
+        Number(target.rabiesRounds || 0) + 1;
+
+      if (!wasAlreadyRabid) {
+        actor.infectedCount =
+          Number(actor.infectedCount || 0) + 1;
+      }
+
+      publicEvents.push(
+        `🦷 **SOMEONE GOT BITTEN.** The raccoon situation is getting concerning.`
+      );
+    }
+  }
+
+  /*
+    Detective.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "investigate" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    let result =
+      "🟢 Nothing suspicious was found.";
+
+    if (!target) {
+      result =
+        "❌ Your investigation found nothing.";
+    } else if (evidenceCleaned) {
+      result =
+        "🧹 Someone cleaned the evidence. Your investigation produced no usable evidence.";
+    } else if (hidden.has(target.id)) {
+      result =
+        "🥸 Your target's identity was concealed. You couldn't get a reliable read.";
+    } else if (illusions.has(target.id)) {
+      result =
+        "🪄 The evidence looked strangely distorted. Your investigation was fooled.";
+    } else if (
+      target.role === "thief" ||
+      framed.has(target.id)
+    ) {
+      result =
+        "🚨 **SUSPICIOUS!** Your evidence points toward this player.";
+    } else {
+      result =
+        "🟢 **NOT SUSPICIOUS.** Your evidence does not point toward the Thief.";
+    }
+
+    game.nightResults[userId] =
+      `🔎 **Investigation Result**\n\n${result}\n\nTarget: **${heistDisplayName(target)}**`;
+  }
+
+  /*
+    Spy.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "watch" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    if (!target) continue;
+
+    const targetAction =
+      target.lastAction;
+
+    game.nightResults[userId] =
+      targetAction
+        ? `🕶️ **Spy Report**\n\n**${heistDisplayName(target)}** performed **${heistActionName(targetAction)}** tonight.`
+        : `🕶️ **Spy Report**\n\n**${heistDisplayName(target)}** did not submit a visible night action.`;
+  }
+
+  /*
+    Trapper.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "trap" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    if (!target) continue;
+
+    game.nightResults[userId] =
+      target.lastAction
+        ? `🪤 **Trap Triggered!**\n\nYour target performed an action tonight.`
+        : `🪤 **Trap Report**\n\nYour target did not appear to perform an action.`;
+  }
+
+  /*
+    Informant.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "eavesdrop" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    if (!target) continue;
+
+    game.nightResults[userId] =
+      target.lastAction
+        ? `🐀 **Informant Clue**\n\nYou heard suspicious movement from **${heistDisplayName(target)}**. They definitely did something tonight.`
+        : `🐀 **Informant Clue**\n\nYou heard nothing useful from **${heistDisplayName(target)}**.`;
+  }
+
+  /*
+    Haunting.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor ||
+      actor.role !== "ghost" ||
+      actor.alive ||
+      action.action !== "haunt"
+    ) {
+      continue;
+    }
+
+    const target =
+      heistPlayer(
+        game,
+        action.targetId
+      );
+
+    if (!target) continue;
+
+    game.nightResults[userId] =
+      `👻 **Ghostly Whisper**\n\nYou haunted **${heistDisplayName(target)}** and sensed that they are **${target.role === "thief" ? "dangerously close to the vault." : "not the main Thief."}**`;
+  }
+
+  /*
+    Gambler.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "gamble" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    if (
+      Math.random() < 0.5
+    ) {
+      actor.gamblePoints =
+        Number(actor.gamblePoints || 0) +
+        750;
+
+      actor.loot =
+        Number(actor.loot || 0) +
+        750;
+
+      game.nightResults[userId] =
+        "🎲 **YOU WON THE GAMBLE!** +750 heist loot.";
+    } else {
+      actor.gamblePoints =
+        Math.max(
+          0,
+          Number(actor.gamblePoints || 0) - 300
+        );
+
+      actor.loot =
+        Math.max(
+          0,
+          Number(actor.loot || 0) - 300
+        );
+
+      game.nightResults[userId] =
+        "🎲 **YOU LOST THE GAMBLE.** -300 heist loot.";
+    }
+  }
+
+  /*
+    Cheese Goblin.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      !actor?.alive ||
+      action.action !== "scavenge" ||
+      canceled.has(userId)
+    ) {
+      continue;
+    }
+
+    actor.cheese =
+      Number(actor.cheese || 0) + 1;
+
+    game.nightResults[userId] =
+      `🧀 **CHEESE ACQUIRED!**\n\nYou now have **${actor.cheese}/3 cheese**.`;
+  }
+
+  /*
+    Escape Artist.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      actor.role === "escape_artist" &&
+      action.action === "escape" &&
+      !canceled.has(userId)
+    ) {
+      actor.escapeReady = true;
+      game.nightResults[userId] =
+        "🦊 **ESCAPE READY.** If the vote targets you later, your escape can save you once.";
+    }
+  }
+
+  /*
+    Raccoon Royalty.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor =
+      heistPlayer(game, userId);
+
+    if (
+      actor?.alive &&
+      actor.role === "raccoon_royalty" &&
+      action.action === "crown" &&
+      !canceled.has(userId)
+    ) {
+      actor.voteShield = true;
+      game.nightResults[userId] =
+        "👑 **ROYAL PROTECTION READY.** Your first vote against you can be cancelled.";
+    }
+  }
+
+  /*
+    Make the public report less revealing when evidence was cleaned.
+  */
+  if (
+    evidenceCleaned &&
+    publicEvents.length
+  ) {
+    publicEvents.push(
+      "🧹 **SOME EVIDENCE WAS CLEANED UP.** The crime scene is suspiciously spotless."
+    );
+  }
+
+  if (!publicEvents.length) {
+    publicEvents.push(
+      "🌙 The night passed quietly... suspiciously quietly."
+    );
+  }
+
+  game.publicEvents =
+    publicEvents;
+
+  await sendHeistPrivateResults(
+    env,
+    game
+  );
+
+  game.status = "voting";
+  game.phaseEndsAt =
+    Date.now() +
+    HEIST_VOTE_DURATION;
+  game.votes = {};
+
+  const unlocked =
+    await setHeistChannelLock(
+      env,
+      game,
+      false
+    );
+
+  if (!unlocked) {
+    console.error(
+      "Heist channel could not be unlocked."
+    );
+  }
+
+  await heistSendPublic(
+    env,
+    game,
+    heistPublicReport(game),
+    heistVoteButtons(game)
+  );
+
+  await saveGuildState(
+    env,
+    game.guildId,
+    await getGuildState(
+      env,
+      game.guildId
+    )
+  );
+}
+
+async function resolveHeistVote(
+  env,
+  game
+) {
+  if (
+    game.status !== "voting"
+  ) {
+    return;
+  }
+
+  const alive =
+    heistAlivePlayers(game);
+
+  if (!alive.length) {
+    await finishHeist(
+      env,
+      game,
+      "No players remain."
+    );
+    return;
+  }
+
+  const tally = {};
+
+  for (const targetId of Object.values(game.votes || {})) {
+    if (
+      heistPlayer(game, targetId)?.alive
+    ) {
+      tally[targetId] =
+        Number(tally[targetId] || 0) + 1;
+    }
+  }
+
+  const ranked =
+    Object.entries(tally)
+      .sort(
+        (a, b) =>
+          b[1] - a[1]
+      );
+
+  if (!ranked.length) {
+    await heistSendPublic(
+      env,
+      game,
+      "🗳️ **NO ONE VOTED.** The raccoons stare at each other awkwardly.\n\nThe heist continues."
+    );
+
+    if (
+      game.round >=
+      game.maxRounds
+    ) {
+      await finishHeist(
+        env,
+        game,
+        "The maximum number of rounds was reached."
+      );
+      return;
+    }
+
+    await startHeistNight(
+      env,
+      game,
+      "🌙 **ANOTHER NIGHT BEGINS.**\n\nNobody was accused, so the Thief remains free."
+    );
+
+    return;
+  }
+
+  const topVotes =
+    ranked[0][1];
+
+  const tied =
+    ranked.filter(
+      entry =>
+        entry[1] === topVotes
+    );
+
+  if (tied.length > 1) {
+    await heistSendPublic(
+      env,
+      game,
+      `🗳️ **TIE!** Nobody is eliminated this round.\n\nThe top vote count was **${topVotes}**. The raccoons argue and accomplish nothing. 🦝`
+    );
+
+    if (
+      game.round >=
+      game.maxRounds
+    ) {
+      await finishHeist(
+        env,
+        game,
+        "The maximum number of rounds was reached."
+      );
+      return;
+    }
+
+    await startHeistNight(
+      env,
+      game,
+      "🌙 **THE TIE BOUGHT THE THIEF ANOTHER NIGHT.**"
+    );
+
+    return;
+  }
+
+  const targetId =
+    ranked[0][0];
+
+  const target =
+    heistPlayer(
+      game,
+      targetId
+    );
+
+  if (!target) return;
+
+  if (target.voteShield) {
+    target.voteShield = false;
+
+    await heistSendPublic(
+      env,
+      game,
+      `👑 **ROYAL PROTECTION!** ${heistDisplayName(target)} was protected from the vote and survives.`
+    );
+
+    if (
+      game.round >=
+      game.maxRounds
+    ) {
+      await finishHeist(
+        env,
+        game,
+        "The maximum number of rounds was reached."
+      );
+      return;
+    }
+
+    await startHeistNight(
+      env,
+      game,
+      "🌙 **THE ROYALTY HAS SPOKEN.** The heist continues."
+    );
+
+    return;
+  }
+
+  if (
+    target.role === "escape_artist" &&
+    target.escapeReady
+  ) {
+    target.escapeReady = false;
+
+    await heistSendPublic(
+      env,
+      game,
+      `🦊 **ESCAPE!** ${heistDisplayName(target)} slipped away at the last second and survives the vote.`
+    );
+
+    if (
+      game.round >=
+      game.maxRounds
+    ) {
+      await finishHeist(
+        env,
+        game,
+        "The maximum number of rounds was reached."
+      );
+      return;
+    }
+
+    await startHeistNight(
+      env,
+      game,
+      "🌙 **THE ESCAPE ARTIST GOT AWAY.**"
+    );
+
+    return;
+  }
+
+  target.alive = false;
+
+  const roleName =
+    heistRoleName(
+      game,
+      target.id
+    );
+
+  const wasThief =
+    target.role === "thief";
+
+  const wasGhost =
+    target.role === "ghost";
+
+  const wasConArtist =
+    target.role === "con_artist";
+
+  if (wasThief) {
+    await finishHeist(
+      env,
+      game,
+      `🎯 **THE THIEF HAS BEEN CAUGHT!**\n\n${heistDisplayName(target)} was the Thief. 🦝💰`
+    );
+    return;
+  }
+
+  let extra = "";
+
+  if (wasGhost) {
+    extra =
+      "\n\n👻 The Ghost is now free to haunt the remaining players at Night.";
+  }
+
+  if (wasConArtist) {
+    extra =
+      "\n\n🎭 The Con Artist's schemes have been exposed.";
+  }
+
+  await heistSendPublic(
+    env,
+    game,
+    `🚨 **WRONG RACCOON!**\n\n${heistDisplayName(target)} was voted out.\n\nTheir role was: **${roleName}**.${extra}`
+  );
+
+  const conArtist =
+    Object.values(game.players).find(
+      player =>
+        player.role === "con_artist" &&
+        player.alive
+    );
+
+  if (
+    conArtist &&
+    !conArtist.conArtistWin
+  ) {
+    conArtist.conArtistWin =
+      true;
+  }
+
+  if (
+    heistAlivePlayers(game).length <= 1 ||
+    game.round >= game.maxRounds
+  ) {
+    await finishHeist(
+      env,
+      game,
+      game.round >= game.maxRounds
+        ? "The maximum number of rounds was reached."
+        : "There is nobody left to continue the investigation."
+    );
+    return;
+  }
+
+  await startHeistNight(
+    env,
+    game,
+    "🌙 **THE WRONG PERSON WAS VOTED OUT.**\n\nThe real Thief is still out there..."
+  );
+}
+
+function heistWinnerList(game) {
+  const winners = [];
+
+  const thief =
+    Object.values(game.players).find(
+      player =>
+        player.role === "thief"
+    );
+
+  if (
+    !game.cancelled &&
+    thief &&
+    !game.endedReason?.includes(
+      "THIEF HAS BEEN CAUGHT"
+    )
+  ) {
+    if (thief.alive) {
+      winners.push(
+        `${heistDisplayName(thief)} — 🦝 Thief`
+      );
+    }
+  }
+
+  for (const player of Object.values(game.players)) {
+    if (
+      player.role === "ringleader" &&
+      thief?.alive
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 👑 Ringleader`
+      );
+    }
+
+    if (
+      player.role === "rabid_raccoon" &&
+      heistAlivePlayers(game).every(
+        target =>
+          target.id === player.id ||
+          target.rabies
+      )
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🦝💢 Rabid Raccoon`
+      );
+    }
+
+    if (
+      player.role === "patient_zero" &&
+      Number(player.infectedCount || 0) >= 3
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🦠 Patient Zero`
+      );
+    }
+
+    if (
+      player.role === "cheese_goblin" &&
+      Number(player.cheese || 0) >= 3
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🧀 Cheese Goblin`
+      );
+    }
+
+    if (
+      player.role === "gambler" &&
+      Number(player.gamblePoints || 0) >= 2000
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🎲 Gambler`
+      );
+    }
+
+    if (
+      player.role === "con_artist" &&
+      player.conArtistWin
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🎭 Con Artist`
+      );
+    }
+
+    if (
+      player.role === "ghost" &&
+      !player.alive
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 👻 Ghost`
+      );
+    }
+  }
+
+  return [
+    ...new Set(winners)
+  ];
+}
+
+async function finishHeist(
+  env,
+  game,
+  reason
+) {
+  game.status = "ended";
+  game.endedReason =
+    reason || "The heist ended.";
+  game.phaseEndsAt = 0;
+
+  await setHeistChannelLock(
+    env,
+    game,
+    false
+  );
+
+  const thief =
+    Object.values(game.players).find(
+      player =>
+        player.role === "thief"
+    );
+
+  if (
+    thief &&
+    game.endedReason.includes(
+      "THIEF HAS BEEN CAUGHT"
+    )
+  ) {
+    thief.alive = false;
+  }
+
+  const winners =
+    heistWinnerList(game);
+
+  const roleReveal =
+    Object.values(game.players)
+      .map(
+        player =>
+          `• ${heistDisplayName(player)} — **${
+            HEIST_ROLE_DEFINITIONS[player.role]?.name ||
+            player.role
+          }**`
+      )
+      .join("\n");
+
+  const winnerText =
+    winners.length
+      ? winners.join("\n")
+      : "No secret-role side goals were completed.";
+
+  await heistSendPublic(
+    env,
+    game,
+    `🏁 **RACCOON HEIST OVER!**\n\n${reason}\n\n💰 Total stolen: **${game.totalStolen} ✨**\n\n🏆 **Winners / completed secret goals:**\n${winnerText}\n\n🎭 **ROLE REVEAL**\n${roleReveal}\n\n🦝 Thank you for committing raccoon crimes.`
+  );
+
+  await saveGuildState(
+    env,
+    game.guildId,
+    await getGuildState(
+      env,
+      game.guildId
+    )
+  );
+}
+
+async function processHeistTimers(
+  env
+) {
+  const guildIds =
+    await getKnownGuildIds(env);
+
+  for (const guildId of guildIds) {
+    try {
+      const state =
+        await getGuildState(
+          env,
+          guildId
+        );
+
+      const game =
+        state.heist;
+
+      if (!game) continue;
+
+      if (
+        game.status === "night" &&
+        Date.now() >=
+          Number(game.phaseEndsAt || 0)
+      ) {
+        await resolveHeistNight(
+          env,
+          game
+        );
+
+        state.heist = game;
+
+        await saveGuildState(
+          env,
+          guildId,
+          state
+        );
+      } else if (
+        game.status === "voting" &&
+        Date.now() >=
+          Number(game.phaseEndsAt || 0)
+      ) {
+        await resolveHeistVote(
+          env,
+          game
+        );
+
+        state.heist = game;
+
+        await saveGuildState(
+          env,
+          guildId,
+          state
+        );
+      }
+    } catch (error) {
+      console.error(
+        `Heist timer failed for guild ${guildId}:`,
+        error
+      );
+    }
+  }
+}
+
+async function handleHeistCreate(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Raccoon Heist can only be played inside a server."
+    );
+    return;
+  }
+
+  const channelId =
+    interaction.channel_id;
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  if (
+    state.heist &&
+    state.heist.status !== "ended"
+  ) {
+    await sendText(
+      env,
+      interaction,
+      `❌ A Raccoon Heist is already running in <#${state.heist.channelId}>.`
+    );
+    return;
+  }
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (!user) return;
+
+  const game =
+    makeHeistGame(
+      interaction.guild_id,
+      channelId,
+      user.id
+    );
+
+  game.players[user.id] = {
+    id: user.id,
+    username: user.username || "",
+    displayName:
+      interaction.member?.nick ||
+      user.global_name ||
+      user.username ||
+      "Werewife",
+    alive: true,
+    role: null,
+    submitted: false,
+    loot: 0,
+    rabies: false,
+    cheese: 0,
+    gamblePoints: 0,
+    infectedCount: 0,
+    escapeReady: false,
+    voteShield: false,
+    lastAction: null,
+    lastPrivateResult: ""
+  };
+
+  state.heist = game;
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+
+  await sendText(
+    env,
+    interaction,
+    `🦝💰 **RACCOON HEIST LOBBY CREATED!**\n\nPlayers: **1/${HEIST_MAX_PLAYERS}**\n\n${heistRoleListText(game)}\n\nThe host is **${heistDisplayName(game.players[user.id])}**.\n\nUse the buttons below or \`/heist join\` to join.`,
+    heistLobbyButtons(game)
+  );
+}
+
+async function handleHeistJoin(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Raccoon Heist can only be played inside a server."
+    );
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  const game =
+    state.heist;
+
+  if (
+    !game ||
+    game.status !== "lobby"
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ There isn't an open Raccoon Heist lobby."
+    );
+    return;
+  }
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (!user) return;
+
+  if (
+    game.players[user.id]
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "🦝 You're already in the heist!"
+    );
+    return;
+  }
+
+  if (
+    heistPlayerCount(game) >=
+    HEIST_MAX_PLAYERS
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ The heist is full! Maximum 12 players."
+    );
+    return;
+  }
+
+  game.players[user.id] = {
+    id: user.id,
+    username: user.username || "",
+    displayName:
+      interaction.member?.nick ||
+      user.global_name ||
+      user.username ||
+      "Werewife",
+    alive: true,
+    role: null,
+    submitted: false,
+    loot: 0,
+    rabies: false,
+    cheese: 0,
+    gamblePoints: 0,
+    infectedCount: 0,
+    escapeReady: false,
+    voteShield: false,
+    lastAction: null,
+    lastPrivateResult: ""
+  };
+
+  state.heist = game;
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+
+  await sendText(
+    env,
+    interaction,
+    `🦝 **YOU JOINED THE HEIST!**\n\nPlayers: **${heistPlayerCount(game)}/${HEIST_MAX_PLAYERS}**`
+  );
+
+  await heistSendPublic(
+    env,
+    game,
+    `🦝 **${heistDisplayName(game.players[user.id])} joined the heist!**\n\nPlayers: **${heistPlayerCount(game)}/${HEIST_MAX_PLAYERS}**`,
+    heistLobbyButtons(game)
+  );
+}
+
+async function handleHeistLeave(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Server only."
+    );
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  const game =
+    state.heist;
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (
+    !game ||
+    game.status !== "lobby" ||
+    !user ||
+    !game.players[user.id]
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ You aren't in an open lobby."
+    );
+    return;
+  }
+
+  delete game.players[user.id];
+
+  if (
+    game.hostId === user.id
+  ) {
+    const next =
+      Object.values(game.players)[0];
+
+    if (next) {
+      game.hostId =
+        next.id;
+    }
+  }
+
+  if (
+    heistPlayerCount(game) === 0
+  ) {
+    state.heist = null;
+  } else {
+    state.heist = game;
+  }
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+
+  await sendText(
+    env,
+    interaction,
+    "🚪 You left the heist lobby."
+  );
+
+  if (state.heist) {
+    await heistSendPublic(
+      env,
+      state.heist,
+      `🚪 **${user.global_name || user.username || "A player"} left the lobby.**\n\nPlayers: **${heistPlayerCount(state.heist)}/${HEIST_MAX_PLAYERS}**`,
+      heistLobbyButtons(state.heist)
+    );
+  }
+}
+
+async function handleHeistStart(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Server only."
+    );
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  const game =
+    state.heist;
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (
+    !game ||
+    game.status !== "lobby"
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ There isn't an open lobby."
+    );
+    return;
+  }
+
+  if (
+    !user ||
+    game.hostId !== user.id
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Only the heist host can start the game."
+    );
+    return;
+  }
+
+  const count =
+    heistPlayerCount(game);
+
+  if (
+    count < HEIST_MIN_PLAYERS
+  ) {
+    await sendText(
+      env,
+      interaction,
+      `❌ You need at least **${HEIST_MIN_PLAYERS} players** to start.`
+    );
+    return;
+  }
+
+  if (
+    interaction.channel_id !==
+    game.channelId
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Start the heist in the channel where the lobby was created."
+    );
+    return;
+  }
+
+  const roles =
+    heistRolesForCount(count);
+
+  const players =
+    shuffleArray(
+      Object.values(game.players)
+    );
+
+  players.forEach(
+    (player, index) => {
+      player.role =
+        roles[index];
+
+      if (
+        player.role === "patient_zero"
+      ) {
+        player.rabies = true;
+      }
+    }
+  );
+
+  game.status = "starting";
+
+  /*
+    Save role assignment before the first Night so a transient
+    request cannot lose the secret roles.
+  */
+  state.heist = game;
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+
+  const locked =
+    await setHeistChannelLock(
+      env,
+      game,
+      true
+    );
+
+  if (!locked) {
+    game.status = "lobby";
+    state.heist = game;
+
+    await saveGuildState(
+      env,
+      interaction.guild_id,
+      state
+    );
+
+    await sendText(
+      env,
+      interaction,
+      "❌ I couldn't lock the game channel. Please give Tree Bot **Manage Channels** permission, then try `/heist start` again."
+    );
+
+    return;
+  }
+
+  await sendText(
+    env,
+    interaction,
+    "🦝💰 **THE HEIST IS STARTING!** Your role is secret. Check the game channel."
+  );
+
+  const roleLines =
+    players
+      .map(
+        player =>
+          `${player.id}: ${HEIST_ROLE_DEFINITIONS[player.role]?.name || player.role}`
+      )
+      .join("\n");
+
+  console.log(
+    `Heist ${game.id} roles for guild ${game.guildId}:\n${roleLines}`
+  );
+
+  await startHeistNight(
+    env,
+    game,
+    `🦝💰 **RACCOON HEIST HAS BEGUN!**\n\n` +
+      `👥 Players: **${count}**\n` +
+      `💰 Starting vault: **${game.vault} ✨**\n\n` +
+      `🌙 **NIGHT 1**\n🔒 The channel is now locked for typing.\n\n` +
+      `Everyone has received a secret role. Click **🌙 Open My Secret Actions** to see your private action buttons.\n\n` +
+      `🚨 Find the Thief. Trust absolutely nobody.`
+  );
+
+  state.heist = game;
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+}
+
+async function handleHeistStatus(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Server only."
+    );
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  const game =
+    state.heist;
+
+  if (!game) {
+    await sendText(
+      env,
+      interaction,
+      "🦝 There is no active Raccoon Heist."
+    );
+    return;
+  }
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  const player =
+    user
+      ? heistPlayer(game, user.id)
+      : null;
+
+  let privateSection =
+    "";
+
+  if (player) {
+    privateSection =
+      `\n\n🔐 **YOUR SECRET ROLE**\n` +
+      `**${heistRoleName(game, player.id)}**\n` +
+      `${HEIST_ROLE_DEFINITIONS[player.role]?.description || ""}\n\n` +
+      `💰 Your heist loot: **${Number(player.loot || 0)} ✨**\n` +
+      `🧀 Cheese: **${Number(player.cheese || 0)}/3**\n` +
+      `🦠 Rabies: **${player.rabies ? "YES" : "No"}**`;
+
+    if (player.lastPrivateResult) {
+      privateSection +=
+        `\n\n📜 **Last Secret Result**\n${player.lastPrivateResult}`;
+    }
+  }
+
+  const alive =
+    heistAlivePlayers(game);
+
+  await sendText(
+    env,
+    interaction,
+    `🦝💰 **RACCOON HEIST STATUS**\n\n` +
+      `Phase: **${game.status}**\n` +
+      `Round: **${game.round}/${game.maxRounds}**\n` +
+      `Players alive: **${alive.length}/${heistPlayerCount(game)}**\n` +
+      `💰 Vault: **${game.vault} ✨**\n` +
+      `🏦 Reserve: **${game.reserve} ✨**\n` +
+      `💸 Total stolen: **${game.totalStolen} ✨**\n\n` +
+      `👥 **Players**\n${heistRoleListText(game)}` +
+      privateSection
+  );
+}
+
+async function handleHeistEnd(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Server only."
+    );
+    return;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      interaction.guild_id
+    );
+
+  const game =
+    state.heist;
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (
+    !game ||
+    game.status === "ended"
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ There is no active heist."
+    );
+    return;
+  }
+
+  if (
+    !user ||
+    (
+      game.hostId !== user.id &&
+      user.id !== env.OWNER_ID
+    )
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Only the heist host or bot owner can end the game."
+    );
+    return;
+  }
+
+  game.cancelled = true;
+
+  await finishHeist(
+    env,
+    game,
+    "🛑 The heist was ended by the host."
+  );
+
+  state.heist = game;
+
+  await saveGuildState(
+    env,
+    interaction.guild_id,
+    state
+  );
+
+  await sendText(
+    env,
+    interaction,
+    "🛑 Heist ended."
+  );
+}
+
+async function handleHeistVote(
+  env,
+  interaction,
+  game,
+  voterId,
+  targetId
+) {
+  if (
+    game.status !== "voting"
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ It isn't voting time."
+    );
+    return;
+  }
+
+  const voter =
+    heistPlayer(
+      game,
+      voterId
+    );
+
+  const target =
+    heistPlayer(
+      game,
+      targetId
+    );
+
+  if (
+    !voter?.alive ||
+    !target?.alive
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Only living players can vote, and your target must be alive."
+    );
+    return;
+  }
+
+  if (
+    voterId === targetId
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ You can't vote for yourself."
+    );
+    return;
+  }
+
+  if (
+    game.votes?.[voterId]
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "🗳️ You already voted."
+    );
+    return;
+  }
+
+  game.votes[voterId] =
+    targetId;
+
+  const voted =
+    Object.keys(game.votes).length;
+
+  const needed =
+    heistAlivePlayers(game).length;
+
+  await sendText(
+    env,
+    interaction,
+    `🗳️ **Vote recorded.**\n\nYou voted for **${heistDisplayName(target)}**.\n\nVotes received: **${voted}/${needed}**`
+  );
+
+  if (
+    voted >= needed
+  ) {
+    await resolveHeistVote(
+      env,
+      game
+    );
+  }
+}
+
+async function handleHeistComponent(
+  env,
+  interaction
+) {
+  const id =
+    interaction.data?.custom_id ||
+    "";
+
+  const parts =
+    id.split(":");
+
+  if (
+    parts[0] !== "heist"
+  ) {
+    return false;
+  }
+
+  const actionType =
+    parts[1];
+
+  const gameId =
+    parts[2];
+
+  const guildId =
+    interaction.guild_id;
+
+  if (!guildId) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Heists only work inside a server."
+    );
+    return true;
+  }
+
+  const state =
+    await getGuildState(
+      env,
+      guildId
+    );
+
+  const game =
+    state.heist;
+
+  if (
+    !game ||
+    game.id !== gameId
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "❌ That heist no longer exists."
+    );
+    return true;
+  }
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (!user) {
+    return true;
+  }
+
+  if (
+    actionType === "lobbyjoin"
+  ) {
+    await handleHeistJoin(
+      env,
+      interaction
+    );
+    return true;
+  }
+
+  if (
+    actionType === "lobbyleave"
+  ) {
+    await handleHeistLeave(
+      env,
+      interaction
+    );
+    return true;
+  }
+
+  if (
+    actionType === "lobbystatus"
+  ) {
+    await handleHeistStatus(
+      env,
+      interaction
+    );
+    return true;
+  }
+
+  const player =
+    heistPlayer(
+      game,
+      user.id
+    );
+
+  if (
+    actionType === "open"
+  ) {
+    if (!player) {
+      await sendText(
+        env,
+        interaction,
+        "❌ You aren't a player in this heist."
+      );
+      return true;
+    }
+
+    if (
+      game.status !== "night"
+    ) {
+      await sendText(
+        env,
+        interaction,
+        "❌ Secret night actions are not available right now."
+      );
+      return true;
+    }
+
+    await sendText(
+      env,
+      interaction,
+      `🌙 **YOUR SECRET ACTIONS**\n\nRole: **${heistRoleName(game, user.id)}**\n\n${HEIST_ROLE_DEFINITIONS[player.role]?.description || ""}`,
+      heistActionButtons(
+        game,
+        player
+      )
+    );
+
+    return true;
+  }
+
+  if (
+    actionType === "cancel"
+  ) {
+    heistCancelAction(
+      game,
+      user.id
+    );
+
+    await sendText(
+      env,
+      interaction,
+      "❌ Action selection cancelled. Your night action has not been submitted."
+    );
+
+    return true;
+  }
+
+  if (
+    actionType === "action"
+  ) {
+    const action =
+      parts[3];
+
+    if (
+      action === "wait"
+    ) {
+      await handleHeistAction(
+        env,
+        interaction,
+        game,
+        user.id,
+        "wait"
+      );
+
+      return true;
+    }
+
+    if (
+      !heistActionAllowed(
+        game,
+        player,
+        action
+      )
+    ) {
+      await sendText(
+        env,
+        interaction,
+        "❌ That action isn't yours."
+      );
+      return true;
+    }
+
+    if (
+      heistNeedsTarget(action)
+    ) {
+      await handleHeistAction(
+        env,
+        interaction,
+        game,
+        user.id,
+        action
+      );
+      return true;
+    }
+
+    await handleHeistAction(
+      env,
+      interaction,
+      game,
+      user.id,
+      action
+    );
+
+    return true;
+  }
+
+  if (
+    actionType === "target"
+  ) {
+    const action =
+      parts[3];
+
+    const targetId =
+      parts[4];
+
+    await handleHeistAction(
+      env,
+      interaction,
+      game,
+      user.id,
+      action,
+      targetId
+    );
+
+    return true;
+  }
+
+  if (
+    actionType === "vote"
+  ) {
+    const targetId =
+      parts[3];
+
+    await handleHeistVote(
+      env,
+      interaction,
+      game,
+      user.id,
+      targetId
+    );
+
+    return true;
+  }
+
+  return true;
+}
+
+async function handleHeistCommand(
+  env,
+  interaction
+) {
+  if (!interaction.guild_id) {
+    await sendText(
+      env,
+      interaction,
+      "❌ Raccoon Heist can only be played inside a server."
+    );
+    return;
+  }
+
+  const subcommand =
+    interaction.data?.options?.find(
+      option =>
+        option.type === 1
+    )?.name ||
+    "status";
+
+  if (
+    subcommand === "create"
+  ) {
+    await handleHeistCreate(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  if (
+    subcommand === "join"
+  ) {
+    await handleHeistJoin(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  if (
+    subcommand === "leave"
+  ) {
+    await handleHeistLeave(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  if (
+    subcommand === "start"
+  ) {
+    await handleHeistStart(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  if (
+    subcommand === "status"
+  ) {
+    await handleHeistStatus(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  if (
+    subcommand === "end"
+  ) {
+    await handleHeistEnd(
+      env,
+      interaction
+    );
+    return;
+  }
+
+  await sendText(
+    env,
+    interaction,
+    "❌ Unknown heist action."
+  );
+}
+
 /* =========================================================
    COMMAND ROUTER
 ========================================================= */
@@ -4733,6 +8122,14 @@ async function handleCommand(
 ) {
   const name =
     interaction.data?.name;
+
+  if (name === "heist") {
+    await handleHeistCommand(
+      env,
+      interaction
+    );
+    return;
+  }
 
   if (name === "tree") {
     await handleTree(
@@ -5003,6 +8400,43 @@ async function handleCommand(
 ========================================================= */
 
 const COMMANDS = [
+  {
+    name: "heist",
+    description: "Play Raccoon Heist with 3–12 players",
+    options: [
+      {
+        type: 1,
+        name: "create",
+        description: "Create a new Raccoon Heist lobby"
+      },
+      {
+        type: 1,
+        name: "join",
+        description: "Join the current Raccoon Heist lobby"
+      },
+      {
+        type: 1,
+        name: "leave",
+        description: "Leave the current Raccoon Heist lobby"
+      },
+      {
+        type: 1,
+        name: "start",
+        description: "Start the Raccoon Heist (host only)"
+      },
+      {
+        type: 1,
+        name: "status",
+        description: "View the current heist and your secret information"
+      },
+      {
+        type: 1,
+        name: "end",
+        description: "End the current heist (host only)"
+      }
+    ]
+  },
+
   {
     name: "tree",
     description:
@@ -5459,7 +8893,7 @@ export default {
    in Cloudflare Worker Settings → Triggers → Cron Triggers.
 
    Every 5 minutes we check:
-   - Chaos events every 15 minutes
+   - Chaos events every 5 minutes
    - Birthday hunt
 ======================================================= */
 
@@ -5474,6 +8908,9 @@ export default {
           env
         ),
         processBirthdayEvent(
+          env
+        ),
+        processHeistTimers(
           env
         )
       ])
