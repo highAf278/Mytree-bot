@@ -876,6 +876,19 @@ async function sendTree(
       player
     );
 
+  /*
+    Browser Rendering can temporarily return 429.
+    The player's action has already been saved, so do not
+    turn that temporary image failure into a failed Discord action.
+  */
+  if (!image) {
+    return updateTreeMessage(
+      env,
+      interaction,
+      player
+    );
+  }
+
   const stats =
     buildTreeStats(player);
 
@@ -1365,9 +1378,10 @@ async function renderTree(
         "rate limit"
       )
     ) {
-      throw new Error(
-        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
+      console.warn(
+        "Browser Rendering is rate-limited; updating the tree without an image."
       );
+      return null;
     }
 
     throw error;
@@ -1980,42 +1994,42 @@ async function handleWater(
     );
 
     /*
-      WATER NEVER REQUIRES BROWSER RENDERING.
-
-      This is intentional: Cloudflare Browser Rendering can
-      temporarily return HTTP 429. Watering, XP, level-ups,
-      sparkle spawning, and sparkle cleanup must still succeed
-      even when the picture renderer is unavailable.
-
-      The next /tree render will show the current sparkle state.
+      Only render when the picture actually changed.
     */
-    await updateTreeMessage(
-      env,
-      interaction,
-      player
-    );
+
+    if (
+      spawned > 0 ||
+      cleaned > 0
+    ) {
+      await sendTree(
+        env,
+        interaction,
+        player
+      );
+    } else {
+      await updateTreeMessage(
+        env,
+        interaction,
+        player
+      );
+    }
   } catch (error) {
     console.error(
       "Water error:",
       error
     );
 
-    const message =
-      error?.message ||
-      "Unknown error";
-
     await editOriginalResponse(
       env,
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\n\n${message}`,
+          `❌ Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
         components:
           treeButtons()
       }
     );
   }
-}
 }
 
 /* =========================================================
@@ -2134,7 +2148,7 @@ async function handleCatch(
       disappeared, so the image MUST be rendered.
     */
 
-    await updateTreeMessage(
+    await sendTree(
       env,
       interaction,
       player
