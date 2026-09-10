@@ -30,8 +30,8 @@ const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
   The scheduled Worker checks every 5 minutes.
   Each guild receives a chaos event every 5 minutes.
 */
-const CHAOS_INTERVAL = 3 * 60 * 1000;
-const CHAOS_SCHEDULE_VERSION = 3;
+const CHAOS_INTERVAL = 5 * 60 * 1000;
+const CHAOS_SCHEDULE_VERSION = 4;
 const STONED_GIFT_SPARKLES = 300;
 
 const BASE_URL =
@@ -1006,7 +1006,7 @@ async function sendTree(
           filename: "tree.png"
         }
       ],
-      components: treeButtons()
+      components: treeButtons(getUserFromInteraction(interaction)?.id || "")
     })
   );
 
@@ -1072,7 +1072,7 @@ async function updateTreeMessage(
       {
         content,
         components:
-          treeButtons()
+          treeButtons(getUserFromInteraction(interaction)?.id || "")
       }
     );
 
@@ -1120,44 +1120,31 @@ function row(...buttons) {
   };
 }
 
-function treeButtons() {
+function treeButtons(ownerId = "") {
+  const prefix = ownerId ? `tree:${ownerId}:` : "tree:unknown:";
+
   return [
     row(
-      button(
-        "💧 Water",
-        "water",
-        1
-      ),
-      button(
-        "✨ Catch Sparkles",
-        "catch",
-        3
-      ),
-      button(
-        "🧩 Daily Riddle",
-        "daily_riddle",
-        2
-      )
+      button("💧 Water", `${prefix}water`, 1),
+      button("✨ Catch Sparkles", `${prefix}catch`, 3),
+      button("🧩 Daily Riddle", `${prefix}daily_riddle`, 2)
     ),
-
     row(
-      button(
-        "🛍️ Shop",
-        "shop",
-        2
-      ),
-      button(
-        "🎨 Customize",
-        "customize",
-        2
-      ),
-      button(
-        "🏆 Leaderboard",
-        "leaderboard",
-        2
-      )
+      button("🛍️ Shop", `${prefix}shop`, 2),
+      button("🎨 Customize", `${prefix}customize`, 2),
+      button("🏆 Leaderboard", `${prefix}leaderboard`, 2)
     )
   ];
+}
+
+function treeButtonOwner(id) {
+  const parts = String(id || "").split(":");
+  return parts[0] === "tree" && parts.length >= 3 ? parts[1] : null;
+}
+
+function treeButtonAction(id) {
+  const parts = String(id || "").split(":");
+  return parts[0] === "tree" && parts.length >= 3 ? parts.slice(2).join(":") : null;
 }
 
 /* =========================================================
@@ -1824,11 +1811,34 @@ async function runRandomChaosEvent(
 ) {
   if (!guildId) return false;
 
-  const members = await getGuildMembers(env, guildId);
-  if (!members.length) return false;
+  let members = [];
 
-  const event =
-    CHAOS_EVENTS[randomInt(0, CHAOS_EVENTS.length - 1)];
+  try {
+    members = await getGuildMembers(env, guildId);
+  } catch (error) {
+    console.error(`Chaos member lookup failed for guild ${guildId}:`, error);
+  }
+
+  /*
+    A member-list/API problem must never make Chaos invisible.
+    If Discord does not return members, announce a guaranteed
+    server-wide event anyway.
+  */
+  if (!members.length) {
+    const event = CHAOS_EVENTS.filter(e => e.type === "everyone")[
+      randomInt(0, CHAOS_EVENTS.filter(e => e.type === "everyone").length - 1)
+    ];
+    const amount = randomInt(event.min, event.max);
+    await announceChaos(
+      env,
+      guildId,
+      `${event.message} **+${amount} sparkles** to the Werewives! ✨\n\n🦝 The raccoon chaos was announced even though Discord did not return the member list.`
+    );
+    console.log(`Chaos fallback announcement for guild ${guildId}`);
+    return true;
+  }
+
+  const event = CHAOS_EVENTS[randomInt(0, CHAOS_EVENTS.length - 1)];
 
   const amount = randomInt(event.min, event.max);
 
@@ -1900,104 +1910,31 @@ async function runRandomChaosEvent(
 async function processChaosEvents(
   env
 ) {
-  const now =
-    Date.now();
+  const now = Date.now();
+  const guildIds = await getKnownGuildIds(env);
 
-  const guildIds =
-    await getKnownGuildIds(
-      env
-    );
-
-  for (
-    const guildId of
-      guildIds
-  ) {
+  for (const guildId of guildIds) {
     try {
-      const state =
-        await getGuildState(
-          env,
-          guildId
-        );
+      const state = await getGuildState(env, guildId);
 
       /*
-        If this guild has never received a chaos timer,
-        start one now.
+        The Worker cron is the actual clock for Chaos.
+        Fire one event on every scheduled pass instead of relying
+        on a second timer that can drift or get stuck in KV.
       */
+      const happened = await runRandomChaosEvent(env, guildId);
 
-      if (
-        state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION
-      ) {
-        state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
-        state.nextChaosAt = now;
-        await saveGuildState(
-          env,
-          guildId,
-          state
-        );
-      }
-
-      if (
-        !state.nextChaosAt ||
-        Number(state.nextChaosAt) <= 0
-      ) {
-        state.nextChaosAt =
-          now +
-          CHAOS_INTERVAL;
-
-        await saveGuildState(
-          env,
-          guildId,
-          state
-        );
-
-        continue;
-      }
-
-      if (
-        now <
-        Number(state.nextChaosAt)
-      ) {
-        continue;
-      }
-
-      /*
-        A chaos event is due.
-        It is completely independent of Water.
-      */
-
-      const happened =
-        await runRandomChaosEvent(
-          env,
-          guildId
-        );
-
-      /*
-        Schedule the next one regardless.
-        This prevents a guild from getting stuck.
-      */
-
-      state.nextChaosAt =
-        Date.now() +
-        CHAOS_INTERVAL;
-
-      state.lastChaosAt =
-        Date.now();
+      state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
+      state.lastChaosAt = now;
+      state.nextChaosAt = now + CHAOS_INTERVAL;
 
       if (happened) {
-        state.lastChaosEvent =
-          easternDateKey();
+        state.lastChaosEvent = easternDateKey();
       }
 
-      await saveGuildState(
-        env,
-        guildId,
-        state
-      );
+      await saveGuildState(env, guildId, state);
     } catch (error) {
-      console.error(
-        `Chaos processing failed for guild ${guildId}:`,
-        error
-      );
+      console.error(`Chaos processing failed for guild ${guildId}:`, error);
     }
   }
 }
@@ -2207,7 +2144,7 @@ async function handleWater(
         content:
           `❌ Water couldn't be completed.\\n\\n${message}`,
         components:
-          treeButtons()
+          treeButtons(getUserFromInteraction(interaction)?.id || "")
       }
     );
   }
@@ -2348,7 +2285,7 @@ async function handleCatch(
         content:
           `❌ Catch Sparkles hit an error.\n\n\`${error?.message || "Unknown error"}\``,
         components:
-          treeButtons()
+          treeButtons(getUserFromInteraction(interaction)?.id || "")
       }
     );
   }
@@ -3953,7 +3890,18 @@ async function showInventory(
       "🐼 Panda Decoration",
 
     cat_decoration:
-      "🐱 Cat Decoration"
+      "🐱 Cat Decoration",
+    shadow_tree: "🌑 Shadow Tree",
+    full_cherry_tree: "🌸 Full Cherry Tree",
+    pine_tree: "🌲 Pine Tree",
+    red_tree: "❤️ Red Tree",
+    soul_tree: "💙 Soul Tree",
+    butterflies_effect: "🦋 Butterflies",
+    hearts_effect: "💕 Hearts",
+    magic_mushroom_background: "🍄 Magic Mushroom Background",
+    field_day_background: "🌾 Field Day Background",
+    red_forest_background: "🌲 Red Forest Background",
+    halloween_tree: "🎃🌳 Halloween Tree"
   };
 
   const items =
@@ -4188,8 +4136,8 @@ async function claimHuntGift(
   hunt.nextGiftAt =
     Date.now() +
     randomInt(
-      3 * 60 * 1000,
-      5 * 60 * 1000
+      1 * 60 * 1000,
+      2 * 60 * 1000
     );
 
   await saveGuildState(
@@ -4361,8 +4309,8 @@ async function releaseHuntGift(
   state.hunt.nextGiftAt =
     Date.now() +
     randomInt(
-      3 * 60 * 1000,
-      5 * 60 * 1000
+      1 * 60 * 1000,
+      2 * 60 * 1000
     );
 
   await saveGuildState(
@@ -4536,17 +4484,13 @@ async function processBirthdayEvent(
       continue;
     }
 
-    if (
-      Date.now() >=
-        currentState.hunt
-          .nextGiftAt &&
-      !currentState.hunt
-        .currentGift
-    ) {
-      await releaseHuntGift(
-        env,
-        guildId
-      );
+    /*
+      Birthday gifts should be frequent and should not get stuck
+      waiting on a second timer. The scheduled Worker is the clock,
+      so release one whenever this pass finds no active gift.
+    */
+    if (!currentState.hunt.currentGift) {
+      await releaseHuntGift(env, guildId);
     }
   }
 }
@@ -4750,7 +4694,7 @@ async function handleTree(
         content:
           `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
         components:
-          treeButtons()
+          treeButtons(getUserFromInteraction(interaction)?.id || "")
       }
     );
   }
@@ -4768,6 +4712,11 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("heist_roles:")) {
+    await handleHeistRolesPage(env, interaction, id.split(":")[1]);
+    return;
+  }
+
   if (
     id.startsWith("heist:")
   ) {
@@ -4775,6 +4724,35 @@ async function handleComponent(
       env,
       interaction
     );
+    return;
+  }
+
+  if (id.startsWith("tree:")) {
+    const ownerId = treeButtonOwner(id);
+    const action = treeButtonAction(id);
+    const user = getUserFromInteraction(interaction);
+
+    if (!ownerId || !user || ownerId !== user.id) {
+      await sendText(env, interaction, "❌ Those tree buttons belong to someone else. Use `/tree` to open your own tree.");
+      return;
+    }
+
+    const actionMap = {
+      water: "water",
+      catch: "catch",
+      daily_riddle: "daily_riddle",
+      shop: "shop",
+      customize: "customize",
+      leaderboard: "leaderboard"
+    };
+
+    const mapped = actionMap[action];
+    if (mapped === "water") { await handleWater(env, interaction); return; }
+    if (mapped === "catch") { await handleCatch(env, interaction); return; }
+    if (mapped === "daily_riddle") { await handleDailyRiddle(env, interaction); return; }
+    if (mapped === "shop") { await showShop(env, interaction); return; }
+    if (mapped === "customize") { await showCustomize(env, interaction); return; }
+    if (mapped === "leaderboard") { await showLeaderboard(env, interaction); return; }
     return;
   }
 
@@ -5156,7 +5134,7 @@ async function handleComponent(
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
-const HEIST_NIGHT_DURATION = 60 * 1000;
+const HEIST_NIGHT_DURATION = 30 * 1000;
 const HEIST_VOTE_DURATION = 3 * 60 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
@@ -8187,6 +8165,12 @@ async function handleHeistVote(
   game.votes[voterId] =
     targetId;
 
+  /* Persist the vote before checking the tally so the vote cannot be
+     lost if the next interaction or timer reads KV immediately. */
+  const voteState = await getGuildState(env, game.guildId);
+  voteState.heist = game;
+  await saveGuildState(env, game.guildId, voteState);
+
   const voted =
     Object.keys(game.votes).length;
 
@@ -8206,6 +8190,21 @@ async function handleHeistVote(
       env,
       game
     );
+  }
+}
+
+async function syncHeistPhase(env, game) {
+  if (!game || game.status === "ended") return;
+
+  if (Date.now() < Number(game.phaseEndsAt || 0)) return;
+
+  if (game.status === "night") {
+    await resolveHeistNight(env, game);
+    return;
+  }
+
+  if (game.status === "voting") {
+    await resolveHeistVote(env, game);
   }
 }
 
@@ -8272,6 +8271,14 @@ async function handleHeistComponent(
 
   if (!user) {
     return true;
+  }
+
+  await syncHeistPhase(env, game);
+
+  /* Refresh from KV because resolving a phase may have changed the game. */
+  const refreshedState = await getGuildState(env, guildId);
+  if (refreshedState.heist?.id === gameId) {
+    game = refreshedState.heist;
   }
 
   if (
@@ -8463,6 +8470,50 @@ async function handleHeistComponent(
   return true;
 }
 
+async function handleHeistRoles(env, interaction) {
+  const entries = Object.values(HEIST_ROLE_DEFINITIONS);
+  const pages = [];
+  let current = "";
+
+  for (const role of entries) {
+    const line = `**${role.name}** — ${role.description}`;
+    if ((current + "\n\n" + line).length > 1700) {
+      pages.push(current);
+      current = line;
+    } else {
+      current += (current ? "\n\n" : "") + line;
+    }
+  }
+  if (current) pages.push(current);
+
+  await sendText(
+    env,
+    interaction,
+    `🦝💰 **RACCOON HEIST ROLES — 1/${pages.length}**\n\n${pages[0]}`,
+    pages.length > 1
+      ? [row(button("➡️ Next", "heist_roles:1", 2))]
+      : [row(button("🌳 Back to Tree", "back_tree", 2))]
+  );
+}
+
+async function handleHeistRolesPage(env, interaction, pageIndex) {
+  const entries = Object.values(HEIST_ROLE_DEFINITIONS);
+  const pages = [];
+  let current = "";
+  for (const role of entries) {
+    const line = `**${role.name}** — ${role.description}`;
+    if ((current + "\n\n" + line).length > 1700) { pages.push(current); current = line; }
+    else current += (current ? "\n\n" : "") + line;
+  }
+  if (current) pages.push(current);
+
+  const index = Math.max(0, Math.min(Number(pageIndex) || 0, pages.length - 1));
+  const buttons = [];
+  if (index > 0) buttons.push(button("⬅️ Previous", `heist_roles:${index - 1}`, 2));
+  if (index < pages.length - 1) buttons.push(button("➡️ Next", `heist_roles:${index + 1}`, 2));
+  await sendText(env, interaction, `🦝💰 **RACCOON HEIST ROLES — ${index + 1}/${pages.length}**\n\n${pages[index]}`, [row(...buttons)]);
+}
+
 async function handleHeistCommand(
   env,
   interaction
@@ -8648,6 +8699,11 @@ async function handleCommand(
       env,
       interaction
     );
+    return;
+  }
+
+  if (name === "roles") {
+    await handleHeistRoles(env, interaction);
     return;
   }
 
@@ -8955,6 +9011,11 @@ const COMMANDS = [
         description: "End the current heist (host only)"
       }
     ]
+  },
+
+  {
+    name: "roles",
+    description: "View all Raccoon Heist roles and what they do"
   },
 
   {
