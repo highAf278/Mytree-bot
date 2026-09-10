@@ -30,8 +30,8 @@ const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
   The scheduled Worker checks every 5 minutes.
   Each guild receives a chaos event every 5 minutes.
 */
-const CHAOS_INTERVAL = 5 * 60 * 1000;
-const CHAOS_SCHEDULE_VERSION = 2;
+const CHAOS_INTERVAL = 3 * 60 * 1000;
+const CHAOS_SCHEDULE_VERSION = 3;
 const STONED_GIFT_SPARKLES = 300;
 
 const BASE_URL =
@@ -48,7 +48,18 @@ const IMAGES = {
   stonedBalloon: "IMG_7277.png",
   stonedBackground: "IMG_7275.jpeg",
   panda: "IMG_7287.png",
-  cat: "IMG_7288.png"
+  cat: "IMG_7288.png",
+  shadowTree: "IMG_7311.png",
+  fullCherryTree: "IMG_7310.png",
+  pineTree: "IMG_7308.png",
+  redTree: "IMG_7307.png",
+  soulTree: "IMG_7280.png",
+  butterflies: "IMG_7306.png",
+  hearts: "IMG_7305.png",
+  magicMushroom: "IMG_7300.jpeg",
+  fieldDay: "IMG_7299.jpeg",
+  redForest: "IMG_7291.jpeg",
+  halloweenTree: "IMG_7309.png"
 };
 
 const SHOP_ITEMS = {
@@ -58,40 +69,102 @@ const SHOP_ITEMS = {
     type: "background",
     value: "candyland"
   },
-
   cotton_candy_tree: {
     name: "🍭 Cotton Candy Tree",
     price: 1000,
     type: "tree",
     value: "cotton_candy"
   },
-
   halloween_background: {
     name: "🎃 Halloween Background",
     price: 150,
     type: "background",
     value: "halloween"
   },
-
   pumpkin_cat_decoration: {
     name: "🎃 Pumpkin Cat",
     price: 250,
     type: "decoration",
     value: "pumpkin_cat"
   },
-
   panda_decoration: {
     name: "🐼 Panda Decoration",
     price: 3000,
     type: "decoration",
     value: "panda"
   },
-
   cat_decoration: {
     name: "🐱 Cat Decoration",
     price: 1500,
     type: "decoration",
     value: "cat"
+  },
+  shadow_tree: {
+    name: "🌑 Shadow Tree",
+    price: 1000,
+    type: "tree",
+    value: "shadow"
+  },
+  full_cherry_tree: {
+    name: "🌸 Full Cherry Tree",
+    price: 1500,
+    type: "tree",
+    value: "full_cherry"
+  },
+  pine_tree: {
+    name: "🌲 Pine Tree",
+    price: 1000,
+    type: "tree",
+    value: "pine"
+  },
+  red_tree: {
+    name: "❤️ Red Tree",
+    price: 2000,
+    type: "tree",
+    value: "red"
+  },
+  soul_tree: {
+    name: "💙 Soul Tree",
+    price: 5000,
+    type: "tree",
+    value: "soul"
+  },
+  butterflies_effect: {
+    name: "🦋 Butterflies",
+    price: 5000,
+    type: "effect",
+    value: "butterflies"
+  },
+  hearts_effect: {
+    name: "💕 Hearts",
+    price: 10000,
+    type: "effect",
+    value: "hearts"
+  },
+  magic_mushroom_background: {
+    name: "🍄 Magic Mushroom",
+    price: 2000,
+    type: "background",
+    value: "magic_mushroom"
+  },
+  field_day_background: {
+    name: "🌾 Field Day",
+    price: 1000,
+    type: "background",
+    value: "field_day"
+  },
+  red_forest_background: {
+    name: "🌲 Red Forest",
+    price: 3000,
+    type: "background",
+    value: "red_forest"
+  },
+  halloween_tree: {
+    name: "🎃 Halloween Tree",
+    price: 2000,
+    type: "tree",
+    value: "halloween_tree",
+    limited: true
   }
 };
 
@@ -278,6 +351,7 @@ function defaultPlayer() {
     inventory: ["pink_sky_background"],
     equipped: {
       decoration: null,
+      effect: null,
       theme: "cherry",
       tree: "cherry"
     },
@@ -1104,6 +1178,15 @@ function getBackgroundImage(player) {
     case "candyland":
       return IMAGES.candyland;
 
+    case "magic_mushroom":
+      return IMAGES.magicMushroom;
+
+    case "field_day":
+      return IMAGES.fieldDay;
+
+    case "red_forest":
+      return IMAGES.redForest;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1118,6 +1201,24 @@ function getTreeImage(player) {
   ) {
     case "cotton_candy":
       return IMAGES.cottonCandyTree;
+
+    case "shadow":
+      return IMAGES.shadowTree;
+
+    case "full_cherry":
+      return IMAGES.fullCherryTree;
+
+    case "pine":
+      return IMAGES.pineTree;
+
+    case "red":
+      return IMAGES.redTree;
+
+    case "soul":
+      return IMAGES.soulTree;
+
+    case "halloween_tree":
+      return IMAGES.halloweenTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1143,6 +1244,21 @@ function getDecorationImage(player) {
 
     case "cat":
       return IMAGES.cat;
+
+    default:
+      return null;
+  }
+}
+
+function getEffectImage(player) {
+  switch (
+    player.equipped?.effect
+  ) {
+    case "butterflies":
+      return IMAGES.butterflies;
+
+    case "hearts":
+      return IMAGES.hearts;
 
     default:
       return null;
@@ -1191,6 +1307,18 @@ async function renderTree(
       decorationFile
         ? imageUrl(
             decorationFile
+          )
+        : "";
+
+    const effectFile =
+      getEffectImage(
+        player
+      );
+
+    const effect =
+      effectFile
+        ? imageUrl(
+            effectFile
           )
         : "";
 
@@ -1259,6 +1387,25 @@ async function renderTree(
             height:${decorationSize};
             object-fit:contain;
             z-index:4;
+          "
+        />
+      `;
+    }
+
+    let effectHTML = "";
+
+    if (effect) {
+      effectHTML = `
+        <img
+          src="${effect}"
+          style="
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            object-fit:contain;
+            z-index:5;
+            pointer-events:none;
           "
         />
       `;
@@ -1338,6 +1485,8 @@ async function renderTree(
           >
 
           ${decorationHTML}
+
+          ${effectHTML}
 
           ${sparkleHTML}
 
@@ -1593,7 +1742,25 @@ async function announceChaos(
       state.announcementChannelId,
       `💥 **WEREWIVES CHAOS EVENT!**\n${message}`
     );
+    return true;
   }
+
+  const channels =
+    await getGuildTextChannels(
+      env,
+      guildId
+    );
+
+  if (channels.length) {
+    await sendChannelMessage(
+      env,
+      channels[0].id,
+      `💥 **WEREWIVES CHAOS EVENT!**\n${message}`
+    );
+    return true;
+  }
+
+  return false;
 }
 
 async function getGuildMembers(env, guildId) {
@@ -2529,6 +2696,11 @@ async function showShop(
           "🎀 Decorations",
           "shop_decorations",
           2
+        ),
+        button(
+          "✨ Effects",
+          "shop_effects",
+          2
         )
       ),
 
@@ -2571,38 +2743,41 @@ async function showBackgroundShop(
       user.id
     );
 
-  const owned =
-    player.inventory.includes(
-      "candyland_background"
-    );
+  const items = [
+    ["candyland_background", "🍬 Candy Land", "buy_candyland"],
+    ["magic_mushroom_background", "🍄 Magic Mushroom", "buy_magic_mushroom"],
+    ["field_day_background", "🌾 Field Day", "buy_field_day"],
+    ["red_forest_background", "🌲 Red Forest", "buy_red_forest"]
+  ];
+
+  const buttons = items.map(
+    ([itemId, label, buttonId]) => {
+      const owned = player.inventory.includes(itemId);
+      return button(
+        owned
+          ? `${label} Owned`
+          : `${label} — ${SHOP_ITEMS[itemId].price}`,
+        buttonId,
+        owned ? 2 : 1,
+        owned
+      );
+    }
+  );
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
+  }
+
+  rows.push(row(button("⬅️ Back", "shop", 2)));
 
   await sendText(
     env,
     interaction,
-    `🌌 **Backgrounds**\n\n🍬 **Candy Land** — 500 sparkles\n${owned ? "✅ Owned" : ""}`,
-    [
-      row(
-        button(
-          owned
-            ? "🍬 Candy Land Owned"
-            : "🍬 Buy Candy Land — 500",
-          "buy_candyland",
-          owned ? 2 : 1,
-          owned
-        )
-      ),
-
-      row(
-        button(
-          "⬅️ Back",
-          "shop",
-          2
-        )
-      )
-    ]
+    "🌌 **Backgrounds**\n\n✨ Prices are in sparkles.",
+    rows
   );
 }
-
 async function showTreeShop(
   env,
   interaction
@@ -2618,38 +2793,43 @@ async function showTreeShop(
       user.id
     );
 
-  const owned =
-    player.inventory.includes(
-      "cotton_candy_tree"
-    );
+  const items = [
+    ["cotton_candy_tree", "🍭 Cotton Candy", "buy_cotton_candy"],
+    ["shadow_tree", "🌑 Shadow", "buy_shadow_tree"],
+    ["full_cherry_tree", "🌸 Full Cherry", "buy_full_cherry_tree"],
+    ["pine_tree", "🌲 Pine", "buy_pine_tree"],
+    ["red_tree", "❤️ Red", "buy_red_tree"],
+    ["soul_tree", "💙 Soul", "buy_soul_tree"]
+  ];
+
+  const buttons = items.map(
+    ([itemId, label, buttonId]) => {
+      const owned = player.inventory.includes(itemId);
+      return button(
+        owned
+          ? `${label} Owned`
+          : `${label} — ${SHOP_ITEMS[itemId].price}`,
+        buttonId,
+        owned ? 2 : 1,
+        owned
+      );
+    }
+  );
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
+  }
+
+  rows.push(row(button("⬅️ Back", "shop", 2)));
 
   await sendText(
     env,
     interaction,
-    `🌳 **Trees**\n\n🍭 **Cotton Candy Tree** — 1000 sparkles\n${owned ? "✅ Owned" : ""}`,
-    [
-      row(
-        button(
-          owned
-            ? "🍭 Cotton Candy Owned"
-            : "🍭 Buy Cotton Candy — 1000",
-          "buy_cotton_candy",
-          owned ? 2 : 1,
-          owned
-        )
-      ),
-
-      row(
-        button(
-          "⬅️ Back",
-          "shop",
-          2
-        )
-      )
-    ]
+    "🌳 **Trees**\n\n✨ Prices are in sparkles.",
+    rows
   );
 }
-
 async function showDecorationShop(
   env,
   interaction
@@ -2711,6 +2891,51 @@ async function showDecorationShop(
   );
 }
 
+async function showEffectShop(
+  env,
+  interaction
+) {
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  const player =
+    await getPlayer(
+      env,
+      user.id
+    );
+
+  const items = [
+    ["butterflies_effect", "🦋 Butterflies", "buy_butterflies"],
+    ["hearts_effect", "💕 Hearts", "buy_hearts"]
+  ];
+
+  const buttons = items.map(
+    ([itemId, label, buttonId]) => {
+      const owned = player.inventory.includes(itemId);
+      return button(
+        owned
+          ? `${label} Owned`
+          : `${label} — ${SHOP_ITEMS[itemId].price}`,
+        buttonId,
+        owned ? 2 : 1,
+        owned
+      );
+    }
+  );
+
+  await sendText(
+    env,
+    interaction,
+    "✨ **Tree Effects**\n\nEffects are layered on top of your tree. ✨",
+    [
+      row(...buttons),
+      row(button("⬅️ Back", "shop", 2))
+    ]
+  );
+}
+
 async function showLimitedShop(
   env,
   interaction
@@ -2727,19 +2952,16 @@ async function showLimitedShop(
     );
 
   const halloweenOwned =
-    player.inventory.includes(
-      "halloween_background"
-    );
-
+    player.inventory.includes("halloween_background");
   const pumpkinOwned =
-    player.inventory.includes(
-      "pumpkin_cat_decoration"
-    );
+    player.inventory.includes("pumpkin_cat_decoration");
+  const halloweenTreeOwned =
+    player.inventory.includes("halloween_tree");
 
   await sendText(
     env,
     interaction,
-    `🎃 **Limited Halloween Shop**\n\n🎃 Halloween Background — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 Pumpkin Cat — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}`,
+    `🎃 **Limited Halloween Shop**\n\n🎃 **Halloween Background** — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 **Pumpkin Cat** — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}\n\n🎃🌳 **Halloween Tree** — 2000 sparkles\n${halloweenTreeOwned ? "✅ Owned" : ""}`,
     [
       row(
         button(
@@ -2751,7 +2973,6 @@ async function showLimitedShop(
           halloweenOwned
         )
       ),
-
       row(
         button(
           pumpkinOwned
@@ -2762,18 +2983,22 @@ async function showLimitedShop(
           pumpkinOwned
         )
       ),
-
       row(
         button(
-          "⬅️ Back",
-          "shop",
-          2
+          halloweenTreeOwned
+            ? "🎃🌳 Halloween Tree Owned"
+            : "🎃🌳 Buy Halloween Tree — 2000",
+          "buy_halloween_tree",
+          halloweenTreeOwned ? 2 : 1,
+          halloweenTreeOwned
         )
+      ),
+      row(
+        button("⬅️ Back", "shop", 2)
       )
     ]
   );
 }
-
 async function showSpecialShop(
   env,
   interaction
@@ -2908,6 +3133,11 @@ async function showCustomize(
           "🎀 Decorations",
           "custom_decorations",
           2
+        ),
+        button(
+          "✨ Effects",
+          "custom_effects",
+          2
         )
       ),
 
@@ -3001,6 +3231,24 @@ async function showCustomBackgrounds(
     );
   }
 
+  const extraBackgrounds = [
+    ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
+    ["field_day_background", "🌾 Field Day", "field_day"],
+    ["red_forest_background", "🌲 Red Forest", "red_forest"]
+  ];
+
+  for (const [itemId, label, value] of extraBackgrounds) {
+    if (player.inventory.includes(itemId)) {
+      buttons.push(
+        button(
+          label,
+          `equip_theme_${value}`,
+          player.equipped.theme === value ? 3 : 2
+        )
+      );
+    }
+  }
+
   const rows = [];
 
   for (
@@ -3051,69 +3299,106 @@ async function showCustomTrees(
       user.id
     );
 
-  const buttons = [
-    button(
-      "🌸 Cherry",
-      "equip_tree_cherry",
-      player.equipped.tree ===
-        "cherry"
-        ? 3
-        : 2
-    )
+  const items = [
+    ["cherry", "🌸 Cherry", null],
+    ["cotton_candy", "🍭 Cotton Candy", "cotton_candy_tree"],
+    ["stoned_birthday", "🎂 Birthday", "stoned_birthday_tree"],
+    ["shadow", "🌑 Shadow", "shadow_tree"],
+    ["full_cherry", "🌸 Full Cherry", "full_cherry_tree"],
+    ["pine", "🌲 Pine", "pine_tree"],
+    ["red", "❤️ Red", "red_tree"],
+    ["soul", "💙 Soul", "soul_tree"],
+    ["halloween_tree", "🎃 Halloween", "halloween_tree"]
   ];
 
-  if (
-    player.inventory.includes(
-      "cotton_candy_tree"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🍭 Cotton Candy",
-        "equip_tree_cotton_candy",
-        player.equipped.tree ===
-          "cotton_candy"
-          ? 3
-          : 2
-      )
-    );
+  const buttons = [];
+
+  for (const [value, label, inventoryId] of items) {
+    if (!inventoryId || player.inventory.includes(inventoryId)) {
+      buttons.push(
+        button(
+          label,
+          `equip_tree_${value}`,
+          player.equipped.tree === value ? 3 : 2
+        )
+      );
+    }
   }
 
-  if (
-    player.inventory.includes(
-      "stoned_birthday_tree"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🎂 Birthday",
-        "equip_tree_stoned_birthday",
-        player.equipped.tree ===
-          "stoned_birthday"
-          ? 3
-          : 2
-      )
-    );
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
   }
+
+  rows.push(row(button("⬅️ Back", "customize", 2)));
 
   await sendText(
     env,
     interaction,
     "🌳 **Tree Customization**",
-    [
-      row(...buttons),
-
-      row(
-        button(
-          "⬅️ Back",
-          "customize",
-          2
-        )
-      )
-    ]
+    rows
   );
 }
 
+async function showCustomEffects(
+  env,
+  interaction
+) {
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  const player =
+    await getPlayer(
+      env,
+      user.id
+    );
+
+  const buttons = [];
+
+  if (player.inventory.includes("butterflies_effect")) {
+    buttons.push(
+      button(
+        "🦋 Butterflies",
+        "equip_effect_butterflies",
+        player.equipped.effect === "butterflies" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("hearts_effect")) {
+    buttons.push(
+      button(
+        "💕 Hearts",
+        "equip_effect_hearts",
+        player.equipped.effect === "hearts" ? 3 : 2
+      )
+    );
+  }
+
+  buttons.push(
+    button(
+      "❌ Remove",
+      "equip_effect_none",
+      player.equipped.effect === null ? 3 : 2
+    )
+  );
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
+  }
+
+  rows.push(row(button("⬅️ Back", "customize", 2)));
+
+  await sendText(
+    env,
+    interaction,
+    "✨ **Effect Customization**\n\nEffects are layered on top of your tree.",
+    rows
+  );
+}
 async function showCustomDecorations(
   env,
   interaction
@@ -3274,6 +3559,21 @@ async function equipTheme(
         "candyland_background"
       ),
 
+    magic_mushroom:
+      player.inventory.includes(
+        "magic_mushroom_background"
+      ),
+
+    field_day:
+      player.inventory.includes(
+        "field_day_background"
+      ),
+
+    red_forest:
+      player.inventory.includes(
+        "red_forest_background"
+      ),
+
     stoned_birthday:
       player.inventory.includes(
         "stoned_birthday_background"
@@ -3332,6 +3632,36 @@ async function equipTree(
     stoned_birthday:
       player.inventory.includes(
         "stoned_birthday_tree"
+      ),
+
+    shadow:
+      player.inventory.includes(
+        "shadow_tree"
+      ),
+
+    full_cherry:
+      player.inventory.includes(
+        "full_cherry_tree"
+      ),
+
+    pine:
+      player.inventory.includes(
+        "pine_tree"
+      ),
+
+    red:
+      player.inventory.includes(
+        "red_tree"
+      ),
+
+    soul:
+      player.inventory.includes(
+        "soul_tree"
+      ),
+
+    halloween_tree:
+      player.inventory.includes(
+        "halloween_tree"
       )
   };
 
@@ -3357,6 +3687,59 @@ async function equipTree(
     env,
     interaction,
     "🌳 Tree equipped!"
+  );
+}
+
+async function equipEffect(
+  env,
+  interaction,
+  effect
+) {
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  const player =
+    await getPlayer(
+      env,
+      user.id
+    );
+
+  if (effect === null) {
+    player.equipped.effect = null;
+  } else {
+    const inventoryId = {
+      butterflies: "butterflies_effect",
+      hearts: "hearts_effect"
+    }[effect];
+
+    if (
+      !inventoryId ||
+      !player.inventory.includes(inventoryId)
+    ) {
+      await sendText(
+        env,
+        interaction,
+        "❌ You don't own that effect."
+      );
+      return;
+    }
+
+    player.equipped.effect = effect;
+  }
+
+  await savePlayer(
+    env,
+    player
+  );
+
+  await sendText(
+    env,
+    interaction,
+    effect === null
+      ? "✨ Effect removed!"
+      : "✨ Effect equipped!"
   );
 }
 
@@ -3801,6 +4184,14 @@ async function claimHuntGift(
   const gift =
     hunt.currentGift;
 
+  hunt.currentGift = null;
+  hunt.nextGiftAt =
+    Date.now() +
+    randomInt(
+      3 * 60 * 1000,
+      5 * 60 * 1000
+    );
+
   await saveGuildState(
     env,
     guildId,
@@ -3970,8 +4361,8 @@ async function releaseHuntGift(
   state.hunt.nextGiftAt =
     Date.now() +
     randomInt(
-      8 * 60 * 1000,
-      12 * 60 * 1000
+      3 * 60 * 1000,
+      5 * 60 * 1000
     );
 
   await saveGuildState(
@@ -4086,8 +4477,8 @@ async function processBirthdayEvent(
         nextGiftAt:
           Date.now() +
           randomInt(
-            2 * 60 * 1000,
-            5 * 60 * 1000
+            1 * 60 * 1000,
+            2 * 60 * 1000
           ),
         currentGift: null
       };
@@ -4474,6 +4865,17 @@ async function handleComponent(
   }
 
   if (
+    id === "shop_effects"
+  ) {
+    await showEffectShop(
+      env,
+      interaction
+    );
+
+    return;
+  }
+
+  if (
     id === "shop_limited"
   ) {
     await showLimitedShop(
@@ -4512,7 +4914,40 @@ async function handleComponent(
       "panda_decoration",
 
     buy_cat:
-      "cat_decoration"
+      "cat_decoration",
+
+    buy_shadow_tree:
+      "shadow_tree",
+
+    buy_full_cherry_tree:
+      "full_cherry_tree",
+
+    buy_pine_tree:
+      "pine_tree",
+
+    buy_red_tree:
+      "red_tree",
+
+    buy_soul_tree:
+      "soul_tree",
+
+    buy_butterflies:
+      "butterflies_effect",
+
+    buy_hearts:
+      "hearts_effect",
+
+    buy_magic_mushroom:
+      "magic_mushroom_background",
+
+    buy_field_day:
+      "field_day_background",
+
+    buy_red_forest:
+      "red_forest_background",
+
+    buy_halloween_tree:
+      "halloween_tree"
   };
 
   if (
@@ -4572,6 +5007,17 @@ async function handleComponent(
   }
 
   if (
+    id === "custom_effects"
+  ) {
+    await showCustomEffects(
+      env,
+      interaction
+    );
+
+    return;
+  }
+
+  if (
     id.startsWith(
       "equip_theme_"
     )
@@ -4600,6 +5046,28 @@ async function handleComponent(
         "equip_tree_",
         ""
       )
+    );
+
+    return;
+  }
+
+  if (
+    id.startsWith(
+      "equip_effect_"
+    )
+  ) {
+    const value =
+      id.replace(
+        "equip_effect_",
+        ""
+      );
+
+    await equipEffect(
+      env,
+      interaction,
+      value === "none"
+        ? null
+        : value
     );
 
     return;
@@ -6543,13 +7011,18 @@ async function resolveHeistNight(
     heistVoteButtons(game)
   );
 
-  await saveGuildState(
-    env,
-    game.guildId,
+  const latestState =
     await getGuildState(
       env,
       game.guildId
-    )
+    );
+
+  latestState.heist = game;
+
+  await saveGuildState(
+    env,
+    game.guildId,
+    latestState
   );
 }
 
