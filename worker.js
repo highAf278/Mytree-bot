@@ -13,7 +13,7 @@ import puppeteer from "@cloudflare/puppeteer";
 
 const EXP_PER_WATER = 10;
 
-const SPARKLE_CHANCE = 0.50;
+const SPARKLE_CHANCE = 0.75;
 const SPARKLE_LIFETIME = 5 * 60 * 1000;
 
 const MIN_SPARKLES_PER_SPAWN = 2;
@@ -22,18 +22,15 @@ const MAX_ACTIVE_SPARKLES = 5;
 
 /* WATER IS NOW 30 MINUTES */
 const WATER_COOLDOWN = 30 * 60 * 1000;
+const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
 
 /*
   CHAOS IS NO LONGER TRIGGERED BY WATER.
 
   The scheduled Worker checks every 5 minutes.
-  Each guild gets a random next chaos time between
-  30 minutes and 2 hours after the previous event.
+  Each guild receives a chaos event every 15 minutes.
 */
-const CHAOS_MIN_DELAY = 30 * 60 * 1000;
-const CHAOS_MAX_DELAY = 2 * 60 * 60 * 1000;
-
-const BIRTHDAY_PIN = "LOVE";
+const CHAOS_INTERVAL = 15 * 60 * 1000;
 const STONED_GIFT_SPARKLES = 300;
 
 const BASE_URL =
@@ -55,42 +52,42 @@ const IMAGES = {
 
 const SHOP_ITEMS = {
   candyland_background: {
-    name: "🍬 Candy Land Background",
+    name: "ð¬ Candy Land Background",
     price: 500,
     type: "background",
     value: "candyland"
   },
 
   cotton_candy_tree: {
-    name: "🍭 Cotton Candy Tree",
+    name: "ð­ Cotton Candy Tree",
     price: 1000,
     type: "tree",
     value: "cotton_candy"
   },
 
   halloween_background: {
-    name: "🎃 Halloween Background",
+    name: "ð Halloween Background",
     price: 150,
     type: "background",
     value: "halloween"
   },
 
   pumpkin_cat_decoration: {
-    name: "🎃 Pumpkin Cat",
+    name: "ð Pumpkin Cat",
     price: 250,
     type: "decoration",
     value: "pumpkin_cat"
   },
 
   panda_decoration: {
-    name: "🐼 Panda Decoration",
+    name: "ð¼ Panda Decoration",
     price: 3000,
     type: "decoration",
     value: "panda"
   },
 
   cat_decoration: {
-    name: "🐱 Cat Decoration",
+    name: "ð± Cat Decoration",
     price: 1500,
     type: "decoration",
     value: "cat"
@@ -146,56 +143,56 @@ const CHAOS_EVENTS = [
     min: 10,
     max: 50,
     message:
-      "🧀 THE CHEESE COUNCIL HAS ARRIVED! Everyone gets a cheese bonus!"
+      "ð§ THE CHEESE COUNCIL HAS ARRIVED! Everyone gets a cheese bonus!"
   },
   {
     type: "everyone",
     min: 5,
     max: 30,
     message:
-      "🦝 RACCOON TAX! The raccoons have blessed everybody with sparkles!"
+      "ð¦ RACCOON TAX! The raccoons have blessed everybody with sparkles!"
   },
   {
     type: "everyone",
     min: 10,
     max: 40,
     message:
-      "🐺 WEREWIFE MOON! Everyone's tree just got a little more powerful!"
+      "ðº WEREWIFE MOON! Everyone's tree just got a little more powerful!"
   },
   {
     type: "everyone",
     min: 5,
     max: 25,
     message:
-      "✨ SPARKLE STORM! Sparkles are raining over every tree!"
+      "â¨ SPARKLE STORM! Sparkles are raining over every tree!"
   },
   {
     type: "player",
     min: 10,
     max: 60,
     message:
-      "🌸 A mysterious fairy found your tree and left you some sparkles!"
+      "ð¸ A mysterious fairy found your tree and left you some sparkles!"
   },
   {
     type: "player",
     min: -30,
     max: -5,
     message:
-      "🦝 A raccoon stole some of your sparkles!"
+      "ð¦ A raccoon stole some of your sparkles!"
   },
   {
     type: "player",
     min: 5,
     max: 35,
     message:
-      "💅 WEREWIFE ENERGY! Your tree received a surprise sparkle boost!"
+      "ð WEREWIFE ENERGY! Your tree received a surprise sparkle boost!"
   },
   {
     type: "player",
     min: -20,
     max: 20,
     message:
-      "🎲 CHAOS DICE! Your sparkle balance has been randomly altered!"
+      "ð² CHAOS DICE! Your sparkle balance has been randomly altered!"
   }
 ];
 
@@ -213,6 +210,7 @@ function defaultPlayer() {
     exp: 0,
     sparkles: 0,
     lastWater: 0,
+    lastRecycle: 0,
     sparklesOnTree: [],
     sceneMessage: "",
     claimedLevelRewards: [],
@@ -372,16 +370,20 @@ async function rememberGuild(env, guildId) {
     get one automatically.
   */
   if (
+    state.chaosScheduleVersion !== 1
+  ) {
+    state.chaosScheduleVersion = 1;
+    state.nextChaosAt =
+      Date.now() +
+      CHAOS_INTERVAL;
+    changed = true;
+  } else if (
     !state.nextChaosAt ||
     Number(state.nextChaosAt) <= 0
   ) {
     state.nextChaosAt =
       Date.now() +
-      randomInt(
-        CHAOS_MIN_DELAY,
-        CHAOS_MAX_DELAY
-      );
-
+      CHAOS_INTERVAL;
     changed = true;
   }
 
@@ -726,12 +728,67 @@ async function editOriginalResponse(
    TREE MESSAGE
 ========================================================= */
 
+function formatWaterCooldown(player) {
+  const now = Date.now();
+
+  if (
+    !player.lastWater ||
+    now - player.lastWater >= WATER_COOLDOWN
+  ) {
+    return "Now! ð";
+  }
+
+  const remaining =
+    WATER_COOLDOWN -
+    (now - player.lastWater);
+
+  const totalSeconds =
+    Math.ceil(remaining / 1000);
+
+  const hours =
+    Math.floor(totalSeconds / 3600);
+
+  const minutes =
+    Math.floor(
+      (totalSeconds % 3600) / 60
+    );
+
+  const seconds =
+    totalSeconds % 60;
+
+  const parts = [];
+
+  if (hours > 0) {
+    parts.push(
+      `${hours} hour${hours === 1 ? "" : "s"}`
+    );
+  }
+
+  if (minutes > 0) {
+    parts.push(
+      `${minutes} minute${minutes === 1 ? "" : "s"}`
+    );
+  }
+
+  if (
+    seconds > 0 &&
+    hours === 0
+  ) {
+    parts.push(
+      `${seconds} second${seconds === 1 ? "" : "s"}`
+    );
+  }
+
+  return parts.join(" ");
+}
+
 function buildTreeStats(player) {
   return (
-    `🌳 **${player.treeName || "Cherry Blossom"}**\n` +
-    `⭐ Level: **${player.level}** • ` +
-    `✨ Sparkles: **${player.sparkles}** • ` +
-    `📏 Height: **${getTreeHeight(player)} ft**`
+    `ð³ **${player.treeName || "Cherry Blossom"}**\n\n` +
+    `ð± **Lvl:** ${player.level}\n` +
+    `â¨ **Sparkles:** ${player.sparkles}\n` +
+    `ð **Height:** ${getTreeHeight(player)} ft\n\n` +
+    `ð§ **Ready to be watered again in:** ${formatWaterCooldown(player)}`
   );
 }
 
@@ -885,17 +942,17 @@ function treeButtons() {
   return [
     row(
       button(
-        "💧 Water",
+        "ð§ Water",
         "water",
         1
       ),
       button(
-        "✨ Catch Sparkles",
+        "â¨ Catch Sparkles",
         "catch",
         3
       ),
       button(
-        "🧩 Daily Riddle",
+        "ð§© Daily Riddle",
         "daily_riddle",
         2
       )
@@ -903,17 +960,17 @@ function treeButtons() {
 
     row(
       button(
-        "🛍️ Shop",
+        "ðï¸ Shop",
         "shop",
         2
       ),
       button(
-        "🎨 Customize",
+        "ð¨ Customize",
         "customize",
         2
       ),
       button(
-        "🏆 Leaderboard",
+        "ð Leaderboard",
         "leaderboard",
         2
       )
@@ -1045,7 +1102,7 @@ async function renderTree(
         const emoji =
           escapeHTML(
             sparkle.emoji ||
-              "✨"
+              "â¨"
           );
 
         return `
@@ -1077,8 +1134,8 @@ async function renderTree(
 
       const decorationSize =
         isBalloon
-          ? "300px"
-          : "190px";
+          ? "350px"
+          : "240px";
 
       decorationHTML = `
         <img
@@ -1310,27 +1367,27 @@ function randomSparkle() {
 
   if (roll < 0.55) {
     return {
-      emoji: "💖",
+      emoji: "ð",
       value: 10
     };
   }
 
   if (roll < 0.80) {
     return {
-      emoji: "🌈",
+      emoji: "ð",
       value: 20
     };
   }
 
   if (roll < 0.95) {
     return {
-      emoji: "🌙",
+      emoji: "ð",
       value: 30
     };
   }
 
   return {
-    emoji: "⭐",
+    emoji: "â­",
     value: 50
   };
 }
@@ -1414,7 +1471,7 @@ async function announceChaos(
     await sendChannelMessage(
       env,
       state.announcementChannelId,
-      `💥 **WEREWIVES CHAOS EVENT!**\n${message}`
+      `ð¥ **WEREWIVES CHAOS EVENT!**\n${message}`
     );
   }
 }
@@ -1530,7 +1587,7 @@ async function runRandomChaosEvent(
       : `${amount}`;
 
   const text =
-    `${getDisplayName(player)} — ${event.message} **${amountText} sparkles**`;
+    `${getDisplayName(player)} â ${event.message} **${amountText} sparkles**`;
 
   await announceChaos(
     env,
@@ -1573,15 +1630,29 @@ async function processChaosEvents(
       */
 
       if (
+        state.chaosScheduleVersion !== 1
+      ) {
+        state.chaosScheduleVersion = 1;
+        state.nextChaosAt =
+          now +
+          CHAOS_INTERVAL;
+
+        await saveGuildState(
+          env,
+          guildId,
+          state
+        );
+
+        continue;
+      }
+
+      if (
         !state.nextChaosAt ||
         Number(state.nextChaosAt) <= 0
       ) {
         state.nextChaosAt =
           now +
-          randomInt(
-            CHAOS_MIN_DELAY,
-            CHAOS_MAX_DELAY
-          );
+          CHAOS_INTERVAL;
 
         await saveGuildState(
           env,
@@ -1617,10 +1688,7 @@ async function processChaosEvents(
 
       state.nextChaosAt =
         Date.now() +
-        randomInt(
-          CHAOS_MIN_DELAY,
-          CHAOS_MAX_DELAY
-        );
+        CHAOS_INTERVAL;
 
       state.lastChaosAt =
         Date.now();
@@ -1733,7 +1801,7 @@ async function handleWater(
         );
 
       player.sceneMessage =
-        `💧 Your tree needs a little time to absorb that water! Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+        `ð§ Your tree needs a little time to absorb that water! Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
 
       await savePlayer(
         env,
@@ -1783,7 +1851,7 @@ async function handleWater(
     */
 
     const parts = [
-      `💧 You watered your tree! +${EXP_PER_WATER} EXP.`
+      `ð§ You watered your tree! +${EXP_PER_WATER} EXP.`
     ];
 
     if (
@@ -1791,7 +1859,7 @@ async function handleWater(
       oldLevel
     ) {
       parts.push(
-        `🎉 Your tree reached **Level ${player.level}**!`
+        `ð Your tree reached **Level ${player.level}**!`
       );
     }
 
@@ -1799,7 +1867,7 @@ async function handleWater(
       levelReward > 0
     ) {
       parts.push(
-        `🎁 Level rewards: +${levelReward} sparkles!`
+        `ð Level rewards: +${levelReward} sparkles!`
       );
     }
 
@@ -1807,7 +1875,7 @@ async function handleWater(
       spawned > 0
     ) {
       parts.push(
-        `✨ ${spawned} sparkles appeared on your tree!`
+        `â¨ ${spawned} sparkles appeared on your tree!`
       );
     }
 
@@ -1850,7 +1918,7 @@ async function handleWater(
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
+          `â Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
         components:
           treeButtons()
       }
@@ -1910,7 +1978,7 @@ async function handleCatch(
       !player.sparklesOnTree.length
     ) {
       player.sceneMessage =
-        "✨ There aren't any sparkles on your tree right now!";
+        "â¨ There aren't any sparkles on your tree right now!";
 
       await savePlayer(
         env,
@@ -1962,7 +2030,7 @@ async function handleCatch(
       total;
 
     player.sceneMessage =
-      `✨ You caught **${caught} sparkles** and earned **+${total} sparkles!** 💖`;
+      `â¨ You caught **${caught} sparkles** and earned **+${total} sparkles!** ð`;
 
     await savePlayer(
       env,
@@ -1991,7 +2059,7 @@ async function handleCatch(
       interaction,
       {
         content:
-          `❌ Catch Sparkles hit an error.\n\n\`${error?.message || "Unknown error"}\``,
+          `â Catch Sparkles hit an error.\n\n\`${error?.message || "Unknown error"}\``,
         components:
           treeButtons()
       }
@@ -2001,8 +2069,8 @@ async function handleCatch(
 
 /* =========================================================
    RECYCLE
-   INPUT: 20–200 SPARKLES
-   PAYOUT: RANDOM 1x–10x
+   INPUT: 20â200 SPARKLES
+   PAYOUT: RANDOM 1xâ10x
 ========================================================= */
 
 async function handleRecycle(
@@ -2030,6 +2098,39 @@ async function handleRecycle(
     interaction
   );
 
+  const now = Date.now();
+
+  if (
+    player.lastRecycle &&
+    now - player.lastRecycle < RECYCLE_COOLDOWN
+  ) {
+    const remaining =
+      RECYCLE_COOLDOWN -
+      (now - player.lastRecycle);
+
+    const totalMinutes =
+      Math.ceil(remaining / 60000);
+
+    const hours =
+      Math.floor(totalMinutes / 60);
+
+    const minutes =
+      totalMinutes % 60;
+
+    const timeText =
+      hours > 0
+        ? `${hours} hour${hours === 1 ? "" : "s"}${minutes > 0 ? ` and ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}`
+        : `${minutes} minute${minutes === 1 ? "" : "s"}`;
+
+    await sendText(
+      env,
+      interaction,
+      `â»ï¸ Your Sparkle Recycler is cooling down! Try again in **${timeText}**.`
+    );
+
+    return;
+  }
+
   const amount =
     Math.floor(
       Number(amountInput)
@@ -2043,7 +2144,7 @@ async function handleRecycle(
     await sendText(
       env,
       interaction,
-      "♻️ You can recycle between **20 and 200 sparkles** at a time."
+      "â»ï¸ You can recycle between **20 and 200 sparkles** at a time."
     );
 
     return;
@@ -2056,11 +2157,13 @@ async function handleRecycle(
     await sendText(
       env,
       interaction,
-      `❌ You only have **${player.sparkles} sparkles**, so you can't recycle **${amount}**.`
+      `â You only have **${player.sparkles} sparkles**, so you can't recycle **${amount}**.`
     );
 
     return;
   }
+
+  player.lastRecycle = now;
 
   /*
     Remove the input amount first.
@@ -2091,7 +2194,7 @@ async function handleRecycle(
     amount;
 
   player.sceneMessage =
-    `♻️ You recycled **${amount} sparkles** and got **${payout} sparkles** back! (${multiplier}×)`;
+    `â»ï¸ You recycled **${amount} sparkles** and got **${payout} sparkles** back! (${multiplier}Ã)`;
 
   await savePlayer(
     env,
@@ -2106,11 +2209,11 @@ async function handleRecycle(
   await sendText(
     env,
     interaction,
-    `♻️ **SPARKLE RECYCLER**\n\nYou put in **${amount} sparkles**.\n\n🎰 Multiplier: **${multiplier}×**\n✨ You got back: **${payout} sparkles**\n💰 Net change: **${netText} sparkles**\n\nYou now have **${player.sparkles} sparkles**! 💖`,
+    `â»ï¸ **SPARKLE RECYCLER**\n\nYou put in **${amount} sparkles**.\n\nð° Multiplier: **${multiplier}Ã**\nâ¨ You got back: **${payout} sparkles**\nð° Net change: **${netText} sparkles**\n\nYou now have **${player.sparkles} sparkles**! ð`,
     [
       row(
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -2172,11 +2275,11 @@ async function handleDailyRiddle(
     await sendText(
       env,
       interaction,
-      `🧩 **Daily Riddle**\n\n${riddle.question}\n\nUse \`/daily-riddle answer:your-answer\` to answer it.`,
+      `ð§© **Daily Riddle**\n\n${riddle.question}\n\nUse \`/daily-riddle answer:your-answer\` to answer it.`,
       [
         row(
           button(
-            "🌳 Back to Tree",
+            "ð³ Back to Tree",
             "back_tree",
             2
           )
@@ -2198,7 +2301,7 @@ async function handleDailyRiddle(
     await sendText(
       env,
       interaction,
-      "🧩 You've already solved today's riddle! Come back tomorrow. 💖"
+      "ð§© You've already solved today's riddle! Come back tomorrow. ð"
     );
 
     return;
@@ -2216,7 +2319,7 @@ async function handleDailyRiddle(
     await sendText(
       env,
       interaction,
-      "❌ Nope! That's not the answer. Try again!"
+      "â Nope! That's not the answer. Try again!"
     );
 
     return;
@@ -2236,7 +2339,7 @@ async function handleDailyRiddle(
   player.dailyRiddleWins++;
 
   player.sceneMessage =
-    `🧩 Correct! You earned **${reward} sparkles!**`;
+    `ð§© Correct! You earned **${reward} sparkles!**`;
 
   await savePlayer(
     env,
@@ -2246,11 +2349,11 @@ async function handleDailyRiddle(
   await sendText(
     env,
     interaction,
-    `🧩 **Correct!** 🎉\n\nYou earned **${reward} sparkles!**\n\nYour next correct daily riddle starts at ${reward + 5} sparkles.`,
+    `ð§© **Correct!** ð\n\nYou earned **${reward} sparkles!**\n\nYour next correct daily riddle starts at ${reward + 5} sparkles.`,
     [
       row(
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -2289,21 +2392,21 @@ async function showShop(
   await sendText(
     env,
     interaction,
-    "🛍️ **Werewives Tree Shop**\n\nChoose a category:",
+    "ðï¸ **Werewives Tree Shop**\n\nChoose a category:",
     [
       row(
         button(
-          "🌌 Backgrounds",
+          "ð Backgrounds",
           "shop_backgrounds",
           2
         ),
         button(
-          "🌳 Trees",
+          "ð³ Trees",
           "shop_trees",
           2
         ),
         button(
-          "🎀 Decorations",
+          "ð Decorations",
           "shop_decorations",
           2
         )
@@ -2311,12 +2414,12 @@ async function showShop(
 
       row(
         button(
-          "🎃 Limited Shop",
+          "ð Limited Shop",
           "shop_limited",
           1
         ),
         button(
-          "🎁 Special / Holiday",
+          "ð Special / Holiday",
           "shop_special",
           2
         )
@@ -2324,7 +2427,7 @@ async function showShop(
 
       row(
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -2356,13 +2459,13 @@ async function showBackgroundShop(
   await sendText(
     env,
     interaction,
-    `🌌 **Backgrounds**\n\n🍬 **Candy Land** — 500 sparkles\n${owned ? "✅ Owned" : ""}`,
+    `ð **Backgrounds**\n\nð¬ **Candy Land** â 500 sparkles\n${owned ? "â Owned" : ""}`,
     [
       row(
         button(
           owned
-            ? "🍬 Candy Land Owned"
-            : "🍬 Buy Candy Land — 500",
+            ? "ð¬ Candy Land Owned"
+            : "ð¬ Buy Candy Land â 500",
           "buy_candyland",
           owned ? 2 : 1,
           owned
@@ -2371,7 +2474,7 @@ async function showBackgroundShop(
 
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "shop",
           2
         )
@@ -2403,13 +2506,13 @@ async function showTreeShop(
   await sendText(
     env,
     interaction,
-    `🌳 **Trees**\n\n🍭 **Cotton Candy Tree** — 1000 sparkles\n${owned ? "✅ Owned" : ""}`,
+    `ð³ **Trees**\n\nð­ **Cotton Candy Tree** â 1000 sparkles\n${owned ? "â Owned" : ""}`,
     [
       row(
         button(
           owned
-            ? "🍭 Cotton Candy Owned"
-            : "🍭 Buy Cotton Candy — 1000",
+            ? "ð­ Cotton Candy Owned"
+            : "ð­ Buy Cotton Candy â 1000",
           "buy_cotton_candy",
           owned ? 2 : 1,
           owned
@@ -2418,7 +2521,7 @@ async function showTreeShop(
 
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "shop",
           2
         )
@@ -2455,13 +2558,13 @@ async function showDecorationShop(
   await sendText(
     env,
     interaction,
-    `🎀 **Decoration Shop**\n\n🐼 **Panda Decoration** — 3000 sparkles\n${pandaOwned ? "✅ Owned" : ""}\n\n🐱 **Cat Decoration** — 1500 sparkles\n${catOwned ? "✅ Owned" : ""}`,
+    `ð **Decoration Shop**\n\nð¼ **Panda Decoration** â 3000 sparkles\n${pandaOwned ? "â Owned" : ""}\n\nð± **Cat Decoration** â 1500 sparkles\n${catOwned ? "â Owned" : ""}`,
     [
       row(
         button(
           pandaOwned
-            ? "🐼 Panda Owned"
-            : "🐼 Buy Panda — 3000",
+            ? "ð¼ Panda Owned"
+            : "ð¼ Buy Panda â 3000",
           "buy_panda",
           pandaOwned ? 2 : 1,
           pandaOwned
@@ -2469,8 +2572,8 @@ async function showDecorationShop(
 
         button(
           catOwned
-            ? "🐱 Cat Owned"
-            : "🐱 Buy Cat — 1500",
+            ? "ð± Cat Owned"
+            : "ð± Buy Cat â 1500",
           "buy_cat",
           catOwned ? 2 : 1,
           catOwned
@@ -2479,7 +2582,7 @@ async function showDecorationShop(
 
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "shop",
           2
         )
@@ -2516,13 +2619,13 @@ async function showLimitedShop(
   await sendText(
     env,
     interaction,
-    `🎃 **Limited Halloween Shop**\n\n🎃 Halloween Background — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 Pumpkin Cat — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}`,
+    `ð **Limited Halloween Shop**\n\nð Halloween Background â 150 sparkles\n${halloweenOwned ? "â Owned" : ""}\n\nð Pumpkin Cat â 250 sparkles\n${pumpkinOwned ? "â Owned" : ""}`,
     [
       row(
         button(
           halloweenOwned
-            ? "🎃 Halloween Owned"
-            : "🎃 Buy Halloween — 150",
+            ? "ð Halloween Owned"
+            : "ð Buy Halloween â 150",
           "buy_halloween",
           halloweenOwned ? 2 : 1,
           halloweenOwned
@@ -2532,8 +2635,8 @@ async function showLimitedShop(
       row(
         button(
           pumpkinOwned
-            ? "🐈 Pumpkin Cat Owned"
-            : "🐈 Buy Pumpkin Cat — 250",
+            ? "ð Pumpkin Cat Owned"
+            : "ð Buy Pumpkin Cat â 250",
           "buy_pumpkin_cat",
           pumpkinOwned ? 2 : 1,
           pumpkinOwned
@@ -2542,7 +2645,7 @@ async function showLimitedShop(
 
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "shop",
           2
         )
@@ -2558,11 +2661,11 @@ async function showSpecialShop(
   await sendText(
     env,
     interaction,
-    "🎁 **Special / Holiday Shop**\n\n✨ More special items are coming soon!",
+    "ð **Special / Holiday Shop**\n\nâ¨ More special items are coming soon!",
     [
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "shop",
           2
         )
@@ -2605,7 +2708,7 @@ async function buyItem(
     await sendText(
       env,
       interaction,
-      "❌ That item doesn't exist."
+      "â That item doesn't exist."
     );
 
     return;
@@ -2619,7 +2722,7 @@ async function buyItem(
     await sendText(
       env,
       interaction,
-      `✅ You already own ${item.name}!`
+      `â You already own ${item.name}!`
     );
 
     return;
@@ -2632,7 +2735,7 @@ async function buyItem(
     await sendText(
       env,
       interaction,
-      `❌ You need **${item.price} sparkles**, but you only have **${player.sparkles}**.`
+      `â You need **${item.price} sparkles**, but you only have **${player.sparkles}**.`
     );
 
     return;
@@ -2653,7 +2756,7 @@ async function buyItem(
   await sendText(
     env,
     interaction,
-    `🎉 You bought **${item.name}** for **${item.price} sparkles**!\n\nGo to **Customize** to equip it.`
+    `ð You bought **${item.name}** for **${item.price} sparkles**!\n\nGo to **Customize** to equip it.`
   );
 }
 
@@ -2668,21 +2771,21 @@ async function showCustomize(
   await sendText(
     env,
     interaction,
-    "🎨 **Customize Your Tree**\n\nChoose what you'd like to change:",
+    "ð¨ **Customize Your Tree**\n\nChoose what you'd like to change:",
     [
       row(
         button(
-          "🌌 Backgrounds",
+          "ð Backgrounds",
           "custom_backgrounds",
           2
         ),
         button(
-          "🌳 Trees",
+          "ð³ Trees",
           "custom_trees",
           2
         ),
         button(
-          "🎀 Decorations",
+          "ð Decorations",
           "custom_decorations",
           2
         )
@@ -2690,7 +2793,7 @@ async function showCustomize(
 
       row(
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -2718,7 +2821,7 @@ async function showCustomBackgrounds(
 
   buttons.push(
     button(
-      "💖 Pink Sky",
+      "ð Pink Sky",
       "equip_theme_cherry",
       player.equipped.theme ===
         "cherry"
@@ -2734,7 +2837,7 @@ async function showCustomBackgrounds(
   ) {
     buttons.push(
       button(
-        "🎃 Halloween",
+        "ð Halloween",
         "equip_theme_halloween",
         player.equipped.theme ===
           "halloween"
@@ -2751,7 +2854,7 @@ async function showCustomBackgrounds(
   ) {
     buttons.push(
       button(
-        "🍬 Candy Land",
+        "ð¬ Candy Land",
         "equip_theme_candyland",
         player.equipped.theme ===
           "candyland"
@@ -2768,7 +2871,7 @@ async function showCustomBackgrounds(
   ) {
     buttons.push(
       button(
-        "🎂 Birthday",
+        "ð Birthday",
         "equip_theme_stoned_birthday",
         player.equipped.theme ===
           "stoned_birthday"
@@ -2798,7 +2901,7 @@ async function showCustomBackgrounds(
   rows.push(
     row(
       button(
-        "⬅️ Back",
+        "â¬ï¸ Back",
         "customize",
         2
       )
@@ -2808,7 +2911,7 @@ async function showCustomBackgrounds(
   await sendText(
     env,
     interaction,
-    "🌌 **Background Customization**",
+    "ð **Background Customization**",
     rows
   );
 }
@@ -2830,7 +2933,7 @@ async function showCustomTrees(
 
   const buttons = [
     button(
-      "🌸 Cherry",
+      "ð¸ Cherry",
       "equip_tree_cherry",
       player.equipped.tree ===
         "cherry"
@@ -2846,7 +2949,7 @@ async function showCustomTrees(
   ) {
     buttons.push(
       button(
-        "🍭 Cotton Candy",
+        "ð­ Cotton Candy",
         "equip_tree_cotton_candy",
         player.equipped.tree ===
           "cotton_candy"
@@ -2863,7 +2966,7 @@ async function showCustomTrees(
   ) {
     buttons.push(
       button(
-        "🎂 Birthday",
+        "ð Birthday",
         "equip_tree_stoned_birthday",
         player.equipped.tree ===
           "stoned_birthday"
@@ -2876,13 +2979,13 @@ async function showCustomTrees(
   await sendText(
     env,
     interaction,
-    "🌳 **Tree Customization**",
+    "ð³ **Tree Customization**",
     [
       row(...buttons),
 
       row(
         button(
-          "⬅️ Back",
+          "â¬ï¸ Back",
           "customize",
           2
         )
@@ -2915,7 +3018,7 @@ async function showCustomDecorations(
   ) {
     buttons.push(
       button(
-        "🎃 Pumpkin Cat",
+        "ð Pumpkin Cat",
         "equip_decoration_pumpkin_cat",
         player.equipped.decoration ===
           "pumpkin_cat"
@@ -2932,7 +3035,7 @@ async function showCustomDecorations(
   ) {
     buttons.push(
       button(
-        "🎈 Stoned Balloon",
+        "ð Stoned Balloon",
         "equip_decoration_stoned_balloon",
         player.equipped.decoration ===
           "stoned_balloon"
@@ -2949,7 +3052,7 @@ async function showCustomDecorations(
   ) {
     buttons.push(
       button(
-        "🐼 Panda",
+        "ð¼ Panda",
         "equip_decoration_panda",
         player.equipped.decoration ===
           "panda"
@@ -2966,7 +3069,7 @@ async function showCustomDecorations(
   ) {
     buttons.push(
       button(
-        "🐱 Cat",
+        "ð± Cat",
         "equip_decoration_cat",
         player.equipped.decoration ===
           "cat"
@@ -2978,7 +3081,7 @@ async function showCustomDecorations(
 
   buttons.push(
     button(
-      "❌ Remove",
+      "â Remove",
       "equip_decoration_none",
       player.equipped.decoration ===
         null
@@ -3007,7 +3110,7 @@ async function showCustomDecorations(
   rows.push(
     row(
       button(
-        "⬅️ Back",
+        "â¬ï¸ Back",
         "customize",
         2
       )
@@ -3017,7 +3120,7 @@ async function showCustomDecorations(
   await sendText(
     env,
     interaction,
-    "🎀 **Decoration Customization**",
+    "ð **Decoration Customization**",
     rows
   );
 }
@@ -3061,7 +3164,7 @@ async function equipTheme(
     await sendText(
       env,
       interaction,
-      "❌ You don't own that background."
+      "â You don't own that background."
     );
 
     return;
@@ -3078,7 +3181,7 @@ async function equipTheme(
   await sendText(
     env,
     interaction,
-    "✨ Background equipped!"
+    "â¨ Background equipped!"
   );
 }
 
@@ -3116,7 +3219,7 @@ async function equipTree(
     await sendText(
       env,
       interaction,
-      "❌ You don't own that tree."
+      "â You don't own that tree."
     );
 
     return;
@@ -3133,7 +3236,7 @@ async function equipTree(
   await sendText(
     env,
     interaction,
-    "🌳 Tree equipped!"
+    "ð³ Tree equipped!"
   );
 }
 
@@ -3182,7 +3285,7 @@ async function equipDecoration(
       await sendText(
         env,
         interaction,
-        "❌ You don't own that decoration."
+        "â You don't own that decoration."
       );
 
       return;
@@ -3201,8 +3304,8 @@ async function equipDecoration(
     env,
     interaction,
     decoration === null
-      ? "🎀 Decoration removed!"
-      : "🎀 Decoration equipped!"
+      ? "ð Decoration removed!"
+      : "ð Decoration equipped!"
   );
 }
 
@@ -3271,7 +3374,7 @@ async function showLeaderboard(
     await sendText(
       env,
       interaction,
-      "🏆 Nobody is on the leaderboard yet!"
+      "ð Nobody is on the leaderboard yet!"
     );
 
     return;
@@ -3280,17 +3383,17 @@ async function showLeaderboard(
   const lines =
     top.map(
       (player, index) =>
-        `**${index + 1}.** ${getDisplayName(player)} — ⭐ ${player.sparkles} sparkles • Level ${player.level} • 🌳 ${getTreeHeight(player)} ft`
+        `**${index + 1}.** ${getDisplayName(player)} â â­ ${player.sparkles} sparkles â¢ Level ${player.level} â¢ ð³ ${getTreeHeight(player)} ft`
     );
 
   await sendText(
     env,
     interaction,
-    `🏆 **Werewives Tree Leaderboard**\n\n${lines.join("\n")}`,
+    `ð **Werewives Tree Leaderboard**\n\n${lines.join("\n")}`,
     [
       row(
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -3320,34 +3423,34 @@ async function showInventory(
 
   const names = {
     pink_sky_background:
-      "💖 Pink Sky Background",
+      "ð Pink Sky Background",
 
     candyland_background:
-      "🍬 Candy Land Background",
+      "ð¬ Candy Land Background",
 
     halloween_background:
-      "🎃 Halloween Background",
+      "ð Halloween Background",
 
     cotton_candy_tree:
-      "🍭 Cotton Candy Tree",
+      "ð­ Cotton Candy Tree",
 
     pumpkin_cat_decoration:
-      "🎃 Pumpkin Cat",
+      "ð Pumpkin Cat",
 
     stoned_birthday_tree:
-      "🎂 Birthday Tree",
+      "ð Birthday Tree",
 
     stoned_balloon_decoration:
-      "🎈 Birthday Balloon",
+      "ð Birthday Balloon",
 
     stoned_birthday_background:
-      "🎂 Birthday Background",
+      "ð Birthday Background",
 
     panda_decoration:
-      "🐼 Panda Decoration",
+      "ð¼ Panda Decoration",
 
     cat_decoration:
-      "🐱 Cat Decoration"
+      "ð± Cat Decoration"
   };
 
   const items =
@@ -3360,24 +3463,24 @@ async function showInventory(
   await sendText(
     env,
     interaction,
-    `🎒 **Your Inventory**\n\n${
+    `ð **Your Inventory**\n\n${
       items.length
         ? items
             .map(
-              x => `• ${x}`
+              x => `â¢ ${x}`
             )
             .join("\n")
         : "Empty!"
-    }\n\n⭐ Sparkles: **${player.sparkles}**`,
+    }\n\nâ­ Sparkles: **${player.sparkles}**`,
     [
       row(
         button(
-          "🎨 Customize",
+          "ð¨ Customize",
           "customize",
           2
         ),
         button(
-          "🌳 Back to Tree",
+          "ð³ Back to Tree",
           "back_tree",
           2
         )
@@ -3389,97 +3492,6 @@ async function showInventory(
 /* =========================================================
    BIRTHDAY
 ========================================================= */
-
-async function handleBirthday(
-  env,
-  interaction,
-  pin = ""
-) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  if (!user) return;
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
-  if (
-    String(pin)
-      .trim()
-      .toUpperCase() !==
-    BIRTHDAY_PIN
-  ) {
-    await sendText(
-      env,
-      interaction,
-      "🎂 **Werewives Birthday Event**\n\nThe birthday surprise is locked! 🔐\n\nUse the correct PIN to unlock the birthday items."
-    );
-
-    return;
-  }
-
-  player.birthdayUnlocked =
-    true;
-
-  const birthdayItems = [
-    "stoned_birthday_tree",
-    "stoned_balloon_decoration",
-    "stoned_birthday_background"
-  ];
-
-  for (
-    const item of
-      birthdayItems
-  ) {
-    if (
-      !player.inventory.includes(
-        item
-      )
-    ) {
-      player.inventory.push(
-        item
-      );
-    }
-  }
-
-  await savePlayer(
-    env,
-    player
-  );
-
-  await sendText(
-    env,
-    interaction,
-    "🎂💖 **HAPPY WEREWIVES BIRTHDAY!** 💖🎂\n\n🔓 The birthday collection has been unlocked!\n\n🌳 Birthday Tree\n🎈 Stoned Balloon\n🎂 Birthday Background\n\nAnd there's a **3-hour Birthday Gift Hunt** starting at **4 PM Eastern** on September 10th! 🎁",
-    [
-      row(
-        button(
-          "🎁 Open Birthday Gift",
-          "open_birthday_gift",
-          1
-        )
-      ),
-
-      row(
-        button(
-          "🎨 Customize",
-          "customize",
-          2
-        ),
-        button(
-          "🌳 Back to Tree",
-          "back_tree",
-          2
-        )
-      )
-    ]
-  );
-}
 
 async function openBirthdayGift(
   env,
@@ -3504,7 +3516,7 @@ async function openBirthdayGift(
     await sendText(
       env,
       interaction,
-      "🎁 You need to unlock the birthday event first!"
+      "ð You need to unlock the birthday event first!"
     );
 
     return;
@@ -3516,7 +3528,7 @@ async function openBirthdayGift(
     await sendText(
       env,
       interaction,
-      "🎁 You already opened your birthday present! 💖"
+      "ð You already opened your birthday present! ð"
     );
 
     return;
@@ -3536,7 +3548,7 @@ async function openBirthdayGift(
   await sendText(
     env,
     interaction,
-    `🎁🎉 **BIRTHDAY PRESENT OPENED!**\n\nYou received **+${STONED_GIFT_SPARKLES} sparkles!** ✨💖`
+    `ðð **BIRTHDAY PRESENT OPENED!**\n\nYou received **+${STONED_GIFT_SPARKLES} sparkles!** â¨ð`
   );
 }
 
@@ -3548,7 +3560,7 @@ function huntGiftButton(id) {
   return [
     row(
       button(
-        "🎁 Claim Present!",
+        "ð Claim Present!",
         `claim_hunt_gift:${id}`,
         1
       )
@@ -3593,7 +3605,7 @@ async function claimHuntGift(
     await sendText(
       env,
       interaction,
-      "❌ This gift can only be claimed inside a server."
+      "â This gift can only be claimed inside a server."
     );
 
     return;
@@ -3618,7 +3630,7 @@ async function claimHuntGift(
     await sendText(
       env,
       interaction,
-      "🎁 That present has already been claimed!"
+      "ð That present has already been claimed!"
     );
 
     return;
@@ -3640,7 +3652,7 @@ async function claimHuntGift(
     await sendText(
       env,
       interaction,
-      "🎁 The birthday hunt is over!"
+      "ð The birthday hunt is over!"
     );
 
     return;
@@ -3652,7 +3664,7 @@ async function claimHuntGift(
     await sendText(
       env,
       interaction,
-      "🎁 Too late! Someone else got it!"
+      "ð Too late! Someone else got it!"
     );
 
     return;
@@ -3686,7 +3698,7 @@ async function claimHuntGift(
     await sendText(
       env,
       interaction,
-      "🎁💀 **YOU GOT THE PRESENT!**\n\n...Oh.\n\nIt was a prank. 😭🦝"
+      "ðð **YOU GOT THE PRESENT!**\n\n...Oh.\n\nIt was a prank. ð­ð¦"
     );
 
     return;
@@ -3714,7 +3726,7 @@ async function claimHuntGift(
   await sendText(
     env,
     interaction,
-    `🎁✨ **YOU GOT IT!**\n\nYou received **+${gift.amount} sparkles!** 💖`
+    `ðâ¨ **YOU GOT IT!**\n\nYou received **+${gift.amount} sparkles!** ð`
   );
 }
 
@@ -3729,7 +3741,7 @@ async function announceBirthdayHunt(
     );
 
   const message =
-    "🎂🎉 **THE WEREWIVES BIRTHDAY GIFT HUNT HAS BEGUN!** 🎉🎂\n\nFor the next **3 hours**, surprise presents will randomly appear around the server! 🎁\n\nWhen you see one, hit **🎁 Claim Present!**\n\nSome presents contain sparkles...\nSome may be pranks. 👀🦝";
+    "ðð **THE WEREWIVES BIRTHDAY GIFT HUNT HAS BEGUN!** ðð\n\nFor the next **3 hours**, surprise presents will randomly appear around the server! ð\n\nWhen you see one, hit **ð Claim Present!**\n\nSome presents contain sparkles...\nSome may be pranks. ðð¦";
 
   if (
     state.announcementChannelId
@@ -3823,8 +3835,8 @@ async function releaseHuntGift(
 
   const message =
     gift.prank
-      ? "🎁 **A mystery birthday present appeared!**\n\nQUICK! Someone claim it! 👀"
-      : "🎁 **A mystery birthday present appeared!**\n\nQUICK! Someone claim it before another Werewife does! 👀✨";
+      ? "ð **A mystery birthday present appeared!**\n\nQUICK! Someone claim it! ð"
+      : "ð **A mystery birthday present appeared!**\n\nQUICK! Someone claim it before another Werewife does! ðâ¨";
 
   await sendChannelMessage(
     env,
@@ -4006,7 +4018,7 @@ async function processBirthdayEvent(
           env,
           currentState
             .announcementChannelId,
-          "🎂💖 **The Werewives Birthday Gift Hunt has ended!**\n\nThank you for playing! ✨🦝"
+          "ðð **The Werewives Birthday Gift Hunt has ended!**\n\nThank you for playing! â¨ð¦"
         );
       }
 
@@ -4041,7 +4053,7 @@ async function handleAnnouncements(
     await sendText(
       env,
       interaction,
-      "❌ This command can only be used inside a server."
+      "â This command can only be used inside a server."
     );
 
     return;
@@ -4071,7 +4083,7 @@ async function handleAnnouncements(
     await sendText(
       env,
       interaction,
-      "❌ You need Administrator or Manage Server permission to set the announcement channel."
+      "â You need Administrator or Manage Server permission to set the announcement channel."
     );
 
     return;
@@ -4081,7 +4093,7 @@ async function handleAnnouncements(
     await sendText(
       env,
       interaction,
-      "❌ Please choose a channel."
+      "â Please choose a channel."
     );
 
     return;
@@ -4097,7 +4109,7 @@ async function handleAnnouncements(
     await sendText(
       env,
       interaction,
-      "❌ I couldn't access that channel."
+      "â I couldn't access that channel."
     );
 
     return;
@@ -4114,7 +4126,7 @@ async function handleAnnouncements(
     await sendText(
       env,
       interaction,
-      "❌ Please choose a normal text channel from this server."
+      "â Please choose a normal text channel from this server."
     );
 
     return;
@@ -4143,10 +4155,8 @@ async function handleAnnouncements(
   ) {
     state.nextChaosAt =
       Date.now() +
-      randomInt(
-        CHAOS_MIN_DELAY,
-        CHAOS_MAX_DELAY
-      );
+      CHAOS_INTERVAL;
+    state.chaosScheduleVersion = 1;
   }
 
   await saveGuildState(
@@ -4158,7 +4168,7 @@ async function handleAnnouncements(
   await sendText(
     env,
     interaction,
-    `📢 Announcement channel set to **#${channel.name}**!\n\nWerewives chaos events and birthday hunt announcements will use this channel. 💖`
+    `ð¢ Announcement channel set to **#${channel.name}**!\n\nWerewives chaos events and birthday hunt announcements will use this channel. ð`
   );
 }
 
@@ -4227,7 +4237,7 @@ async function handleTree(
       interaction,
       {
         content:
-          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
+          `ð³ Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
         components:
           treeButtons()
       }
@@ -4530,7 +4540,7 @@ async function handleComponent(
   await sendText(
     env,
     interaction,
-    "❌ Unknown button."
+    "â Unknown button."
   );
 }
 
@@ -4655,21 +4665,6 @@ async function handleCommand(
   }
 
   if (
-    name === "birthday"
-  ) {
-    await handleBirthday(
-      env,
-      interaction,
-      getOption(
-        interaction,
-        "pin"
-      )
-    );
-
-    return;
-  }
-
-  if (
     name === "announcements"
   ) {
     await handleAnnouncements(
@@ -4719,7 +4714,7 @@ async function handleCommand(
       await sendText(
         env,
         interaction,
-        "❌ Tree names must be between 1 and 40 characters."
+        "â Tree names must be between 1 and 40 characters."
       );
 
       return;
@@ -4736,7 +4731,7 @@ async function handleCommand(
     await sendText(
       env,
       interaction,
-      `🌳 Your tree is now named **${player.treeName}**!`
+      `ð³ Your tree is now named **${player.treeName}**!`
     );
 
     return;
@@ -4760,7 +4755,7 @@ async function handleCommand(
       await sendText(
         env,
         interaction,
-        "❌ Owner only."
+        "â Owner only."
       );
 
       return;
@@ -4790,7 +4785,7 @@ async function handleCommand(
       await sendText(
         env,
         interaction,
-        "❌ Invalid user or amount."
+        "â Invalid user or amount."
       );
 
       return;
@@ -4813,7 +4808,7 @@ async function handleCommand(
     await sendText(
       env,
       interaction,
-      `✨ Gave **${Math.floor(amount)} sparkles** to <@${target}>!`
+      `â¨ Gave **${Math.floor(amount)} sparkles** to <@${target}>!`
     );
 
     return;
@@ -4822,7 +4817,7 @@ async function handleCommand(
   await sendText(
     env,
     interaction,
-    "❌ Unknown command."
+    "â Unknown command."
   );
 }
 
@@ -4905,22 +4900,6 @@ const COMMANDS = [
     name: "leaderboard",
     description:
       "View the tree leaderboard"
-  },
-
-  {
-    name: "birthday",
-    description:
-      "Unlock the Werewives birthday event",
-
-    options: [
-      {
-        type: 3,
-        name: "pin",
-        description:
-          "Birthday PIN",
-        required: false
-      }
-    ]
   },
 
   {
@@ -5122,7 +5101,7 @@ export default {
       url.pathname === "/"
     ) {
       return new Response(
-        "Werewives Tree Bot is alive! 🌳💖",
+        "Werewives Tree Bot is alive! ð³ð",
         {
           status: 200
         }
@@ -5254,7 +5233,7 @@ export default {
           interaction,
           {
             content:
-              `❌ Something went wrong: ${error?.message || "Unknown error"}`,
+              `â Something went wrong: ${error?.message || "Unknown error"}`,
             components:
               treeButtons()
           }
@@ -5264,7 +5243,7 @@ export default {
           await sendText(
             env,
             interaction,
-            `❌ Something went wrong: ${error?.message || "Unknown error"}`
+            `â Something went wrong: ${error?.message || "Unknown error"}`
           );
         } catch {}
       }
@@ -5282,10 +5261,10 @@ export default {
    SCHEDULED TASKS
 
    Cloudflare cron should be configured separately
-   in Cloudflare Worker Settings → Triggers → Cron Triggers.
+   in Cloudflare Worker Settings â Triggers â Cron Triggers.
 
    Every 5 minutes we check:
-   - Random chaos events
+   - Chaos events every 15 minutes
    - Birthday hunt
 ======================================================= */
 
