@@ -5278,16 +5278,16 @@ export default {
     }
   },
 
-  /* =======================================================
-     SCHEDULED TASKS
+ /* =======================================================
+   SCHEDULED TASKS
 
-     Cloudflare cron should still be:
-     */5 * * * *
+   Cloudflare cron should be configured separately
+   in Cloudflare Worker Settings → Triggers → Cron Triggers.
 
-     Every 5 minutes we check:
-     - Random chaos events
-     - Birthday hunt
-  ======================================================= */
+   Every 5 minutes we check:
+   - Random chaos events
+   - Birthday hunt
+======================================================= */
 
   async scheduled(
     event,
