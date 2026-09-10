@@ -8249,7 +8249,7 @@ async function handleHeistComponent(
       guildId
     );
 
-  const game =
+  let game =
     state.heist;
 
   if (
