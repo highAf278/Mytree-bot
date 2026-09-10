@@ -14,7 +14,7 @@ import puppeteer from "@cloudflare/puppeteer";
 const EXP_PER_WATER = 10;
 
 const SPARKLE_CHANCE = 0.75;
-const SPARKLE_LIFETIME = 5 * 60 * 1000;
+const SPARKLE_LIFETIME = 20 * 60 * 1000;
 
 const MIN_SPARKLES_PER_SPAWN = 2;
 const MAX_SPARKLES_PER_SPAWN = 4;
@@ -779,6 +779,41 @@ async function sendText(
   return response;
 }
 
+async function sendPublicText(
+  env,
+  interaction,
+  content,
+  components = []
+) {
+  const response =
+    await fetch(
+      `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          type: 4,
+          data: {
+            content,
+            components
+          }
+        })
+      }
+    );
+
+  if (!response.ok) {
+    console.error(
+      "sendPublicText failed:",
+      response.status,
+      await response.text()
+    );
+  }
+
+  return response;
+}
+
 async function editOriginalResponse(
   env,
   interaction,
@@ -875,19 +910,6 @@ async function sendTree(
       env,
       player
     );
-
-  /*
-    Browser Rendering can temporarily return 429.
-    The player's action has already been saved, so do not
-    turn that temporary image failure into a failed Discord action.
-  */
-  if (!image) {
-    return updateTreeMessage(
-      env,
-      interaction,
-      player
-    );
-  }
 
   const stats =
     buildTreeStats(player);
@@ -1199,11 +1221,11 @@ async function renderTree(
               top:${top}%;
               transform:translate(-50%,-50%);
               font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-              font-size:34px;
-              animation: sparkleFall ${randomInt(2200, 4200)}ms ease-in-out infinite;
+              font-size:42px;
               line-height:1;
-              z-index:5;
-              filter:drop-shadow(0 0 8px white);
+              z-index:10;
+              opacity:1;
+              filter:drop-shadow(0 0 6px white) drop-shadow(0 0 14px white) drop-shadow(0 0 24px #fff);
               user-select:none;
             "
           >${emoji}</div>
@@ -1285,9 +1307,8 @@ async function renderTree(
           }
 
           @keyframes sparkleFall {
-            0% { transform: translate(-50%, -30%) rotate(0deg); opacity: 0.35; }
-            35% { opacity: 1; }
-            100% { transform: translate(-50%, 75px) rotate(18deg); opacity: 0.2; }
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
           }
 
           #tree {
@@ -1378,10 +1399,9 @@ async function renderTree(
         "rate limit"
       )
     ) {
-      console.warn(
-        "Browser Rendering is rate-limited; updating the tree without an image."
+      throw new Error(
+        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
       );
-      return null;
     }
 
     throw error;
@@ -1994,37 +2014,31 @@ async function handleWater(
     );
 
     /*
-      Only render when the picture actually changed.
+      Watering must still succeed even when Browser Rendering
+      is temporarily rate-limited. The saved state is enough
+      for the interaction response, so do not render here.
     */
-
-    if (
-      spawned > 0 ||
-      cleaned > 0
-    ) {
-      await sendTree(
-        env,
-        interaction,
-        player
-      );
-    } else {
-      await updateTreeMessage(
-        env,
-        interaction,
-        player
-      );
-    }
+    await updateTreeMessage(
+      env,
+      interaction,
+      player
+    );
   } catch (error) {
     console.error(
       "Water error:",
       error
     );
 
+    const message =
+      error?.message ||
+      "Unknown error";
+
     await editOriginalResponse(
       env,
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
+          `❌ Water couldn't be completed.\\n\\n${message}`,
         components:
           treeButtons()
       }
@@ -2148,7 +2162,7 @@ async function handleCatch(
       disappeared, so the image MUST be rendered.
     */
 
-    await sendTree(
+    await updateTreeMessage(
       env,
       interaction,
       player
@@ -4674,7 +4688,7 @@ async function handleComponent(
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
-const HEIST_NIGHT_DURATION = 2 * 60 * 1000;
+const HEIST_NIGHT_DURATION = 60 * 1000;
 const HEIST_VOTE_DURATION = 3 * 60 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
@@ -5766,6 +5780,67 @@ function heistActionWasSubmitted(
   );
 }
 
+async function sendHeistDM(
+  env,
+  userId,
+  content
+) {
+  try {
+    const dmResponse =
+      await discordRequest(
+        env,
+        "/users/@me/channels",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            recipients: [userId]
+          })
+        }
+      );
+
+    if (!dmResponse.ok) {
+      console.error(
+        "Heist DM channel failed:",
+        dmResponse.status,
+        await dmResponse.text()
+      );
+      return false;
+    }
+
+    const dmChannel =
+      await dmResponse.json();
+
+    const messageResponse =
+      await discordRequest(
+        env,
+        `/channels/${dmChannel.id}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content
+          })
+        }
+      );
+
+    if (!messageResponse.ok) {
+      console.error(
+        "Heist DM message failed:",
+        messageResponse.status,
+        await messageResponse.text()
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Heist DM error:",
+      error
+    );
+    return false;
+  }
+}
+
 async function sendHeistPrivateResults(
   env,
   game
@@ -5776,22 +5851,14 @@ async function sendHeistPrivateResults(
 
     if (!result) continue;
 
-    if (
-      player.id === game.hostId &&
-      false
-    ) {
-      continue;
-    }
-
-    const fakeInteraction = null;
-
-    /*
-      Results are also exposed through /heist status.
-      This avoids requiring DMs to be enabled.
-    */
-
     player.lastPrivateResult =
       result;
+
+    await sendHeistDM(
+      env,
+      player.id,
+      `☀️ **DAWN — YOUR SECRET HEIST RESULT**\n\n${result}\n\nYour result is private. Do not reveal it unless you want to.`
+    );
   }
 }
 
@@ -7049,7 +7116,7 @@ async function handleHeistCreate(
     state
   );
 
-  await sendText(
+  await sendPublicText(
     env,
     interaction,
     `🦝💰 **RACCOON HEIST LOBBY CREATED!**\n\nPlayers: **1/${HEIST_MAX_PLAYERS}**\n\n${heistRoleListText(game)}\n\nThe host is **${heistDisplayName(game.players[user.id])}**.\n\nUse the buttons below or \`/heist join\` to join.`,
@@ -8872,8 +8939,9 @@ export default {
    Cloudflare cron should be configured separately
    in Cloudflare Worker Settings → Triggers → Cron Triggers.
 
-   Every 5 minutes we check:
-   - Chaos events every 5 minutes
+   Every minute we check:
+   - Raccoon Heist timers (60-second Night timeout)
+   - Chaos events (their own 5-minute schedule)
    - Birthday hunt
 ======================================================= */
 
