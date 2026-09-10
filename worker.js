@@ -280,8 +280,7 @@ function getUserFromInteraction(interaction) {
 }
 
 function updatePlayerIdentity(player, interaction) {
-  const user =
-    getUserFromInteraction(interaction);
+  const user = getUserFromInteraction(interaction);
 
   if (!user) return;
 
@@ -304,10 +303,9 @@ async function getGuildState(env, guildId) {
     };
   }
 
-  const raw =
-    await env.TREE_DATA.get(
-      `guild:${guildId}`
-    );
+  const raw = await env.TREE_DATA.get(
+    `guild:${guildId}`
+  );
 
   if (!raw) {
     return {
@@ -333,28 +331,20 @@ async function getGuildState(env, guildId) {
   }
 }
 
-async function saveGuildState(
-  env,
-  guildId,
-  state
-) {
+async function saveGuildState(env, guildId, state) {
   await env.TREE_DATA.put(
     `guild:${guildId}`,
     JSON.stringify(state)
   );
 }
 
-async function rememberGuild(
-  env,
-  guildId
-) {
+async function rememberGuild(env, guildId) {
   if (!guildId) return;
 
-  const state =
-    await getGuildState(
-      env,
-      guildId
-    );
+  const state = await getGuildState(
+    env,
+    guildId
+  );
 
   if (!state.createdAt) {
     state.createdAt = Date.now();
@@ -386,12 +376,9 @@ function applyLevelUps(player) {
   let leveled = false;
 
   while (
-    player.exp >=
-    xpNeeded(player.level)
+    player.exp >= xpNeeded(player.level)
   ) {
-    player.exp -=
-      xpNeeded(player.level);
-
+    player.exp -= xpNeeded(player.level);
     player.level++;
     leveled = true;
   }
@@ -411,9 +398,7 @@ function getLevelReward(level) {
   return rewards[level] || 0;
 }
 
-function claimAvailableLevelRewards(
-  player
-) {
+function claimAvailableLevelRewards(player) {
   const rewardLevels = [
     5,
     10,
@@ -427,21 +412,16 @@ function claimAvailableLevelRewards(
   for (const level of rewardLevels) {
     if (
       player.level >= level &&
-      !player.claimedLevelRewards.includes(
-        level
-      )
+      !player.claimedLevelRewards.includes(level)
     ) {
-      const reward =
-        getLevelReward(level);
+      const reward = getLevelReward(level);
 
       if (reward > 0) {
         player.sparkles += reward;
         total += reward;
       }
 
-      player.claimedLevelRewards.push(
-        level
-      );
+      player.claimedLevelRewards.push(level);
     }
   }
 
@@ -459,8 +439,7 @@ function getEasternDateParts(
     new Intl.DateTimeFormat(
       "en-US",
       {
-        timeZone:
-          "America/New_York",
+        timeZone: "America/New_York",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -475,8 +454,7 @@ function getEasternDateParts(
 
   for (const part of parts) {
     if (part.type !== "literal") {
-      result[part.type] =
-        part.value;
+      result[part.type] = part.value;
     }
   }
 
@@ -493,8 +471,7 @@ function getEasternDateParts(
 function easternDateKey(
   date = new Date()
 ) {
-  const p =
-    getEasternDateParts(date);
+  const p = getEasternDateParts(date);
 
   return `${p.year}-${String(
     p.month
@@ -506,8 +483,7 @@ function easternDateKey(
 function isBirthdayDate(
   date = new Date()
 ) {
-  const p =
-    getEasternDateParts(date);
+  const p = getEasternDateParts(date);
 
   return (
     p.year === 2026 &&
@@ -525,10 +501,9 @@ async function discordRequest(
   path,
   options = {}
 ) {
-  const headers =
-    new Headers(
-      options.headers || {}
-    );
+  const headers = new Headers(
+    options.headers || {}
+  );
 
   headers.set(
     "Authorization",
@@ -627,8 +602,7 @@ async function acknowledge(
       {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/json"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           type: 5
@@ -657,8 +631,7 @@ async function sendText(
       {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/json"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           type: 4,
@@ -692,8 +665,7 @@ async function editOriginalResponse(
     {
       method: "PATCH",
       headers: {
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify(data)
     }
@@ -705,6 +677,15 @@ async function editOriginalResponse(
    IMPORTANT:
    STATS ARE HERE — NOT INSIDE THE IMAGE.
 ========================================================= */
+
+function buildTreeStats(player) {
+  return (
+    `🌳 **${player.treeName || "Cherry Blossom"}**\n` +
+    `⭐ Level: **${player.level}** • ` +
+    `✨ Sparkles: **${player.sparkles}** • ` +
+    `📏 Height: **${getTreeHeight(player)} ft**`
+  );
+}
 
 async function sendTree(
   env,
@@ -718,10 +699,7 @@ async function sendTree(
     );
 
   const stats =
-    `🌳 **${player.treeName || "Cherry Blossom"}**\n` +
-    `⭐ Level: **${player.level}** • ` +
-    `✨ Sparkles: **${player.sparkles}** • ` +
-    `📏 Height: **${getTreeHeight(player)} ft**`;
+    buildTreeStats(player);
 
   const content =
     player.sceneMessage
@@ -777,6 +755,53 @@ async function sendTree(
 
     throw new Error(
       `Discord tree update failed (${response.status})`
+    );
+  }
+
+  return response;
+}
+
+/* =========================================================
+   UPDATE TREE MESSAGE WITHOUT RENDERING
+   THIS IS THE IMPORTANT 429 OPTIMIZATION.
+========================================================= */
+
+async function updateTreeMessage(
+  env,
+  interaction,
+  player
+) {
+  const stats =
+    buildTreeStats(player);
+
+  const content =
+    player.sceneMessage
+      ? `${stats}\n\n${player.sceneMessage}`
+      : stats;
+
+  const response =
+    await editOriginalResponse(
+      env,
+      interaction,
+      {
+        content,
+        components:
+          treeButtons()
+      }
+    );
+
+  if (!response.ok) {
+    const text =
+      await response.text();
+
+    console.error(
+      "updateTreeMessage failed:",
+      response.status,
+      text
+    );
+
+    throw new Error(
+      `Discord tree message update failed (${response.status})`
     );
   }
 
@@ -922,12 +947,20 @@ async function renderTree(
   env,
   player
 ) {
-  const browser =
-    await puppeteer.launch(
-      env.BROWSER
-    );
+  let browser;
 
   try {
+    /*
+      ONE browser session per actual render.
+      Watering no longer renders unless the image
+      actually needs to change.
+    */
+
+    browser =
+      await puppeteer.launch(
+        env.BROWSER
+      );
+
     const page =
       await browser.newPage();
 
@@ -998,33 +1031,41 @@ async function renderTree(
       })
       .join("");
 
-    const decorationHTML =
-      decoration
-        ? `
-          <img
-            src="${decoration}"
-            style="
-              position:absolute;
-              left:20%;
-              top:78%;
-              transform:translate(-50%,-50%);
-              width:24%;
-              height:24%;
-              object-fit:contain;
-              z-index:4;
-            "
-          />
-        `
-        : "";
-
     /*
-      IMPORTANT:
-      There is deliberately NO title,
-      NO stats box, NO player name,
-      NO level,
-      NO sparkle amount,
-      and NO height text in this HTML.
+      Birthday balloon gets a MUCH larger canvas.
+      Other decorations stay around 190px.
     */
+
+    let decorationHTML = "";
+
+    if (
+      decoration
+    ) {
+      const isBalloon =
+        player.equipped?.decoration ===
+        "stoned_balloon";
+
+      const decorationSize =
+        isBalloon
+          ? "300px"
+          : "190px";
+
+      decorationHTML = `
+        <img
+          src="${decoration}"
+          style="
+            position:absolute;
+            left:20%;
+            top:78%;
+            transform:translate(-50%,-50%);
+            width:${decorationSize};
+            height:${decorationSize};
+            object-fit:contain;
+            z-index:4;
+          "
+        />
+      `;
+    }
 
     const html = `
       <!DOCTYPE html>
@@ -1102,10 +1143,16 @@ async function renderTree(
       </html>
     `;
 
+    /*
+      "load" is intentionally used instead of
+      "networkidle0" to avoid waiting for an
+      unnecessary network-idle period.
+    */
+
     await page.setContent(
       html,
       {
-        waitUntil: "networkidle0"
+        waitUntil: "load"
       }
     );
 
@@ -1139,21 +1186,44 @@ async function renderTree(
       }
     );
 
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          500
-        )
-    );
-
     return await page.screenshot(
       {
         type: "png"
       }
     );
+  } catch (error) {
+    const message =
+      error?.message ||
+      String(error);
+
+    /*
+      Make the Cloudflare 429 error easier
+      to understand in Discord logs.
+    */
+
+    if (
+      message.includes("429") ||
+      message.toLowerCase().includes(
+        "rate limit"
+      )
+    ) {
+      throw new Error(
+        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
+      );
+    }
+
+    throw error;
   } finally {
-    await browser.close();
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error(
+          "Browser close error:",
+          closeError
+        );
+      }
+    }
   }
 }
 
@@ -1189,6 +1259,12 @@ function cleanSparkles(player) {
   const now =
     Date.now();
 
+  const before =
+    (
+      player.sparklesOnTree ||
+      []
+    ).length;
+
   player.sparklesOnTree =
     (
       player.sparklesOnTree ||
@@ -1206,6 +1282,11 @@ function cleanSparkles(player) {
         );
       }
     );
+
+  const after =
+    player.sparklesOnTree.length;
+
+  return before - after;
 }
 
 function randomInt(min, max) {
@@ -1269,8 +1350,7 @@ function maybeSpawnSparkles(
   for (
     let i = 0;
     i < amount &&
-    player.sparklesOnTree
-      .length <
+    player.sparklesOnTree.length <
       MAX_ACTIVE_SPARKLES;
     i++
   ) {
@@ -1459,6 +1539,8 @@ async function listAllPlayerKeys(
 
 /* =========================================================
    WATER
+   IMPORTANT:
+   DO NOT RENDER UNLESS THE IMAGE CHANGED.
 ========================================================= */
 
 async function handleWater(
@@ -1477,135 +1559,185 @@ async function handleWater(
 
   if (!user) return;
 
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
-  updatePlayerIdentity(
-    player,
-    interaction
-  );
-
-  const now =
-    Date.now();
-
-  if (
-    player.lastWater &&
-    now - player.lastWater <
-      WATER_COOLDOWN
-  ) {
-    const remaining =
-      WATER_COOLDOWN -
-      (now - player.lastWater);
-
-    const minutes =
-      Math.ceil(
-        remaining / 60000
+  try {
+    const player =
+      await getPlayer(
+        env,
+        user.id
       );
 
+    updatePlayerIdentity(
+      player,
+      interaction
+    );
+
+    const now =
+      Date.now();
+
+    /*
+      COOLDOWN:
+      No image change is necessary,
+      so DO NOT launch Browser Rendering.
+    */
+
+    if (
+      player.lastWater &&
+      now - player.lastWater <
+        WATER_COOLDOWN
+    ) {
+      const remaining =
+        WATER_COOLDOWN -
+        (now - player.lastWater);
+
+      const minutes =
+        Math.ceil(
+          remaining / 60000
+        );
+
+      player.sceneMessage =
+        `💧 Your tree needs a little time to absorb that water! Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+
+      await savePlayer(
+        env,
+        player
+      );
+
+      await updateTreeMessage(
+        env,
+        interaction,
+        player
+      );
+
+      return;
+    }
+
+    player.lastWater =
+      now;
+
+    player.exp +=
+      EXP_PER_WATER;
+
+    const oldLevel =
+      player.level;
+
+    applyLevelUps(
+      player
+    );
+
+    const levelReward =
+      claimAvailableLevelRewards(
+        player
+      );
+
+    /*
+      If old sparkles expired, the image has changed
+      even if no new sparkles appear.
+    */
+
+    const cleaned =
+      cleanSparkles(
+        player
+      );
+
+    const spawned =
+      maybeSpawnSparkles(
+        player
+      );
+
+    const chaosMessage =
+      await maybeChaosEvent(
+        env,
+        interaction,
+        player
+      );
+
+    const parts = [
+      `💧 You watered your tree! +${EXP_PER_WATER} EXP.`
+    ];
+
+    if (
+      player.level >
+      oldLevel
+    ) {
+      parts.push(
+        `🎉 Your tree reached **Level ${player.level}**!`
+      );
+    }
+
+    if (
+      levelReward > 0
+    ) {
+      parts.push(
+        `🎁 Level rewards: +${levelReward} sparkles!`
+      );
+    }
+
+    if (
+      spawned > 0
+    ) {
+      parts.push(
+        `✨ ${spawned} sparkles appeared on your tree!`
+      );
+    }
+
+    if (
+      chaosMessage
+    ) {
+      parts.push(
+        chaosMessage
+      );
+    }
+
     player.sceneMessage =
-      `💧 Your tree needs a little time to absorb that water! Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+      parts.join("\n");
 
     await savePlayer(
       env,
       player
     );
 
-    await sendTree(
+    /*
+      Only launch Browser Rendering if the visual
+      tree actually changed.
+
+      - New sparkles = render
+      - Expired sparkles disappeared = render
+      - Otherwise = just update Discord text
+    */
+
+    if (
+      spawned > 0 ||
+      cleaned > 0
+    ) {
+      await sendTree(
+        env,
+        interaction,
+        player
+      );
+    } else {
+      await updateTreeMessage(
+        env,
+        interaction,
+        player
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Water error:",
+      error
+    );
+
+    await editOriginalResponse(
       env,
       interaction,
-      player
-    );
-
-    return;
-  }
-
-  player.lastWater =
-    now;
-
-  player.exp +=
-    EXP_PER_WATER;
-
-  const oldLevel =
-    player.level;
-
-  applyLevelUps(
-    player
-  );
-
-  const levelReward =
-    claimAvailableLevelRewards(
-      player
-    );
-
-  cleanSparkles(
-    player
-  );
-
-  const spawned =
-    maybeSpawnSparkles(
-      player
-    );
-
-  const chaosMessage =
-    await maybeChaosEvent(
-      env,
-      interaction,
-      player
-    );
-
-  const parts = [
-    `💧 You watered your tree! +${EXP_PER_WATER} EXP.`
-  ];
-
-  if (
-    player.level >
-    oldLevel
-  ) {
-    parts.push(
-      `🎉 Your tree reached **Level ${player.level}**!`
+      {
+        content:
+          `❌ Water couldn't be completed.\n\n${error?.message || "Unknown error"}`,
+        components:
+          treeButtons()
+      }
     );
   }
-
-  if (
-    levelReward > 0
-  ) {
-    parts.push(
-      `🎁 Level rewards: +${levelReward} sparkles!`
-    );
-  }
-
-  if (
-    spawned > 0
-  ) {
-    parts.push(
-      `✨ ${spawned} sparkles appeared on your tree!`
-    );
-  }
-
-  if (
-    chaosMessage
-  ) {
-    parts.push(
-      chaosMessage
-    );
-  }
-
-  player.sceneMessage =
-    parts.join("\n");
-
-  await savePlayer(
-    env,
-    player
-  );
-
-  await sendTree(
-    env,
-    interaction,
-    player
-  );
 }
 
 /* =========================================================
@@ -1646,11 +1778,6 @@ async function handleCatch(
       player
     );
 
-    /*
-      If there are no active sparkles,
-      tell the user directly.
-    */
-
     if (
       !player.sparklesOnTree ||
       !player.sparklesOnTree.length
@@ -1663,6 +1790,11 @@ async function handleCatch(
         player
       );
 
+      /*
+        The image might contain expired sparkles,
+        so we still render here.
+      */
+
       await sendTree(
         env,
         interaction,
@@ -1671,11 +1803,6 @@ async function handleCatch(
 
       return;
     }
-
-    /*
-      Catch every currently visible sparkle.
-      Each sparkle has its own saved value.
-    */
 
     let total = 0;
     let caught = 0;
@@ -1701,11 +1828,6 @@ async function handleCatch(
       caught++;
     }
 
-    /*
-      Remove the sparkles from the tree
-      ONLY after calculating their reward.
-    */
-
     player.sparklesOnTree =
       [];
 
@@ -1721,10 +1843,8 @@ async function handleCatch(
     );
 
     /*
-      Re-render the tree.
-      The sparkles disappear from the image,
-      and the sparkle balance updates outside
-      the image in the Discord message.
+      Sparkles disappeared from the image,
+      so this one MUST render.
     */
 
     await sendTree(
@@ -1738,13 +1858,6 @@ async function handleCatch(
       "Catch Sparkles error:",
       error
     );
-
-    /*
-      If something breaks, edit the
-      already-acknowledged interaction
-      instead of trying to send a second
-      initial interaction response.
-    */
 
     await editOriginalResponse(
       env,
@@ -3850,7 +3963,7 @@ async function handleTree(
       interaction,
       {
         content:
-          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\nError: ${error?.message || "Unknown error"}`,
+          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
         components:
           treeButtons()
       }
@@ -3878,12 +3991,6 @@ async function handleComponent(
 
     return;
   }
-
-  /*
-    CATCH BUTTON
-    The button is literally custom_id "catch"
-    and this route calls handleCatch().
-  */
 
   if (
     id === "catch" ||
@@ -4845,12 +4952,6 @@ export default {
         "Interaction error:",
         error
       );
-
-      /*
-        IMPORTANT:
-        Some interactions are already acknowledged.
-        Don't blindly send another initial response.
-      */
 
       try {
         await editOriginalResponse(
