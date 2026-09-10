@@ -20,9 +20,18 @@ const MIN_SPARKLES_PER_SPAWN = 2;
 const MAX_SPARKLES_PER_SPAWN = 4;
 const MAX_ACTIVE_SPARKLES = 5;
 
-const WATER_COOLDOWN = 60 * 60 * 1000;
+/* WATER IS NOW 30 MINUTES */
+const WATER_COOLDOWN = 30 * 60 * 1000;
 
-const CHAOS_CHANCE = 0.35;
+/*
+  CHAOS IS NO LONGER TRIGGERED BY WATER.
+
+  The scheduled Worker checks every 5 minutes.
+  Each guild gets a random next chaos time between
+  30 minutes and 2 hours after the previous event.
+*/
+const CHAOS_MIN_DELAY = 30 * 60 * 1000;
+const CHAOS_MAX_DELAY = 2 * 60 * 60 * 1000;
 
 const BIRTHDAY_PIN = "LOVE";
 const STONED_GIFT_SPARKLES = 300;
@@ -299,7 +308,8 @@ async function getGuildState(env, guildId) {
     return {
       announcementChannelId: null,
       announcementChannelName: "",
-      hunt: null
+      hunt: null,
+      nextChaosAt: 0
     };
   }
 
@@ -311,7 +321,8 @@ async function getGuildState(env, guildId) {
     return {
       announcementChannelId: null,
       announcementChannelName: "",
-      hunt: null
+      hunt: null,
+      nextChaosAt: 0
     };
   }
 
@@ -320,13 +331,15 @@ async function getGuildState(env, guildId) {
       announcementChannelId: null,
       announcementChannelName: "",
       hunt: null,
+      nextChaosAt: 0,
       ...JSON.parse(raw)
     };
   } catch {
     return {
       announcementChannelId: null,
       announcementChannelName: "",
-      hunt: null
+      hunt: null,
+      nextChaosAt: 0
     };
   }
 }
@@ -341,14 +354,38 @@ async function saveGuildState(env, guildId, state) {
 async function rememberGuild(env, guildId) {
   if (!guildId) return;
 
-  const state = await getGuildState(
-    env,
-    guildId
-  );
+  const state =
+    await getGuildState(
+      env,
+      guildId
+    );
+
+  let changed = false;
 
   if (!state.createdAt) {
     state.createdAt = Date.now();
+    changed = true;
+  }
 
+  /*
+    Existing guilds that don't yet have a chaos timer
+    get one automatically.
+  */
+  if (
+    !state.nextChaosAt ||
+    Number(state.nextChaosAt) <= 0
+  ) {
+    state.nextChaosAt =
+      Date.now() +
+      randomInt(
+        CHAOS_MIN_DELAY,
+        CHAOS_MAX_DELAY
+      );
+
+    changed = true;
+  }
+
+  if (changed) {
     await saveGuildState(
       env,
       guildId,
@@ -489,6 +526,19 @@ function isBirthdayDate(
     p.year === 2026 &&
     p.month === 9 &&
     p.day === 10
+  );
+}
+
+/* =========================================================
+   RANDOM HELPERS
+========================================================= */
+
+function randomInt(min, max) {
+  return (
+    Math.floor(
+      Math.random() *
+        (max - min + 1)
+    ) + min
   );
 }
 
@@ -674,8 +724,6 @@ async function editOriginalResponse(
 
 /* =========================================================
    TREE MESSAGE
-   IMPORTANT:
-   STATS ARE HERE — NOT INSIDE THE IMAGE.
 ========================================================= */
 
 function buildTreeStats(player) {
@@ -763,7 +811,6 @@ async function sendTree(
 
 /* =========================================================
    UPDATE TREE MESSAGE WITHOUT RENDERING
-   THIS IS THE IMPORTANT 429 OPTIMIZATION.
 ========================================================= */
 
 async function updateTreeMessage(
@@ -876,12 +923,6 @@ function treeButtons() {
 
 /* =========================================================
    IMAGE RENDERING
-   NO NAME
-   NO LEVEL
-   NO SPARKLE AMOUNT
-   NO HEIGHT
-   NO TEXT STATS
-   ONLY VISUAL TREE SCENE
 ========================================================= */
 
 function imageUrl(filename) {
@@ -950,12 +991,6 @@ async function renderTree(
   let browser;
 
   try {
-    /*
-      ONE browser session per actual render.
-      Watering no longer renders unless the image
-      actually needs to change.
-    */
-
     browser =
       await puppeteer.launch(
         env.BROWSER
@@ -1031,11 +1066,6 @@ async function renderTree(
       })
       .join("");
 
-    /*
-      Birthday balloon gets a MUCH larger canvas.
-      Other decorations stay around 190px.
-    */
-
     let decorationHTML = "";
 
     if (
@@ -1104,10 +1134,6 @@ async function renderTree(
             object-fit: cover;
           }
 
-          /*
-            BIG FULL-SIZE TREE
-          */
-
           #tree {
             position: absolute;
             left: 50%;
@@ -1142,12 +1168,6 @@ async function renderTree(
       </body>
       </html>
     `;
-
-    /*
-      "load" is intentionally used instead of
-      "networkidle0" to avoid waiting for an
-      unnecessary network-idle period.
-    */
 
     await page.setContent(
       html,
@@ -1195,11 +1215,6 @@ async function renderTree(
     const message =
       error?.message ||
       String(error);
-
-    /*
-      Make the Cloudflare 429 error easier
-      to understand in Discord logs.
-    */
 
     if (
       message.includes("429") ||
@@ -1289,15 +1304,6 @@ function cleanSparkles(player) {
   return before - after;
 }
 
-function randomInt(min, max) {
-  return (
-    Math.floor(
-      Math.random() *
-        (max - min + 1)
-    ) + min
-  );
-}
-
 function randomSparkle() {
   const roll =
     Math.random();
@@ -1376,97 +1382,10 @@ function maybeSpawnSparkles(
 
 /* =========================================================
    CHAOS EVENTS
+   IMPORTANT:
+   CHAOS IS RANDOMLY SCHEDULED.
+   WATER DOES NOT TRIGGER CHAOS.
 ========================================================= */
-
-async function maybeChaosEvent(
-  env,
-  interaction,
-  player
-) {
-  if (
-    Math.random() >
-    CHAOS_CHANCE
-  ) {
-    return "";
-  }
-
-  const event =
-    CHAOS_EVENTS[
-      randomInt(
-        0,
-        CHAOS_EVENTS.length - 1
-      )
-    ];
-
-  const amount =
-    randomInt(
-      event.min,
-      event.max
-    );
-
-  if (
-    event.type === "everyone"
-  ) {
-    const keys =
-      await listAllPlayerKeys(
-        env
-      );
-
-    for (const key of keys) {
-      const other =
-        await getPlayer(
-          env,
-          key
-        );
-
-      other.sparkles =
-        Math.max(
-          0,
-          other.sparkles +
-            amount
-        );
-
-      await savePlayer(
-        env,
-        other
-      );
-    }
-
-    const text =
-      `${event.message} **+${amount} sparkles** to everyone!`;
-
-    await announceChaos(
-      env,
-      interaction.guild_id,
-      text
-    );
-
-    return text;
-  }
-
-  player.sparkles =
-    Math.max(
-      0,
-      player.sparkles +
-        amount
-    );
-
-  const amountText =
-    amount >= 0
-      ? `+${amount}`
-      : `${amount}`;
-
-  const text =
-    `${event.message} **${amountText} sparkles**`;
-
-  await announceChaos(
-    env,
-    interaction.guild_id,
-    `${getDisplayName(player)} — ${text}`
-  );
-
-  return text;
-}
 
 function getDisplayName(player) {
   return (
@@ -1497,6 +1416,231 @@ async function announceChaos(
       state.announcementChannelId,
       `💥 **WEREWIVES CHAOS EVENT!**\n${message}`
     );
+  }
+}
+
+async function runRandomChaosEvent(
+  env,
+  guildId
+) {
+  if (!guildId) {
+    return false;
+  }
+
+  const event =
+    CHAOS_EVENTS[
+      randomInt(
+        0,
+        CHAOS_EVENTS.length - 1
+      )
+    ];
+
+  const amount =
+    randomInt(
+      event.min,
+      event.max
+    );
+
+  if (
+    event.type === "everyone"
+  ) {
+    const keys =
+      await listAllPlayerKeys(
+        env
+      );
+
+    let affected = 0;
+
+    for (const key of keys) {
+      const other =
+        await getPlayer(
+          env,
+          key
+        );
+
+      other.sparkles =
+        Math.max(
+          0,
+          Number(other.sparkles || 0) +
+            amount
+        );
+
+      await savePlayer(
+        env,
+        other
+      );
+
+      affected++;
+    }
+
+    const text =
+      `${event.message} **${amount >= 0 ? "+" : ""}${amount} sparkles** to everyone!`;
+
+    await announceChaos(
+      env,
+      guildId,
+      text
+    );
+
+    console.log(
+      `Chaos event for guild ${guildId}: everyone, affected ${affected} players`
+    );
+
+    return true;
+  }
+
+  const keys =
+    await listAllPlayerKeys(
+      env
+    );
+
+  if (!keys.length) {
+    return false;
+  }
+
+  const targetId =
+    keys[
+      randomInt(
+        0,
+        keys.length - 1
+      )
+    ];
+
+  const player =
+    await getPlayer(
+      env,
+      targetId
+    );
+
+  player.sparkles =
+    Math.max(
+      0,
+      Number(player.sparkles || 0) +
+        amount
+    );
+
+  await savePlayer(
+    env,
+    player
+  );
+
+  const amountText =
+    amount >= 0
+      ? `+${amount}`
+      : `${amount}`;
+
+  const text =
+    `${getDisplayName(player)} — ${event.message} **${amountText} sparkles**`;
+
+  await announceChaos(
+    env,
+    guildId,
+    text
+  );
+
+  console.log(
+    `Chaos event for guild ${guildId}: player ${targetId}`
+  );
+
+  return true;
+}
+
+async function processChaosEvents(
+  env
+) {
+  const now =
+    Date.now();
+
+  const guildIds =
+    await getKnownGuildIds(
+      env
+    );
+
+  for (
+    const guildId of
+      guildIds
+  ) {
+    try {
+      const state =
+        await getGuildState(
+          env,
+          guildId
+        );
+
+      /*
+        If this guild has never received a chaos timer,
+        start one now.
+      */
+
+      if (
+        !state.nextChaosAt ||
+        Number(state.nextChaosAt) <= 0
+      ) {
+        state.nextChaosAt =
+          now +
+          randomInt(
+            CHAOS_MIN_DELAY,
+            CHAOS_MAX_DELAY
+          );
+
+        await saveGuildState(
+          env,
+          guildId,
+          state
+        );
+
+        continue;
+      }
+
+      if (
+        now <
+        Number(state.nextChaosAt)
+      ) {
+        continue;
+      }
+
+      /*
+        A chaos event is due.
+        It is completely independent of Water.
+      */
+
+      const happened =
+        await runRandomChaosEvent(
+          env,
+          guildId
+        );
+
+      /*
+        Schedule the next one regardless.
+        This prevents a guild from getting stuck.
+      */
+
+      state.nextChaosAt =
+        Date.now() +
+        randomInt(
+          CHAOS_MIN_DELAY,
+          CHAOS_MAX_DELAY
+        );
+
+      state.lastChaosAt =
+        Date.now();
+
+      if (happened) {
+        state.lastChaosEvent =
+          easternDateKey();
+      }
+
+      await saveGuildState(
+        env,
+        guildId,
+        state
+      );
+    } catch (error) {
+      console.error(
+        `Chaos processing failed for guild ${guildId}:`,
+        error
+      );
+    }
   }
 }
 
@@ -1539,8 +1683,8 @@ async function listAllPlayerKeys(
 
 /* =========================================================
    WATER
-   IMPORTANT:
-   DO NOT RENDER UNLESS THE IMAGE CHANGED.
+   30 MINUTE COOLDOWN
+   DOES NOT TRIGGER CHAOS
 ========================================================= */
 
 async function handleWater(
@@ -1573,12 +1717,6 @@ async function handleWater(
 
     const now =
       Date.now();
-
-    /*
-      COOLDOWN:
-      No image change is necessary,
-      so DO NOT launch Browser Rendering.
-    */
 
     if (
       player.lastWater &&
@@ -1629,11 +1767,6 @@ async function handleWater(
         player
       );
 
-    /*
-      If old sparkles expired, the image has changed
-      even if no new sparkles appear.
-    */
-
     const cleaned =
       cleanSparkles(
         player
@@ -1644,12 +1777,10 @@ async function handleWater(
         player
       );
 
-    const chaosMessage =
-      await maybeChaosEvent(
-        env,
-        interaction,
-        player
-      );
+    /*
+      NO CHAOS CALL HERE.
+      Chaos is handled only by scheduled().
+    */
 
     const parts = [
       `💧 You watered your tree! +${EXP_PER_WATER} EXP.`
@@ -1680,14 +1811,6 @@ async function handleWater(
       );
     }
 
-    if (
-      chaosMessage
-    ) {
-      parts.push(
-        chaosMessage
-      );
-    }
-
     player.sceneMessage =
       parts.join("\n");
 
@@ -1697,12 +1820,7 @@ async function handleWater(
     );
 
     /*
-      Only launch Browser Rendering if the visual
-      tree actually changed.
-
-      - New sparkles = render
-      - Expired sparkles disappeared = render
-      - Otherwise = just update Discord text
+      Only render when the picture actually changed.
     */
 
     if (
@@ -1774,6 +1892,15 @@ async function handleCatch(
       interaction
     );
 
+    /*
+      First remove expired sparkles.
+
+      If there are NONE after cleaning, we DO NOT
+      launch Browser Rendering anymore.
+
+      This is an important reduction in 429 usage.
+    */
+
     cleanSparkles(
       player
     );
@@ -1791,11 +1918,11 @@ async function handleCatch(
       );
 
       /*
-        The image might contain expired sparkles,
-        so we still render here.
+        NO sendTree().
+        NO Browser Rendering.
       */
 
-      await sendTree(
+      await updateTreeMessage(
         env,
         interaction,
         player
@@ -1843,8 +1970,8 @@ async function handleCatch(
     );
 
     /*
-      Sparkles disappeared from the image,
-      so this one MUST render.
+      Sparkles were actually visible and have now
+      disappeared, so the image MUST be rendered.
     */
 
     await sendTree(
@@ -1870,6 +1997,126 @@ async function handleCatch(
       }
     );
   }
+}
+
+/* =========================================================
+   RECYCLE
+   INPUT: 20–200 SPARKLES
+   PAYOUT: RANDOM 1x–10x
+========================================================= */
+
+async function handleRecycle(
+  env,
+  interaction,
+  amountInput
+) {
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (!user) {
+    return;
+  }
+
+  const player =
+    await getPlayer(
+      env,
+      user.id
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  const amount =
+    Math.floor(
+      Number(amountInput)
+    );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount < 20 ||
+    amount > 200
+  ) {
+    await sendText(
+      env,
+      interaction,
+      "♻️ You can recycle between **20 and 200 sparkles** at a time."
+    );
+
+    return;
+  }
+
+  if (
+    player.sparkles <
+    amount
+  ) {
+    await sendText(
+      env,
+      interaction,
+      `❌ You only have **${player.sparkles} sparkles**, so you can't recycle **${amount}**.`
+    );
+
+    return;
+  }
+
+  /*
+    Remove the input amount first.
+  */
+
+  player.sparkles -=
+    amount;
+
+  /*
+    Random multiplier from 1x through 10x.
+  */
+
+  const multiplier =
+    randomInt(
+      1,
+      10
+    );
+
+  const payout =
+    amount *
+    multiplier;
+
+  player.sparkles +=
+    payout;
+
+  const net =
+    payout -
+    amount;
+
+  player.sceneMessage =
+    `♻️ You recycled **${amount} sparkles** and got **${payout} sparkles** back! (${multiplier}×)`;
+
+  await savePlayer(
+    env,
+    player
+  );
+
+  const netText =
+    net >= 0
+      ? `+${net}`
+      : `${net}`;
+
+  await sendText(
+    env,
+    interaction,
+    `♻️ **SPARKLE RECYCLER**\n\nYou put in **${amount} sparkles**.\n\n🎰 Multiplier: **${multiplier}×**\n✨ You got back: **${payout} sparkles**\n💰 Net change: **${netText} sparkles**\n\nYou now have **${player.sparkles} sparkles**! 💖`,
+    [
+      row(
+        button(
+          "🌳 Back to Tree",
+          "back_tree",
+          2
+        )
+      )
+    ]
+  );
 }
 
 /* =========================================================
@@ -3885,6 +4132,23 @@ async function handleAnnouncements(
   state.announcementChannelName =
     channel.name || "";
 
+  /*
+    If the guild didn't have a chaos timer yet,
+    give it one when announcements are configured.
+  */
+
+  if (
+    !state.nextChaosAt ||
+    Number(state.nextChaosAt) <= 0
+  ) {
+    state.nextChaosAt =
+      Date.now() +
+      randomInt(
+        CHAOS_MIN_DELAY,
+        CHAOS_MAX_DELAY
+      );
+  }
+
   await saveGuildState(
     env,
     interaction.guild_id,
@@ -4335,6 +4599,19 @@ async function handleCommand(
     return;
   }
 
+  if (name === "recycle") {
+    await handleRecycle(
+      env,
+      interaction,
+      getOption(
+        interaction,
+        "amount"
+      )
+    );
+
+    return;
+  }
+
   if (name === "shop") {
     await showShop(
       env,
@@ -4584,6 +4861,24 @@ const COMMANDS = [
         description:
           "Your answer",
         required: false
+      }
+    ]
+  },
+
+  {
+    name: "recycle",
+    description:
+      "Recycle 20-200 sparkles for a random 1x-10x payout",
+
+    options: [
+      {
+        type: 4,
+        name: "amount",
+        description:
+          "Amount of sparkles to recycle (20-200)",
+        required: true,
+        min_value: 20,
+        max_value: 200
       }
     ]
   },
@@ -4983,15 +5278,31 @@ export default {
     }
   },
 
+  /* =======================================================
+     SCHEDULED TASKS
+
+     Cloudflare cron should still be:
+     */5 * * * *
+
+     Every 5 minutes we check:
+     - Random chaos events
+     - Birthday hunt
+  ======================================================= */
+
   async scheduled(
     event,
     env,
     ctx
   ) {
     ctx.waitUntil(
-      processBirthdayEvent(
-        env
-      )
+      Promise.all([
+        processChaosEvents(
+          env
+        ),
+        processBirthdayEvent(
+          env
+        )
+      ])
     );
   }
 };
