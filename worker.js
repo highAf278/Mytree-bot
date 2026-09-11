@@ -546,6 +546,7 @@ async function getGuildState(env, guildId) {
       announcementChannelId: null,
       announcementChannelName: "",
       hunt: null,
+      island: null,
       nextChaosAt: 0
     };
   }
@@ -559,6 +560,7 @@ async function getGuildState(env, guildId) {
       announcementChannelId: null,
       announcementChannelName: "",
       hunt: null,
+      island: null,
       nextChaosAt: 0
     };
   }
@@ -568,6 +570,7 @@ async function getGuildState(env, guildId) {
       announcementChannelId: null,
       announcementChannelName: "",
       hunt: null,
+      island: null,
       nextChaosAt: 0,
       ...JSON.parse(raw)
     };
@@ -576,6 +579,7 @@ async function getGuildState(env, guildId) {
       announcementChannelId: null,
       announcementChannelName: "",
       hunt: null,
+      island: null,
       nextChaosAt: 0
     };
   }
@@ -895,7 +899,7 @@ async function acknowledge(
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          type: 5
+          type: interaction.type === 3 ? 6 : 5
         })
       }
     );
@@ -3675,6 +3679,11 @@ async function equipTheme(
     stoned_birthday:
       player.inventory.includes(
         "stoned_birthday_background"
+      ),
+
+    cozy_cat:
+      player.inventory.includes(
+        "cozy_cat_background"
       )
   };
 
@@ -3760,6 +3769,11 @@ async function equipTree(
     halloween_tree:
       player.inventory.includes(
         "halloween_tree"
+      ),
+
+    kitty_tree:
+      player.inventory.includes(
+        "kitty_tree"
       )
   };
 
@@ -3809,7 +3823,8 @@ async function equipEffect(
   } else {
     const inventoryId = {
       butterflies: "butterflies_effect",
-      hearts: "hearts_effect"
+      hearts: "hearts_effect",
+      purr_princess: "purr_princess_effect"
     }[effect];
 
     if (
@@ -4875,6 +4890,17 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("island:")) {
+    const parts = id.split(":");
+    const action = parts[1];
+    if (action === "join") { await handleIslandJoin(env, interaction); return; }
+    if (action === "leave") { await handleIslandLeave(env, interaction); return; }
+    if (action === "rules") { await handleIslandRules(env, interaction); return; }
+    if (action === "start") { await handleIslandStart(env, interaction); return; }
+    if (action === "choice") { await handleIslandChoice(env, interaction, parts[2]); return; }
+    return;
+  }
+
   if (id.startsWith("heist_roles:")) {
     await handleHeistRolesPage(env, interaction, id.split(":")[1]);
     return;
@@ -5272,6 +5298,5823 @@ async function handleComponent(
   );
 }
 
+
+
+/* =========================================================
+   CHAOS ISLAND
+   2-10 PLAYER MULTIPLAYER SURVIVAL GAME
+
+   Each scenario has multiple fixed versions. A version is
+   selected when the round starts, so the same scenario can
+   have different correct choices on a later game. Within a
+   single round, everyone choosing the same option receives
+   the exact same outcome.
+========================================================= */
+
+const ISLAND_MIN_PLAYERS = 2;
+const ISLAND_MAX_PLAYERS = 10;
+const ISLAND_ROUNDS = 5;
+const ISLAND_ROUND_TIMEOUT = 90 * 1000;
+const ISLAND_SURVIVE_POINTS = 100;
+const ISLAND_SURVIVOR_REWARD = 300;
+const ISLAND_WINNER_REWARD = 750;
+
+const CHAOS_ISLAND_SCENARIOS = [
+  {
+    "id": 1,
+    "title": "The Giant Wave",
+    "prompt": "🌊 A ridiculous wave is racing toward the island. Pick your escape plan!",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb the tree",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide in the hut",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Hide behind the rock",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏊 Swim away",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb the tree",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏠 Hide in the hut",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Hide behind the rock",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏊 Swim away",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb the tree",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide in the hut",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Hide behind the rock",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏊 Swim away",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "title": "Volcano Having A Day",
+    "prompt": "🌋 The volcano has officially decided everyone needs to leave. Immediately.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb high",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Hide in the jungle",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🛶 Build a raft",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Run to the beach",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb high",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Hide in the jungle",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Build a raft",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Run to the beach",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb high",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Hide in the jungle",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Build a raft",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🏖️ Run to the beach",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Angry Weather",
+    "prompt": "⛈️ The sky is furious. Thunder is shaking coconuts out of the trees.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🌳 Climb a tree",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Hide in a cave",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Stay on the beach",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb a tree",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Hide in a cave",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏖️ Stay on the beach",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb a tree",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🕳️ Hide in a cave",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Stay on the beach",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "title": "Shark Meeting",
+    "prompt": "🦈 A shark has appeared near the shore and looks like it has a calendar appointment with you.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🛶 Take a boat",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run inland",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦈 Swim past it",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Offer it food",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🛶 Take a boat",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run inland",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦈 Swim past it",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Offer it food",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🛶 Take a boat",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🏃 Run inland",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦈 Swim past it",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Offer it food",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "title": "Coconut Avalanche",
+    "prompt": "🥥 A mountain of coconuts starts rolling downhill toward camp.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌴 Climb",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Stand still",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏃 Run downhill",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🌴 Climb",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Stand still",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run downhill",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌴 Climb",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Stand still",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run downhill",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "title": "Quicksand",
+    "prompt": "🕳️ You step into suspiciously squishy sand. This feels like a terrible Tuesday.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🪵 Stay still",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🪨 Grab a branch",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Crawl out",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🪵 Stay still",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Grab a branch",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Crawl out",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🪵 Stay still",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Grab a branch",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🕳️ Crawl out",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "title": "Tornado Beach",
+    "prompt": "🌪️ A tiny tornado has arrived and is stealing everyone's flip-flops.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🩴 Save your flip-flops",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Chase the tornado",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🩴 Save your flip-flops",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏖️ Chase the tornado",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏠 Hide indoors",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🩴 Save your flip-flops",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏖️ Chase the tornado",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "title": "Jungle Stampede",
+    "prompt": "🐗 A herd of extremely offended wild boars is charging through the jungle.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🌳 Climb",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Distract them",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌳 Climb",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Distract them",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌳 Climb",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍎 Distract them",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "title": "Giant Crab",
+    "prompt": "🦀 A crab the size of a refrigerator blocks the path. It appears to be guarding something.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🦀 Approach",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍪 Offer a snack",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🔍 Search around it",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🦀 Approach",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍪 Offer a snack",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🔍 Search around it",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🦀 Approach",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🍪 Offer a snack",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🔍 Search around it",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "title": "Falling Tree",
+    "prompt": "🌳 A giant tree starts falling directly toward camp.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏃 Run sideways",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪵 Push the tree back",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏃 Run sideways",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪵 Push the tree back",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏃 Run sideways",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Hide",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🪵 Push the tree back",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "title": "Mystery Fog",
+    "prompt": "🌫️ Thick fog covers the island and you can barely see your own toes.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Follow the sound",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏕️ Stay at camp",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Find a cave",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Follow the sound",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏕️ Stay at camp",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🕳️ Find a cave",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Follow the sound",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏕️ Stay at camp",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🌳 Climb",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🕳️ Find a cave",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "title": "Monkey Alarm",
+    "prompt": "🐒 A troop of monkeys starts screaming and throwing fruit for reasons unknown.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍌 Hide",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🙈 Cover your head",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🐒 Wave back",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍌 Hide",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🙈 Cover your head",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🐒 Wave back",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍌 Hide",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🙈 Cover your head",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🐒 Wave back",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 13,
+    "title": "Landslide",
+    "prompt": "⛰️ The hillside begins sliding toward the campsite.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb up",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Stay put",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🛶 Take the river",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb up",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏠 Stay put",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Take the river",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏔️ Climb up",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Stay put",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Take the river",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 14,
+    "title": "Lightning Tree",
+    "prompt": "⚡ The tallest tree on the island is being struck by lightning over and over.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb it",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Move away",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🪨 Hide",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "⚡ Touch the tree",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb it",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Move away",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Hide",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "⚡ Touch the tree",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🌴 Climb it",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Move away",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Hide",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "⚡ Touch the tree",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "title": "The Ground Moves",
+    "prompt": "🌎 The ground starts wobbling. Nobody likes this.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🏃 Run",
+            "text": "💰 You escape with style and find 100 ✨ on the way.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏠 Stay inside",
+            "text": "❤️ You get to high ground and survive!",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Sit down",
+            "text": "💔 The shelter collapses around you. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Get on the water",
+            "text": "💔 The island chooses violence. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏃 Run",
+            "text": "💔 You picked the obvious-looking route. Unfortunately, the island noticed. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Stay inside",
+            "text": "❤️ Safe! Your questionable plan somehow works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪨 Sit down",
+            "text": "💰 You survive and discover 150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🛶 Get on the water",
+            "text": "💔 Absolutely not. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🏃 Run",
+            "text": "💔 You make a dramatic mistake. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏠 Stay inside",
+            "text": "💰 Safe and richer! +200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🪨 Sit down",
+            "text": "💔 You are now having a character-building experience. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🛶 Get on the water",
+            "text": "❤️ Safe! Nature has decided to spare you today.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "title": "Three Suspicious Caves",
+    "prompt": "💎 Three caves appear: one tiny, one glowing, and one with a very judgmental sign.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 17,
+    "title": "Buried Chest",
+    "prompt": "📦 A treasure chest is half-buried in the sand.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 18,
+    "title": "Gold Coconut",
+    "prompt": "🥥 One coconut is glowing gold. This cannot possibly be normal.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 19,
+    "title": "Pirate Map",
+    "prompt": "🏴‍☠️ You find a pirate map with an enormous X drawn on it.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 20,
+    "title": "Shiny Lagoon",
+    "prompt": "✨ The lagoon is sparkling like someone dropped a jewelry store into it.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 21,
+    "title": "Treasure Tree",
+    "prompt": "🌳 A tree has coins growing on its branches.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 22,
+    "title": "Suspicious Backpack",
+    "prompt": "🎒 You find a backpack labeled 'DEFINITELY NOT TREASURE.'",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 23,
+    "title": "Statue With A Button",
+    "prompt": "🗿 An ancient statue has one giant red button labeled 'DO NOT PRESS.'",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 24,
+    "title": "Golden Crab",
+    "prompt": "🦀 A golden crab is carrying a tiny treasure chest.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 25,
+    "title": "Message In A Bottle",
+    "prompt": "🍾 A bottle washes ashore containing a note that simply says 'dig here.'",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "❤️ You wisely leave it alone. Safe, but no treasure.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 The treasure was bait. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 You find a tiny stash. +100 ✨.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💎 JACKPOT! You found 300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +500 ✨! You found the REALLY good stuff.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "❤️ Nothing happens. Suspicious, but safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +200 ✨! The island rewards your confidence.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 A trap! Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "✨ Investigate",
+            "text": "💎 +350 ✨! Someone left a sparkle stash here.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🚶 Walk away",
+            "text": "💔 It was a decoy. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🪙 Grab it",
+            "text": "💰 +150 ✨ and absolutely no regrets.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Safe! You decide treasure can wait.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 26,
+    "title": "Raccoon Coup",
+    "prompt": "🦝 Forty-seven raccoons have surrounded your campsite and appear organized.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 27,
+    "title": "Raccoon Tax Collector",
+    "prompt": "🦝 A raccoon wearing a tiny tie demands an island tax.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 28,
+    "title": "Banana Disaster",
+    "prompt": "🍌 A banana the size of a house falls from the sky.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 29,
+    "title": "Parrot Lawyer",
+    "prompt": "🦜 A parrot lands nearby and announces that you are being sued.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 30,
+    "title": "Goose Invasion",
+    "prompt": "🪿 A flock of geese marches onto the island like they own the place.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 31,
+    "title": "Coconut Cannon",
+    "prompt": "🥥 Someone has apparently built a coconut cannon overnight.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 32,
+    "title": "Tiny Pirate",
+    "prompt": "🏴‍☠️ A three-inch pirate appears and demands your most valuable possession.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 33,
+    "title": "Dancing Statue",
+    "prompt": "🗿 The ancient statue starts dancing whenever anyone looks at it.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 34,
+    "title": "Evil Sandcastle",
+    "prompt": "🏰 The sandcastle you built has developed an attitude.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 35,
+    "title": "Chicken Emergency",
+    "prompt": "🐔 A chicken is running around screaming 'THE END IS NIGH!'",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💔 You have made the situation significantly worse. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Somehow your plan works.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Chaos wins. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 The chaos creature respects you. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "💰 +300 ✨! The nonsense pays off.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Nobody knows how.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💔 Disaster. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "🦝 You have been promoted to Assistant Chaos Manager. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "😈 Embrace chaos",
+            "text": "🦝 The raccoons approve. +400 ✨.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Please do not question it.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Trust the raccoon",
+            "text": "💰 +100 ✨ and one deeply confusing memory.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🧠 Make a plan",
+            "text": "💔 The plan backfires spectacularly. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 36,
+    "title": "Haunted Cabin",
+    "prompt": "🏚️ You find an abandoned cabin with the front door mysteriously open.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 37,
+    "title": "Huge Footprints",
+    "prompt": "👣 Enormous footprints appear outside camp overnight.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 38,
+    "title": "Whispering Jungle",
+    "prompt": "🌿 The jungle is whispering your name.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 39,
+    "title": "Locked Chest",
+    "prompt": "🔒 You find a locked chest that is humming quietly.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 40,
+    "title": "Strange Lights",
+    "prompt": "🌌 Strange lights appear over the ocean every few seconds.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 41,
+    "title": "The Mirror",
+    "prompt": "🪞 You discover a mirror that seems to show the island slightly differently.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 42,
+    "title": "Mysterious Door",
+    "prompt": "🚪 A door is standing alone in the middle of the jungle.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 43,
+    "title": "Footsteps Behind You",
+    "prompt": "👀 You hear footsteps behind you. When you turn around, nobody is there.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 44,
+    "title": "Talking Skull",
+    "prompt": "💀 A skull on the beach says, 'Choose wisely.' Then it yawns.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 45,
+    "title": "The Missing Campfire",
+    "prompt": "🔥 Your campfire is gone. In its place is a neat little pile of marshmallows.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ You decide not to investigate. Probably wise.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 Something spooky happens. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "👻 The mystery remains a mystery. You are safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "🔎 You discover a hidden stash. +250 ✨.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "❤️ Safe. The weirdness leaves you alone.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "💔 The island whispers 'wrong answer.' Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💔 You find exactly what you were afraid of. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💰 Mystery solved! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🔦 Investigate",
+            "text": "👀 Nothing happens. Somehow that is the creepiest result. Safe.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚪 Leave",
+            "text": "❤️ Safe! You trust your instincts.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "👀 Watch quietly",
+            "text": "💎 You uncover 200 ✨.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Send the raccoon",
+            "text": "💔 You should not have touched that. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 46,
+    "title": "Wishing Well",
+    "prompt": "✨ A mysterious wishing well appears beside your campsite.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 47,
+    "title": "Golden Dice",
+    "prompt": "🎲 A giant golden die falls from the sky and lands perfectly upright.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 48,
+    "title": "Lucky Shell",
+    "prompt": "🐚 You find a shell that feels suspiciously lucky.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 49,
+    "title": "Four-Leaf Coconut",
+    "prompt": "🍀 Somehow, a coconut has grown four tiny leaves.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "title": "Rainbow Door",
+    "prompt": "🌈 A rainbow appears and forms a doorway.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 51,
+    "title": "Mystery Gift Box",
+    "prompt": "🎁 A gift box appears with a tag reading 'FOR WHOEVER IS LUCKY.'",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 52,
+    "title": "Coin Flip Island",
+    "prompt": "🪙 A giant coin appears with 'LUCK' on one side and 'CHAOS' on the other.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 53,
+    "title": "Singing Star",
+    "prompt": "⭐ A star falls from the sky and starts singing badly.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 54,
+    "title": "Lucky Umbrella",
+    "prompt": "☂️ You find an umbrella that sparkles even though it isn't raining.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 55,
+    "title": "The Four Buttons",
+    "prompt": "🔴🔵🟢🟡 Four buttons appear on a rock. One is apparently very lucky.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "❤️ Safe! Your luck is confusing but functional.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "🍀 Lucky! +300 ✨.",
+            "hearts": 1,
+            "sparkles": 300
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Not lucky. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +100 ✨! The universe sends pocket change.",
+            "hearts": 1,
+            "sparkles": 100
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "💎 JACKPOT! +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! The universe shrugs at you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💔 Your luck called in sick. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "✨ +200 ✨! The universe remembered your name.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🍀 Trust your luck",
+            "text": "🍀 +150 ✨! That's suspiciously lucky.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🎲 Take a chance",
+            "text": "❤️ Safe! Nothing weird happens.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🚶 Play it safe",
+            "text": "💰 +350 ✨! You should probably buy a lottery ticket.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "✨ Choose the shiny thing",
+            "text": "💔 Bad luck. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 56,
+    "title": "Mayor Raccoon",
+    "prompt": "🦝 The raccoons have elected a mayor. The mayor has summoned you to city hall, which is a tree stump.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "🦝 The raccoons declare you cool. +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The nonsense claims a victim. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Somehow safe. Nobody understands why.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💰 +200 ✨ and a story nobody will believe.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "🦝 You have been accepted by the weirdness. +350 ✨.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Reality briefly gives up.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +250 ✨. Please don't ask where it came from.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💔 This was a terrible idea. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💔 You are personally offended by physics. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons applaud. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +400 ✨! Chaos has chosen you.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "❤️ Safe! The island is too confused to hurt you.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 57,
+    "title": "Giant Sock",
+    "prompt": "🧦 A gigantic sock falls from the sky and lands on the island.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💔 The nonsense claims a victim. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Somehow safe. Nobody understands why.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +200 ✨ and a story nobody will believe.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "🦝 The raccoons declare you cool. +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "❤️ Safe! Reality briefly gives up.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +250 ✨. Please don't ask where it came from.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 This was a terrible idea. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "🦝 You have been accepted by the weirdness. +350 ✨.",
+            "hearts": 1,
+            "sparkles": 350
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "🦝 The raccoons applaud. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +400 ✨! Chaos has chosen you.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Safe! The island is too confused to hurt you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💔 You are personally offended by physics. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 58,
+    "title": "Dramatic Banana",
+    "prompt": "🍌 A banana rolls toward you while dramatic music somehow plays.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "❤️ Somehow safe. Nobody understands why.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💰 +200 ✨ and a story nobody will believe.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "🦝 The raccoons declare you cool. +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💔 The nonsense claims a victim. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💰 +250 ✨. Please don't ask where it came from.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 This was a terrible idea. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "🦝 You have been accepted by the weirdness. +350 ✨.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "❤️ Safe! Reality briefly gives up.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💰 +400 ✨! Chaos has chosen you.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! The island is too confused to hurt you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 You are personally offended by physics. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "🦝 The raccoons applaud. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 59,
+    "title": "Disco Volcano",
+    "prompt": "🪩🌋 The volcano starts flashing disco lights instead of erupting.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💰 +200 ✨ and a story nobody will believe.",
+            "hearts": 1,
+            "sparkles": 200
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons declare you cool. +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💔 The nonsense claims a victim. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "❤️ Somehow safe. Nobody understands why.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💔 This was a terrible idea. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 You have been accepted by the weirdness. +350 ✨.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Safe! Reality briefly gives up.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💰 +250 ✨. Please don't ask where it came from.",
+            "hearts": 1,
+            "sparkles": 250
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "❤️ Safe! The island is too confused to hurt you.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 You are personally offended by physics. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "🦝 The raccoons applaud. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💰 +400 ✨! Chaos has chosen you.",
+            "hearts": 1,
+            "sparkles": 400
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 60,
+    "title": "Angry Coconut",
+    "prompt": "🥥 One coconut is rolling after you. It has tiny angry eyebrows.",
+    "versions": [
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "🦝 The raccoons declare you cool. +500 ✨.",
+            "hearts": 1,
+            "sparkles": 500
+          },
+          {
+            "label": "🏃 Run",
+            "text": "💔 The nonsense claims a victim. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "❤️ Somehow safe. Nobody understands why.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💰 +200 ✨ and a story nobody will believe.",
+            "hearts": 1,
+            "sparkles": 200
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "🦝 You have been accepted by the weirdness. +350 ✨.",
+            "hearts": 1,
+            "sparkles": 350
+          },
+          {
+            "label": "🏃 Run",
+            "text": "❤️ Safe! Reality briefly gives up.",
+            "hearts": 1,
+            "sparkles": 0
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +250 ✨. Please don't ask where it came from.",
+            "hearts": 1,
+            "sparkles": 250
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "💔 This was a terrible idea. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          }
+        ]
+      },
+      {
+        "choices": [
+          {
+            "label": "🤡 Commit to the bit",
+            "text": "💔 You are personally offended by physics. Lose 1 ❤️.",
+            "hearts": -1,
+            "sparkles": 0
+          },
+          {
+            "label": "🏃 Run",
+            "text": "🦝 The raccoons applaud. +150 ✨.",
+            "hearts": 1,
+            "sparkles": 150
+          },
+          {
+            "label": "🦝 Ask the raccoon",
+            "text": "💰 +400 ✨! Chaos has chosen you.",
+            "hearts": 1,
+            "sparkles": 400
+          },
+          {
+            "label": "🧠 Pretend this is normal",
+            "text": "❤️ Safe! The island is too confused to hurt you.",
+            "hearts": 1,
+            "sparkles": 0
+          }
+        ]
+      }
+    ]
+  }
+];
+
+function chaosIslandRulesText() {
+  return [
+    "🏝️ **CHAOS ISLAND — HOW TO PLAY**",
+    "",
+    "👥 **Players:** 2–10",
+    "❤️ **Starting Hearts:** 3",
+    "🎮 **Game:** 5 rounds",
+    "",
+    "Each round gives everyone one ridiculous island scenario and **4 choices**.",
+    "",
+    "🔒 Pick **one** choice before the round ends.",
+    "👯 **Same choice = same outcome** for everyone who picked it.",
+    "",
+    "🔀 The same scenario can appear again in a later game with a **different version**, so don't memorize the answers!",
+    "",
+    "❤️ Lose hearts when your choice says so. Reach **0 hearts** and you're eliminated.",
+    "✨ Some choices earn sparkles.",
+    "🏆 Survive the island and compete for the biggest final reward.",
+    "",
+    "🦝 **Important:** The raccoons are not qualified to provide legal, medical, or survival advice.",
+    "",
+    "**Good luck. The island has questionable judgment.** 🏝️💀"
+  ].join("\n");
+}
+
+function islandLobbyComponents(game) {
+  return [
+    row(
+      button("👥 Join Island", "island:join", 3),
+      button("📖 How to Play", "island:rules", 2),
+      button("🚪 Leave", "island:leave", 4),
+      button("🚀 Start Game", "island:start", 1)
+    )
+  ];
+}
+
+function islandPlayerLines(game) {
+  return Object.values(game.players || {}).map((p, i) =>
+    `${i + 1}. <@${p.id}> — ❤️ ${p.hearts} ${p.alive ? "" : "💀 Eliminated"}`
+  ).join("\n");
+}
+
+function islandLobbyText(game) {
+  return [
+    "🏝️ **CHAOS ISLAND**",
+    "",
+    `👥 **Players: ${Object.keys(game.players).length}/${ISLAND_MAX_PLAYERS}**`,
+    `🎮 **Host:** <@${game.hostId}>`,
+    "",
+    islandPlayerLines(game) || "No players yet!",
+    "",
+    Object.keys(game.players).length < ISLAND_MIN_PLAYERS
+      ? `⏳ Need at least **${ISLAND_MIN_PLAYERS} players** to start.`
+      : "✨ Ready! The host can start the island.",
+    "",
+    "📖 Read the rules before you start!"
+  ].join("\n");
+}
+
+function islandGameText(game, scenario, version) {
+  const alive = Object.values(game.players).filter(p => p.alive);
+  const chosen = Object.values(game.players).filter(p => p.alive && p.choice !== null);
+  const choiceCount = Object.fromEntries(Array.from({length:4}, (_,i)=>[i,0]));
+  for (const p of chosen) choiceCount[p.choice] = (choiceCount[p.choice] || 0) + 1;
+  const lines = alive.map(p =>
+    `• <@${p.id}> — ❤️ ${p.hearts}${p.choice !== null ? " — 🔒 Choice locked" : " — 🤔 Choosing..."}`
+  ).join("\n");
+  return [
+    `🏝️ **CHAOS ISLAND — ROUND ${game.round}/${ISLAND_ROUNDS}**`,
+    "",
+    `### ${scenario.title}`,
+    scenario.prompt,
+    "",
+    `🔒 **Choices locked:** ${chosen.length}/${alive.length}`,
+    "",
+    lines,
+    "",
+    `⏳ Choose one option!`,
+    `🌀 Scenario version: ${version + 1}`
+  ].join("\n");
+}
+
+function islandChoiceRows(game, scenario) {
+  const rows=[];
+  const activeChoices = scenario.versions[game.currentVersion]?.choices || scenario.versions[0].choices;
+  for (let i=0;i<activeChoices.length;i+=2) {
+    const a=activeChoices[i];
+    const b=activeChoices[i+1];
+    rows.push(row(
+      button(a.label, `island:choice:${i}`, 2),
+      button(b.label, `island:choice:${i+1}`, 2)
+    ));
+  }
+  rows.push(row(button("📖 Rules", "island:rules", 2)));
+  return rows;
+}
+
+async function islandPublicUpdate(env, interaction, content, components=[]) {
+  const response=await editOriginalResponse(env, interaction, {content,components});
+  if (!response.ok) console.error("Chaos Island message update failed:", response.status, await response.text());
+  return response;
+}
+
+function islandPickScenario(game) {
+  const used=new Set(game.usedScenarioIds || []);
+  let pool=CHAOS_ISLAND_SCENARIOS.filter(s=>!used.has(s.id));
+  if (!pool.length) { game.usedScenarioIds=[]; pool=CHAOS_ISLAND_SCENARIOS; }
+  const scenario=pool[randomInt(0,pool.length-1)];
+  game.usedScenarioIds.push(scenario.id);
+  const version=randomInt(0,scenario.versions.length-1);
+  game.currentScenarioId=scenario.id;
+  game.currentVersion=version;
+  game.currentChoices={};
+  for (const p of Object.values(game.players)) p.choice=null;
+  return scenario;
+}
+
+function getIslandCurrentScenario(game) {
+  return CHAOS_ISLAND_SCENARIOS.find(s=>s.id===game.currentScenarioId) || null;
+}
+
+function islandCurrentChoices(game) {
+  const scenario=getIslandCurrentScenario(game);
+  return scenario?.versions?.[game.currentVersion]?.choices || [];
+}
+
+function islandAllAliveChosen(game) {
+  const alive=Object.values(game.players).filter(p=>p.alive);
+  return alive.length>0 && alive.every(p=>p.choice !== null);
+}
+
+async function islandSave(env, game) {
+  const state=await getGuildState(env, game.guildId);
+  if (state.island?.id !== game.id) return;
+  state.island=game;
+  await saveGuildState(env, game.guildId, state);
+}
+
+async function handleIslandCreate(env, interaction) {
+  if (!interaction.guild_id) {
+    await sendText(env, interaction, "❌ Chaos Island can only be played inside a server.");
+    return;
+  }
+  const state=await getGuildState(env, interaction.guild_id);
+  if (state.island && state.island.status !== "ended") {
+    await sendText(env, interaction, `❌ A Chaos Island game is already running in <#${state.island.channelId}>.`);
+    return;
+  }
+  const user=getUserFromInteraction(interaction);
+  const game={
+    id:`island-${Date.now()}-${user.id}`,
+    guildId:interaction.guild_id,
+    channelId:interaction.channel_id,
+    hostId:user.id,
+    status:"lobby",
+    round:0,
+    currentScenarioId:null,
+    currentVersion:0,
+    currentChoices:{},
+    usedScenarioIds:[],
+    phaseEndsAt:0,
+    players:{[user.id]:{id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0}}
+  };
+  state.island=game;
+  await saveGuildState(env, interaction.guild_id, state);
+  await sendPublicText(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+}
+
+async function handleIslandJoin(env, interaction) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state=await getGuildState(env, interaction.guild_id);
+  const game=state.island;
+  if (!game || game.status !== "lobby") return sendText(env, interaction, "❌ There isn't an open Chaos Island lobby right now.");
+  const user=getUserFromInteraction(interaction);
+  if (game.players[user.id]) return sendText(env, interaction, "🏝️ You're already on the island!", islandLobbyComponents(game));
+  if (Object.keys(game.players).length >= ISLAND_MAX_PLAYERS) return sendText(env, interaction, "❌ The island is full! 10 players maximum.");
+  game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0};
+  await islandSave(env, game);
+  await acknowledge(env, interaction);
+  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+}
+
+async function handleIslandLeave(env, interaction) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state=await getGuildState(env, interaction.guild_id);
+  const game=state.island;
+  if (!game || game.status === "ended") return sendText(env, interaction, "❌ There isn't an active Chaos Island game.");
+  const user=getUserFromInteraction(interaction);
+  if (!game.players[user.id]) return sendText(env, interaction, "❌ You're not in this Chaos Island game.");
+  delete game.players[user.id];
+  if (user.id===game.hostId) {
+    const next=Object.values(game.players)[0];
+    if (next) game.hostId=next.id;
+  }
+  if (!Object.keys(game.players).length) {
+    state.island=null;
+    await saveGuildState(env, interaction.guild_id, state);
+    await acknowledge(env, interaction);
+    await islandPublicUpdate(env, interaction, "🏝️ **CHAOS ISLAND LOBBY CLOSED**\n\nEveryone left the island.", []);
+    return;
+  }
+  await islandSave(env, game);
+  await acknowledge(env, interaction);
+  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+}
+
+async function handleIslandRules(env, interaction) {
+  await sendText(env, interaction, chaosIslandRulesText());
+}
+
+async function handleIslandStart(env, interaction) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state=await getGuildState(env, interaction.guild_id);
+  const game=state.island;
+  const user=getUserFromInteraction(interaction);
+  if (!game || game.status !== "lobby") return sendText(env, interaction, "❌ There isn't an open Chaos Island lobby.");
+  if (game.hostId!==user.id) return sendText(env, interaction, "❌ Only the island host can start the game.");
+  if (Object.keys(game.players).length < ISLAND_MIN_PLAYERS) return sendText(env, interaction, "❌ You need at least **2 players** to start Chaos Island.");
+  game.status="playing";
+  game.round=1;
+  game.currentScenarioId=null;
+  const scenario=islandPickScenario(game);
+  game.phaseEndsAt=Date.now()+ISLAND_ROUND_TIMEOUT;
+  for (const p of Object.values(game.players)) { p.hearts=3; p.alive=true; p.choice=null; p.points=0; p.sparklesEarned=0; }
+  await islandSave(env, game);
+  await sendPublicText(env, interaction, islandGameText(game,scenario,game.currentVersion), islandChoiceRows(game,scenario));
+}
+
+async function handleIslandStatus(env, interaction) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state=await getGuildState(env, interaction.guild_id);
+  const game=state.island;
+  if (!game) return sendText(env, interaction, "🏝️ No Chaos Island game is active.");
+  const players=Object.values(game.players);
+  const lines=players.map(p=>`• <@${p.id}> — ❤️ ${p.hearts} — ${p.points} pts`).join("\n");
+  await sendText(env, interaction, `🏝️ **CHAOS ISLAND — ${game.status.toUpperCase()}**\n\n${lines}`);
+}
+
+async function resolveChaosIslandRound(env, game, interaction=null, timedOut=false) {
+  const choices=islandCurrentChoices(game);
+  const outcomeGroups={};
+  for (const p of Object.values(game.players)) {
+    if (!p.alive) continue;
+    const choice=p.choice === null ? null : Number(p.choice);
+    const outcome=choice === null ? {label:"No choice",text:"⏰ You never chose. The island assumes you fainted. Lose 1 ❤️.",hearts:-1,sparkles:0} : choices[choice];
+    if (!outcome) continue;
+    const key=choice===null?"none":String(choice);
+    if (!outcomeGroups[key]) outcomeGroups[key]={outcome,players:[]};
+    outcomeGroups[key].players.push(p);
+  }
+  const resultLines=[];
+  for (const [key,group] of Object.entries(outcomeGroups)) {
+    const o=group.outcome;
+    for (const p of group.players) {
+      p.hearts=Math.max(0,Number(p.hearts||0)+Number(o.hearts||0));
+      if (o.sparkles) { p.sparklesEarned+=o.sparkles; p.points+=Math.floor(o.sparkles/10); }
+      if (o.hearts>0) p.points+=ISLAND_SURVIVE_POINTS;
+      p.choice=null;
+      if (p.hearts<=0) p.alive=false;
+    }
+    const names=group.players.map(p=>`<@${p.id}>`).join(", ");
+    resultLines.push(`${group.outcome.text}\n👥 ${names}`);
+  }
+  game.lastRoundResults=resultLines;
+  const alive=Object.values(game.players).filter(p=>p.alive);
+  if (!alive.length || game.round>=ISLAND_ROUNDS) {
+    game.status="ended";
+    game.phaseEndsAt=0;
+    const maxPoints=Math.max(...Object.values(game.players).map(p=>Number(p.points||0)));
+    const winners=Object.values(game.players).filter(p=>Number(p.points||0)===maxPoints);
+    for (const p of Object.values(game.players)) {
+      const player=await getPlayer(env,p.id);
+      const survivorReward = p.alive ? ISLAND_SURVIVOR_REWARD : 0;
+      const winnerReward = winners.some(w=>w.id===p.id) ? ISLAND_WINNER_REWARD : 0;
+      p.finalReward = Number(p.sparklesEarned||0) + survivorReward + winnerReward;
+      player.sparkles=Number(player.sparkles||0)+p.finalReward;
+      await savePlayer(env,player);
+    }
+    const finalLines=Object.values(game.players).sort((a,b)=>Number(b.points||0)-Number(a.points||0)).map(p=>`• <@${p.id}> — ${p.alive?"❤️ Survived":"💀 Eliminated"} — **${p.points} pts** — **${p.finalReward || 0} ✨ earned**`).join("\n");
+    const winnerText=winners.map(w=>`🏆 <@${w.id}> — **${maxPoints} points**`).join("\n");
+    const content=`🏝️ **CHAOS ISLAND IS OVER!**\n\n${resultLines.join("\n\n")}\n\n🏆 **WINNER${winners.length===1?"":"S"}**\n${winnerText}\n\n🎁 Survivors received **${ISLAND_SURVIVOR_REWARD} ✨**.\n🏆 Winners received an extra **${ISLAND_WINNER_REWARD} ✨**.\n\n📊 **FINAL STANDINGS**\n${finalLines}\n\n🦝 The island has been returned to the raccoons.`;
+    const state=await getGuildState(env,game.guildId);
+    if (state.island?.id===game.id) { state.island=null; await saveGuildState(env,game.guildId,state); }
+    if (interaction) await islandPublicUpdate(env,interaction,content,[]);
+    return;
+  }
+  game.round++;
+  const scenario=islandPickScenario(game);
+  game.phaseEndsAt=Date.now()+ISLAND_ROUND_TIMEOUT;
+  await islandSave(env,game);
+  if (interaction) await islandPublicUpdate(env,interaction,`${resultLines.join("\n\n")}\n\n${islandGameText(game,scenario,game.currentVersion)}`,islandChoiceRows(game,scenario));
+}
+
+async function handleIslandChoice(env, interaction, choiceIndex) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state=await getGuildState(env,interaction.guild_id);
+  const game=state.island;
+  if (!game || game.status!=="playing") return sendText(env,interaction,"❌ There isn't an active Chaos Island round.");
+  const user=getUserFromInteraction(interaction);
+  const player=game.players[user.id];
+  if (!player) return sendText(env,interaction,"❌ You're not in this Chaos Island game.");
+  if (!player.alive) return sendText(env,interaction,"💀 You're eliminated, but you can watch the rest of the island game.");
+  if (player.choice!==null) return sendText(env,interaction,"🔒 You already locked in your choice for this round!");
+  const choices=islandCurrentChoices(game);
+  const index=Number(choiceIndex);
+  if (!Number.isInteger(index)||!choices[index]) return sendText(env,interaction,"❌ That island choice is invalid.");
+  player.choice=index;
+  game.currentChoices[user.id]=index;
+  if (islandAllAliveChosen(game)) {
+    await acknowledge(env,interaction);
+    await resolveChaosIslandRound(env,game,interaction,false);
+    return;
+  }
+  await islandSave(env,game);
+  await acknowledge(env,interaction);
+  const scenario=getIslandCurrentScenario(game);
+  await islandPublicUpdate(env,interaction,islandGameText(game,scenario,game.currentVersion),islandChoiceRows(game,scenario));
+}
+
+async function processChaosIslandTimers(env) {
+  const guildIds=await getKnownGuildIds(env);
+  for (const guildId of guildIds) {
+    try {
+      const state=await getGuildState(env,guildId);
+      const game=state.island;
+      if (!game || game.status!=="playing") continue;
+      if (Date.now() < Number(game.phaseEndsAt||0)) continue;
+      await resolveChaosIslandRound(env,game,null,true);
+      const refreshed=await getGuildState(env,guildId);
+      if (game.status!=="ended" && refreshed.island?.id===game.id) { refreshed.island=game; await saveGuildState(env,guildId,refreshed); }
+    } catch(error) { console.error(`Chaos Island timer failed for guild ${guildId}:`,error); }
+  }
+}
 
 /* =========================================================
    RACCOON HEIST
@@ -7433,6 +13276,15 @@ async function resolveHeistVote(
 function heistWinnerList(game) {
   const winners = [];
 
+  const thiefCaught = String(game.endedReason || "").includes("THIEF HAS BEEN CAUGHT");
+  if (thiefCaught) {
+    for (const player of Object.values(game.players)) {
+      if (player.alive && HEIST_ROLE_DEFINITIONS[player.role]?.team === "hunters") {
+        winners.push(`${heistDisplayName(player)} — ${HEIST_ROLE_DEFINITIONS[player.role].name}`);
+      }
+    }
+  }
+
   const thief =
     Object.values(game.players).find(
       player =>
@@ -7611,7 +13463,7 @@ async function finishHeist(
               `🏆 ${heistDisplayName(player)} — **${winnerReward} ✨**`
           )
           .join("\n")
-      : "No secret-role side goals were completed.";
+      : "No winners were recorded.";
 
   await heistSendPublic(
     env,
@@ -9134,12 +14986,31 @@ async function handleFine(env, interaction) {
   );
 }
 
+async function handleIslandCommand(env, interaction) {
+  if (!interaction.guild_id) {
+    await sendText(env, interaction, "❌ Chaos Island can only be played inside a server.");
+    return;
+  }
+  const subcommand = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
+  if (subcommand === "create") return handleIslandCreate(env, interaction);
+  if (subcommand === "join") return handleIslandJoin(env, interaction);
+  if (subcommand === "leave") return handleIslandLeave(env, interaction);
+  if (subcommand === "start") return handleIslandStart(env, interaction);
+  if (subcommand === "status") return handleIslandStatus(env, interaction);
+  await handleIslandRules(env, interaction);
+}
+
 async function handleCommand(
   env,
   interaction
 ) {
   const name =
     interaction.data?.name;
+
+  if (name === "island") {
+    await handleIslandCommand(env, interaction);
+    return;
+  }
 
   if (name === "heist") {
     await handleHeistCommand(
@@ -9443,6 +15314,19 @@ async function handleCommand(
 ========================================================= */
 
 const COMMANDS = [
+  {
+    name: "island",
+    description: "Play Chaos Island with 2–10 players",
+    options: [
+      { type: 1, name: "create", description: "Create a Chaos Island lobby" },
+      { type: 1, name: "join", description: "Join the current Chaos Island lobby" },
+      { type: 1, name: "leave", description: "Leave the current Chaos Island game" },
+      { type: 1, name: "start", description: "Start Chaos Island (host only)" },
+      { type: 1, name: "status", description: "View the current Chaos Island game" },
+      { type: 1, name: "rules", description: "View Chaos Island rules" }
+    ]
+  },
+
   {
     name: "heist",
     description: "Play Raccoon Heist with 3–12 players",
@@ -9970,6 +15854,7 @@ export default {
 
    Every scheduled pass checks:
    - Raccoon Heist timers
+   - Chaos Island round timers
    - Chaos events (their one-hour schedule)
 ======================================================= */
 
@@ -9984,6 +15869,9 @@ export default {
           env
         ),
         processHeistTimers(
+          env
+        ),
+        processChaosIslandTimers(
           env
         )
       ])
