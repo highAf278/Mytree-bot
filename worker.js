@@ -10904,9 +10904,10 @@ function islandSettingsComponents(game) {
 }
 
 function islandPlayerLines(game) {
-  return Object.values(game.players || {}).map((p, i) =>
-    `${i + 1}. <@${p.id}> — ❤️ ${p.hearts} ${p.alive ? "" : "💀 Eliminated"}`
-  ).join("\n");
+  return Object.values(game.players || {}).map((p, i) => {
+    const title = p.equippedTitle && SOLO_TITLES[p.equippedTitle]?.name ? ` ${SOLO_TITLES[p.equippedTitle].name}` : "";
+    return `${i + 1}. <@${p.id}>${title} — ❤️ ${p.hearts} ${p.alive ? "" : "💀 Eliminated"}`;
+  }).join("\n");
 }
 
 function islandLobbyText(game) {
@@ -11030,7 +11031,7 @@ async function handleIslandCreate(env, interaction) {
     currentChoices:{},
     usedScenarioIds:[],
     phaseEndsAt:0,
-    players:{[user.id]:{id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0}}
+    players:{[user.id]:{id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""}}
   };
   state.island=game;
   await saveGuildState(env, interaction.guild_id, state);
@@ -11045,7 +11046,7 @@ async function handleIslandJoin(env, interaction) {
   const user=getUserFromInteraction(interaction);
   if (game.players[user.id]) return sendText(env, interaction, "🏝️ You're already on the island!", islandLobbyComponents(game));
   if (Object.keys(game.players).length >= ISLAND_MAX_PLAYERS) return sendText(env, interaction, "❌ The island is full! 10 players maximum.");
-  game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0};
+  game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""};
   await islandSave(env, game);
   await acknowledge(env, interaction);
   await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
@@ -11478,7 +11479,7 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
     row(button("🕵️ Solo Mission", "games:solo", 3), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2)),
     row(button("🏷️ Titles", "title:list", 2))
@@ -11948,11 +11949,9 @@ function heistPlayer(game, userId) {
 }
 
 function heistDisplayName(player) {
-  return (
-    player?.displayName ||
-    player?.username ||
-    "Werewife"
-  );
+  const name = player?.displayName || player?.username || "Werewife";
+  const title = player?.equippedTitle && SOLO_TITLES[player.equippedTitle]?.name ? ` ${SOLO_TITLES[player.equippedTitle].name}` : "";
+  return `${name}${title}`;
 }
 
 function heistRole(game, userId) {
