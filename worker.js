@@ -23,6 +23,8 @@ const MAX_ACTIVE_SPARKLES = 5;
 /* WATER IS NOW 30 MINUTES */
 const WATER_COOLDOWN = 30 * 60 * 1000;
 const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
+const RACCOON_COOLDOWN = 3 * 60 * 60 * 1000;
+const FORTUNE_COOLDOWN = 60 * 60 * 1000;
 
 /*
   CHAOS IS NO LONGER TRIGGERED BY WATER.
@@ -30,8 +32,8 @@ const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
   The scheduled Worker checks every 5 minutes.
   Each guild receives a chaos event every 5 minutes.
 */
-const CHAOS_INTERVAL = 1 * 60 * 1000;
-const CHAOS_SCHEDULE_VERSION = 4;
+const CHAOS_INTERVAL = 60 * 60 * 1000;
+const CHAOS_SCHEDULE_VERSION = 5;
 const STONED_GIFT_SPARKLES = 300;
 
 const BASE_URL =
@@ -59,7 +61,10 @@ const IMAGES = {
   magicMushroom: "IMG_7300.jpeg",
   fieldDay: "IMG_7299.jpeg",
   redForest: "IMG_7291.jpeg",
-  halloweenTree: "IMG_7309.png"
+  halloweenTree: "IMG_7309.png",
+  purrPrincess: "IMG_7315.png",
+  kittyTree: "IMG_7314.png",
+  cozyCat: "IMG_7317.png"
 };
 
 const SHOP_ITEMS = {
@@ -164,6 +169,27 @@ const SHOP_ITEMS = {
     price: 2000,
     type: "tree",
     value: "halloween_tree",
+    limited: true
+  },
+  purr_princess_effect: {
+    name: "👑 Purr Princess",
+    price: 5000,
+    type: "effect",
+    value: "purr_princess",
+    limited: true
+  },
+  kitty_tree: {
+    name: "🐱 Kitty Tree",
+    price: 5000,
+    type: "tree",
+    value: "kitty_tree",
+    limited: true
+  },
+  cozy_cat_background: {
+    name: "🐱 Cozy Cat",
+    price: 5000,
+    type: "background",
+    value: "cozy_cat",
     limited: true
   }
 };
@@ -394,6 +420,8 @@ function defaultPlayer() {
     sparkles: 0,
     lastWater: 0,
     lastRecycle: 0,
+    lastRaccoon: 0,
+    lastFortune: 0,
     sparklesOnTree: [],
     sceneMessage: "",
     claimedLevelRewards: [],
@@ -408,7 +436,17 @@ function defaultPlayer() {
     dailyRiddleSolved: false,
     dailyRiddleWins: 0,
     birthdayUnlocked: false,
-    birthdayGiftClaimed: false
+    birthdayGiftClaimed: false,
+    waterCount: 0,
+    sparklesCaught: 0,
+    sparkleValueCaught: 0,
+    raccoonRobberies: 0,
+    raccoonWins: 0,
+    fortuneUses: 0,
+    shopPurchases: 0,
+    treeChecks: 0,
+    catItemBought: false,
+    achievements: []
   };
 }
 
@@ -441,6 +479,10 @@ async function getPlayer(env, userId) {
         Array.isArray(player.claimedLevelRewards)
           ? player.claimedLevelRewards
           : [],
+      achievements:
+        Array.isArray(player.achievements)
+          ? player.achievements
+          : [],
       sparklesOnTree:
         Array.isArray(player.sparklesOnTree)
           ? player.sparklesOnTree
@@ -468,6 +510,7 @@ async function getPlayer(env, userId) {
 }
 
 async function savePlayer(env, player) {
+  updateAchievements(player);
   await env.TREE_DATA.put(
     player.userId,
     JSON.stringify(player)
@@ -1055,7 +1098,7 @@ async function sendTree(
           filename: "tree.png"
         }
       ],
-      components: treeButtons(getUserFromInteraction(interaction)?.id || "")
+      components: treeButtons(getUserFromInteraction(interaction)?.id || "", player)
     })
   );
 
@@ -1121,7 +1164,7 @@ async function updateTreeMessage(
       {
         content,
         components:
-          treeButtons(getUserFromInteraction(interaction)?.id || "")
+          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
     );
 
@@ -1169,13 +1212,14 @@ function row(...buttons) {
   };
 }
 
-function treeButtons(ownerId = "") {
+function treeButtons(ownerId = "", player = null) {
   const prefix = ownerId ? `tree:${ownerId}:` : "tree:unknown:";
 
-  return [
+  const rows = [
     row(
       button("💧 Water", `${prefix}water`, 1),
-      button("✨ Catch Sparkles", `${prefix}catch`, 3),
+      button("🔮 Fortune", `${prefix}fortune`, 2),
+      button("✨ Balance", `${prefix}sparkle`, 3),
       button("🧩 Daily Riddle", `${prefix}daily_riddle`, 2)
     ),
     row(
@@ -1184,6 +1228,28 @@ function treeButtons(ownerId = "") {
       button("🏆 Leaderboard", `${prefix}leaderboard`, 2)
     )
   ];
+
+  const sparkles = Array.isArray(player?.sparklesOnTree)
+    ? player.sparklesOnTree
+    : [];
+
+  if (sparkles.length) {
+    for (let i = 0; i < sparkles.length; i += 5) {
+      rows.push(
+        row(
+          ...sparkles.slice(i, i + 5).map(sparkle =>
+            button(
+              `${sparkle.emoji || "✨"} Catch +${Number(sparkle.value) || 0}`,
+              `${prefix}catch:${sparkle.id}`,
+              3
+            )
+          )
+        )
+      );
+    }
+  }
+
+  return rows;
 }
 
 function treeButtonOwner(id) {
@@ -1223,6 +1289,9 @@ function getBackgroundImage(player) {
     case "red_forest":
       return IMAGES.redForest;
 
+    case "cozy_cat":
+      return IMAGES.cozyCat;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1255,6 +1324,9 @@ function getTreeImage(player) {
 
     case "halloween_tree":
       return IMAGES.halloweenTree;
+
+    case "kitty_tree":
+      return IMAGES.kittyTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1295,6 +1367,9 @@ function getEffectImage(player) {
 
     case "hearts":
       return IMAGES.hearts;
+
+    case "purr_princess":
+      return IMAGES.purrPrincess;
 
     default:
       return null;
@@ -1392,6 +1467,7 @@ async function renderTree(
               filter:drop-shadow(0 0 6px white) drop-shadow(0 0 14px white) drop-shadow(0 0 24px #fff);
               user-select:none;
             "
+          title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
           >${emoji}</div>
         `;
       })
@@ -1667,31 +1743,38 @@ function cleanSparkles(player) {
 }
 
 function randomSparkle() {
-  const roll =
-    Math.random();
+  const roll = Math.random();
 
-  if (roll < 0.55) {
+  if (roll < 0.45) {
     return {
-      emoji: "💖",
+      id: "pink",
+      name: "Pink Sparkle",
+      emoji: "🩷",
       value: 10
     };
   }
 
-  if (roll < 0.80) {
+  if (roll < 0.72) {
     return {
+      id: "rainbow",
+      name: "Rainbow Sparkle",
       emoji: "🌈",
       value: 20
     };
   }
 
-  if (roll < 0.95) {
+  if (roll < 0.92) {
     return {
+      id: "moon",
+      name: "Moon Sparkle",
       emoji: "🌙",
       value: 30
     };
   }
 
   return {
+    id: "star",
+    name: "Star Sparkle",
     emoji: "⭐",
     value: 50
   };
@@ -1728,6 +1811,8 @@ function maybeSpawnSparkles(
     player.sparklesOnTree.push(
       {
         id: crypto.randomUUID(),
+        kind: sparkle.id,
+        name: sparkle.name,
         emoji: sparkle.emoji,
         value: sparkle.value,
         x: randomInt(25, 75),
@@ -1966,11 +2051,21 @@ async function processChaosEvents(
     try {
       const state = await getGuildState(env, guildId);
 
-      /*
-        The Worker cron is the actual clock for Chaos.
-        Fire one event on every scheduled pass instead of relying
-        on a second timer that can drift or get stuck in KV.
-      */
+      if (
+        state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION ||
+        !state.nextChaosAt ||
+        Number(state.nextChaosAt) <= 0
+      ) {
+        state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
+        state.nextChaosAt = now + CHAOS_INTERVAL;
+        await saveGuildState(env, guildId, state);
+        continue;
+      }
+
+      if (now < Number(state.nextChaosAt)) {
+        continue;
+      }
+
       const happened = await runRandomChaosEvent(env, guildId);
 
       state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
@@ -2095,6 +2190,8 @@ async function handleWater(
 
     player.lastWater =
       now;
+    player.waterCount =
+      Number(player.waterCount || 0) + 1;
 
     player.exp +=
       EXP_PER_WATER;
@@ -2193,7 +2290,7 @@ async function handleWater(
         content:
           `❌ Water couldn't be completed.\\n\\n${message}`,
         components:
-          treeButtons(getUserFromInteraction(interaction)?.id || "")
+          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
     );
   }
@@ -2205,7 +2302,8 @@ async function handleWater(
 
 async function handleCatch(
   env,
-  interaction
+  interaction,
+  sparkleId = null
 ) {
   await acknowledge(
     env,
@@ -2233,93 +2331,68 @@ async function handleCatch(
       interaction
     );
 
-    /*
-      First remove expired sparkles.
+    cleanSparkles(player);
 
-      If there are NONE after cleaning, we DO NOT
-      launch Browser Rendering anymore.
+    const sparkles =
+      Array.isArray(player.sparklesOnTree)
+        ? player.sparklesOnTree
+        : [];
 
-      This is an important reduction in 429 usage.
-    */
-
-    cleanSparkles(
-      player
-    );
-
-    if (
-      !player.sparklesOnTree ||
-      !player.sparklesOnTree.length
-    ) {
+    if (!sparkles.length) {
       player.sceneMessage =
         "✨ There aren't any sparkles on your tree right now!";
 
-      await savePlayer(
-        env,
-        player
-      );
-
-      /*
-        NO sendTree().
-        NO Browser Rendering.
-      */
-
-      await updateTreeMessage(
-        env,
-        interaction,
-        player
-      );
-
+      await savePlayer(env, player);
+      await updateTreeMessage(env, interaction, player);
       return;
     }
 
-    let total = 0;
-    let caught = 0;
+    let caughtSparkle = null;
 
-    for (
-      const sparkle of
-        player.sparklesOnTree
-    ) {
-      const value =
-        Number(
-          sparkle.value
+    if (sparkleId) {
+      caughtSparkle =
+        sparkles.find(
+          sparkle => sparkle.id === sparkleId
         );
 
-      if (
-        Number.isFinite(
-          value
-        ) &&
-        value > 0
-      ) {
-        total += value;
-      }
+      if (!caughtSparkle) {
+        player.sceneMessage =
+          "✨ That sparkle has already been caught or expired!";
 
-      caught++;
+        await savePlayer(env, player);
+        await updateTreeMessage(env, interaction, player);
+        return;
+      }
+    } else {
+      /*
+        Legacy Catch Sparkles buttons now catch only ONE sparkle,
+        never the whole tree. Prefer the first active sparkle.
+      */
+      caughtSparkle = sparkles[0];
     }
 
     player.sparklesOnTree =
-      [];
+      sparkles.filter(
+        sparkle => sparkle.id !== caughtSparkle.id
+      );
 
-    player.sparkles +=
-      total;
+    const value =
+      Math.max(
+        0,
+        Number(caughtSparkle.value) || 0
+      );
+
+    player.sparkles += value;
+    player.sparklesCaught =
+      Number(player.sparklesCaught || 0) + 1;
+    player.sparkleValueCaught =
+      Number(player.sparkleValueCaught || 0) + value;
 
     player.sceneMessage =
-      `✨ You caught **${caught} sparkles** and earned **+${total} sparkles!** 💖`;
+      `✨ You caught a **${caughtSparkle.name || "Sparkle"}** ${caughtSparkle.emoji || "✨"} and earned **+${value} sparkles!**`;
 
-    await savePlayer(
-      env,
-      player
-    );
-
-    /*
-      Sparkles were actually visible and have now
-      disappeared, so the image MUST be rendered.
-    */
-
-    await updateTreeMessage(
-      env,
-      interaction,
-      player
-    );
+    await savePlayer(env, player);
+    await updateTreeMessage(env, interaction, player);
 
   } catch (error) {
     console.error(
@@ -2926,65 +2999,80 @@ async function showLimitedShop(
   env,
   interaction
 ) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
 
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
+  const items = [
+    ["purr_princess_effect", "👑 Purr Princess", "buy_purr_princess"],
+    ["kitty_tree", "🐱 Kitty Tree", "buy_kitty_tree"],
+    ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"],
+    ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
+    ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
+    ["halloween_tree", "🎃🌳 Halloween Tree", "buy_halloween_tree"]
+  ];
 
-  const halloweenOwned =
-    player.inventory.includes("halloween_background");
-  const pumpkinOwned =
-    player.inventory.includes("pumpkin_cat_decoration");
-  const halloweenTreeOwned =
-    player.inventory.includes("halloween_tree");
+  const rows = [];
+
+  const catItems = items.slice(0, 3);
+  for (const [itemId, label, buttonId] of catItems) {
+    const owned = player.inventory.includes(itemId);
+    rows.push(
+      row(
+        button(
+          owned
+            ? `${label} Owned`
+            : `${label} — 5000`,
+          buttonId,
+          owned ? 2 : 1,
+          owned
+        )
+      )
+    );
+  }
+
+  rows.push(
+    row(
+      button("🎃 Other Limited Items", "shop_limited_halloween", 2),
+      button("⬅️ Back", "shop", 2)
+    )
+  );
 
   await sendText(
     env,
     interaction,
-    `🎃 **Limited Halloween Shop**\n\n🎃 **Halloween Background** — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 **Pumpkin Cat** — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}\n\n🎃🌳 **Halloween Tree** — 2000 sparkles\n${halloweenTreeOwned ? "✅ Owned" : ""}`,
+    "🛍️ **LIMITED SHOP**\n\n🐱 **CAT BUNDLE**\nLimited cat cosmetics — 5,000 sparkles each!\n\n👑 Purr Princess — Effect\n🐱 Kitty Tree — Tree\n🐱 Cozy Cat — Background",
+    rows
+  );
+}
+
+async function showLimitedHalloweenShop(
+  env,
+  interaction
+) {
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
+
+  const halloweenOwned = player.inventory.includes("halloween_background");
+  const pumpkinOwned = player.inventory.includes("pumpkin_cat_decoration");
+  const halloweenTreeOwned = player.inventory.includes("halloween_tree");
+
+  await sendText(
+    env,
+    interaction,
+    `🎃 **Other Limited Items**\n\n🎃 **Halloween Background** — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 **Pumpkin Cat** — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}\n\n🎃🌳 **Halloween Tree** — 2000 sparkles\n${halloweenTreeOwned ? "✅ Owned" : ""}`,
     [
       row(
-        button(
-          halloweenOwned
-            ? "🎃 Halloween Owned"
-            : "🎃 Buy Halloween — 150",
-          "buy_halloween",
-          halloweenOwned ? 2 : 1,
-          halloweenOwned
-        )
+        button(halloweenOwned ? "🎃 Halloween Owned" : "🎃 Buy Halloween — 150", "buy_halloween", halloweenOwned ? 2 : 1, halloweenOwned),
+        button(pumpkinOwned ? "🐈 Pumpkin Cat Owned" : "🐈 Buy Pumpkin Cat — 250", "buy_pumpkin_cat", pumpkinOwned ? 2 : 1, pumpkinOwned)
       ),
       row(
-        button(
-          pumpkinOwned
-            ? "🐈 Pumpkin Cat Owned"
-            : "🐈 Buy Pumpkin Cat — 250",
-          "buy_pumpkin_cat",
-          pumpkinOwned ? 2 : 1,
-          pumpkinOwned
-        )
+        button(halloweenTreeOwned ? "🎃🌳 Halloween Tree Owned" : "🎃🌳 Buy Halloween Tree — 2000", "buy_halloween_tree", halloweenTreeOwned ? 2 : 1, halloweenTreeOwned)
       ),
-      row(
-        button(
-          halloweenTreeOwned
-            ? "🎃🌳 Halloween Tree Owned"
-            : "🎃🌳 Buy Halloween Tree — 2000",
-          "buy_halloween_tree",
-          halloweenTreeOwned ? 2 : 1,
-          halloweenTreeOwned
-        )
-      ),
-      row(
-        button("⬅️ Back", "shop", 2)
-      )
+      row(button("⬅️ Back to Limited Shop", "shop_limited", 2))
     ]
   );
 }
+
 async function showSpecialShop(
   env,
   interaction
@@ -3078,6 +3166,18 @@ async function buyItem(
   player.inventory.push(
     itemId
   );
+  player.shopPurchases =
+    Number(player.shopPurchases || 0) + 1;
+
+  if (
+    itemId === "purr_princess_effect" ||
+    itemId === "kitty_tree" ||
+    itemId === "cozy_cat_background" ||
+    itemId === "cat_decoration" ||
+    itemId === "pumpkin_cat_decoration"
+  ) {
+    player.catItemBought = true;
+  }
 
   await savePlayer(
     env,
@@ -3220,7 +3320,8 @@ async function showCustomBackgrounds(
   const extraBackgrounds = [
     ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
     ["field_day_background", "🌾 Field Day", "field_day"],
-    ["red_forest_background", "🌲 Red Forest", "red_forest"]
+    ["red_forest_background", "🌲 Red Forest", "red_forest"],
+    ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
@@ -3294,6 +3395,7 @@ async function showCustomTrees(
     ["pine", "🌲 Pine", "pine_tree"],
     ["red", "❤️ Red", "red_tree"],
     ["soul", "💙 Soul", "soul_tree"],
+    ["kitty_tree", "🐱 Kitty Tree", "kitty_tree"],
     ["halloween_tree", "🎃 Halloween", "halloween_tree"]
   ];
 
@@ -3359,6 +3461,16 @@ async function showCustomEffects(
         "💕 Hearts",
         "equip_effect_hearts",
         player.equipped.effect === "hearts" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("purr_princess_effect")) {
+    buttons.push(
+      button(
+        "👑 Purr Princess",
+        "equip_effect_purr_princess",
+        player.equipped.effect === "purr_princess" ? 3 : 2
       )
     );
   }
@@ -4718,6 +4830,8 @@ async function handleTree(
 
   player.sceneMessage =
     "";
+  player.treeChecks =
+    Number(player.treeChecks || 0) + 1;
 
   await savePlayer(
     env,
@@ -4743,7 +4857,7 @@ async function handleTree(
         content:
           `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
         components:
-          treeButtons(getUserFromInteraction(interaction)?.id || "")
+          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
     );
   }
@@ -4786,22 +4900,26 @@ async function handleComponent(
       return;
     }
 
-    const actionMap = {
-      water: "water",
-      catch: "catch",
-      daily_riddle: "daily_riddle",
-      shop: "shop",
-      customize: "customize",
-      leaderboard: "leaderboard"
-    };
+    const actionParts = String(action || "").split(":");
+    const baseAction = actionParts[0];
 
-    const mapped = actionMap[action];
-    if (mapped === "water") { await handleWater(env, interaction); return; }
-    if (mapped === "catch") { await handleCatch(env, interaction); return; }
-    if (mapped === "daily_riddle") { await handleDailyRiddle(env, interaction); return; }
-    if (mapped === "shop") { await showShop(env, interaction); return; }
-    if (mapped === "customize") { await showCustomize(env, interaction); return; }
-    if (mapped === "leaderboard") { await showLeaderboard(env, interaction); return; }
+    if (baseAction === "water") { await handleWater(env, interaction); return; }
+    if (baseAction === "catch") {
+      await handleCatch(env, interaction, actionParts[1] || null);
+      return;
+    }
+    if (baseAction === "fortune") {
+      await handleFortune(env, interaction);
+      return;
+    }
+    if (baseAction === "sparkle") {
+      await handleSparkleBalance(env, interaction);
+      return;
+    }
+    if (baseAction === "daily_riddle") { await handleDailyRiddle(env, interaction); return; }
+    if (baseAction === "shop") { await showShop(env, interaction); return; }
+    if (baseAction === "customize") { await showCustomize(env, interaction); return; }
+    if (baseAction === "leaderboard") { await showLeaderboard(env, interaction); return; }
     return;
   }
 
@@ -4909,7 +5027,11 @@ async function handleComponent(
       env,
       interaction
     );
+    return;
+  }
 
+  if (id === "shop_limited_halloween") {
+    await showLimitedHalloweenShop(env, interaction);
     return;
   }
 
@@ -4974,7 +5096,16 @@ async function handleComponent(
       "red_forest_background",
 
     buy_halloween_tree:
-      "halloween_tree"
+      "halloween_tree",
+
+    buy_purr_princess:
+      "purr_princess_effect",
+
+    buy_kitty_tree:
+      "kitty_tree",
+
+    buy_cozy_cat:
+      "cozy_cat_background"
   };
 
   if (
@@ -5160,6 +5291,7 @@ const HEIST_VOTE_DURATION = 3 * 60 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
 const HEIST_STEAL_MAX = 1500;
+const HEIST_WIN_REWARD = 500;
 
 const HEIST_PERMISSIONS = {
   SEND_MESSAGES: 2048n,
@@ -6042,6 +6174,12 @@ async function startHeistNight(
     intro,
     heistNightOpenButton(game)
   );
+
+  await setHeistChannelLock(env, game, true);
+
+  const state = await getGuildState(env, game.guildId);
+  state.heist = game;
+  await saveGuildState(env, game.guildId, state);
 
   return true;
 }
@@ -7002,6 +7140,8 @@ async function resolveHeistNight(
     game
   );
 
+  await setHeistChannelLock(env, game, false);
+
   game.status = "voting";
   game.phaseEndsAt =
     Date.now() +
@@ -7392,29 +7532,65 @@ async function finishHeist(
   game,
   reason
 ) {
-  game.status = "ended";
-  game.endedReason =
-    reason || "The heist ended.";
-  game.phaseEndsAt = 0;
+  if (!game || game.status === "ended") return;
 
+  game.status = "ended";
+  game.endedReason = reason || "The heist ended.";
+  game.phaseEndsAt = 0;
 
   const thief =
     Object.values(game.players).find(
-      player =>
-        player.role === "thief"
+      player => player.role === "thief"
     );
 
   if (
     thief &&
-    game.endedReason.includes(
-      "THIEF HAS BEEN CAUGHT"
-    )
+    game.endedReason.includes("THIEF HAS BEEN CAUGHT")
   ) {
     thief.alive = false;
   }
 
-  const winners =
-    heistWinnerList(game);
+  const winners = heistWinnerList(game);
+
+  /*
+    Winners now receive an actual sparkle payout.
+    The prize is split among all winners so ties are fair.
+    If nobody completed a secret goal, nobody receives a payout.
+  */
+  const winnerPlayers = [];
+  const seenWinnerIds = new Set();
+
+  for (const player of Object.values(game.players)) {
+    const label = `${heistDisplayName(player)} — `;
+    if (
+      winners.some(entry => entry.startsWith(label)) &&
+      !seenWinnerIds.has(player.id)
+    ) {
+      winnerPlayers.push(player);
+      seenWinnerIds.add(player.id);
+    }
+  }
+
+  const prizePool = Math.max(
+    0,
+    Number(game.reserve || 0) + Number(game.totalStolen || 0)
+  );
+
+  const winnerReward =
+    winnerPlayers.length
+      ? HEIST_WIN_REWARD +
+        Math.floor(prizePool / winnerPlayers.length)
+      : 0;
+
+  if (winnerReward > 0) {
+    for (const winner of winnerPlayers) {
+      const winnerPlayer = await getPlayer(env, winner.id);
+      winnerPlayer.sparkles =
+        Number(winnerPlayer.sparkles || 0) + winnerReward;
+      await savePlayer(env, winnerPlayer);
+      winner.heistReward = winnerReward;
+    }
+  }
 
   const roleReveal =
     Object.values(game.players)
@@ -7428,24 +7604,30 @@ async function finishHeist(
       .join("\n");
 
   const winnerText =
-    winners.length
-      ? winners.join("\n")
+    winnerPlayers.length
+      ? winnerPlayers
+          .map(
+            player =>
+              `🏆 ${heistDisplayName(player)} — **${winnerReward} ✨**`
+          )
+          .join("\n")
       : "No secret-role side goals were completed.";
 
   await heistSendPublic(
     env,
     game,
-    `🏁 **RACCOON HEIST OVER!**\n\n${reason}\n\n💰 Total stolen: **${game.totalStolen} ✨**\n\n🏆 **Winners / completed secret goals:**\n${winnerText}\n\n🎭 **ROLE REVEAL**\n${roleReveal}\n\n🦝 Thank you for committing raccoon crimes.`
+    `🏁 **RACCOON HEIST OVER!**\n\n${reason}\n\n💰 Total stolen: **${game.totalStolen} ✨**\n💰 Winner prize pool: **${prizePool} ✨**\n🎁 Guaranteed winner reward: **${HEIST_WIN_REWARD} ✨ each**\n\n🏆 **WINNERS**\n${winnerText}\n\n🎭 **ROLE REVEAL**\n${roleReveal}\n\n🦝 Thank you for committing raccoon crimes.`
   );
 
-  await saveGuildState(
-    env,
-    game.guildId,
-    await getGuildState(
-      env,
-      game.guildId
-    )
-  );
+  await setHeistChannelLock(env, game, false);
+
+  const latestState = await getGuildState(env, game.guildId);
+  if (latestState.heist?.id === game.id) {
+    latestState.heist = null;
+    await saveGuildState(env, game.guildId, latestState);
+  }
+
+  game.status = "ended";
 }
 
 async function processHeistTimers(
@@ -7477,13 +7659,11 @@ async function processHeistTimers(
           game
         );
 
-        state.heist = game;
-
-        await saveGuildState(
-          env,
-          guildId,
-          state
-        );
+        const refreshed = await getGuildState(env, guildId);
+        if (refreshed.heist?.id === game.id) {
+          refreshed.heist = game;
+          await saveGuildState(env, guildId, refreshed);
+        }
       } else if (
         game.status === "voting" &&
         Date.now() >=
@@ -7494,13 +7674,11 @@ async function processHeistTimers(
           game
         );
 
-        state.heist = game;
-
-        await saveGuildState(
-          env,
-          guildId,
-          state
-        );
+        const refreshed = await getGuildState(env, guildId);
+        if (refreshed.heist?.id === game.id) {
+          refreshed.heist = game;
+          await saveGuildState(env, guildId, refreshed);
+        }
       }
     } catch (error) {
       console.error(
@@ -8080,13 +8258,11 @@ async function handleHeistEnd(
     "🛑 The heist was ended by the host."
   );
 
-  state.heist = game;
-
-  await saveGuildState(
-    env,
-    interaction.guild_id,
-    state
-  );
+  const latestState = await getGuildState(env, interaction.guild_id);
+  if (latestState.heist?.id === game.id) {
+    latestState.heist = null;
+    await saveGuildState(env, interaction.guild_id, latestState);
+  }
 
   await sendText(
     env,
@@ -8614,6 +8790,280 @@ function getOption(
   );
 }
 
+const FORTUNES = [
+  ["🔮 The Fortune Tree looked into your soul... and decided you deserve **{n} sparkles**. ✨", 25, 200],
+  ["🌳 The tree whispered: “Take these and don't ask questions.” **{n} sparkles!**", 50, 250],
+  ["🦝 A raccoon delivered your fortune personally. **{n} sparkles!**", 10, 150],
+  ["🌙 The moon is feeling generous tonight. **{n} sparkles!**", 25, 300],
+  ["🌈 A rainbow appeared... unfortunately it brought **0 sparkles**. 😭", 0, 0],
+  ["🍃 A leaf fell on your head. That's your fortune. **0 sparkles.**", 0, 0],
+  ["💀 The tree considered giving you sparkles, then changed its mind. **0 sparkles.**", 0, 0],
+  ["👀 The Fortune Tree stared at you. You stared back. Nothing happened. **0 sparkles.**", 0, 0],
+  ["🐱 The tree demanded cat pictures. It gave you **{n} sparkles** anyway.", 25, 175],
+  ["🤨 The tree says you should have come yesterday. **0 sparkles.**", 0, 0],
+  ["✨ A suspiciously shiny leaf fell into your hands. **{n} sparkles!**", 5, 75],
+  ["🎰 THE FORTUNE TREE HAS SPOKEN. **{n} sparkles!**", 100, 400],
+  ["🦝 Your raccoon friend put in a good word for you. **{n} sparkles!**", 20, 125],
+  ["😭 The Fortune Tree tried to pay you, but tripped. **0 sparkles.**", 0, 0],
+  ["👑 The tree has chosen you. **{n} sparkles** have been bestowed upon you!", 150, 500]
+];
+
+async function handleSparkleBalance(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  await savePlayer(env, player);
+  await sendText(env, interaction, `✨ **Your Sparkle Balance**\n\nYou have **${Number(player.sparkles || 0)} sparkles**. 💖`);
+}
+
+async function handleFortune(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+
+  const now = Date.now();
+  if (player.lastFortune && now - player.lastFortune < FORTUNE_COOLDOWN) {
+    const remaining = FORTUNE_COOLDOWN - (now - player.lastFortune);
+    const minutes = Math.ceil(remaining / 60000);
+    await sendText(env, interaction, `🔮 The Fortune Tree is still thinking... try again in about **${minutes} minute${minutes === 1 ? "" : "s"}**. 🌳`);
+    return;
+  }
+
+  player.lastFortune = now;
+  player.fortuneUses = Number(player.fortuneUses || 0) + 1;
+
+  const fortune = FORTUNES[randomInt(0, FORTUNES.length - 1)];
+  const reward =
+    fortune[1] === 0 && fortune[2] === 0
+      ? 0
+      : randomInt(fortune[1], fortune[2]);
+
+  player.sparkles += reward;
+
+  const message =
+    reward > 0
+      ? fortune[0].replace("{n}", String(reward))
+      : fortune[0];
+
+  player.sceneMessage = `🔮 **FORTUNE TREE**\n\n${message}`;
+  await savePlayer(env, player);
+
+  await sendText(
+    env,
+    interaction,
+    `${message}\n\n${reward > 0 ? `✨ Your balance increased by **${reward} sparkles**!` : "🌳 The tree gave you absolutely nothing. 😂"}`
+  );
+}
+
+async function handleRaccoon(env, interaction) {
+  if (!interaction.guild_id) {
+    await sendText(env, interaction, "❌ `/raccoon` can only be used inside a server.");
+    return;
+  }
+
+  const user = getUserFromInteraction(interaction);
+  const targetId = getOption(interaction, "user");
+
+  if (!user || !targetId || targetId === user.id) {
+    await sendText(env, interaction, "❌ Choose another player for your raccoon to rob.");
+    return;
+  }
+
+  const player = await getPlayer(env, user.id);
+  const target = await getPlayer(env, targetId);
+
+  updatePlayerIdentity(player, interaction);
+
+  const now = Date.now();
+  if (player.lastRaccoon && now - player.lastRaccoon < RACCOON_COOLDOWN) {
+    const remaining = RACCOON_COOLDOWN - (now - player.lastRaccoon);
+    const hours = Math.floor(remaining / 3600000);
+    const minutes = Math.ceil((remaining % 3600000) / 60000);
+    const timeText = hours > 0
+      ? `${hours} hour${hours === 1 ? "" : "s"}${minutes > 0 ? ` and ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}`
+      : `${minutes} minute${minutes === 1 ? "" : "s"}`;
+    await sendText(env, interaction, `🦝 Your raccoon is exhausted from crime. Try again in about **${timeText}**.`);
+    return;
+  }
+
+  player.lastRaccoon = now;
+  player.raccoonRobberies = Number(player.raccoonRobberies || 0) + 1;
+
+  const victimName =
+    target.displayName ||
+    target.username ||
+    "that player";
+
+  const available = Math.max(0, Number(target.sparkles || 0));
+  const requested = randomInt(0, 300);
+  const stolen = Math.min(requested, available);
+
+  let result;
+
+  if (stolen === 0) {
+    player.secretAchievements =
+      Array.isArray(player.secretAchievements) ? player.secretAchievements : [];
+    player.secretAchievements.push("secret_zero");
+
+    const zeroResponses = [
+      `🦝 Your raccoon robbed **${victimName}**... but came back with **0 sparkles**. 😭`,
+      `🦝 Your raccoon found the sparkle vault completely empty. **0 sparkles for you.**`,
+      `🦝 Your raccoon ate the sparkles instead. **0 sparkles for you.** 💀`,
+      `🦝 Your raccoon got distracted and forgot to rob anyone. **0 sparkles.**`,
+      `🦝 Your raccoon demanded payment, got ignored, and came home angry. **0 sparkles.**`
+    ];
+    result = zeroResponses[randomInt(0, zeroResponses.length - 1)];
+    if (result.includes("ate the sparkles")) {
+      player.secretAchievements.push("secret_ate");
+    }
+  } else {
+    const successResponses = [
+      `🦝 Your raccoon robbed **${stolen} sparkles** from **${victimName}**!`,
+      `💰 Your raccoon came back carrying **${stolen} sparkles**! Crime pays. 🦝`,
+      `🦝✨ Your raccoon successfully stole **${stolen} sparkles**!`,
+      `🚨 Raccoon robbery successful! **${stolen} sparkles** are now yours.`
+    ];
+    result = successResponses[randomInt(0, successResponses.length - 1)];
+    player.sparkles += stolen;
+    player.raccoonWins = Number(player.raccoonWins || 0) + 1;
+    target.sparkles = Math.max(0, Number(target.sparkles || 0) - stolen);
+  }
+
+  await savePlayer(env, player);
+  await savePlayer(env, target);
+
+  await sendText(env, interaction, `${result}\n\n🕒 Your raccoon needs **3 hours** to recover before the next robbery.`);
+
+  const dmText =
+    stolen > 0
+      ? `🦝 **A RACCOON ROBBED YOU!**\n\nA raccoon sent by **${player.displayName || player.username || "another Werewife"}** stole **${stolen} sparkles** from you. 😭\n\nYour remaining balance: **${target.sparkles} sparkles**.`
+      : `🦝 **A RACCOON TRIED TO ROB YOU!**\n\nSomeone sent a raccoon after your sparkles, but it came back empty-handed. 😂\n\nYour balance is still **${target.sparkles} sparkles**.`;
+
+  await sendUserDM(env, targetId, dmText);
+}
+
+async function sendUserDM(env, userId, content) {
+  try {
+    const response = await discordRequest(
+      env,
+      "/users/@me/channels",
+      {
+        method: "POST",
+        body: JSON.stringify({ recipients: [userId] })
+      }
+    );
+
+    if (!response.ok) {
+      console.error("User DM channel failed:", response.status, await response.text());
+      return false;
+    }
+
+    const channel = await response.json();
+
+    const messageResponse = await discordRequest(
+      env,
+      `/channels/${channel.id}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({ content })
+      }
+    );
+
+    if (!messageResponse.ok) {
+      console.error("User DM message failed:", messageResponse.status, await messageResponse.text());
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("User DM error:", error);
+    return false;
+  }
+}
+
+/* =========================================================
+   ACHIEVEMENTS
+========================================================= */
+
+const ACHIEVEMENTS = [
+  { id: "first_water", name: "💧 First Sip", description: "Water your tree 1 time.", reward: 25, progress: p => Number(p.waterCount || 0), goal: 1 },
+  { id: "hydration_25", name: "💦 Hydration Station", description: "Water your tree 25 times.", reward: 50, progress: p => Number(p.waterCount || 0), goal: 25 },
+  { id: "hydration_100", name: "🪣 Professional Waterer", description: "Water your tree 100 times.", reward: 100, progress: p => Number(p.waterCount || 0), goal: 100 },
+  { id: "hydration_500", name: "🌊 Why Is Everything Wet?", description: "Water your tree 500 times.", reward: 250, progress: p => Number(p.waterCount || 0), goal: 500 },
+  { id: "first_sparkle", name: "✨ Shiny!", description: "Catch your first sparkle.", reward: 25, progress: p => Number(p.sparklesCaught || 0), goal: 1 },
+  { id: "sparkles_100", name: "💎 Sparkle Hoarder", description: "Catch 100 sparkles.", reward: 100, progress: p => Number(p.sparklesCaught || 0), goal: 100 },
+  { id: "sparkles_1000", name: "💰 Little Rich", description: "Catch 1,000 sparkles.", reward: 250, progress: p => Number(p.sparkleValueCaught || 0), goal: 1000 },
+  { id: "sparkles_10000", name: "💎 Sparkle Goblin", description: "Collect 10,000 sparkle value.", reward: 750, progress: p => Number(p.sparkleValueCaught || 0), goal: 10000 },
+  { id: "level_5", name: "🌱 Baby Tree", description: "Reach level 5.", reward: 50, progress: p => Number(p.level || 1), goal: 5 },
+  { id: "level_10", name: "🌿 Growing Up", description: "Reach level 10.", reward: 100, progress: p => Number(p.level || 1), goal: 10 },
+  { id: "level_25", name: "🌳 Established", description: "Reach level 25.", reward: 250, progress: p => Number(p.level || 1), goal: 25 },
+  { id: "level_50", name: "✨ Glowing", description: "Reach level 50.", reward: 500, progress: p => Number(p.level || 1), goal: 50 },
+  { id: "raccoon_first", name: "🦝 Crime Pays", description: "Use /raccoon for the first time.", reward: 50, progress: p => Number(p.raccoonRobberies || 0), goal: 1 },
+  { id: "raccoon_5", name: "🦝 Public Menace", description: "Successfully rob someone 5 times.", reward: 150, progress: p => Number(p.raccoonWins || 0), goal: 5 },
+  { id: "fortune_first", name: "🔮 Fortune Seeker", description: "Use /fortune for the first time.", reward: 50, progress: p => Number(p.fortuneUses || 0), goal: 1 },
+  { id: "shop_5", name: "🛍️ Take My Sparkles", description: "Buy 5 shop items.", reward: 150, progress: p => Number(p.shopPurchases || 0), goal: 5 },
+  { id: "secret_zero", name: "🤡 Worth A Shot", description: "Get a 0-sparkle raccoon result.", reward: 100, hidden: true, progress: p => p.secretAchievements?.includes("secret_zero") ? 1 : 0, goal: 1 },
+  { id: "secret_ate", name: "🍽️ He Ate Them?!", description: "Get the raccoon ate the sparkles outcome.", reward: 150, hidden: true, progress: p => p.secretAchievements?.includes("secret_ate") ? 1 : 0, goal: 1 },
+  { id: "tree_obsessed", name: "🌳 Tree Obsessed", description: "Check /tree 100 times.", reward: 100, hidden: true, progress: p => Number(p.treeChecks || 0), goal: 100 },
+  { id: "cat_person", name: "🐱 Cat Person", description: "Buy your first cat item.", reward: 100, hidden: true, progress: p => p.catItemBought ? 1 : 0, goal: 1 }
+];
+
+function updateAchievements(player) {
+  if (!Array.isArray(player.achievements)) player.achievements = [];
+  if (!Array.isArray(player.secretAchievements)) player.secretAchievements = [];
+
+  let rewardTotal = 0;
+  for (const achievement of ACHIEVEMENTS) {
+    if (player.achievements.includes(achievement.id)) continue;
+    const progress = Number(achievement.progress(player) || 0);
+    if (progress >= achievement.goal) {
+      player.achievements.push(achievement.id);
+      player.sparkles = Number(player.sparkles || 0) + achievement.reward;
+      rewardTotal += achievement.reward;
+    }
+  }
+  return rewardTotal;
+}
+
+async function handleAchievements(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  updateAchievements(player);
+  await savePlayer(env, player);
+
+  if (
+    player.inventory.includes("cat_decoration") ||
+    player.inventory.includes("pumpkin_cat_decoration") ||
+    player.inventory.includes("purr_princess_effect") ||
+    player.inventory.includes("kitty_tree") ||
+    player.inventory.includes("cozy_cat_background")
+  ) {
+    player.catItemBought = true;
+  }
+
+  const unlocked = new Set(player.achievements || []);
+  const lines = ACHIEVEMENTS.map(a => {
+    if (a.hidden && !unlocked.has(a.id)) {
+      return "🔒 **Secret Achievement** — ???";
+    }
+    const progress = Math.min(a.goal, Number(a.progress(player) || 0));
+    const status = unlocked.has(a.id) ? "🏆" : "⬜";
+    return `${status} **${a.name}** — ${a.description}\n   Progress: **${progress}/${a.goal}** • Reward: **${a.reward} ✨**`;
+  });
+
+  await sendText(
+    env,
+    interaction,
+    `🏆 **YOUR ACHIEVEMENTS**\n\nUnlocked: **${player.achievements.length}/${ACHIEVEMENTS.length}**\n\n${lines.join("\n\n")}`
+  );
+}
+
 async function handleGift(env, interaction) {
   const user = getUserFromInteraction(interaction);
   if (!user || !interaction.guild_id) {
@@ -8696,6 +9146,26 @@ async function handleCommand(
       env,
       interaction
     );
+    return;
+  }
+
+  if (name === "raccoon") {
+    await handleRaccoon(env, interaction);
+    return;
+  }
+
+  if (name === "sparkle") {
+    await handleSparkleBalance(env, interaction);
+    return;
+  }
+
+  if (name === "fortune") {
+    await handleFortune(env, interaction);
+    return;
+  }
+
+  if (name === "achievements") {
+    await handleAchievements(env, interaction);
     return;
   }
 
@@ -9013,6 +9483,34 @@ const COMMANDS = [
   {
     name: "roles",
     description: "View all Raccoon Heist roles and what they do"
+  },
+
+  {
+    name: "raccoon",
+    description: "Send a raccoon to rob another player",
+    options: [
+      {
+        type: 6,
+        name: "user",
+        description: "Player your raccoon should rob",
+        required: true
+      }
+    ]
+  },
+
+  {
+    name: "sparkle",
+    description: "Check your sparkle balance"
+  },
+
+  {
+    name: "fortune",
+    description: "Ask the Fortune Tree for a silly fortune"
+  },
+
+  {
+    name: "achievements",
+    description: "View your achievements"
   },
 
   {
@@ -9470,9 +9968,9 @@ export default {
    Cloudflare cron should be configured separately
    in Cloudflare Worker Settings → Triggers → Cron Triggers.
 
-   Every minute we check:
-   - Raccoon Heist timers (60-second Night timeout)
-   - Chaos events (their own 5-minute schedule)
+   Every scheduled pass checks:
+   - Raccoon Heist timers
+   - Chaos events (their one-hour schedule)
 ======================================================= */
 
   async scheduled(
