@@ -4925,16 +4925,16 @@ async function handleComponent(
     if (action === "menu") { await handleGamesMenu(env, interaction); return; }
     if (action === "solo") { await handleSoloStart(env, interaction); return; }
     if (action === "solo_leaderboard") { await handleSoloLeaderboard(env, interaction); return; }
-    if (action === "island") { await sendText(env, interaction, "🏝️ **Chaos Island**
+    if (action === "island") { await sendText(env, interaction, `🏝️ **Chaos Island**
 
 Use `/island create` to make a lobby, then `/island join` and `/island start`.
 
-⚙️ The host can choose the number of rounds from the lobby settings."); return; }
-    if (action === "heist") { await sendText(env, interaction, "💰 **Raccoon Heist**
+⚙️ The host can choose the number of rounds from the lobby settings.`); return; }
+    if (action === "heist") { await sendText(env, interaction, `💰 **Raccoon Heist**
 
 Use `/heist create` to make a lobby, then `/heist join` and `/heist start`.
 
-Use `/roles` to see all available roles."); return; }
+Use `/roles` to see all available roles.`); return; }
     return;
   }
 
