@@ -443,6 +443,17 @@ function defaultPlayer() {
     raccoonRobberies: 0,
     raccoonWins: 0,
     fortuneUses: 0,
+    soloMission: null,
+    soloBestScore: 0,
+    soloBestStash: 0,
+    soloRuns: 0,
+    soloWins: 0,
+    soloRiskyChoices: 0,
+    soloPerfectRuns: 0,
+    soloSparklesEarned: 0,
+    soloHighestHeat: 0,
+    titles: [],
+    equippedTitle: "",
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -482,6 +493,10 @@ async function getPlayer(env, userId) {
       achievements:
         Array.isArray(player.achievements)
           ? player.achievements
+          : [],
+      titles:
+        Array.isArray(player.titles)
+          ? player.titles
           : [],
       sparklesOnTree:
         Array.isArray(player.sparklesOnTree)
@@ -4896,8 +4911,46 @@ async function handleComponent(
     if (action === "join") { await handleIslandJoin(env, interaction); return; }
     if (action === "leave") { await handleIslandLeave(env, interaction); return; }
     if (action === "rules") { await handleIslandRules(env, interaction); return; }
+    if (action === "settings") { await handleIslandSettings(env, interaction); return; }
+    if (action === "rounds") { await handleIslandSettings(env, interaction, parts[2]); return; }
+    if (action === "back") { const state=await getGuildState(env, interaction.guild_id); if (state.island) await sendText(env, interaction, islandLobbyText(state.island), islandLobbyComponents(state.island)); return; }
     if (action === "start") { await handleIslandStart(env, interaction); return; }
     if (action === "choice") { await handleIslandChoice(env, interaction, parts[2]); return; }
+    return;
+  }
+
+  if (id.startsWith("games:")) {
+    const parts = id.split(":");
+    const action = parts[1];
+    if (action === "menu") { await handleGamesMenu(env, interaction); return; }
+    if (action === "solo") { await handleSoloStart(env, interaction); return; }
+    if (action === "solo_leaderboard") { await handleSoloLeaderboard(env, interaction); return; }
+    if (action === "island") { await sendText(env, interaction, "🏝️ **Chaos Island**
+
+Use `/island create` to make a lobby, then `/island join` and `/island start`.
+
+⚙️ The host can choose the number of rounds from the lobby settings."); return; }
+    if (action === "heist") { await sendText(env, interaction, "💰 **Raccoon Heist**
+
+Use `/heist create` to make a lobby, then `/heist join` and `/heist start`.
+
+Use `/roles` to see all available roles."); return; }
+    return;
+  }
+
+  if (id.startsWith("solo:")) {
+    const parts = id.split(":");
+    if (parts[1] === "start") { await handleSoloStart(env, interaction); return; }
+    if (parts[1] === "choice") { await handleSoloChoice(env, interaction, parts[2]); return; }
+    if (parts[1] === "abort") { await handleSoloAbort(env, interaction); return; }
+    return;
+  }
+
+  if (id.startsWith("title:")) {
+    const parts = id.split(":");
+    if (parts[1] === "list") { await handleTitleList(env, interaction); return; }
+    if (parts[1] === "equip") { await handleTitleEquip(env, interaction, parts[2]); return; }
+    if (parts[1] === "unequip") { await handleTitleUnequip(env, interaction); return; }
     return;
   }
 
@@ -5313,7 +5366,8 @@ async function handleComponent(
 
 const ISLAND_MIN_PLAYERS = 2;
 const ISLAND_MAX_PLAYERS = 10;
-const ISLAND_ROUNDS = 5;
+const ISLAND_DEFAULT_ROUNDS = 5;
+const ISLAND_ROUND_OPTIONS = [5, 10, 15, 20, 25, 30];
 const ISLAND_ROUND_TIMEOUT = 90 * 1000;
 const ISLAND_SURVIVE_POINTS = 100;
 const ISLAND_SURVIVOR_REWARD = 300;
@@ -10811,11 +10865,38 @@ function islandLobbyComponents(game) {
   return [
     row(
       button("👥 Join Island", "island:join", 3),
-      button("📖 How to Play", "island:rules", 2),
+      button("⚙️ Settings", "island:settings", 2),
+      button("📖 How to Play", "island:rules", 2)
+    ),
+    row(
       button("🚪 Leave", "island:leave", 4),
       button("🚀 Start Game", "island:start", 1)
     )
   ];
+}
+
+function islandSettingsText(game) {
+  const current = Number(game.maxRounds || ISLAND_DEFAULT_ROUNDS);
+  return [
+    "⚙️ **CHAOS ISLAND SETTINGS**",
+    "",
+    `🎮 **Rounds:** ${current}`,
+    `👑 **Host:** <@${game.hostId}>`,
+    "",
+    "Only the host can change the number of rounds.",
+    `Available: ${ISLAND_ROUND_OPTIONS.join(", ")}`
+  ].join("\n");
+}
+
+function islandSettingsComponents(game) {
+  const rows = [];
+  for (let i = 0; i < ISLAND_ROUND_OPTIONS.length; i += 3) {
+    rows.push(row(...ISLAND_ROUND_OPTIONS.slice(i, i + 3).map(n =>
+      button(`${n} Rounds`, `island:rounds:${n}`, Number(game.maxRounds || ISLAND_DEFAULT_ROUNDS) === n ? 1 : 2)
+    )));
+  }
+  rows.push(row(button("⬅️ Back to Lobby", "island:back", 2)));
+  return rows;
 }
 
 function islandPlayerLines(game) {
@@ -10830,6 +10911,7 @@ function islandLobbyText(game) {
     "",
     `👥 **Players: ${Object.keys(game.players).length}/${ISLAND_MAX_PLAYERS}**`,
     `🎮 **Host:** <@${game.hostId}>`,
+    `🔢 **Rounds:** ${Number(game.maxRounds || ISLAND_DEFAULT_ROUNDS)}`
     "",
     islandPlayerLines(game) || "No players yet!",
     "",
@@ -10850,7 +10932,7 @@ function islandGameText(game, scenario, version) {
     `• <@${p.id}> — ❤️ ${p.hearts}${p.choice !== null ? " — 🔒 Choice locked" : " — 🤔 Choosing..."}`
   ).join("\n");
   return [
-    `🏝️ **CHAOS ISLAND — ROUND ${game.round}/${ISLAND_ROUNDS}**`,
+    `🏝️ **CHAOS ISLAND — ROUND ${game.round}/${game.maxRounds || ISLAND_DEFAULT_ROUNDS}**`,
     "",
     `### ${scenario.title}`,
     scenario.prompt,
@@ -10937,6 +11019,7 @@ async function handleIslandCreate(env, interaction) {
     channelId:interaction.channel_id,
     hostId:user.id,
     status:"lobby",
+    maxRounds: ISLAND_DEFAULT_ROUNDS,
     round:0,
     currentScenarioId:null,
     currentVersion:0,
@@ -10986,6 +11069,26 @@ async function handleIslandLeave(env, interaction) {
   await islandSave(env, game);
   await acknowledge(env, interaction);
   await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+}
+
+async function handleIslandSettings(env, interaction, rounds = null) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.island;
+  if (!game || game.status !== "lobby") return sendText(env, interaction, "❌ There isn't an open Chaos Island lobby right now.");
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  if (user.id !== game.hostId) return sendText(env, interaction, "❌ Only the island host can change game settings.");
+  if (rounds !== null) {
+    const value = Number(rounds);
+    if (!ISLAND_ROUND_OPTIONS.includes(value)) return sendText(env, interaction, "❌ That round count isn't available.");
+    game.maxRounds = value;
+    await islandSave(env, game);
+    await acknowledge(env, interaction);
+    await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+    return;
+  }
+  await sendText(env, interaction, islandSettingsText(game), islandSettingsComponents(game));
 }
 
 async function handleIslandRules(env, interaction) {
@@ -11047,7 +11150,7 @@ async function resolveChaosIslandRound(env, game, interaction=null, timedOut=fal
   }
   game.lastRoundResults=resultLines;
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if (!alive.length || game.round>=ISLAND_ROUNDS) {
+  if (!alive.length || game.round>=Number(game.maxRounds || ISLAND_DEFAULT_ROUNDS)) {
     game.status="ended";
     game.phaseEndsAt=0;
     const maxPoints=Math.max(...Object.values(game.players).map(p=>Number(p.points||0)));
@@ -11114,6 +11217,433 @@ async function processChaosIslandTimers(env) {
       if (game.status!=="ended" && refreshed.island?.id===game.id) { refreshed.island=game; await saveGuildState(env,guildId,refreshed); }
     } catch(error) { console.error(`Chaos Island timer failed for guild ${guildId}:`,error); }
   }
+}
+
+/* =========================================================
+   SOLO MISSION
+   SINGLE-PLAYER CHAOTIC STRATEGY GAME
+========================================================= */
+
+const SOLO_MISSION_ROUNDS = 8;
+const SOLO_START_CASH = 500;
+const SOLO_START_HEALTH = 3;
+const SOLO_START_HEAT = 0;
+const SOLO_MAX_HEAT = 100;
+
+const SOLO_SCENARIOS = [
+  {
+    title: "The Suspicious Briefcase",
+    prompt: "💼 A briefcase is sitting unattended in the middle of the street. It is humming.",
+    choices: [
+      { label: "👜 Take it", cash: 350, heat: 20, score: 450, message: "💰 It contains cash. Also one very angry kazoo." },
+      { label: "👀 Inspect it", cash: 100, heat: 5, score: 250, message: "🧠 You spot a hidden compartment and take the safe contents." },
+      { label: "🚶 Walk away", cash: 0, heat: -5, score: 80, message: "😌 You avoid trouble. Suspiciously responsible behavior." },
+      { label: "🧨 Kick it", cash: 500, heat: 35, health: -1, score: 600, risky: true, message: "💥 Terrible idea. Incredible loot. Your ankle disagrees." }
+    ]
+  },
+  {
+    title: "The Raccoon Toll Booth",
+    prompt: "🦝 Three raccoons have built a toll booth and demand payment to cross.",
+    choices: [
+      { label: "🧀 Pay cheese", cash: -50, heat: -10, score: 180, message: "🧀 The raccoons respect the cheese economy." },
+      { label: "💰 Bribe them", cash: -150, heat: -20, score: 300, message: "🦝 The raccoons accept the bribe and give you a suspicious receipt." },
+      { label: "🏃 Sprint through", cash: 250, heat: 25, health: -1, score: 500, risky: true, message: "🏃 You escape with your dignity missing but your wallet fuller." },
+      { label: "🤝 Join their union", cash: 400, heat: 10, score: 550, message: "🦝 You are now middle management for raccoons." }
+    ]
+  },
+  {
+    title: "The Cheese Vault",
+    prompt: "🧀 You discover a vault containing an irresponsible amount of cheese and a keypad.",
+    choices: [
+      { label: "🔐 Crack the code", cash: 600, heat: 30, score: 700, risky: true, message: "💰 The vault opens. You definitely did not learn that code legally." },
+      { label: "🧠 Study the keypad", cash: 250, heat: 5, score: 400, message: "🧠 Patience pays. Mostly in cheese." },
+      { label: "🧀 Take one wheel", cash: 100, heat: 0, score: 220, message: "🧀 You take one wheel. The cheese council nods approvingly." },
+      { label: "🚨 Set off the alarm", cash: 900, heat: 55, health: -1, score: 850, risky: true, message: "🚨 Somehow this works. You grab the biggest cheese and run." }
+    ]
+  },
+  {
+    title: "The Werewife Meeting",
+    prompt: "🐺 You accidentally walk into a secret meeting. Everyone stops talking.",
+    choices: [
+      { label: "😎 Pretend you're invited", cash: 300, heat: 15, score: 450, message: "😎 Nobody questions your confidence." },
+      { label: "📝 Take notes", cash: 450, heat: 25, score: 600, risky: true, message: "📝 You leave with extremely questionable intelligence." },
+      { label: "🙇 Apologize and leave", cash: 0, heat: -15, score: 150, message: "🏃 You escape before anyone asks your name." },
+      { label: "🍕 Offer pizza", cash: -100, heat: -25, score: 350, message: "🍕 Pizza solves diplomacy. Obviously." }
+    ]
+  },
+  {
+    title: "The Sparkle Mine",
+    prompt: "✨ A glittering mine is filled with loose sparkles. A sign says: 'Probably Safe.'",
+    choices: [
+      { label: "⛏️ Mine aggressively", cash: 700, heat: 35, health: -1, score: 900, risky: true, message: "✨ You mine like rent is due." },
+      { label: "🔎 Take the easy glitter", cash: 300, heat: 5, score: 450, message: "✨ Small haul, minimal nonsense." },
+      { label: "🛡️ Gear up first", cash: -100, heat: -5, health: 1, score: 300, message: "🛡️ You prepare properly. Grossly responsible." },
+      { label: "🦝 Ask a raccoon", cash: 450, heat: 10, score: 500, message: "🦝 The raccoon points at the richest tunnel and demands 10%." }
+    ]
+  },
+  {
+    title: "The Totally Legal Casino",
+    prompt: "🎰 A neon casino appears. The front door says 'Definitely Not A Trap.'",
+    choices: [
+      { label: "🎲 Bet small", cash: 250, heat: 5, score: 350, message: "🎲 You win. The universe shrugs." },
+      { label: "💰 Bet big", cash: 800, heat: 25, score: 900, risky: true, message: "💰 Somehow you hit the jackpot." },
+      { label: "🧠 Count cards", cash: 600, heat: 45, score: 850, risky: true, message: "🧠 You were too good. Security noticed." },
+      { label: "🚪 Leave", cash: 0, heat: -20, score: 180, message: "🚪 You refuse to be financially manipulated by a building." }
+    ]
+  },
+  {
+    title: "The Police Officer Who Is Definitely Not A Raccoon",
+    prompt: "🚨 A suspiciously furry officer asks why you're carrying a briefcase full of cheese.",
+    choices: [
+      { label: "😇 Tell the truth", cash: -100, heat: -30, score: 250, message: "😇 Honesty works. Nobody knows why." },
+      { label: "🕵️ Make up a story", cash: 200, heat: 15, score: 400, message: "🕵️ Your lie is terrible. Your confidence is excellent." },
+      { label: "🧀 Offer cheese", cash: -75, heat: -40, score: 500, message: "🧀 The officer quietly accepts the cheese." },
+      { label: "🏃 RUN", cash: 500, heat: 60, health: -1, score: 800, risky: true, message: "🏃 You run. This is now significantly more complicated." }
+    ]
+  },
+  {
+    title: "The Final Door",
+    prompt: "🚪 You reach a giant door with four buttons: SAFE, RICH, CHAOS, and DO NOT PRESS.",
+    choices: [
+      { label: "🛡️ SAFE", cash: 250, heat: -20, score: 350, message: "🛡️ Boring. Effective. You survive." },
+      { label: "💰 RICH", cash: 1000, heat: 35, score: 1100, message: "💰 The door opens to a vault. Beautiful." },
+      { label: "🌪️ CHAOS", cash: 1300, heat: 50, health: -1, score: 1300, risky: true, message: "🌪️ Everything explodes into glitter. You somehow profit." },
+      { label: "☠️ DO NOT PRESS", cash: 2000, heat: 70, health: -2, score: 1700, risky: true, message: "☠️ You pressed it. Of course you pressed it." }
+    ]
+  },
+  {
+    title: "The Mystery Button",
+    prompt: "🔴 A red button appears on a pedestal. There is no explanation.",
+    choices: [
+      { label: "🔴 Press it", cash: 500, heat: 30, score: 650, risky: true, message: "🔴 A money cannon activates. This feels illegal." },
+      { label: "🧠 Inspect it", cash: 150, heat: 0, score: 300, message: "🧠 You find a hidden coin slot and make a modest profit." },
+      { label: "🚶 Ignore it", cash: 0, heat: -10, score: 120, message: "🚶 You resist the button. Character development!" },
+      { label: "🦝 Let a raccoon press it", cash: 750, heat: 20, score: 800, message: "🦝 The raccoon presses it. You accept the consequences." }
+    ]
+  },
+  {
+    title: "The Escape Cart",
+    prompt: "🛒 A shopping cart with an engine offers you a questionable escape route.",
+    choices: [
+      { label: "🏎️ Floor it", cash: 600, heat: 45, health: -1, score: 850, risky: true, message: "🏎️ You have achieved shopping-cart velocity." },
+      { label: "🛞 Drive carefully", cash: 250, heat: 5, score: 400, message: "🛞 Somehow the cart has excellent handling." },
+      { label: "🔧 Fix the brakes", cash: 100, heat: -10, health: 1, score: 300, message: "🔧 You improve the cart and your odds." },
+      { label: "🦝 Give it to the raccoons", cash: 450, heat: 0, score: 550, message: "🦝 The raccoons take the cart. They are now faster than you." }
+    ]
+  }
+];
+
+const SOLO_TITLES = {
+  rabid_raccoon: { name: "the Rabid Raccoon", description: "Finish a Solo Mission after making a raccoon-related choice." },
+  cheese_boss: { name: "the Cheese Boss", description: "Finish a Solo Mission with at least 3,000 cash." },
+  sparkle_princess: { name: "the Sparkle Princess", description: "Earn at least 1,000 sparkles from Solo Mission." },
+  lucky: { name: "the Unreasonably Lucky", description: "Finish a mission with exactly 1 ❤️ remaining." },
+  public_menace: { name: "the Public Menace", description: "Reach 90+ Heat and survive the mission." },
+  bad_decision: { name: "the Walking Bad Decision", description: "Make 5 risky choices in one mission." },
+  chaos_royalty: { name: "the Chaos Royalty", description: "Score 5,000+ in a single mission." },
+  untouchable: { name: "the Untouchable", description: "Finish a mission with 10 or less Heat." },
+  rich_goblin: { name: "the Rich Goblin", description: "Finish a mission with 2,000+ cash." },
+  iron_will: { name: "the Iron Will", description: "Finish a mission without losing any ❤️." },
+  button_goblin: { name: "the Button Goblin", description: "Press 3 or more obviously suspicious buttons/choices." },
+  survivor: { name: "the Mission Survivor", description: "Complete your first Solo Mission." }
+};
+
+function soloPlayerName(player) {
+  const name = player.displayName || player.username || "Werewife";
+  const title = player.equippedTitle && SOLO_TITLES[player.equippedTitle]?.name;
+  return title ? `${name} ${title}` : name;
+}
+
+function soloChoiceRows(game) {
+  const scenario = game.currentScenario;
+  const rows = [];
+  for (let i = 0; i < scenario.choices.length; i += 2) {
+    rows.push(row(
+      button(scenario.choices[i].label, `solo:choice:${i}`, 2),
+      scenario.choices[i + 1] ? button(scenario.choices[i + 1].label, `solo:choice:${i + 1}`, 2) : button("—", "solo:noop", 2, true)
+    ));
+  }
+  rows.push(row(button("🛑 Abort Mission", "solo:abort", 4)));
+  return rows;
+}
+
+function soloGameText(game) {
+  return [
+    `🕵️ **SOLO MISSION — ROUND ${game.round}/${game.maxRounds}**`,
+    `👤 **${game.playerName}**`,
+    "",
+    `❤️ **Health:** ${game.health}/3`,
+    `💰 **Stash:** ${game.cash}`,
+    `🚨 **Heat:** ${game.heat}/100`,
+    `🏆 **Score:** ${game.score}`,
+    `🎲 **Risky choices:** ${game.riskyChoices}`,
+    "",
+    `### ${game.currentScenario.title}`,
+    game.currentScenario.prompt,
+    "",
+    "Choose carefully. The raccoons are watching. 🦝"
+  ].join("\n");
+}
+
+function soloPickScenario(game) {
+  const used = new Set(game.usedScenarioIds || []);
+  let pool = SOLO_SCENARIOS.filter(s => !used.has(s.title));
+  if (!pool.length) { game.usedScenarioIds = []; pool = SOLO_SCENARIOS; }
+  const scenario = pool[randomInt(0, pool.length - 1)];
+  game.usedScenarioIds.push(scenario.title);
+  game.currentScenario = scenario;
+  game.currentChoice = null;
+  return scenario;
+}
+
+function soloMissionMenuText(player) {
+  return [
+    "🕵️ **SOLO MISSION**",
+    "",
+    `👤 **${soloPlayerName(player)}**`,
+    "",
+    "A single-player strategic chaos run where every decision can help you, hurt you, or make the situation dramatically worse.",
+    "",
+    "💰 Manage your stash.",
+    "🚨 Keep your Heat under control.",
+    "❤️ Protect your health.",
+    "🧠 Take risks when the payoff is worth it.",
+    "🏆 Finish with the highest score you can.",
+    "",
+    `📊 **Your best score:** ${Number(player.soloBestScore || 0)}`,
+    `🎮 **Runs completed:** ${Number(player.soloRuns || 0)}`
+  ].join("\n");
+}
+
+function soloMenuComponents() {
+  return [
+    row(button("🕵️ Start Solo Mission", "solo:start", 1), button("🏆 Leaderboard", "games:solo_leaderboard", 2)),
+    row(button("🏷️ Titles", "title:list", 3), button("🎮 Games", "games:menu", 2))
+  ];
+}
+
+async function updateSoloLeaderboard(env, player, score) {
+  const raw = await env.TREE_DATA.get("solo:leaderboard");
+  let board = [];
+  try { board = raw ? JSON.parse(raw) : []; } catch { board = []; }
+  board = Array.isArray(board) ? board : [];
+  const existing = board.find(x => x.userId === player.userId);
+  if (existing) {
+    if (score > Number(existing.score || 0)) {
+      existing.score = score;
+      existing.displayName = player.displayName || player.username || "Werewife";
+      existing.title = player.equippedTitle || "";
+    }
+  } else {
+    board.push({ userId: player.userId, displayName: player.displayName || player.username || "Werewife", score, title: player.equippedTitle || "" });
+  }
+  board.sort((a,b) => Number(b.score || 0) - Number(a.score || 0));
+  board = board.slice(0, 10);
+  await env.TREE_DATA.put("solo:leaderboard", JSON.stringify(board));
+  return board;
+}
+
+async function getSoloLeaderboard(env) {
+  const raw = await env.TREE_DATA.get("solo:leaderboard");
+  try {
+    const board = raw ? JSON.parse(raw) : [];
+    return Array.isArray(board) ? board : [];
+  } catch { return []; }
+}
+
+function unlockSoloTitles(player, mission) {
+  if (!Array.isArray(player.titles)) player.titles = [];
+  const unlock = id => { if (!player.titles.includes(id)) player.titles.push(id); };
+  unlock("survivor");
+  if (mission.raccoonChoice) unlock("rabid_raccoon");
+  if (mission.cash >= 3000) unlock("cheese_boss");
+  if (mission.sparklesEarned >= 1000) unlock("sparkle_princess");
+  if (mission.health === 1) unlock("lucky");
+  if (mission.highestHeat >= 90) unlock("public_menace");
+  if (mission.riskyChoices >= 5) unlock("bad_decision");
+  if (mission.finalScore >= 5000) unlock("chaos_royalty");
+  if (mission.heat <= 10) unlock("untouchable");
+  if (mission.cash >= 2000) unlock("rich_goblin");
+  if (mission.health === SOLO_START_HEALTH) unlock("iron_will");
+  if (mission.buttonChoices >= 3) unlock("button_goblin");
+}
+
+async function handleGamesMenu(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  await savePlayer(env, player);
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n\n🌳 The Tree is separate — use **/tree**.`, [
+    row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
+    row(button("🕵️ Solo Mission", "games:solo", 3), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2)),
+    row(button("🏷️ Titles", "title:list", 2))
+  ]);
+}
+
+async function handleSoloStart(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  if (player.soloMission && player.soloMission.status === "playing") {
+    await sendText(env, interaction, "❌ You already have a Solo Mission in progress. Finish it first!", soloMenuComponents());
+    return;
+  }
+  const game = {
+    id: `solo-${Date.now()}-${user.id}`,
+    userId: user.id,
+    playerName: soloPlayerName(player),
+    status: "playing",
+    round: 1,
+    maxRounds: SOLO_MISSION_ROUNDS,
+    health: SOLO_START_HEALTH,
+    cash: SOLO_START_CASH,
+    heat: SOLO_START_HEAT,
+    score: 0,
+    riskyChoices: 0,
+    buttonChoices: 0,
+    highestHeat: 0,
+    sparklesEarned: 0,
+    raccoonChoice: false,
+    usedScenarioIds: [],
+    currentScenario: null,
+    currentChoice: null
+  };
+  soloPickScenario(game);
+  player.soloMission = game;
+  await savePlayer(env, player);
+  await sendPublicText(env, interaction, soloGameText(game), soloChoiceRows(game));
+}
+
+async function finishSoloMission(env, interaction, player, game, aborted = false) {
+  game.status = "ended";
+  let finalScore = Math.max(0, Math.floor(Number(game.score || 0) + Number(game.cash || 0) * 2 + Number(game.health || 0) * 100 - Number(game.heat || 0) * 10));
+  if (aborted) finalScore = Math.floor(finalScore * 0.25);
+  game.finalScore = finalScore;
+  player.soloRuns = Number(player.soloRuns || 0) + 1;
+  if (!aborted) player.soloWins = Number(player.soloWins || 0) + 1;
+  player.soloBestScore = Math.max(Number(player.soloBestScore || 0), finalScore);
+  player.soloBestStash = Math.max(Number(player.soloBestStash || 0), Number(game.cash || 0));
+  player.soloRiskyChoices = Math.max(Number(player.soloRiskyChoices || 0), Number(game.riskyChoices || 0));
+  player.soloPerfectRuns = Number(player.soloPerfectRuns || 0) + (game.health === SOLO_START_HEALTH && !aborted ? 1 : 0);
+  player.soloHighestHeat = Math.max(Number(player.soloHighestHeat || 0), Number(game.highestHeat || 0));
+  const reward = aborted ? 0 : Math.min(1000, Math.max(50, Math.floor(finalScore / 20)));
+  player.soloSparklesEarned = Number(player.soloSparklesEarned || 0) + reward;
+  player.sparkles = Number(player.sparkles || 0) + reward;
+  unlockSoloTitles(player, { ...game, finalScore });
+  player.soloMission = null;
+  await savePlayer(env, player);
+  if (!aborted) await updateSoloLeaderboard(env, player, finalScore);
+  const unlocked = player.titles.map(id => SOLO_TITLES[id]?.name).filter(Boolean);
+  const titleText = unlocked.length ? `\n🏷️ **Titles unlocked:** ${unlocked.slice(-4).map(x => `**${x}**`).join(", ")}` : "";
+  const content = aborted
+    ? `🛑 **SOLO MISSION ABORTED**\n\nYour run score was **${finalScore}**. No sparkles awarded.\n\nYou can try again anytime. 🕵️`
+    : `🏁 **SOLO MISSION COMPLETE!**\n\n👤 **${soloPlayerName(player)}**\n🏆 **Final Score:** ${finalScore}\n💰 **Final Stash:** ${game.cash}\n❤️ **Health:** ${game.health}/3\n🚨 **Highest Heat:** ${game.highestHeat}/100\n✨ **Sparkles Earned:** +${reward}${titleText}\n\n🏆 Check **/solo-leaderboard** to see where you rank!`;
+  await editOriginalResponse(env, interaction, { content, components: [row(button("🕵️ Play Again", "solo:start", 1), button("🏆 Leaderboard", "games:solo_leaderboard", 2)), row(button("🏷️ Titles", "title:list", 3), button("🎮 Games", "games:menu", 2))] });
+}
+
+async function handleSoloChoice(env, interaction, choiceIndex) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  const game = player.soloMission;
+  if (!game || game.status !== "playing") return sendText(env, interaction, "❌ You don't have an active Solo Mission. Use **/solo** to start one.");
+  const index = Number(choiceIndex);
+  const choice = game.currentScenario?.choices?.[index];
+  if (!choice) return sendText(env, interaction, "❌ That Solo Mission choice is invalid.");
+  game.currentChoice = index;
+  if (choice.risky) game.riskyChoices = Number(game.riskyChoices || 0) + 1;
+  if (String(choice.label).includes("raccoon") || String(choice.label).includes("Raccoon")) game.raccoonChoice = true;
+  if (String(choice.label).includes("BUTTON") || String(choice.label).includes("button") || String(choice.label).includes("Press")) game.buttonChoices = Number(game.buttonChoices || 0) + 1;
+  game.cash = Math.max(0, Number(game.cash || 0) + Number(choice.cash || 0));
+  game.heat = Math.max(0, Math.min(SOLO_MAX_HEAT, Number(game.heat || 0) + Number(choice.heat || 0)));
+  game.health = Math.max(0, Math.min(SOLO_START_HEALTH, Number(game.health || 0) + Number(choice.health || 0)));
+  game.score += Number(choice.score || 0);
+  game.highestHeat = Math.max(Number(game.highestHeat || 0), game.heat);
+  game.sparklesEarned += Math.max(0, Math.floor(Number(choice.score || 0) / 4));
+  const result = choice.message;
+  if (game.health <= 0 || game.heat >= SOLO_MAX_HEAT || game.round >= game.maxRounds) {
+    game.score += Math.max(0, game.health) * 100;
+    await savePlayer(env, player);
+    await acknowledge(env, interaction);
+    await finishSoloMission(env, interaction, player, game, false);
+    return;
+  }
+  game.round++;
+  soloPickScenario(game);
+  await savePlayer(env, player);
+  await acknowledge(env, interaction);
+  await editOriginalResponse(env, interaction, { content: `${result}\n\n${soloGameText(game)}`, components: soloChoiceRows(game) });
+}
+
+async function handleSoloAbort(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  const game = player.soloMission;
+  if (!game || game.status !== "playing") return sendText(env, interaction, "❌ You don't have an active Solo Mission.");
+  await acknowledge(env, interaction);
+  await finishSoloMission(env, interaction, player, game, true);
+}
+
+async function handleSoloStatus(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  if (!player.soloMission || player.soloMission.status !== "playing") {
+    await sendText(env, interaction, soloMissionMenuText(player), soloMenuComponents());
+    return;
+  }
+  await sendText(env, interaction, soloGameText(player.soloMission), soloChoiceRows(player.soloMission));
+}
+
+async function handleSoloLeaderboard(env, interaction) {
+  const board = await getSoloLeaderboard(env);
+  if (!board.length) return sendText(env, interaction, "🏆 **SOLO MISSION LEADERBOARD**\n\nNo completed missions yet. Be the first! 🕵️");
+  const lines = board.map((entry, i) => {
+    const title = entry.title && SOLO_TITLES[entry.title]?.name ? ` ${SOLO_TITLES[entry.title].name}` : "";
+    return `${i + 1}. **${entry.displayName}${title}** — **${entry.score} pts**`;
+  });
+  await sendText(env, interaction, `🏆 **SOLO MISSION LEADERBOARD**\n\n${lines.join("\n")}`);
+}
+
+async function handleTitleList(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  const equipped = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? SOLO_TITLES[player.equippedTitle].name : "None";
+  const lines = Object.entries(SOLO_TITLES).map(([id, t]) => `${player.titles.includes(id) ? "🏆" : "🔒"} **${t.name}** — ${t.description}${player.equippedTitle === id ? " — ⭐ EQUIPPED" : ""}`);
+  await sendText(env, interaction, `🏷️ **YOUR TITLES**\n\nCurrently equipped: **${equipped}**\n\n${lines.join("\n\n")}`, [
+    row(...player.titles.slice(0, 5).map(id => button(`Equip ${SOLO_TITLES[id]?.name || id}`, `title:equip:${id}`, 2))),
+    ...(player.titles.length > 5 ? [row(...player.titles.slice(5, 10).map(id => button(`Equip ${SOLO_TITLES[id]?.name || id}`, `title:equip:${id}`, 2)))] : []),
+    row(button("❌ Unequip Title", "title:unequip", 4), button("🎮 Games", "games:menu", 2))
+  ]);
+}
+
+async function handleTitleEquip(env, interaction, titleId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  if (!player.titles.includes(titleId) || !SOLO_TITLES[titleId]) return sendText(env, interaction, "🔒 You haven't unlocked that title yet.");
+  player.equippedTitle = titleId;
+  await savePlayer(env, player);
+  await sendText(env, interaction, `🏷️ **Title equipped!**\n\nYou are now **${soloPlayerName(player)}**. 👑`);
+}
+
+async function handleTitleUnequip(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  player.equippedTitle = "";
+  await savePlayer(env, player);
+  await sendText(env, interaction, "🏷️ Title unequipped. You are now title-less. 😭");
 }
 
 /* =========================================================
@@ -14997,6 +15527,7 @@ async function handleIslandCommand(env, interaction) {
   if (subcommand === "leave") return handleIslandLeave(env, interaction);
   if (subcommand === "start") return handleIslandStart(env, interaction);
   if (subcommand === "status") return handleIslandStatus(env, interaction);
+  if (subcommand === "settings") return handleIslandSettings(env, interaction);
   await handleIslandRules(env, interaction);
 }
 
@@ -15006,6 +15537,25 @@ async function handleCommand(
 ) {
   const name =
     interaction.data?.name;
+
+  if (name === "games") {
+    await handleGamesMenu(env, interaction);
+    return;
+  }
+
+  if (name === "solo") {
+    const subcommand = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
+    if (subcommand === "leaderboard") await handleSoloLeaderboard(env, interaction);
+    else if (subcommand === "status") await handleSoloStatus(env, interaction);
+    else if (subcommand === "start") await handleSoloStart(env, interaction);
+    else await handleSoloStart(env, interaction);
+    return;
+  }
+
+  if (name === "title") {
+    await handleTitleList(env, interaction);
+    return;
+  }
 
   if (name === "island") {
     await handleIslandCommand(env, interaction);
@@ -15315,6 +15865,26 @@ async function handleCommand(
 
 const COMMANDS = [
   {
+    name: "games",
+    description: "Open the Werewives games menu"
+  },
+
+  {
+    name: "solo",
+    description: "Play Solo Mission",
+    options: [
+      { type: 1, name: "start", description: "Start a Solo Mission" },
+      { type: 1, name: "status", description: "View your current Solo Mission" },
+      { type: 1, name: "leaderboard", description: "View the Solo Mission leaderboard" }
+    ]
+  },
+
+  {
+    name: "title",
+    description: "View and equip your earned titles"
+  },
+
+  {
     name: "island",
     description: "Play Chaos Island with 2–10 players",
     options: [
@@ -15322,6 +15892,7 @@ const COMMANDS = [
       { type: 1, name: "join", description: "Join the current Chaos Island lobby" },
       { type: 1, name: "leave", description: "Leave the current Chaos Island game" },
       { type: 1, name: "start", description: "Start Chaos Island (host only)" },
+      { type: 1, name: "settings", description: "Change Chaos Island settings (host only)" },
       { type: 1, name: "status", description: "View the current Chaos Island game" },
       { type: 1, name: "rules", description: "View Chaos Island rules" }
     ]
