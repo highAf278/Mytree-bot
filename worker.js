@@ -11404,7 +11404,7 @@ const SOLO_SCENARIOS = [
       { label: "🔧 Fix the brakes", cash: 100, heat: -10, health: 1, score: 300, message: "🔧 You improve the cart and your odds." },
       { label: "🦝 Give it to the raccoons", cash: 450, heat: 0, score: 550, message: "🦝 The raccoons take the cart. They are now faster than you." }
     ]
-  }
+  },
 
   {
     title: "The Glitter Laundromat",
