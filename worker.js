@@ -1498,31 +1498,32 @@ async function renderTree(
           Number(sparkle.y) ||
           50;
 
-        const emoji =
-          escapeHTML(
-            sparkle.emoji ||
-              "✨"
-          );
+        const kind = escapeHTML(sparkle.kind || "pink");
+        const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
+        const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
 
         return `
-          <div class="emoji"
+          <div
             style="
               position:absolute;
               left:${left}%;
               top:${top}%;
               transform:translate(-50%,-50%);
-              font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-              font-size:70px;
+              font-family:Arial, Helvetica, sans-serif;
+              font-size:76px;
+              font-weight:900;
               line-height:1;
-              z-index:10;
+              color:#ffffff;
+              z-index:20;
               opacity:1;
-              filter:drop-shadow(0 0 8px #ffffff) drop-shadow(0 0 18px #ffffff) drop-shadow(0 0 34px #b8ff00) drop-shadow(0 0 52px #7cff00);
-              text-shadow:0 0 10px #ffffff, 0 0 22px #ffffff, 0 0 40px #8cff00;
+              -webkit-text-stroke:2px ${glow};
+              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
+              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
               animation:sparklePulse 1.2s ease-in-out infinite;
               user-select:none;
             "
-          title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
-          >${emoji}</div>
+            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
+          >${symbol}</div>
         `;
       })
       .join("");
@@ -2323,15 +2324,15 @@ async function handleWater(
     );
 
     /*
-      Watering must still succeed even when Browser Rendering
-      is temporarily rate-limited. The saved state is enough
-      for the interaction response, so do not render here.
+      If sparkles appeared, render the image so they are actually
+      visible on the tree. Otherwise update only the message to
+      avoid an unnecessary Browser Rendering call.
     */
-    await updateTreeMessage(
-      env,
-      interaction,
-      player
-    );
+    if (spawned > 0) {
+      await sendTree(env, interaction, player);
+    } else {
+      await updateTreeMessage(env, interaction, player);
+    }
   } catch (error) {
     console.error(
       "Water error:",
@@ -2824,14 +2825,9 @@ async function showShop(
 
       row(
         button(
-          "🎃 Limited Shop",
+          "🎁 Limited / Holiday",
           "shop_limited",
           1
-        ),
-        button(
-          "🎁 Special / Holiday",
-          "shop_special",
-          2
         )
       ),
 
@@ -3067,7 +3063,10 @@ async function showLimitedShop(
     ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"],
     ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
     ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
-    ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"]
+    ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"],
+    ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
+    ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
+    ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
   ];
 
   const buttons = items.map(([itemId, label, buttonId]) => {
@@ -3086,66 +3085,13 @@ async function showLimitedShop(
     rows.push(row(...buttons.slice(i, i + 2)));
   }
 
-  rows.push(
-    row(
-      button("🎃 Other Limited Items", "shop_limited_halloween", 2),
-      button("⬅️ Back", "shop", 2)
-    )
-  );
+  rows.push(row(button("⬅️ Back", "shop", 2)));
 
   await sendText(
     env,
     interaction,
-    "🛍️ **LIMITED SHOP**\n\n🐱 **CAT BUNDLE**\n👑 Purr Princess — 5,000 sparkles\n🐱 Kitty Tree — 5,000 sparkles\n🐱 Cozy Cat — 5,000 sparkles\n\n💚 **GREEN GLOW SET**\n🌳 Green Glow Tree — 20,000 sparkles\n🌌 Green Glow Background — 10,000 sparkles\n✨ Green Glow Effect — 10,000 sparkles",
+    "🎁 **LIMITED / HOLIDAY SHOP**\n\n🐱 **CAT BUNDLE** — special limited items\n💚 **GREEN GLOW SET** — limited items\n🎃 **HALLOWEEN** — holiday items",
     rows
-  );
-}
-
-async function showLimitedHalloweenShop(
-  env,
-  interaction
-) {
-  const user = getUserFromInteraction(interaction);
-  const player = await getPlayer(env, user.id);
-
-  const halloweenOwned = player.inventory.includes("halloween_background");
-  const pumpkinOwned = player.inventory.includes("pumpkin_cat_decoration");
-  const halloweenTreeOwned = player.inventory.includes("halloween_tree");
-
-  await sendText(
-    env,
-    interaction,
-    `🎃 **Other Limited Items**\n\n🎃 **Halloween Background** — 150 sparkles\n${halloweenOwned ? "✅ Owned" : ""}\n\n🐈 **Pumpkin Cat** — 250 sparkles\n${pumpkinOwned ? "✅ Owned" : ""}\n\n🎃🌳 **Halloween Tree** — 2000 sparkles\n${halloweenTreeOwned ? "✅ Owned" : ""}`,
-    [
-      row(
-        button(halloweenOwned ? "🎃 Halloween Owned" : "🎃 Buy Halloween — 150", "buy_halloween", halloweenOwned ? 2 : 1, halloweenOwned),
-        button(pumpkinOwned ? "🐈 Pumpkin Cat Owned" : "🐈 Buy Pumpkin Cat — 250", "buy_pumpkin_cat", pumpkinOwned ? 2 : 1, pumpkinOwned)
-      ),
-      row(
-        button(halloweenTreeOwned ? "🎃🌳 Halloween Tree Owned" : "🎃🌳 Buy Halloween Tree — 2000", "buy_halloween_tree", halloweenTreeOwned ? 2 : 1, halloweenTreeOwned)
-      ),
-      row(button("⬅️ Back to Limited Shop", "shop_limited", 2))
-    ]
-  );
-}
-
-async function showSpecialShop(
-  env,
-  interaction
-) {
-  await sendText(
-    env,
-    interaction,
-    "🎁 **Special / Holiday Shop**\n\n✨ More special items are coming soon!",
-    [
-      row(
-        button(
-          "⬅️ Back",
-          "shop",
-          2
-        )
-      )
-    ]
   );
 }
 
@@ -3430,18 +3376,11 @@ async function showCustomBackgrounds(
 
 async function showCustomTrees(
   env,
-  interaction
+  interaction,
+  page = 0
 ) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
 
   const items = [
     ["cherry", "🌸 Cherry", null],
@@ -3454,26 +3393,39 @@ async function showCustomTrees(
     ["soul", "💙 Soul", "soul_tree"],
     ["kitty_tree", "🐱 Kitty Tree", "kitty_tree"],
     ["halloween_tree", "🎃 Halloween", "halloween_tree"],
-    ["green_glow", "💚 Green Glow", "green_glow"]
+    ["green_glow", "💚 Green Glow", "green_glow_tree"]
   ];
 
-  const buttons = [];
+  const ownedItems = items.filter(([value, label, inventoryId]) =>
+    !inventoryId || player.inventory.includes(inventoryId)
+  );
 
-  for (const [value, label, inventoryId] of items) {
-    if (!inventoryId || player.inventory.includes(inventoryId)) {
-      buttons.push(
-        button(
-          label,
-          `equip_tree_${value}`,
-          player.equipped.tree === value ? 3 : 2
-        )
-      );
-    }
-  }
+  const pageSize = 5;
+  const pageCount = Math.max(1, Math.ceil(ownedItems.length / pageSize));
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+
+  const pageItems = ownedItems.slice(page * pageSize, page * pageSize + pageSize);
+  const buttons = pageItems.map(([value, label]) =>
+    button(
+      label,
+      `equip_tree_${value}`,
+      player.equipped.tree === value ? 3 : 2
+    )
+  );
 
   const rows = [];
   for (let i = 0; i < buttons.length; i += 5) {
     rows.push(row(...buttons.slice(i, i + 5)));
+  }
+
+  if (pageCount > 1) {
+    rows.push(
+      row(
+        button("⬅️ Previous", `custom_trees_page_${page - 1}`, 2, page === 0),
+        button(`Page ${page + 1}/${pageCount}`, "custom_trees_page_current", 2, true),
+        button("Next ➡️", `custom_trees_page_${page + 1}`, 2, page === pageCount - 1)
+      )
+    );
   }
 
   rows.push(row(button("⬅️ Back", "customize", 2)));
@@ -3481,7 +3433,7 @@ async function showCustomTrees(
   await sendText(
     env,
     interaction,
-    "🌳 **Tree Customization**",
+    `🌳 **Tree Customization**\n\nChoose your tree. ${pageCount > 1 ? `Page **${page + 1}/${pageCount}**` : ""}`,
     rows
   );
 }
@@ -4913,6 +4865,10 @@ async function handleTree(
     player
   );
 
+  if (!player.sparklesOnTree.length) {
+    maybeSpawnSparkles(player);
+  }
+
   await rememberGuild(
     env,
     interaction.guild_id
@@ -5294,12 +5250,21 @@ async function handleComponent(
     return;
   }
 
+  if (id.startsWith("custom_trees_page_")) {
+    const pageText = id.replace("custom_trees_page_", "");
+    if (pageText !== "current") {
+      await showCustomTrees(env, interaction, Number(pageText));
+    }
+    return;
+  }
+
   if (
     id === "custom_trees"
   ) {
     await showCustomTrees(
       env,
-      interaction
+      interaction,
+      0
     );
 
     return;
