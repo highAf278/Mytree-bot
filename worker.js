@@ -64,7 +64,10 @@ const IMAGES = {
   halloweenTree: "IMG_7309.png",
   purrPrincess: "IMG_7315.png",
   kittyTree: "IMG_7314.png",
-  cozyCat: "IMG_7317.png"
+  cozyCat: "IMG_7317.png",
+  greenGlowTree: "IMG_7327.png",
+  greenGlowBackground: "IMG_7324.png",
+  greenGlowEffect: "IMG_7325.png"
 };
 
 const SHOP_ITEMS = {
@@ -190,6 +193,27 @@ const SHOP_ITEMS = {
     price: 5000,
     type: "background",
     value: "cozy_cat",
+    limited: true
+  },
+  green_glow_tree: {
+    name: "💚 Green Glow Tree",
+    price: 20000,
+    type: "tree",
+    value: "green_glow",
+    limited: true
+  },
+  green_glow_background: {
+    name: "💚 Green Glow Background",
+    price: 10000,
+    type: "background",
+    value: "green_glow",
+    limited: true
+  },
+  green_glow_effect: {
+    name: "💚 Green Glow Effect",
+    price: 10000,
+    type: "effect",
+    value: "green_glow",
     limited: true
   }
 };
@@ -1311,6 +1335,9 @@ function getBackgroundImage(player) {
     case "cozy_cat":
       return IMAGES.cozyCat;
 
+    case "green_glow":
+      return IMAGES.greenGlowBackground;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1346,6 +1373,9 @@ function getTreeImage(player) {
 
     case "kitty_tree":
       return IMAGES.kittyTree;
+
+    case "green_glow":
+      return IMAGES.greenGlowTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1389,6 +1419,9 @@ function getEffectImage(player) {
 
     case "purr_princess":
       return IMAGES.purrPrincess;
+
+    case "green_glow":
+      return IMAGES.greenGlowEffect;
 
     default:
       return null;
@@ -1479,11 +1512,13 @@ async function renderTree(
               top:${top}%;
               transform:translate(-50%,-50%);
               font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-              font-size:42px;
+              font-size:70px;
               line-height:1;
               z-index:10;
               opacity:1;
-              filter:drop-shadow(0 0 6px white) drop-shadow(0 0 14px white) drop-shadow(0 0 24px #fff);
+              filter:drop-shadow(0 0 8px #ffffff) drop-shadow(0 0 18px #ffffff) drop-shadow(0 0 34px #b8ff00) drop-shadow(0 0 52px #7cff00);
+              text-shadow:0 0 10px #ffffff, 0 0 22px #ffffff, 0 0 40px #8cff00;
+              animation:sparklePulse 1.2s ease-in-out infinite;
               user-select:none;
             "
           title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
@@ -1587,6 +1622,11 @@ async function renderTree(
           @keyframes sparkleFall {
             0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
             50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+          }
+
+          @keyframes sparklePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.78; }
           }
 
           #tree {
@@ -1834,8 +1874,8 @@ function maybeSpawnSparkles(
         name: sparkle.name,
         emoji: sparkle.emoji,
         value: sparkle.value,
-        x: randomInt(25, 75),
-        y: randomInt(25, 70),
+        x: randomInt(30, 70),
+        y: randomInt(30, 72),
         createdAt: Date.now()
       }
     );
@@ -3025,28 +3065,25 @@ async function showLimitedShop(
     ["purr_princess_effect", "👑 Purr Princess", "buy_purr_princess"],
     ["kitty_tree", "🐱 Kitty Tree", "buy_kitty_tree"],
     ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"],
-    ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
-    ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
-    ["halloween_tree", "🎃🌳 Halloween Tree", "buy_halloween_tree"]
+    ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
+    ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
+    ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"]
   ];
 
-  const rows = [];
-
-  const catItems = items.slice(0, 3);
-  for (const [itemId, label, buttonId] of catItems) {
+  const buttons = items.map(([itemId, label, buttonId]) => {
     const owned = player.inventory.includes(itemId);
-    rows.push(
-      row(
-        button(
-          owned
-            ? `${label} Owned`
-            : `${label} — 5000`,
-          buttonId,
-          owned ? 2 : 1,
-          owned
-        )
-      )
+    const price = SHOP_ITEMS[itemId].price;
+    return button(
+      owned ? `${label} Owned` : `${label} — ${price}`,
+      buttonId,
+      owned ? 2 : 1,
+      owned
     );
+  });
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(row(...buttons.slice(i, i + 2)));
   }
 
   rows.push(
@@ -3059,7 +3096,7 @@ async function showLimitedShop(
   await sendText(
     env,
     interaction,
-    "🛍️ **LIMITED SHOP**\n\n🐱 **CAT BUNDLE**\nLimited cat cosmetics — 5,000 sparkles each!\n\n👑 Purr Princess — Effect\n🐱 Kitty Tree — Tree\n🐱 Cozy Cat — Background",
+    "🛍️ **LIMITED SHOP**\n\n🐱 **CAT BUNDLE**\n👑 Purr Princess — 5,000 sparkles\n🐱 Kitty Tree — 5,000 sparkles\n🐱 Cozy Cat — 5,000 sparkles\n\n💚 **GREEN GLOW SET**\n🌳 Green Glow Tree — 20,000 sparkles\n🌌 Green Glow Background — 10,000 sparkles\n✨ Green Glow Effect — 10,000 sparkles",
     rows
   );
 }
@@ -3340,7 +3377,8 @@ async function showCustomBackgrounds(
     ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
     ["field_day_background", "🌾 Field Day", "field_day"],
     ["red_forest_background", "🌲 Red Forest", "red_forest"],
-    ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"]
+    ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"],
+    ["green_glow_background", "💚 Green Glow", "green_glow"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
@@ -3415,7 +3453,8 @@ async function showCustomTrees(
     ["red", "❤️ Red", "red_tree"],
     ["soul", "💙 Soul", "soul_tree"],
     ["kitty_tree", "🐱 Kitty Tree", "kitty_tree"],
-    ["halloween_tree", "🎃 Halloween", "halloween_tree"]
+    ["halloween_tree", "🎃 Halloween", "halloween_tree"],
+    ["green_glow", "💚 Green Glow", "green_glow"]
   ];
 
   const buttons = [];
@@ -3480,6 +3519,16 @@ async function showCustomEffects(
         "💕 Hearts",
         "equip_effect_hearts",
         player.equipped.effect === "hearts" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("green_glow_effect")) {
+    buttons.push(
+      button(
+        "💚 Green Glow",
+        "equip_effect_green_glow",
+        player.equipped.effect === "green_glow" ? 3 : 2
       )
     );
   }
@@ -3699,6 +3748,11 @@ async function equipTheme(
     cozy_cat:
       player.inventory.includes(
         "cozy_cat_background"
+      ),
+
+    green_glow:
+      player.inventory.includes(
+        "green_glow_background"
       )
   };
 
@@ -3789,6 +3843,11 @@ async function equipTree(
     kitty_tree:
       player.inventory.includes(
         "kitty_tree"
+      ),
+
+    green_glow:
+      player.inventory.includes(
+        "green_glow_tree"
       )
   };
 
@@ -3839,7 +3898,8 @@ async function equipEffect(
     const inventoryId = {
       butterflies: "butterflies_effect",
       hearts: "hearts_effect",
-      purr_princess: "purr_princess_effect"
+      purr_princess: "purr_princess_effect",
+      green_glow: "green_glow_effect"
     }[effect];
 
     if (
@@ -5188,7 +5248,16 @@ async function handleComponent(
       "kitty_tree",
 
     buy_cozy_cat:
-      "cozy_cat_background"
+      "cozy_cat_background",
+
+    buy_green_glow_tree:
+      "green_glow_tree",
+
+    buy_green_glow_background:
+      "green_glow_background",
+
+    buy_green_glow_effect:
+      "green_glow_effect"
   };
 
   if (
@@ -11336,6 +11405,137 @@ const SOLO_SCENARIOS = [
       { label: "🦝 Give it to the raccoons", cash: 450, heat: 0, score: 550, message: "🦝 The raccoons take the cart. They are now faster than you." }
     ]
   }
+
+  {
+    title: "The Glitter Laundromat",
+    prompt: "🫧 You discover a laundromat where every washing machine is filled with loose sparkles.",
+    choices: [
+      { label: "✨ Open every machine", cash: 700, heat: 35, score: 850, risky: true, message: "✨ You hit the sparkle jackpot and leave covered in glitter." },
+      { label: "🧺 Check one machine", cash: 300, heat: 5, score: 450, message: "🧺 One machine pays out. The others remain suspicious." },
+      { label: "🧼 Wash your clothes", cash: 0, heat: -15, score: 180, message: "🧼 You came for crime and accidentally did laundry." },
+      { label: "🦝 Hire a raccoon", cash: 550, heat: 20, score: 650, message: "🦝 The raccoon handles the machines. You refuse to ask how." }
+    ]
+  },
+  {
+    title: "The Fake Treasure Map",
+    prompt: "🗺️ A treasure map claims the greatest prize in Werewives is buried beneath a very normal bush.",
+    choices: [
+      { label: "⛏️ Dig immediately", cash: 650, heat: 25, score: 750, risky: true, message: "⛏️ You find a glitter chest. The bush was absolutely suspicious." },
+      { label: "🔎 Study the map", cash: 350, heat: 5, score: 500, message: "🔎 You notice a second treasure marker and choose wisely." },
+      { label: "🌳 Dig elsewhere", cash: 150, heat: 0, score: 250, message: "🌳 You find old coins and a deeply offended worm." },
+      { label: "🦝 Ask the bush raccoon", cash: 500, heat: 15, score: 600, message: "🦝 The raccoon already knew where the treasure was." }
+    ]
+  },
+  {
+    title: "The Suspicious Vending Machine",
+    prompt: "🥤 A vending machine offers snacks, rare loot, and one button labeled CHAOS.",
+    choices: [
+      { label: "🥤 Buy a snack", cash: -50, heat: -5, score: 220, message: "🥤 The snack is weirdly delicious." },
+      { label: "💎 Buy the mystery item", cash: 450, heat: 15, score: 600, message: "💎 You receive a tiny bag of valuable gems." },
+      { label: "🔴 PRESS CHAOS", cash: 1000, heat: 55, health: -1, score: 1200, risky: true, message: "🌪️ The vending machine becomes a money cannon." },
+      { label: "🧠 Shake it", cash: 250, heat: 20, score: 400, risky: true, message: "🧠 You shake it. A coin falls out. Probably worth it." }
+    ]
+  },
+  {
+    title: "The Werewolf Delivery",
+    prompt: "🐺 A sealed package arrives with instructions: 'Do NOT open before delivery.'",
+    choices: [
+      { label: "📦 Deliver it", cash: 350, heat: -10, score: 450, message: "📦 You deliver it without incident. Suspiciously professional." },
+      { label: "👀 Peek inside", cash: 600, heat: 30, score: 750, risky: true, message: "👀 It's full of expensive jewelry. You saw nothing." },
+      { label: "🧀 Replace it with cheese", cash: 500, heat: 15, score: 650, message: "🧀 The cheese substitution is somehow accepted." },
+      { label: "🏃 Run away with it", cash: 900, heat: 50, health: -1, score: 1000, risky: true, message: "🏃 You have accidentally become a courier fugitive." }
+    ]
+  },
+  {
+    title: "The Glittering Bridge",
+    prompt: "🌉 A magical bridge charges a different toll depending on how confident you look.",
+    choices: [
+      { label: "😎 Strut across", cash: 450, heat: 10, score: 550, message: "😎 Confidence wins. The bridge respects the attitude." },
+      { label: "💰 Pay the toll", cash: -100, heat: -10, score: 250, message: "💰 You pay. The bridge gives you a coupon." },
+      { label: "🦝 Send a raccoon first", cash: 700, heat: 20, score: 750, message: "🦝 The raccoon negotiates aggressively." },
+      { label: "🏃 Sprint", cash: 550, heat: 45, health: -1, score: 850, risky: true, message: "🏃 You outrun the bridge's magical toll collectors." }
+    ]
+  },
+  {
+    title: "The Secret Arcade",
+    prompt: "🕹️ A hidden arcade offers enormous prizes if you can beat three suspicious machines.",
+    choices: [
+      { label: "🕹️ Play normally", cash: 350, heat: 5, score: 500, message: "🕹️ You win a respectable pile of tickets." },
+      { label: "⚡ Mash everything", cash: 800, heat: 35, score: 900, risky: true, message: "⚡ The machines cannot handle your button energy." },
+      { label: "🧠 Find the pattern", cash: 550, heat: 0, score: 700, message: "🧠 You crack the machines like a puzzle." },
+      { label: "🦝 Let the raccoon play", cash: 1000, heat: 25, score: 1100, risky: true, message: "🦝 The raccoon becomes an arcade champion." }
+    ]
+  },
+  {
+    title: "The Cheese Auction",
+    prompt: "🧀 A fancy auction is selling a legendary wheel of cheese. Everyone looks extremely serious.",
+    choices: [
+      { label: "💰 Bid carefully", cash: 250, heat: 0, score: 450, message: "💰 You somehow leave with a profit." },
+      { label: "🔥 Outbid everyone", cash: 900, heat: 30, score: 1000, risky: true, message: "🔥 You win the cheese and immediately regret the price." },
+      { label: "🎭 Fake a bid", cash: 500, heat: 40, score: 850, risky: true, message: "🎭 Your fake bid causes chaos and a surprising payout." },
+      { label: "🧀 Eat the sample", cash: 50, heat: -5, score: 200, message: "🧀 You contributed absolutely nothing to the auction." }
+    ]
+  },
+  {
+    title: "The Moonlight Warehouse",
+    prompt: "🌙 A warehouse door opens only under moonlight. Something valuable is glowing inside.",
+    choices: [
+      { label: "🔦 Enter quietly", cash: 450, heat: 10, score: 600, message: "🔦 You find a neat stash and leave quietly." },
+      { label: "💎 Grab the glowing crate", cash: 900, heat: 40, score: 1000, risky: true, message: "💎 The crate is worth a fortune." },
+      { label: "👂 Listen first", cash: 250, heat: -5, score: 350, message: "👂 You wait for the warehouse to settle before taking a small haul." },
+      { label: "🦝 Send raccoons", cash: 750, heat: 25, score: 850, message: "🦝 The raccoons return carrying things you didn't ask about." }
+    ]
+  },
+  {
+    title: "The Emergency Cheese Alarm",
+    prompt: "🚨 An alarm blares: 'EMERGENCY! SOMEONE HAS STOLEN THE CHEESE.' Everyone points at you.",
+    choices: [
+      { label: "😇 Deny everything", cash: 200, heat: -15, score: 350, message: "😇 Your confidence is somehow convincing." },
+      { label: "🧀 Confess to one cheese", cash: -50, heat: -25, score: 300, message: "🧀 You admit to a tiny cheese crime. The crowd respects it." },
+      { label: "🏃 Blame the raccoons", cash: 500, heat: 35, score: 700, risky: true, message: "🦝 The raccoons are furious but you escape." },
+      { label: "🎭 Become the detective", cash: 650, heat: 10, score: 800, message: "🕵️ You solve the mystery and keep the reward." }
+    ]
+  },
+  {
+    title: "The Tiny Casino Boat",
+    prompt: "🚤 A tiny boat offers you one trip across a glittering lake and one very questionable game of chance.",
+    choices: [
+      { label: "🎲 Play safe", cash: 250, heat: 0, score: 350, message: "🎲 Safe choice. Safe profit." },
+      { label: "💰 Double down", cash: 900, heat: 30, score: 1000, risky: true, message: "💰 You double down and somehow double everything." },
+      { label: "🌊 Explore the lake", cash: 450, heat: 10, score: 600, message: "🌊 You find a floating chest." },
+      { label: "🦝 Let the raccoon captain", cash: 800, heat: 45, health: -1, score: 950, risky: true, message: "🦝 The raccoon drives like it has nine lives." }
+    ]
+  },
+  {
+    title: "The Password Wall",
+    prompt: "🔐 A wall demands a password. A sticky note says: 'Definitely not CHEESE.'",
+    choices: [
+      { label: "🧀 Try CHEESE", cash: 700, heat: 30, score: 850, risky: true, message: "🧀 It was cheese. Of course it was cheese." },
+      { label: "🧠 Think logically", cash: 350, heat: 0, score: 550, message: "🧠 You solve the clue properly." },
+      { label: "🔴 Press random buttons", cash: 500, heat: 45, health: -1, score: 750, risky: true, message: "🔴 One button opens the wall. Another definitely should not have been pressed." },
+      { label: "🚪 Leave", cash: 0, heat: -20, score: 180, message: "🚪 You choose peace over password nonsense." }
+    ]
+  },
+  {
+    title: "The Raccoon Rooftop",
+    prompt: "🏙️ A rooftop is covered in shiny objects guarded by a suspiciously organized raccoon crew.",
+    choices: [
+      { label: "🤝 Negotiate", cash: 400, heat: -5, score: 550, message: "🤝 The raccoons accept your proposal and split the loot." },
+      { label: "💎 Grab the biggest shiny", cash: 850, heat: 40, score: 950, risky: true, message: "💎 You grab the biggest shiny and immediately become unpopular." },
+      { label: "🦝 Join the crew", cash: 650, heat: 5, score: 800, message: "🦝 You have been promoted to assistant shiny manager." },
+      { label: "🏃 Escape", cash: 300, heat: 25, health: -1, score: 650, risky: true, message: "🏃 You leave with one shiny and several raccoon complaints." }
+    ]
+  },
+  {
+    title: "The Glitter Train",
+    prompt: "🚂 A mysterious train stops for exactly one minute. Every passenger is carrying treasure.",
+    choices: [
+      { label: "🚪 Hop aboard", cash: 600, heat: 30, score: 800, risky: true, message: "🚂 You jump aboard and discover a treasure carriage." },
+      { label: "🎟️ Buy a ticket", cash: -100, heat: -10, score: 400, message: "🎟️ You travel legally. How strange." },
+      { label: "🕵️ Watch passengers", cash: 300, heat: 5, score: 500, message: "🕵️ You spot a dropped wallet and return it for a reward." },
+      { label: "🦝 Send a raccoon aboard", cash: 900, heat: 45, score: 1000, risky: true, message: "🦝 The raccoon returns before the train leaves with an entire suitcase." }
+    ]
+  },
 ];
 
 const SOLO_TITLES = {
@@ -11859,6 +12059,24 @@ const HEIST_ROLE_DEFINITIONS = {
     actionLabel: "👀 Watch"
   },
 
+  tracker: {
+    name: "🧭 The Tracker",
+    team: "hunters",
+    description:
+      "Follow one player and learn whether they targeted someone during the night.",
+    action: "track",
+    actionLabel: "🧭 Track"
+  },
+
+  oracle: {
+    name: "🔮 The Oracle",
+    team: "hunters",
+    description:
+      "Read one player's alignment and learn whether they are on the Thief, Hunter, or Neutral side.",
+    action: "reveal",
+    actionLabel: "🔮 Reveal"
+  },
+
   magician: {
     name: "🪄 The Magician",
     team: "neutral",
@@ -11896,7 +12114,9 @@ const HEIST_OPTIONAL_ROLES = [
   "ghost",
   "magician",
   "patient_zero",
-  "lookout"
+  "lookout",
+  "tracker",
+  "oracle"
 ];
 
 function shuffleArray(array) {
@@ -11988,7 +12208,9 @@ function heistActionName(action) {
     scavenge: "🧀 Scavenge",
     crown: "👑 Raise the Crown",
     haunt: "👻 Haunt",
-    illusion: "🪄 Illusion"
+    illusion: "🪄 Illusion",
+    track: "🧭 Track",
+    reveal: "🔮 Reveal"
   };
 
   return names[action] || action;
@@ -12001,20 +12223,22 @@ function heistRolesForCount(count) {
 
   /* Curated setups for tiny games keep every player useful. */
   if (count === 3) {
-    return shuffleArray([
-      "thief",
-      "detective",
-      "lookout"
-    ]);
+    const setups = [
+      ["thief", "detective", "lookout"],
+      ["thief", "detective", "tracker"],
+      ["thief", "oracle", "lookout"],
+      ["thief", "detective", "guard"]
+    ];
+    return shuffleArray(setups[randomInt(0, setups.length - 1)]);
   }
 
   if (count === 4) {
-    return shuffleArray([
-      "thief",
-      "detective",
-      "guard",
-      "lookout"
-    ]);
+    const setups = [
+      ["thief", "detective", "guard", "lookout"],
+      ["thief", "detective", "tracker", "guard"],
+      ["thief", "oracle", "lookout", "guard"]
+    ];
+    return shuffleArray(setups[randomInt(0, setups.length - 1)]);
   }
 
   const roles = [
@@ -12133,6 +12357,14 @@ function heistActionButtons(game, player) {
     );
   }
 
+  buttons.push(
+    button(
+      "📖 Role Info",
+      `heist:roleinfo:${game.id}`,
+      2
+    )
+  );
+
   const rows = [];
 
   for (let i = 0; i < buttons.length; i += 5) {
@@ -12157,7 +12389,9 @@ function heistNeedsTarget(action) {
     "eavesdrop",
     "distract",
     "haunt",
-    "illusion"
+    "illusion",
+    "track",
+    "reveal"
   ].includes(action);
 }
 
@@ -13275,6 +13509,7 @@ async function resolveHeistNight(
 
     if (
       !actor?.alive ||
+      actor.role !== "spy" ||
       action.action !== "watch" ||
       canceled.has(userId)
     ) {
@@ -13296,6 +13531,53 @@ async function resolveHeistNight(
       targetAction
         ? `🕶️ **Spy Report**\n\n**${heistDisplayName(target)}** performed **${heistActionName(targetAction)}** tonight.`
         : `🕶️ **Spy Report**\n\n**${heistDisplayName(target)}** did not submit a visible night action.`;
+  }
+
+  /*
+    Lookout / Spy distinction.
+    Both use the same watch action, but each role gets its own
+    clear private report.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor = heistPlayer(game, userId);
+    if (!actor?.alive || action.action !== "watch" || canceled.has(userId)) continue;
+    const target = heistPlayer(game, action.targetId);
+    if (!target) continue;
+    const targetAction = target.lastAction;
+    if (actor.role === "lookout") {
+      game.nightResults[userId] = targetAction
+        ? `👀 **Lookout Report**\n\nYou watched **${heistDisplayName(target)}**. They performed **${heistActionName(targetAction)}** tonight.`
+        : `👀 **Lookout Report**\n\nYou watched **${heistDisplayName(target)}**. They did not submit a visible night action.`;
+    }
+  }
+
+  /*
+    Tracker.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor = heistPlayer(game, userId);
+    if (!actor?.alive || action.action !== "track" || canceled.has(userId)) continue;
+    const target = heistPlayer(game, action.targetId);
+    if (!target) continue;
+    const targetAction = actions[target.id];
+    game.nightResults[userId] = targetAction?.targetId && targetAction.targetId !== "vault"
+      ? `🧭 **Tracker Report**\n\n**${heistDisplayName(target)}** acted on **${heistDisplayName(heistPlayer(game, targetAction.targetId))}**.`
+      : targetAction?.targetId === "vault"
+        ? `🧭 **Tracker Report**\n\n**${heistDisplayName(target)}** targeted **the Vault**.`
+        : `🧭 **Tracker Report**\n\n**${heistDisplayName(target)}** did not target another player.`;
+  }
+
+  /*
+    Oracle.
+  */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor = heistPlayer(game, userId);
+    if (!actor?.alive || action.action !== "reveal" || canceled.has(userId)) continue;
+    const target = heistPlayer(game, action.targetId);
+    if (!target) continue;
+    const team = HEIST_ROLE_DEFINITIONS[target.role]?.team || "neutral";
+    const alignment = team === "thief" ? "🦝 THIEF" : team === "hunters" ? "🛡️ HUNTER" : team === "rabid" ? "🦷 RABID" : "🎭 NEUTRAL";
+    game.nightResults[userId] = `🔮 **Oracle Reading**\n\n**${heistDisplayName(target)}** reads as **${alignment}**.`;
   }
 
   /*
@@ -14908,6 +15190,21 @@ async function handleHeistComponent(
       )
     );
 
+    return true;
+  }
+
+  if (actionType === "roleinfo") {
+    if (!player) {
+      await sendText(env, interaction, "❌ You aren't a player in this heist.");
+      return true;
+    }
+    const definition = HEIST_ROLE_DEFINITIONS[player.role];
+    await heistSendPrivate(
+      env,
+      interaction,
+      `📖 **YOUR HEIST ROLE**\n\n${definition?.name || player.role}\n\n${definition?.description || "No role description available."}\n\n🎯 Night action: **${definition?.actionLabel || "None"}**`,
+      heistActionButtons(game, player)
+    );
     return true;
   }
 
