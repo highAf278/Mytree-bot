@@ -481,7 +481,17 @@ function defaultPlayer() {
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
-    achievements: []
+    achievements: [],
+    pastelRating: 0,
+    pastelLevel: 0,
+    pastelWins: 0,
+    pastelLosses: 0,
+    pastelQuits: 0,
+    battleWins: 0,
+    battleLosses: 0,
+    battleStreak: 0,
+    battleBestStreak: 0,
+    battleLowHpWins: 0
   };
 }
 
@@ -648,23 +658,12 @@ async function rememberGuild(env, guildId) {
   }
 
   /*
-    Existing guilds that don't yet have a chaos timer
-    get one automatically.
+    Chaos Events are now handled inside Chaos Island instead of as a
+    separate recurring hourly event system. Existing timer fields are
+    left in guild state for backwards compatibility.
   */
-  if (
-    state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION
-  ) {
+  if (state.chaosScheduleVersion !== CHAOS_SCHEDULE_VERSION) {
     state.chaosScheduleVersion = CHAOS_SCHEDULE_VERSION;
-    state.nextChaosAt =
-      Date.now();
-    changed = true;
-  } else if (
-    !state.nextChaosAt ||
-    Number(state.nextChaosAt) <= 0
-  ) {
-    state.nextChaosAt =
-      Date.now() +
-      CHAOS_INTERVAL;
     changed = true;
   }
 
@@ -4960,6 +4959,34 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("battle:")) {
+    const parts=id.split(":"); const action=parts[1]; const gameId=parts[2];
+    if(action==="attack"||action==="defend"||action==="special") { await handleBattleAction(env,interaction,action,gameId); return; }
+    if(action==="items") { await handleBattleItems(env,interaction,gameId); return; }
+    if(action==="forfeit") { await handleBattleForfeit(env,interaction,gameId); return; }
+    if(action==="back") { const state=await getGuildState(env,interaction.guild_id); if(state.battle) await sendText(env,interaction,battleText(state.battle),battleComponents(state.battle)); return; }
+    return;
+  }
+
+  if (id.startsWith("battleitem:")) {
+    const parts=id.split(":"); await useBattleItem(env,interaction,parts[1],parts[2]); return;
+  }
+
+  if (id.startsWith("bshop:")) {
+    const parts=id.split(":"); if(parts[1]==="buy") await handleBattleShopBuy(env,interaction,parts[2]); return;
+  }
+
+  if (id.startsWith("pastel:")) {
+    const parts=id.split(":"); const action=parts[1];
+    if(action==="mode") { await handlePastelMode(env,interaction,parts[2]); return; }
+    if(action==="join") { await handlePastelJoin(env,interaction,parts[2]); return; }
+    if(action==="cancel") { await handlePastelCancel(env,interaction,parts[2]); return; }
+    if(action==="choose") { await handlePastelChoose(env,interaction,parts[2],parts[3]); return; }
+    if(action==="quit") { await handlePastelQuit(env,interaction,parts[2]); return; }
+    if(action==="rules") { await handlePastelRules(env,interaction); return; }
+    return;
+  }
+
   if (id.startsWith("island:")) {
     const parts = id.split(":");
     const action = parts[1];
@@ -4994,6 +5021,8 @@ async function handleComponent(
       "",
       "Use `/roles` to see all available roles."
     ].join("\n")); return; }
+    if (action === "battle") { await sendText(env,interaction,"🌳⚔️ **Tree Battle**\n\nUse `/battle @player` to challenge another tree."); return; }
+    if (action === "pastel") { await handlePastelStart(env,interaction); return; }
     return;
   }
 
@@ -11556,7 +11585,13 @@ const SOLO_TITLES = {
   rich_goblin: { name: "the Rich Goblin", description: "Finish a mission with 2,000+ cash." },
   iron_will: { name: "the Iron Will", description: "Finish a mission without losing any ❤️." },
   button_goblin: { name: "the Button Goblin", description: "Press 3 or more obviously suspicious buttons/choices." },
-  survivor: { name: "the Mission Survivor", description: "Complete your first Solo Mission." }
+  survivor: { name: "the Mission Survivor", description: "Complete your first Solo Mission." },
+  battle_champion: { name: "the Tree Battle Champion", description: "Win your first Tree Battle." },
+  battle_brawler: { name: "the Branch Brawler", description: "Win 5 Tree Battles." },
+  battle_streak: { name: "the Bark Streak", description: "Win 3 Tree Battles in a row." },
+  battle_master: { name: "the Battle Master", description: "Win 10 Tree Battles." },
+  battle_legend: { name: "the Tree Battle Legend", description: "Win 25 Tree Battles." },
+  battle_clutch: { name: "the One-HP Menace", description: "Win a Tree Battle while at 20 HP or less." }
 };
 
 function soloPlayerName(player) {
@@ -11685,9 +11720,10 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Pastel Panic** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
-    row(button("🕵️ Solo Mission", "games:solo", 3), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2)),
+    row(button("🕵️ Solo Mission", "games:solo", 3), button("🌳⚔️ Tree Battle", "games:battle", 1)),
+    row(button("🌈 Pastel Panic", "games:pastel", 3), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2)),
     row(button("🏷️ Titles", "title:list", 2))
   ]);
 }
@@ -11892,6 +11928,33 @@ const HEIST_ROLE_DEFINITIONS = {
       "Steal from the vault and survive the vote. You are the one everyone is hunting.",
     action: "steal",
     actionLabel: "💰 Steal"
+  },
+
+  jimothy_jester: {
+    name: "🤡 Jimothy Jester",
+    team: "jester",
+    description:
+      "You win if you get voted out OR die. The Detective sees you as suspicious, so make everyone wonder whether you're the Thief.",
+    action: null,
+    actionLabel: "🤡 Cause Suspicion"
+  },
+
+  raccoon_reaper: {
+    name: "🦝☠️ Raccoon Reaper",
+    team: "neutral",
+    description:
+      "Once per game, choose one living player. If they are NOT the Thief, they are eliminated. If you choose the Thief, the Reaper's attack fails and the Thief survives.",
+    action: "reap",
+    actionLabel: "☠️ Reap"
+  },
+
+  sleeper: {
+    name: "😴 The Sleepwalker",
+    team: "hunters",
+    description:
+      "Put one living player to sleep for the night. Their normal night action is blocked. You are the one who may use the special daytime Sleepwalker action while they sleep.",
+    action: "sleep",
+    actionLabel: "😴 Put to Sleep"
   },
 
   detective: {
@@ -12103,6 +12166,9 @@ const HEIST_ROLE_DEFINITIONS = {
 };
 
 const HEIST_OPTIONAL_ROLES = [
+  "jimothy_jester",
+  "raccoon_reaper",
+  "sleeper",
   "spy",
   "locksmith",
   "con_artist",
@@ -12216,7 +12282,9 @@ function heistActionName(action) {
     haunt: "👻 Haunt",
     illusion: "🪄 Illusion",
     track: "🧭 Track",
-    reveal: "🔮 Reveal"
+    reveal: "🔮 Reveal",
+    reap: "☠️ Reap",
+    sleep: "😴 Put to Sleep"
   };
 
   return names[action] || action;
@@ -12227,43 +12295,44 @@ function heistRolesForCount(count) {
     return [];
   }
 
-  /* Curated setups for tiny games keep every player useful. */
+  /*
+    Curated tiny-game setups intentionally avoid stacking too much
+    information on the Hunters. Jimothy adds uncertainty because the
+    Detective reads the Jester as suspicious.
+  */
   if (count === 3) {
     const setups = [
-      ["thief", "detective", "lookout"],
-      ["thief", "detective", "tracker"],
-      ["thief", "oracle", "lookout"],
-      ["thief", "detective", "guard"]
+      ["thief", "detective", "jimothy_jester"],
+      ["thief", "guard", "jimothy_jester"],
+      ["thief", "detective", "sleeper"]
     ];
     return shuffleArray(setups[randomInt(0, setups.length - 1)]);
   }
 
   if (count === 4) {
     const setups = [
-      ["thief", "detective", "guard", "lookout"],
-      ["thief", "detective", "tracker", "guard"],
-      ["thief", "oracle", "lookout", "guard"]
+      ["thief", "detective", "guard", "jimothy_jester"],
+      ["thief", "detective", "sleeper", "jimothy_jester"],
+      ["thief", "guard", "sleeper", "jimothy_jester"]
     ];
     return shuffleArray(setups[randomInt(0, setups.length - 1)]);
   }
 
-  const roles = [
-    "thief",
-    "detective",
-    "rabid_raccoon"
-  ];
-
-  if (count >= 5) {
-    roles.push("guard");
+  if (count === 5) {
+    const setups = [
+      ["thief", "detective", "guard", "jimothy_jester", "raccoon_reaper"],
+      ["thief", "detective", "sleeper", "jimothy_jester", "raccoon_reaper"],
+      ["thief", "guard", "sleeper", "jimothy_jester", "raccoon_reaper"]
+    ];
+    return shuffleArray(setups[randomInt(0, setups.length - 1)]);
   }
+
+  const roles = ["thief", "detective", "rabid_raccoon"];
+  if (count >= 6) roles.push("guard");
 
   const needed = count - roles.length;
   const optional = shuffleArray(HEIST_OPTIONAL_ROLES);
-
-  for (let i = 0; i < needed; i++) {
-    roles.push(optional[i]);
-  }
-
+  for (let i = 0; i < needed; i++) roles.push(optional[i]);
   return roles;
 }
 
@@ -12344,6 +12413,16 @@ function heistActionButtons(game, player) {
       );
     }
 
+    if (role === "thief" && Number(player.loot || 0) > 0 && !player.runUsed) {
+      buttons.push(
+        button(
+          "🏃 Run (40%)",
+          `heist:action:${game.id}:run`,
+          4
+        )
+      );
+    }
+
     if (player.rabies && role !== "rabid_raccoon") {
       buttons.push(
         button(
@@ -12397,7 +12476,9 @@ function heistNeedsTarget(action) {
     "haunt",
     "illusion",
     "track",
-    "reveal"
+    "reveal",
+    "reap",
+    "sleep"
   ].includes(action);
 }
 
@@ -12597,6 +12678,7 @@ async function startHeistNight(
     player.currentAction = null;
     player.currentTarget = null;
     player.lastAction = null;
+    player.cannotVote = false;
   }
 
 
@@ -12645,6 +12727,11 @@ function heistActionAllowed(
   }
 
   if (!player.alive) return false;
+
+  if (player.asleep && action !== "sleep") return false;
+
+  if (action === "reap" && player.role === "raccoon_reaper" && player.reaperUsed) return false;
+  if (action === "run" && player.role === "thief" && !player.runUsed && Number(player.loot || 0) > 0) return true;
 
   if (
     action === "bite" &&
@@ -12711,6 +12798,35 @@ async function handleHeistAction(
       interaction,
       "❌ That is not an action available to you."
     );
+    return;
+  }
+
+  if (action === "run") {
+    if (game.status !== "night" || player.role !== "thief" || player.runUsed || Number(player.loot || 0) <= 0) {
+      await heistSendPrivate(env, interaction, "❌ You can't Run right now.");
+      return;
+    }
+    player.runUsed = true;
+    if (Math.random() < 0.40) {
+      player.alive = false;
+      game.thiefEscaped = true;
+      game.thiefEscapeLoot = Number(player.loot || 0);
+      game.endedReason = "🏃 THIEF ESCAPED";
+      await heistSendPrivate(env, interaction, `🏃 **YOU GOT AWAY!** You escaped with **${Number(player.loot || 0)} ✨** stolen loot.`);
+      await finishHeist(env, game, "🏃 **THE THIEF RAN!** The Thief escaped the vault with all stolen loot.");
+      return;
+    }
+    const dropped = Math.min(Number(player.loot || 0), Math.max(1, Math.floor(Number(player.loot || 0) * 0.35)));
+    player.loot = Math.max(0, Number(player.loot || 0) - dropped);
+    game.vault += dropped;
+    game.totalStolen = Math.max(0, Number(game.totalStolen || 0) - dropped);
+    await heistSendPrivate(env, interaction, `💥 **YOU FAILED TO RUN!** You dropped **${dropped} ✨** back into the vault. Your remaining stolen loot is **${Number(player.loot || 0)} ✨**.`);
+    player.submitted = true;
+    player.currentAction = "run";
+    game.nightActions[userId] = { action: "run", targetId: null, submittedAt: Date.now() };
+    const runState = await getGuildState(env, game.guildId);
+    runState.heist = game;
+    await saveGuildState(env, game.guildId, runState);
     return;
   }
 
@@ -12845,7 +12961,8 @@ function heistActionWasSubmitted(
 async function sendHeistDM(
   env,
   userId,
-  content
+  content,
+  components = []
 ) {
   try {
     const dmResponse =
@@ -12879,7 +12996,8 @@ async function sendHeistDM(
         {
           method: "POST",
           body: JSON.stringify({
-            content
+            content,
+            components
           })
         }
       );
@@ -12903,6 +13021,12 @@ async function sendHeistDM(
   }
 }
 
+function heistDaytimeButton(game, player) {
+  return player?.role === "sleeper" && player.daytimeActionReady && game.status === "voting"
+    ? [row(button("☀️ Daytime Nudge", `heist:dayaction:${game.id}:nudge`, 1))]
+    : [];
+}
+
 async function sendHeistPrivateResults(
   env,
   game
@@ -12919,7 +13043,8 @@ async function sendHeistPrivateResults(
     await sendHeistDM(
       env,
       player.id,
-      `☀️ **DAWN — YOUR SECRET HEIST RESULT**\n\n${result}\n\nYour result is private. Do not reveal it unless you want to.`
+      `☀️ **DAWN — YOUR SECRET HEIST RESULT**\n\n${result}\n\nYour result is private. Do not reveal it unless you want to.`,
+      heistDaytimeButton(game, player)
     );
   }
 }
@@ -13064,12 +13189,61 @@ async function resolveHeistNight(
       continue;
     }
 
+    if (Math.random() < 0.20) {
+      actor.guardFailed = true;
+      game.nightResults[userId] = "🥱 **YOU FELL ASLEEP AT YOUR POST!** You couldn't guard your target tonight.";
+      publicEvents.push("🥱 **THE GUARD FELL ASLEEP AT THEIR POST.** Security was not as secure as advertised.");
+      continue;
+    }
+
     if (action.targetId === "vault") {
       protectedVault = true;
     } else if (action.targetId) {
       protectedPlayers.add(
         action.targetId
       );
+    }
+  }
+
+  /*
+    Sleepwalker: a sleeping target loses their normal night action.
+    The Sleepwalker gets a private notice that their daytime action is
+    available after dawn.
+  */
+  const sleeping = new Set();
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor = heistPlayer(game, userId);
+    if (!actor?.alive || actor.role !== "sleeper" || action.action !== "sleep" || canceled.has(userId)) continue;
+    const target = heistPlayer(game, action.targetId);
+    if (!target?.alive || target.id === userId) continue;
+    sleeping.add(target.id);
+    target.asleep = true;
+    actor.daytimeActionReady = true;
+    game.nightResults[userId] = `😴 **SLEEP SUCCESS!** ${heistDisplayName(target)} was sent to sleep. Their normal night action was blocked. You may use your special daytime action.`;
+  }
+
+  for (const userId of sleeping) {
+    delete actions[userId];
+  }
+
+  /* Raccoon Reaper can eliminate one player once per game. */
+  for (const [userId, action] of Object.entries(actions)) {
+    const actor = heistPlayer(game, userId);
+    if (!actor?.alive || actor.role !== "raccoon_reaper" || action.action !== "reap" || canceled.has(userId) || actor.reaperUsed) continue;
+    actor.reaperUsed = true;
+    const target = heistPlayer(game, action.targetId);
+    if (!target?.alive || target.id === userId) {
+      game.nightResults[userId] = "☠️ **THE REAPER MISSED.** No valid target was eliminated.";
+      continue;
+    }
+    if (target.role === "thief") {
+      game.nightResults[userId] = `☠️ **REAPER FAILED!** ${heistDisplayName(target)} was the Thief. The Thief slipped away from your attack.`;
+    } else if (!protectedPlayers.has(target.id)) {
+      target.alive = false;
+      game.nightResults[userId] = `☠️ **REAP SUCCESS!** ${heistDisplayName(target)} was eliminated.`;
+      publicEvents.push("☠️ **SOMETHING TERRIBLE HAPPENED IN THE DARK.** A player did not make it through the night.");
+    } else {
+      game.nightResults[userId] = `🛡️ **REAPER BLOCKED!** Your target was protected by the Guard.`;
     }
   }
 
@@ -13278,6 +13452,12 @@ async function resolveHeistNight(
     }
   }
 
+  if (heistAlivePlayers(game).length <= 1) {
+    const remaining = heistAlivePlayers(game)[0];
+    await finishHeist(env, game, remaining ? `☠️ **THE REAPER LEFT ONLY ONE PLAYER STANDING.** ${heistDisplayName(remaining)} survives.` : "No players remain after the night.");
+    return;
+  }
+
   /*
     Detective.
   */
@@ -13316,6 +13496,7 @@ async function resolveHeistNight(
         "🪄 The evidence looked strangely distorted. Your investigation was fooled.";
     } else if (
       target.role === "thief" ||
+      target.role === "jimothy_jester" ||
       framed.has(target.id)
     ) {
       result =
@@ -13622,17 +13803,20 @@ async function resolveHeistNight(
   game.publicEvents =
     publicEvents;
 
-  await sendHeistPrivateResults(
-    env,
-    game
-  );
-
+  for (const p of Object.values(game.players)) {
+    p.asleep = false;
+  }
 
   game.status = "voting";
   game.phaseEndsAt =
     Date.now() +
     HEIST_VOTE_DURATION;
   game.votes = {};
+
+  await sendHeistPrivateResults(
+    env,
+    game
+  );
 
 
   await heistSendPublic(
@@ -13941,7 +14125,7 @@ function heistWinnerList(game) {
       "THIEF HAS BEEN CAUGHT"
     )
   ) {
-    if (thief.alive) {
+    if (game.thiefEscaped || thief.alive) {
       winners.push(
         `${heistDisplayName(thief)} — 🦝 Thief`
       );
@@ -14015,6 +14199,15 @@ function heistWinnerList(game) {
         `${heistDisplayName(player)} — 👻 Ghost`
       );
     }
+
+    if (
+      player.role === "jimothy_jester" &&
+      !player.alive
+    ) {
+      winners.push(
+        `${heistDisplayName(player)} — 🤡 Jimothy Jester`
+      );
+    }
   }
 
   return [
@@ -14066,14 +14259,18 @@ async function finishHeist(
     }
   }
 
-  const prizePool = Math.max(
-    0,
-    Number(game.reserve || 0) + Number(game.totalStolen || 0)
-  );
+  const prizePool = game.thiefEscaped
+    ? 0
+    : Math.max(0, Number(game.reserve || 0) + Number(game.totalStolen || 0));
+
+  const escapedLoot = game.thiefEscaped
+    ? Number(game.thiefEscapeLoot || thief?.loot || 0)
+    : 0;
 
   const winnerReward =
     winnerPlayers.length
       ? HEIST_WIN_REWARD +
+        escapedLoot +
         Math.floor(prizePool / winnerPlayers.length)
       : 0;
 
@@ -14249,6 +14446,9 @@ async function handleHeistCreate(
     infectedCount: 0,
     escapeReady: false,
     voteShield: false,
+    reaperUsed: false,
+    asleep: false,
+    daytimeActionReady: false,
     lastAction: null,
     lastPrivateResult: ""
   };
@@ -14795,6 +14995,11 @@ async function handleHeistVote(
       targetId
     );
 
+  if (voter?.cannotVote) {
+    await sendText(env,interaction,"😴 Your vote was silenced for this round.");
+    return;
+  }
+
   if (
     !voter?.alive ||
     !target?.alive
@@ -14873,6 +15078,37 @@ async function syncHeistPhase(env, game) {
   if (game.status === "voting") {
     await resolveHeistVote(env, game);
   }
+}
+
+async function handleHeistDayAction(env, interaction, gameId, action) {
+  if (!interaction.guild_id) return sendText(env,interaction,"❌ Heists only work inside a server.");
+  const state=await getGuildState(env,interaction.guild_id); const game=state.heist; const user=getUserFromInteraction(interaction);
+  const player=game?.players?.[user?.id];
+  if(!game||game.id!==gameId||game.status!=="voting") return sendText(env,interaction,"❌ The daytime action is no longer available.");
+  if(!player||player.role!=="sleeper"||!player.daytimeActionReady) return sendText(env,interaction,"❌ You don't have a daytime action ready.");
+  if(action!=="nudge") return sendText(env,interaction,"❌ Unknown daytime action.");
+  const targets=heistAlivePlayers(game).filter(p=>p.id!==user.id);
+  if(!targets.length) return sendText(env,interaction,"❌ There is nobody to nudge.");
+  await sendText(env,interaction,"☀️ **DAYTIME NUDGE**
+
+Choose one living player. Their vote will be silenced this round.",heistDayTargetButtons(game,user.id));
+}
+
+function heistDayTargetButtons(game,userId){
+  const targets=heistAlivePlayers(game).filter(p=>p.id!==userId); const rows=[];
+  for(let i=0;i<targets.length;i+=5) rows.push(row(...targets.slice(i,i+5).map(p=>button(`☀️ ${heistDisplayName(p).slice(0,70)}`,`heist:daytarget:${game.id}:nudge:${p.id}`,2))));
+  rows.push(row(button("❌ Cancel","heist:cancelday:"+game.id,2))); return rows;
+}
+
+async function handleHeistDayTarget(env, interaction, gameId, action, targetId) {
+  const state=await getGuildState(env,interaction.guild_id); const game=state.heist; const user=getUserFromInteraction(interaction); const player=game?.players?.[user?.id]; const target=game?.players?.[targetId];
+  if(!game||game.id!==gameId||game.status!=="voting") return sendText(env,interaction,"❌ Voting is over.");
+  if(!player||player.role!=="sleeper"||!player.daytimeActionReady) return sendText(env,interaction,"❌ Your daytime action is no longer available.");
+  if(action!=="nudge"||!target?.alive||target.id===user.id) return sendText(env,interaction,"❌ Invalid daytime target.");
+  target.cannotVote=true; player.daytimeActionReady=false;
+  game.publicEvents=(game.publicEvents||[]).concat(`☀️ **SOMEONE'S VOTE WAS SILENCED.** The daytime got a little sleepier.`).slice(-12);
+  state.heist=game; await saveGuildState(env,game.guildId,state);
+  await sendText(env,interaction,`☀️ **DAYTIME NUDGE SUCCESSFUL.** ${heistDisplayName(target)} cannot vote this round.`);
 }
 
 async function handleHeistComponent(
@@ -14984,6 +15220,18 @@ async function handleHeistComponent(
       game,
       user.id
     );
+
+  if (actionType === "dayaction") {
+    await handleHeistDayAction(env,interaction,gameId,parts[3]); return true;
+  }
+
+  if (actionType === "daytarget") {
+    await handleHeistDayTarget(env,interaction,gameId,parts[3],parts[4]); return true;
+  }
+
+  if (actionType === "cancelday") {
+    const p=heistPlayer(game,user.id); if(p) p.daytimeActionReady=false; state.heist=game; await saveGuildState(env,guildId,state); await sendText(env,interaction,"❌ Daytime action cancelled."); return true;
+  }
 
   if (
     actionType === "open"
@@ -15518,7 +15766,12 @@ const ACHIEVEMENTS = [
   { id: "secret_zero", name: "🤡 Worth A Shot", description: "Get a 0-sparkle raccoon result.", reward: 100, hidden: true, progress: p => p.secretAchievements?.includes("secret_zero") ? 1 : 0, goal: 1 },
   { id: "secret_ate", name: "🍽️ He Ate Them?!", description: "Get the raccoon ate the sparkles outcome.", reward: 150, hidden: true, progress: p => p.secretAchievements?.includes("secret_ate") ? 1 : 0, goal: 1 },
   { id: "tree_obsessed", name: "🌳 Tree Obsessed", description: "Check /tree 100 times.", reward: 100, hidden: true, progress: p => Number(p.treeChecks || 0), goal: 100 },
-  { id: "cat_person", name: "🐱 Cat Person", description: "Buy your first cat item.", reward: 100, hidden: true, progress: p => p.catItemBought ? 1 : 0, goal: 1 }
+  { id: "cat_person", name: "🐱 Cat Person", description: "Buy your first cat item.", reward: 100, hidden: true, progress: p => p.catItemBought ? 1 : 0, goal: 1 },
+  { id: "battle_first", name: "⚔️ Branch Brawl", description: "Win your first Tree Battle.", reward: 100, progress: p => Number(p.battleWins || 0), goal: 1 },
+  { id: "battle_5", name: "🌳 Bark Bruiser", description: "Win 5 Tree Battles.", reward: 200, progress: p => Number(p.battleWins || 0), goal: 5 },
+  { id: "battle_10", name: "⚔️ Forest Fighter", description: "Win 10 Tree Battles.", reward: 400, progress: p => Number(p.battleWins || 0), goal: 10 },
+  { id: "battle_streak_3", name: "🔥 Hot Roots", description: "Reach a 3-battle Tree Battle win streak.", reward: 300, progress: p => Number(p.battleBestStreak || 0), goal: 3 },
+  { id: "battle_clutch", name: "💗 Last Leaf Standing", description: "Win a Tree Battle while at 20 HP or less.", reward: 500, progress: p => Number(p.battleLowHpWins || 0), goal: 1 }
 ];
 
 function updateAchievements(player) {
@@ -15715,6 +15968,27 @@ async function handleCommand(
 
   if (name === "achievements") {
     await handleAchievements(env, interaction);
+    return;
+  }
+
+  if (name === "battle") {
+    await handleBattleStart(env, interaction);
+    return;
+  }
+
+  if (name === "battleshop") {
+    await handleBattleShop(env, interaction);
+    return;
+  }
+
+  if (name === "pastelpanic") {
+    await handlePastelStart(env, interaction);
+    return;
+  }
+
+  if (name === "pastel") {
+    const sub = interaction.data?.options?.find(o => o.type === 1)?.name || "leaderboard";
+    if (sub === "leaderboard") await handlePastelLeaderboard(env, interaction);
     return;
   }
 
@@ -15987,6 +16261,620 @@ async function handleCommand(
   );
 }
 
+
+/* =========================================================
+   TREE BATTLE
+   Uses only the equipped tree image: no background, decoration,
+   or effect is included in battle artwork.
+========================================================= */
+
+const BATTLE_MOVES = {
+  attack: [
+    ["🌿 Branch Slap", 12, "slapped your tree with a branch!"],
+    ["🌰 Acorn Bonk", 10, "launched an acorn directly at the forehead!"],
+    ["🌱 Root Trip", 11, "tripped the opponent with a sneaky root!"],
+    ["🍃 Leaf Cannon", 13, "fired a compressed leaf cannon!"],
+    ["🐦 Bird Assault", 14, "called in an extremely aggressive bird!"],
+    ["☀️ Photosynthesis Beam", 16, "weaponized photosynthesis!"],
+    ["👊 Trunk Punch", 15, "threw a very wooden punch!"],
+    ["🥜 Nut Toss", 9, "threw a handful of nuts with questionable accuracy!"],
+    ["🍃 Leaf Shuriken", 14, "sent razor-sharp leaves spinning!"],
+    ["🪵 Log Launcher", 17, "launched a log with absolutely no safety inspection!"],
+    ["🌿 Vine Whip", 13, "whipped the opponent with a vine!"],
+    ["🐿️ Squirrel Hitman", 18, "hired a squirrel to handle the problem!"],
+    ["🌪️ Leaf Tornado", 16, "created a tiny but furious leaf tornado!"],
+    ["☀️ Solar Smackdown", 20, "charged up under the sun and bonked with solar power!"],
+    ["🍎 Fruit Fling", 12, "flung fruit with suspicious confidence!"],
+    ["🐦 Bird Bonk", 11, "bonked the opponent with a bird-assisted attack!"],
+    ["🌎 Rootquake", 19, "shook the ground with a rootquake!"],
+    ["🌲 Forest Fury", 21, "unleashed the fury of the entire forest!"],
+    ["🪓 Fake Axe Attack", 8, "pretended to be an axe and caused emotional damage!"],
+    ["✨ Sparkle Blast", 18, "fired a ridiculous blast of sparkles!"]
+  ],
+  defense: [
+    ["🛡️ Bark Armor", 10, "hardened its bark and reduced incoming damage."],
+    ["🌳 Hide Behind a Bush", 9, "disappeared behind a suspiciously convenient bush."],
+    ["🏰 Root Fortress", 12, "built a fortress of roots around itself."],
+    ["🌳 I Am Literally Just a Tree", 8, "stood there so confidently that the attack barely worked."],
+    ["🍃 Leaf Shield", 10, "formed a swirling leaf shield."],
+    ["🪵 Maximum Bark", 13, "activated MAXIMUM BARK."],
+    ["🧥 Leaf Cloak", 9, "wrapped itself in a dramatic leaf cloak."],
+    ["🪵 Log Shield", 11, "blocked with a conveniently nearby log."],
+    ["🌿 Vine Barrier", 12, "raised a tangled vine barrier."],
+    ["🌱 Root Lock", 10, "anchored itself to the ground."],
+    ["☂️ Umbrella Branches", 9, "deployed umbrella-shaped branches."],
+    ["🍃 Tree Camouflage", 11, "became even more tree-like somehow."],
+    ["🏠 Birdhouse Fortress", 12, "hid behind an entire birdhouse fortress."],
+    ["🍄 Mushroom Wall", 10, "summoned a wall of mushrooms."],
+    ["🏰 Bark Fortress", 14, "turned its bark into a tiny castle."],
+    ["✨ Sparkle Shield", 12, "raised a sparkling shield."],
+    ["😴 Nap Defense", 8, "took a nap and somehow reduced the damage."],
+    ["🦝 Raccoon Bodyguard", 13, "hired a raccoon bodyguard."],
+    ["🌈 Rainbow Barrier", 14, "raised a rainbow barrier."],
+    ["💅 Dramatic Pose", 7, "hit a dramatic pose and confused the attacker."]
+  ]
+};
+
+const BATTLE_COSMETIC_ABILITIES = {
+  cotton_candy: { startHp: 10 },
+  cherry: { regen: 8 },
+  full_cherry: { startHp: 5, regen: 5 },
+  shadow: { attackBonus: 3 },
+  pine: { defenseBonus: 0.08 },
+  red: { attackBonus: 5 },
+  soul: { fatalSave: true },
+  halloween_tree: { scareChance: 0.25 },
+  kitty_tree: { counterChance: 0.25, counterDamage: 8 },
+  green_glow: { specialBonus: 5 },
+  stoned_birthday: { regen: 3 }
+};
+
+const BATTLE_EFFECT_ABILITIES = {
+  hearts: { healOnAttack: 5 },
+  butterflies: { dodgeChance: 0.15 },
+  purr_princess: { confuseChance: 0.20 },
+  green_glow: { specialBonus: 4 }
+};
+
+const BATTLE_DECORATION_ABILITIES = {
+  pumpkin_cat: { healOnDefend: 6 },
+  panda: { damageReduction: 0.10 },
+  cat: { dodgeChance: 0.12 },
+  stoned_balloon: { dodgeChance: 0.08 }
+};
+
+const BATTLE_BACKGROUND_ABILITIES = {
+  candyland: { startHp: 10 },
+  halloween: { scareChance: 0.15 },
+  magic_mushroom: { randomEffect: true },
+  field_day: { defenseBonus: 0.05 },
+  red_forest: { attackBonus: 4 },
+  cozy_cat: { regen: 5 },
+  green_glow: { specialBonus: 3 },
+  stoned_birthday: { startHp: 5 }
+};
+
+const BATTLE_SHOP_ITEMS = {
+  mystery_juice: { name: "🧃 Mystery Juice", price: 20000, description: "Randomly heals 10–30 HP or adds 8–15 attack damage on your next hit." },
+  mega_acorn: { name: "🌰 Mega Acorn", price: 35000, description: "Your next attack deals +20 damage." },
+  suspicious_mushroom: { name: "🍄 Suspicious Mushroom", price: 50000, description: "Randomly grants +20 HP, +15 attack, or +25% dodge for the battle." },
+  emergency_bark: { name: "🪵 Emergency Bark", price: 60000, description: "Instantly heals 25 HP." },
+  raccoon_contract: { name: "🦝 Raccoon Contract", price: 90000, description: "Summon a raccoon to deal 18 damage and reduce the opponent's next attack by 5." },
+  thunder_acorn: { name: "⚡ Thunder Acorn", price: 125000, description: "Deal 28 damage and stun the opponent's next action." },
+  sparkle_armor: { name: "✨ Sparkle Armor", price: 150000, description: "Reduce incoming damage by 25% for the rest of the battle." },
+  inferno_root: { name: "🔥 Inferno Root", price: 200000, description: "Deal 35 damage, but take 5 recoil damage." },
+  royal_root_crown: { name: "👑 Royal Root Crown", price: 250000, description: "Heal 10 HP and gain +5 attack for the rest of the battle." },
+  cosmic_seed: { name: "🌌 Cosmic Seed", price: 300000, description: "Fully charge your Special move and heal 15 HP." },
+  chaos_potion: { name: "🌀 Chaos Potion", price: 400000, description: "Randomly heal, damage, or swap 10 HP between the trees." },
+  second_chance_seed: { name: "🌱 Second Chance Seed", price: 500000, description: "If you would be defeated, survive once at 1 HP." },
+  forbidden_acorn: { name: "☠️ Forbidden Acorn", price: 650000, description: "Deal 45 damage, but reduce your own max HP by 10." },
+  world_tree_seed: { name: "🌳 World Tree Seed", price: 800000, description: "Heal 35 HP and permanently gain +3 defense." },
+  rainbow_heart: { name: "🌈 Rainbow Heart", price: 900000, description: "Heal 20 HP, gain 20% dodge, and charge your Special." },
+  ultimate_tree_relic: { name: "💎 Ultimate Tree Relic", price: 1000000, description: "Heal 40 HP and make your next attack guaranteed to hit for +25 damage." }
+};
+
+function battleShopItems(player) {
+  if (!player.battleShop) player.battleShop = {};
+  return player.battleShop;
+}
+
+function getBattleAbility(player) {
+  const tree = BATTLE_COSMETIC_ABILITIES[player.equipped?.tree] || {};
+  const effect = BATTLE_EFFECT_ABILITIES[player.equipped?.effect] || {};
+  const background = BATTLE_BACKGROUND_ABILITIES[player.equipped?.theme] || {};
+  const decoration = BATTLE_DECORATION_ABILITIES[player.equipped?.decoration] || {};
+  return {
+    startHp: Number(tree.startHp || 0) + Number(background.startHp || 0),
+    regen: Number(tree.regen || 0) + Number(background.regen || 0),
+    attackBonus: Number(tree.attackBonus || 0) + Number(background.attackBonus || 0),
+    defenseBonus: Number(tree.defenseBonus || 0) + Number(background.defenseBonus || 0),
+    dodgeChance: Number(effect.dodgeChance || 0) + Number(decoration.dodgeChance || 0),
+    healOnAttack: Number(effect.healOnAttack || 0),
+    healOnDefend: Number(decoration.healOnDefend || 0),
+    damageReduction: Number(decoration.damageReduction || 0),
+    scareChance: Number(tree.scareChance || 0) + Number(background.scareChance || 0),
+    counterChance: Number(tree.counterChance || 0),
+    counterDamage: Number(tree.counterDamage || 0),
+    fatalSave: Boolean(tree.fatalSave),
+    confuseChance: Number(effect.confuseChance || 0),
+    specialBonus: Number(tree.specialBonus || 0) + Number(effect.specialBonus || 0) + Number(background.specialBonus || 0),
+    randomEffect: Boolean(background.randomEffect)
+  };
+}
+
+function battleMaxHp(player) {
+  return 100 + Math.max(0, Number(player.level || 1) - 1) * 6 + getBattleAbility(player).startHp;
+}
+
+function battleNewPlayerState(player) {
+  const maxHp = battleMaxHp(player);
+  return {
+    userId: player.userId,
+    name: getDisplayName(player),
+    treeImage: getTreeImage(player),
+    level: Number(player.level || 1),
+    maxHp,
+    hp: maxHp,
+    special: 0,
+    defending: false,
+    stunned: false,
+    confused: false,
+    soulUsed: false,
+    secondChanceUsed: false,
+    battleItems: {},
+    nextAttackBonus: 0,
+    defenseBonus: 0,
+    dodgeBonus: 0,
+    guaranteedNextHit: false,
+    cosmeticAbility: getBattleAbility(player)
+  };
+}
+
+function makeBattleGame(guildId, challenger, opponent) {
+  return {
+    id: `battle-${Date.now()}-${randomInt(1000,9999)}`,
+    guildId,
+    status: "playing",
+    turn: challenger.userId,
+    round: 1,
+    createdAt: Date.now(),
+    players: {
+      [challenger.userId]: battleNewPlayerState(challenger),
+      [opponent.userId]: battleNewPlayerState(opponent)
+    },
+    log: ["🌳⚔️ **TREE BATTLE BEGINS!** The trees are already judging each other."],
+    shopItemsUsed: []
+  };
+}
+
+function battleOpponent(game, userId) {
+  return Object.values(game.players).find(p => p.userId !== userId) || null;
+}
+
+function battlePlayer(game, userId) {
+  return game.players?.[userId] || null;
+}
+
+function battleComponents(game) {
+  const current = battlePlayer(game, game.turn);
+  const disabled = !current || current.hp <= 0 || game.status !== "playing";
+  return [
+    row(
+      button("🌿 ATTACK", `battle:attack:${game.id}`, 1, disabled),
+      button("🛡️ DEFEND", `battle:defend:${game.id}`, 3, disabled),
+      button("✨ SPECIAL", `battle:special:${game.id}`, 2, disabled)
+    ),
+    row(
+      button("🎒 ITEM MOVES", `battle:items:${game.id}`, 2, disabled),
+      button("🚪 Forfeit", `battle:forfeit:${game.id}`, 4, disabled)
+    )
+  ];
+}
+
+function battleText(game) {
+  const ps = Object.values(game.players);
+  const a = ps[0], b = ps[1];
+  const turnName = battlePlayer(game, game.turn)?.name || "Nobody";
+  return [
+    `🌳⚔️ **TREE BATTLE** — Round ${game.round}`,
+    "",
+    `🌳 **${a.name}** — Lvl ${a.level} — ❤️ **${Math.max(0,a.hp)}/${a.maxHp} HP**`,
+    `🌳 **${b.name}** — Lvl ${b.level} — ❤️ **${Math.max(0,b.hp)}/${b.maxHp} HP**`,
+    "",
+    `🎯 **${turnName}'s turn**`,
+    "",
+    (game.log || []).slice(-5).join("\n")
+  ].join("\n");
+}
+
+async function renderBattleImage(env, game) {
+  let browser;
+  try {
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width: 1200, height: 700, deviceScaleFactor: 1});
+    const ps = Object.values(game.players);
+    const left = imageUrl(ps[0].treeImage);
+    const right = imageUrl(ps[1].treeImage);
+    const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
+      *{box-sizing:border-box}body{margin:0;background:#fff;overflow:hidden;font-family:Arial,sans-serif}
+      #battle{width:1200px;height:700px;display:flex;align-items:center;justify-content:space-around;position:relative}
+      .tree{width:42%;height:600px;object-fit:contain}.vs{font-size:90px;font-weight:900;z-index:5}
+    </style></head><body><div id="battle"><img class="tree" src="${left}"><div class="vs">VS</div><img class="tree" src="${right}"></div></body></html>`;
+    await page.setContent(html,{waitUntil:"load"});
+    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
+    return await page.screenshot({type:"png"});
+  } catch (error) {
+    const message = error?.message || String(error);
+    if (message.includes("429") || message.toLowerCase().includes("rate limit")) throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another battle.");
+    throw error;
+  } finally { if (browser) try { await browser.close(); } catch {} }
+}
+
+async function sendBattleMessage(env, interaction, game) {
+  const image = await renderBattleImage(env, game);
+  const form = new FormData();
+  form.append("payload_json", JSON.stringify({content:battleText(game),attachments:[{id:0,filename:"battle.png"}],components:battleComponents(game)}));
+  form.append("files[0]", new Blob([image],{type:"image/png"}),"battle.png");
+  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
+}
+
+async function handleBattleStart(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  if (!interaction.guild_id) return sendText(env,interaction,"❌ Tree Battle can only be played inside a server.");
+  const target = getOption(interaction,"user");
+  if (!target || target === user.id) return sendText(env,interaction,"❌ Choose another player to battle.");
+  const state = await getGuildState(env,interaction.guild_id);
+  if (state.battle && state.battle.status === "playing") return sendText(env,interaction,"❌ There is already an active Tree Battle in this server.");
+  const challenger = await getPlayer(env,user.id); updatePlayerIdentity(challenger,interaction); await savePlayer(env,challenger);
+  const opponent = await getPlayer(env,target);
+  if (!opponent.userId) opponent.userId = target;
+  if (!opponent.displayName) opponent.displayName = "Werewife";
+  const game = makeBattleGame(interaction.guild_id,challenger,opponent);
+  for (const bp of Object.values(game.players)) {
+    if (bp.cosmeticAbility?.randomEffect) {
+      const roll = randomInt(1,3);
+      if (roll === 1) { bp.hp = Math.min(bp.maxHp, bp.hp + 15); bp.battleStartEffect = "🍄 Magic Mushroom: +15 starting HP"; }
+      else if (roll === 2) { bp.nextAttackBonus += 10; bp.battleStartEffect = "🍄 Magic Mushroom: next attack +10 damage"; }
+      else { bp.dodgeBonus += 0.15; bp.battleStartEffect = "🍄 Magic Mushroom: +15% dodge"; }
+      game.log.push(`🍄 **${bp.name}** triggered ${bp.battleStartEffect}.`);
+    }
+  }
+  game.interactionToken = interaction.token;
+  state.battle = game;
+  await saveGuildState(env,interaction.guild_id,state);
+  try { await sendBattleMessage(env,interaction,game); } catch(error) { await editOriginalResponse(env,interaction,{content:`🌳⚔️ Battle started, but I couldn't render the battle image.\n\n${error?.message||"Unknown error"}`,components:battleComponents(game)}); }
+}
+
+function battleApplyDamage(target, amount) {
+  let damage = Math.max(0, Math.floor(amount));
+  if (target.defending) damage = Math.max(1, Math.floor(damage * 0.45));
+  if (Number(target.cosmeticAbility?.damageReduction || 0) > 0) damage = Math.max(1, Math.floor(damage * Math.max(0.25, 1 - Number(target.cosmeticAbility.damageReduction))));
+  if (Number(target.defenseBonus || 0) > 0) damage = Math.max(1, Math.floor(damage * Math.max(0.25, 1 - Number(target.defenseBonus))));
+  if (target.cosmeticAbility?.dodgeChance && Math.random() < target.cosmeticAbility.dodgeChance + Number(target.dodgeBonus || 0)) return {damage:0,dodged:true};
+  if (target.hp - damage <= 0) {
+    if (target.cosmeticAbility?.fatalSave && !target.soulUsed) { target.soulUsed=true; target.hp=1; return {damage:0,saved:true}; }
+    if (target.secondChanceReady && !target.secondChanceUsed) { target.secondChanceUsed=true; target.hp=1; return {damage:0,saved:true}; }
+  }
+  target.hp = Math.max(0,target.hp-damage);
+  return {damage};
+}
+
+async function finishBattle(env, game, winnerId, loserId, reason) {
+  game.status="ended";
+  const winner = battlePlayer(game,winnerId), loser = battlePlayer(game,loserId);
+  game.log.push(reason);
+  const winnerPlayer = await getPlayer(env,winnerId);
+  const loserPlayer = await getPlayer(env,loserId);
+  winnerPlayer.battleWins = Number(winnerPlayer.battleWins||0)+1;
+  winnerPlayer.battleStreak = Number(winnerPlayer.battleStreak||0)+1;
+  winnerPlayer.battleBestStreak = Math.max(Number(winnerPlayer.battleBestStreak||0), Number(winnerPlayer.battleStreak||0));
+  if (Number(winner?.hp||0) <= 20) winnerPlayer.battleLowHpWins = Number(winnerPlayer.battleLowHpWins||0)+1;
+  if (!Array.isArray(winnerPlayer.titles)) winnerPlayer.titles=[];
+  const unlockBattleTitle=id=>{if(!winnerPlayer.titles.includes(id))winnerPlayer.titles.push(id);};
+  unlockBattleTitle("battle_champion");
+  if(winnerPlayer.battleWins>=5)unlockBattleTitle("battle_brawler");
+  if(winnerPlayer.battleBestStreak>=3)unlockBattleTitle("battle_streak");
+  if(winnerPlayer.battleWins>=10)unlockBattleTitle("battle_master");
+  if(winnerPlayer.battleWins>=25)unlockBattleTitle("battle_legend");
+  if(Number(winner?.hp||0)<=20)unlockBattleTitle("battle_clutch");
+  loserPlayer.battleLosses = Number(loserPlayer.battleLosses||0)+1;
+  loserPlayer.battleStreak = 0;
+  await savePlayer(env,winnerPlayer); await savePlayer(env,loserPlayer);
+  const state = await getGuildState(env,game.guildId);
+  if (state.battle?.id === game.id) { state.battle=null; await saveGuildState(env,game.guildId,state); }
+  await sendBattleMessage(env,{token:game.interactionToken},game).catch(()=>null);
+}
+
+async function handleBattleAction(env, interaction, action, gameId) {
+  const state = await getGuildState(env,interaction.guild_id);
+  const game = state.battle;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env,interaction,"❌ That Tree Battle is over or no longer exists.");
+  if (!user || !game.players[user.id]) return sendText(env,interaction,"❌ You aren't in this Tree Battle.");
+  if (game.turn !== user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
+  game.interactionToken = interaction.token;
+  const me = battlePlayer(game,user.id), foe = battleOpponent(game,user.id);
+  if (me.stunned) { me.stunned=false; game.turn=foe.userId; game.log.push(`😵 **${me.name}** was stunned and lost their turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
+  if (me.confused && Math.random()<0.5) { me.confused=false; game.log.push(`🤪 **${me.name}** got confused and did absolutely nothing.`); game.turn=foe.userId; await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
+  me.defending = false;
+  const ability = me.cosmeticAbility || {};
+  if (action === "attack") {
+    const move = BATTLE_MOVES.attack[randomInt(0,BATTLE_MOVES.attack.length-1)];
+    let damage = move[1] + Number(ability.attackBonus||0) + Number(me.nextAttackBonus||0);
+    if (foe.cosmeticAbility?.scareChance && Math.random() < foe.cosmeticAbility.scareChance) { damage = Math.max(1, Math.floor(damage * 0.55)); game.log.push(`🎃 **${foe.name}** scared the attacker! Damage was reduced.`); }
+    if (me.guaranteedNextHit) me.guaranteedNextHit=false;
+    const savedDodge = foe.cosmeticAbility?.dodgeChance;
+    if (me.guaranteedNextHit && foe.cosmeticAbility) foe.cosmeticAbility.dodgeChance = 0;
+    const result = battleApplyDamage(foe,damage);
+    if (foe.cosmeticAbility && savedDodge !== undefined) foe.cosmeticAbility.dodgeChance = savedDodge;
+    me.nextAttackBonus=0;
+    me.special=Math.min(100,me.special+25);
+    if (ability.healOnAttack) me.hp=Math.min(me.maxHp,me.hp+ability.healOnAttack);
+    if (result.dodged) game.log.push(`🦋 **${me.name}** used **${move[0]}**, but **${foe.name}** dodged!`);
+    else game.log.push(`🌿 **${me.name}** ${move[2]} **${foe.name}** took **${result.damage} damage**.`);
+    if (result.saved) game.log.push(`💎 **${foe.name}** survived at **1 HP**!`);
+    if (ability.confuseChance && Math.random() < ability.confuseChance) { foe.confused = true; game.log.push(`👑 **${foe.name}** is confused by the battle effect!`); }
+    if (foe.hp<=0) { await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** The opponent's tree has been defeated.`); return; }
+    if (ability.counterChance && Math.random()<ability.counterChance && foe.hp>0) { const c=battleApplyDamage(me,ability.counterDamage||8); game.log.push(`🐱 **${foe.name}** counterattacked for **${c.damage} damage**!`); if(me.hp<=0){await finishBattle(env,game,foe.userId,me.userId,`🏆 **${foe.name} WINS!** The counterattack finished the battle.`);return;} }
+  } else if (action === "defend") {
+    const move=BATTLE_MOVES.defense[randomInt(0,BATTLE_MOVES.defense.length-1)];
+    me.defending=true; me.special=Math.min(100,me.special+15); if(ability.healOnDefend) me.hp=Math.min(me.maxHp,me.hp+ability.healOnDefend); game.log.push(`🛡️ **${me.name}** used **${move[0]}** — ${move[2]}${ability.healOnDefend?` (+${ability.healOnDefend} HP)`:""}`);
+  } else if (action === "special") {
+    if (me.special<100) return sendText(env,interaction,`❌ Your Special is only **${me.special}%** charged.`);
+    me.special=0;
+    let damage=30+Number(ability.specialBonus||0)+randomInt(-4,8);
+    const result=battleApplyDamage(foe,damage);
+    me.hp=Math.min(me.maxHp,me.hp+Number(ability.regen||0));
+    game.log.push(`✨ **${me.name}** unleashed a **SPECIAL MOVE** for **${result.damage} damage**!`);
+    if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** Their Special move ended the battle.`);return;}
+  } else return sendText(env,interaction,"❌ Invalid battle action.");
+  game.round++;
+  game.turn=foe.userId;
+  await saveGuildState(env,game.guildId,{...state,battle:game});
+  try { await sendBattleMessage(env,interaction,game); } catch(error) { await editOriginalResponse(env,interaction,{content:`${battleText(game)}\n\n⚠️ Battle image couldn't be refreshed: ${error?.message||"Unknown error"}`,components:battleComponents(game)}); }
+}
+
+async function handleBattleForfeit(env, interaction, gameId) {
+  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId||!user||!game.players[user.id]) return sendText(env,interaction,"❌ That battle is no longer active.");
+  const foe=battleOpponent(game,user.id); if(!foe) return sendText(env,interaction,"❌ Battle opponent not found.");
+  game.interactionToken = interaction.token;
+  await finishBattle(env,game,foe.userId,user.id,`🚪 **${battlePlayer(game,user.id).name} forfeited!** The other tree wins.`);
+}
+
+async function handleBattleItems(env, interaction, gameId) {
+  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId||game.status!=="playing") return sendText(env,interaction,"❌ That battle is no longer active.");
+  if(game.turn!==user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
+  const player=await getPlayer(env,user.id); const owned=battleShopItems(player);
+  const ownedIds=Object.entries(owned).filter(([id,count])=>Number(count)>0).map(([id])=>id);
+  if(!ownedIds.length) return sendText(env,interaction,"🎒 You don't have any Tree Battle items. Use `/battleshop` to shop.");
+  const rows=[]; for(let i=0;i<ownedIds.length;i+=5) rows.push(row(...ownedIds.slice(i,i+5).map(id=>button(`${BATTLE_SHOP_ITEMS[id]?.name||id}`.slice(0,80),`battleitem:${game.id}:${id}`,2))));
+  rows.push(row(button("⬅️ Back",`battle:back:${game.id}`,2)));
+  await sendText(env,interaction,"🎒 **YOUR TREE BATTLE ITEMS**\n\nChoose an item to use:",rows);
+}
+
+async function useBattleItem(env,interaction,gameId,itemId) {
+  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId||game.status!=="playing") return sendText(env,interaction,"❌ Battle is no longer active.");
+  if(game.turn!==user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
+  const def=BATTLE_SHOP_ITEMS[itemId]; if(!def) return sendText(env,interaction,"❌ Unknown battle item.");
+  const player=await getPlayer(env,user.id); const inv=battleShopItems(player); if(Number(inv[itemId]||0)<=0) return sendText(env,interaction,"❌ You don't own that item.");
+  inv[itemId]--; await savePlayer(env,player);
+  const me=battlePlayer(game,user.id), foe=battleOpponent(game,user.id);
+  let msg="";
+  if(itemId==="mystery_juice"){if(Math.random()<0.5){const h=randomInt(10,30);me.hp=Math.min(me.maxHp,me.hp+h);msg=`🧃 Mystery Juice healed **${h} HP**!`;}else{const d=randomInt(8,15);me.nextAttackBonus+=d;msg=`🧃 Mystery Juice gave your next attack **+${d} damage**!`;}}
+  if(itemId==="mega_acorn"){me.nextAttackBonus+=20;msg="🌰 Your next attack gets **+20 damage**!";}
+  if(itemId==="suspicious_mushroom"){const r=randomInt(1,3);if(r===1){me.hp=Math.min(me.maxHp,me.hp+20);msg="🍄 The mushroom gave you **+20 HP**!";}else if(r===2){me.nextAttackBonus+=15;msg="🍄 The mushroom gave your next attack **+15 damage**!";}else{me.dodgeBonus+=0.25;msg="🍄 The mushroom gave you **+25% dodge**!";}}
+  if(itemId==="emergency_bark"){me.hp=Math.min(me.maxHp,me.hp+25);msg="🪵 Emergency Bark healed **25 HP**!";}
+  if(itemId==="raccoon_contract"){const r=battleApplyDamage(foe,18);foe.nextAttackBonus=Math.max(-5,Number(foe.nextAttackBonus||0)-5);msg=`🦝 Raccoon Contract dealt **${r.damage} damage** and weakened the next attack!`;}
+  if(itemId==="thunder_acorn"){const r=battleApplyDamage(foe,28);foe.stunned=true;msg=`⚡ Thunder Acorn dealt **${r.damage} damage** and stunned the opponent!`;}
+  if(itemId==="sparkle_armor"){me.defenseBonus+=0.25;msg="✨ Sparkle Armor activated! Incoming damage is reduced.";}
+  if(itemId==="inferno_root"){const r=battleApplyDamage(foe,35);me.hp=Math.max(1,me.hp-5);msg=`🔥 Inferno Root dealt **${r.damage} damage** with 5 recoil damage!`;}
+  if(itemId==="royal_root_crown"){me.hp=Math.min(me.maxHp,me.hp+10);me.nextAttackBonus+=5;msg="👑 Royal Root Crown healed **10 HP** and gave **+5 attack**!";}
+  if(itemId==="cosmic_seed"){me.hp=Math.min(me.maxHp,me.hp+15);me.special=100;msg="🌌 Cosmic Seed healed **15 HP** and fully charged Special!";}
+  if(itemId==="chaos_potion"){const r=randomInt(1,3);if(r===1){me.hp=Math.min(me.maxHp,me.hp+30);msg="🌀 Chaos Potion healed **30 HP**!";}else if(r===2){const d=25;const hit=battleApplyDamage(foe,d);msg=`🌀 Chaos Potion blasted the opponent for **${hit.damage} damage**!`;}else{const transfer=Math.min(10,Math.max(0,foe.hp));foe.hp=Math.max(1,foe.hp-transfer);me.hp=Math.min(me.maxHp,me.hp+transfer);msg=`🌀 Chaos Potion swapped **${transfer} HP**!`;}}
+  if(itemId==="second_chance_seed"){me.secondChanceReady=true;msg="🌱 Second Chance Seed is ready. You can survive one defeat at 1 HP.";}
+  if(itemId==="forbidden_acorn"){const r=battleApplyDamage(foe,45);me.maxHp=Math.max(1,me.maxHp-10);me.hp=Math.min(me.hp,me.maxHp);msg=`☠️ Forbidden Acorn dealt **${r.damage} damage**, but reduced your max HP by 10.`;}
+  if(itemId==="world_tree_seed"){me.hp=Math.min(me.maxHp,me.hp+35);me.defenseBonus+=0.10;msg="🌳 World Tree Seed healed **35 HP** and added +10% defense.";}
+  if(itemId==="rainbow_heart"){me.hp=Math.min(me.maxHp,me.hp+20);me.dodgeBonus+=0.20;me.special=100;msg="🌈 Rainbow Heart healed **20 HP**, added dodge, and charged Special!";}
+  if(itemId==="ultimate_tree_relic"){me.hp=Math.min(me.maxHp,me.hp+40);me.guaranteedNextHit=true;me.nextAttackBonus+=25;msg="💎 Ultimate Tree Relic healed **40 HP** and supercharged your next attack!";}
+  game.log.push(`${msg}`); if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** A battle item finished the fight.`);return;}
+  game.turn=foe.userId; game.round++; await saveGuildState(env,game.guildId,{...state,battle:game});
+  try{await sendBattleMessage(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${battleText(game)}\n\n⚠️ ${error?.message||"Battle image error"}`,components:battleComponents(game)});}
+}
+
+async function handleBattleShop(env,interaction){
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  const player=await getPlayer(env,user.id); const lines=Object.entries(BATTLE_SHOP_ITEMS).map(([id,x])=>`**${x.name}** — 💰 ${x.price.toLocaleString()} ✨\n${x.description}`).join("\n\n");
+  const rows=[]; const ids=Object.keys(BATTLE_SHOP_ITEMS); for(let i=0;i<ids.length;i+=2) rows.push(row(...ids.slice(i,i+2).map(id=>button(`Buy ${BATTLE_SHOP_ITEMS[id].name}`.slice(0,80),`bshop:buy:${id}`,2))));
+  await sendText(env,interaction,`⚔️ **TREE BATTLE SHOP**\n\n${lines}\n\nUse your sparkles to buy battle-only items.`,rows);
+}
+
+async function handleBattleShopBuy(env,interaction,itemId){
+  const def=BATTLE_SHOP_ITEMS[itemId]; const user=getUserFromInteraction(interaction); if(!def||!user)return;
+  const player=await getPlayer(env,user.id); if(Number(player.sparkles||0)<def.price)return sendText(env,interaction,"❌ You don't have enough sparkles for that item.");
+  player.sparkles-=def.price; const inv=battleShopItems(player); inv[itemId]=Number(inv[itemId]||0)+1; await savePlayer(env,player); await sendText(env,interaction,`🛍️ Bought **${def.name}** for **${def.price.toLocaleString()} ✨**! You now own **${inv[itemId]}**.`);
+}
+
+/* =========================================================
+   PASTEL PANIC
+   1v1 = 20x20 square. 3P = 20-row triangular board with exactly
+   400 cells (1+3+5+...+39). 4P = 20x20 square.
+========================================================= */
+
+const PASTEL_COLORS = [
+  {id:"cotton_candy_kiss",name:"Cotton Candy Kiss",hex:"#f7b7d9",label:"🩷"},
+  {id:"marine_blue",name:"Marine Blue",hex:"#9fc7e8",label:"💙"},
+  {id:"lemon_meringue",name:"Lemon Meringue",hex:"#f7e6a6",label:"💛"},
+  {id:"minty_mermaid",name:"Minty Mermaid",hex:"#a9ddc3",label:"💚"},
+  {id:"peachy_pop",name:"Peachy Pop",hex:"#f6c29b",label:"🧡"},
+  {id:"coral_crush",name:"Coral Crush",hex:"#f2a9a9",label:"❤️"}
+];
+const PASTEL_HEART_COLOR="#ef9fbd";
+const PASTEL_WILD_COLOR="#fffaf2";
+const PASTEL_REGEN={1:5,3:7,4:10};
+
+function pastelRatingLevel(rating){return Math.max(0,Math.floor(Math.max(0,Number(rating||0))/100));}
+function pastelStats(player){
+  const rating=Math.max(0,Number(player.pastelRating||0));
+  player.pastelLevel=pastelRatingLevel(rating);
+  return {rating,level:player.pastelLevel,wins:Number(player.pastelWins||0),losses:Number(player.pastelLosses||0),quits:Number(player.pastelQuits||0)};
+}
+function pastelNeighbors(board,r,c,mode){
+  const h=board.length; const out=[];
+  if(mode==="triangle"){
+    const width=board[r]?.length||0;
+    if(c>0)out.push([r,c-1]); if(c<width-1)out.push([r,c+1]);
+    if(r>0){
+      const center=c/2; const a=Math.floor(center); const b=Math.ceil(center);
+      out.push([r-1,a], [r-1,b]);
+    }
+    if(r<h-1){
+      const center=c/2; const a=Math.floor(center); const b=Math.ceil(center);
+      out.push([r+1,Math.floor(center*2)], [r+1,Math.floor(center*2)+1], [r+1,Math.floor(center*2)+2]);
+    }
+  }else{
+    const w=board[0]?.length||0;
+    if(r>0)out.push([r-1,c]);if(r<h-1)out.push([r+1,c]);if(c>0)out.push([r,c-1]);if(c<w-1)out.push([r,c+1]);
+  }
+  const seen=new Set();
+  return out.filter(([rr,cc])=>board[rr]&&board[rr][cc]&&(!seen.has(`${rr},${cc}`)&&(seen.add(`${rr},${cc}`),true)));
+}
+function pastelCellCount(mode){return mode==="triangle"?400:400;}
+function pastelGenerateBoard(mode,players){
+  const board=[];
+  const rows=mode==="triangle"?20:20;
+  for(let r=0;r<rows;r++){
+    const width=mode==="triangle"?(2*r+1):20;
+    board.push(Array.from({length:width},()=>({color:randomInt(0,PASTEL_COLORS.length-1),owner:null,heart:false,wild:Math.random()<0.075})));
+  }
+  /* Seed fair starting corners and give each player a small safe region. */
+  const starts=mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
+  players.forEach((p,i)=>{const [r,c]=starts[i]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=i;board[r][c].heart=false;board[r][c].wild=false;}});
+  let hearts=Math.max(8,Math.floor(pastelCellCount(mode)*0.035));
+  let attempts=0;
+  while(hearts>0&&attempts<3000){attempts++;const r=randomInt(0,board.length-1);const c=randomInt(0,board[r].length-1);const cell=board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;}
+  return board;
+}
+function pastelStartingPlayers(game){return Object.values(game.players||{}).sort((a,b)=>a.slot-b.slot);}
+function pastelFindOwned(game,userId){return Object.values(game.players).find(p=>p.id===userId)||null;}
+function pastelClaimedCells(game,userId){let n=0;for(const row of game.board)for(const c of row)if(c.owner===userId)n++;return n;}
+function pastelTerritoryTotal(game){let n=0;for(const row of game.board)for(const c of row)if(c.owner)n++;return n;}
+function pastelAdjacentColors(game,player){const colors=new Set();for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){const cell=game.board[r][c];if(cell.owner!==player.id)continue;for(const [rr,cc] of pastelNeighbors(game.board,r,c,game.mode)) {const n=game.board[rr][cc];if(n.owner!==player.id)colors.add(n.color);}}return [...colors];}
+function pastelFlood(game,player,color){
+  const board=game.board; const seen=new Set(); const queue=[]; let capturedHearts=0;
+  for(let r=0;r<board.length;r++)for(let c=0;c<board[r].length;c++)if(board[r][c].owner===player.id)queue.push([r,c]);
+  while(queue.length){
+    const [r,c]=queue.shift(); const key=`${r},${c}`; if(seen.has(key))continue; seen.add(key);
+    const cell=board[r][c];
+    if(cell.owner===player.id||cell.color===color||cell.wild){
+      if(cell.owner!==player.id&&cell.heart)capturedHearts++;
+      cell.owner=player.id; cell.color=color; cell.wild=false; cell.heart=false;
+      for(const [rr,cc] of pastelNeighbors(board,r,c,game.mode)){
+        const n=board[rr][cc]; if(n.owner!==player.id&&n.color!==color&&!n.wild)continue;
+        if(!seen.has(`${rr},${cc}`))queue.push([rr,cc]);
+      }
+    }
+  }
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(let r=0;r<board.length;r++)for(let c=0;c<board[r].length;c++){
+      const cell=board[r][c]; if(cell.owner!==player.id)continue;
+      for(const [rr,cc] of pastelNeighbors(board,r,c,game.mode)){
+        const n=board[rr][cc];
+        if(n.wild&&n.owner!==player.id){if(n.heart)capturedHearts++;n.owner=player.id;n.color=color;n.wild=false;n.heart=false;changed=true;}
+      }
+    }
+  }
+  return {capturedHearts};
+}
+function pastelValidColor(game,player,color){return pastelAdjacentColors(game,player).includes(color);}
+function pastelBoardTextLegend(){return PASTEL_COLORS.map(c=>`${c.label} ${c.name}`).join(" • ");}
+function pastelRenderCell(cell){if(cell.owner&&cell.heart)return "❤️";if(cell.heart)return "💗";if(cell.wild)return "⬜";return PASTEL_COLORS[cell.color]?.label||"⬜";}
+function pastelAscii(game){
+  return game.board.map((cells,r)=>{const prefix=game.mode==="triangle"?" ".repeat(19-r):"";return prefix+cells.map(pastelRenderCell).join("")}).join("\n");
+}
+function pastelGameText(game){
+  const players=pastelStartingPlayers(game);const total=pastelTerritoryTotal(game);
+  const lines=players.map(p=>`• ${p.alive?"🌈":"⬛"} <@${p.id}> — **${pastelClaimedCells(game,p.id)} cells** (${total?Math.round(pastelClaimedCells(game,p.id)/total*100):0}%)${p.choiceLocked?" — 🔒":""}`).join("\n");
+  const turn=pastelFindOwned(game,game.turnId);
+  const remaining=Math.max(0,Number(game.refreshEvery)-Number(game.turnsSinceRefresh||0));
+  return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,`🎯 **Turn:** <@${game.turnId}>`,`🔄 **Board refreshes in:** ${remaining} turn${remaining===1?"":"s"}`,"",lines,"",`❤️ Hearts give an **extra turn** • ⬜ Wild Blocks copy the color you just took`,``,pastelBoardTextLegend(),"",`🧩 **400 playable cells** • Choose a touching color to expand your territory.`].join("\n");
+}
+function pastelChoiceComponents(game){
+  const p=pastelFindOwned(game,game.turnId);if(!p)return[];const colors=pastelAdjacentColors(game,p);const rows=[];const buttons=colors.map(i=>button(`${PASTEL_COLORS[i].label} ${PASTEL_COLORS[i].name}`.slice(0,80),`pastel:choose:${game.id}:${i}`,2));for(let i=0;i<buttons.length;i+=2)rows.push(row(...buttons.slice(i,i+2)));rows.push(row(button("🚪 Quit Game",`pastel:quit:${game.id}`,4),button("📖 Rules",`pastel:rules:${game.id}`,2)));return rows;
+}
+function pastelLobbyComponents(game){return [row(button("💗 Join Game",`pastel:join:${game.id}`,1),button("🚪 Cancel",`pastel:cancel:${game.id}`,4)),row(button("📖 How to Play",`pastel:rules:${game.id}`,2))];}
+function pastelModeComponents(){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3)),row(button("📖 How to Play","pastel:rules:menu",2))];}
+function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:{mode:"square",modeLabel:"4 Player",needed:4};}
+function pastelLobbyText(game){return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...","",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.`,`❤️ Hearts grant an extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
+function pastelRulesText(){return [`🌈 **PASTEL PANIC — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`❤️ Absorb a Heart for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,``,`🩷 Cotton Candy Kiss • 💙 Marine Blue • 💛 Lemon Meringue • 💚 Minty Mermaid • 🧡 Peachy Pop • ❤️ Coral Crush`].join("\n");}
+function pastelGameIsUnbeatable(game){const total=pastelCellCount(game.mode);const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1)return true;const leader=Math.max(...alive.map(p=>pastelClaimedCells(game,p.id)));const others=total-leader;return leader>others;}
+function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive).sort((a,b)=>pastelClaimedCells(game,b.id)-pastelClaimedCells(game,a.id))[0]||null;}
+function pastelRegenerate(game){
+  const players=pastelStartingPlayers(game).filter(p=>p.alive);
+  const oldCounts={};
+  for(const p of players) oldCounts[p.id]=pastelClaimedCells(game,p.id);
+  const oldBoard=game.board;
+  game.board=pastelGenerateBoard(game.mode,players);
+  /* Preserve each living player's approximate territory size by rebuilding
+     a contiguous region around their original starting corner. */
+  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
+  const assigned=new Set();
+  for(let i=0;i<players.length;i++){
+    const p=players[i]; const target=Math.max(1,Math.min(oldCounts[p.id]||1,pastelCellCount(game.mode)-players.length+1));
+    const [sr,sc]=starts[i]||starts[0];
+    const cells=[];
+    for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
+      const key=`${r},${c}`; if(assigned.has(key))continue;
+      const d=Math.abs(r-sr)+Math.abs(c-sc); cells.push({r,c,d});
+    }
+    cells.sort((a,b)=>a.d-b.d);
+    let taken=0;
+    for(const pos of cells){
+      if(taken>=target)break;
+      const cell=game.board[pos.r][pos.c]; const key=`${pos.r},${pos.c}`;
+      if(assigned.has(key))continue;
+      cell.owner=p.id; cell.color=p.slot % PASTEL_COLORS.length; cell.heart=false; cell.wild=false; assigned.add(key); taken++;
+    }
+  }
+  /* Re-seed a small number of fresh Hearts and Wild Blocks only in unclaimed cells. */
+  for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
+    const cell=game.board[r][c];
+    if(cell.owner)continue;
+    cell.heart=false; cell.wild=Math.random()<0.075;
+  }
+  let hearts=Math.max(8,Math.floor(pastelCellCount(game.mode)*0.035));
+  let attempts=0;
+  while(hearts>0&&attempts<3000){attempts++;const r=randomInt(0,game.board.length-1);const c=randomInt(0,game.board[r].length-1);const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;}
+  game.turnsSinceRefresh=0; game.refreshCount=Number(game.refreshCount||0)+1;
+  game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Your territories carried over, but the map around them changed.`;
+}
+
+async function pastelSave(env,game){const state=await getGuildState(env,game.guildId);if(state.pastel?.id!==game.id)return false;state.pastel=game;await saveGuildState(env,game.guildId,state);return true;}
+async function renderPastelBoard(env,game){
+  let browser;try{browser=await puppeteer.launch(env.BROWSER);const page=await browser.newPage();await page.setViewport({width:1100,height:900,deviceScaleFactor:1});
+    const rows=game.board.map((cells,r)=>{const indent=game.mode==="triangle"?(19-r)*13:0;return `<div class="row" style="margin-left:${indent}px">${cells.map((cell,c)=>{let color=cell.owner?PASTEL_COLORS[cell.color]?.hex:PASTEL_COLORS[cell.color]?.hex;let inner=cell.heart?"♥":cell.wild?"":cell.owner?"":"";let border=cell.owner?"#ffffff":"#e9e1da";return `<div class="cell" style="background:${cell.wild?PASTEL_WILD_COLOR:color};border-color:${border}">${inner}</div>`;}).join("")}</div>`}).join("");
+    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif}.wrap{width:1100px;height:900px;display:flex;align-items:center;justify-content:center}.board{padding:20px}.row{height:26px;display:flex;justify-content:flex-start}.cell{width:24px;height:24px;border:1px solid #e9e1da;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border-radius:5px;margin:1px}</style></head><body><div class="wrap"><div class="board">${rows}</div></div></body></html>`;
+    await page.setContent(html,{waitUntil:"load"});return await page.screenshot({type:"png"});
+  }catch(error){const m=error?.message||String(error);if(m.includes("429")||m.toLowerCase().includes("rate limit"))throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another Pastel Panic board.");throw error;}finally{if(browser)try{await browser.close();}catch{}}}
+async function sendPastelBoard(env,interaction,game){const image=await renderPastelBoard(env,game);const form=new FormData();form.append("payload_json",JSON.stringify({content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"pastel-panic.png"}],components:pastelChoiceComponents(game)}));form.append("files[0]",new Blob([image],{type:"image/png"}),"pastel-panic.png");return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});}
+async function handlePastelStart(env,interaction){await sendText(env,interaction,"🌈 **PASTEL PANIC**\n\nChoose your game mode!",pastelModeComponents());}
+async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.board=pastelGenerateBoard(game.mode,players);game.turnsSinceRefresh=0;game.lastRefresh="";await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
+async function handlePastelJoin(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false};await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Pastel Panic game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Pastel Panic lobby cancelled.");}
+async function pastelFinish(env,game,winnerId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=pastelFindOwned(game,winnerId);for(const p of pastelStartingPlayers(game)){const player=await getPlayer(env,p.id);if(p.id===winnerId){player.pastelWins=Number(player.pastelWins||0)+1;player.pastelRating=Number(player.pastelRating||0)+100;}else if(!p.alive||p.id!==winnerId){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}player.pastelLevel=pastelRatingLevel(player.pastelRating);await savePlayer(env,player);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}return winner;}
+async function handlePastelChoose(env,interaction,gameId,colorIndex){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Pastel Panic game is over or missing.");if(game.turnId!==user.id)return sendText(env,interaction,"⏳ It isn't your turn.");const player=pastelFindOwned(game,user.id);if(!player?.alive)return sendText(env,interaction,"💀 You're out of the game.");const color=Number(colorIndex);if(!Number.isInteger(color)||!PASTEL_COLORS[color]||!pastelValidColor(game,player,color))return sendText(env,interaction,"❌ You can only choose a color touching your territory.");const before=pastelClaimedCells(game,user.id);const flood=pastelFlood(game,player,color);const after=pastelClaimedCells(game,user.id);const gained=after-before;const extra=Number(flood.capturedHearts||0)>0;game.round++;game.turnsSinceRefresh++;game.lastMove=`🎨 <@${user.id}> chose **${PASTEL_COLORS[color].name}** and gained **${gained} cells**.${extra?" ❤️ HEART BONUS — EXTRA TURN!":""}`;if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");return sendText(env,interaction,`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!`);}const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");return sendText(env,interaction,`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!`);}if(game.turnsSinceRefresh>=game.refreshEvery){pastelRegenerate(game);}if(!extra){const currentIndex=pastelStartingPlayers(game).findIndex(p=>p.id===user.id);let nextIndex=currentIndex;for(let i=0;i<pastelStartingPlayers(game).length;i++){nextIndex=(nextIndex+1)%pastelStartingPlayers(game).length;const n=pastelStartingPlayers(game)[nextIndex];if(n?.alive){game.turnId=n.id;break;}}}else game.turnId=user.id;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}}
+async function handlePastelQuit(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Pastel Panic game is over or missing.");const quitter=pastelFindOwned(game,user.id);if(!quitter?.alive)return sendText(env,interaction,"❌ You're already out of this game.");quitter.alive=false;const player=await getPlayer(env,user.id);player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelQuits=Number(player.pastelQuits||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);player.pastelLevel=pastelRatingLevel(player.pastelRating);await savePlayer(env,player);if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,"🚪 You quit. It counts as a loss, and your opponent wins.");}for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;}const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,"🚪 You quit. Your territory is blacked out and you are eliminated.");}if(game.turnId===user.id)game.turnId=alive[0].id;await pastelSave(env,game);await sendText(env,interaction,"🚪 **RAGE QUIT RECORDED.** Your territory has been blacked out and you are out of the game.");}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.pastelLevel=pastelRatingLevel(wp.pastelRating);await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function handlePastelLeaderboard(env,interaction){const keys=await listAllPlayerKeys(env);const players=[];for(const key of keys){const p=await getPlayer(env,key);pastelStats(p);players.push(p);}players.sort((a,b)=>{const r=Number(b.pastelRating||0)-Number(a.pastelRating||0);if(r)return r;const w=Number(b.pastelWins||0)-Number(a.pastelWins||0);if(w)return w;return Number(a.pastelQuits||0)-Number(b.pastelQuits||0);});const top=players.slice(0,10);if(!top.length)return sendText(env,interaction,"🌈 Nobody has played Pastel Panic yet!");const lines=top.map((p,i)=>`**${i+1}.** ${getDisplayName(p)} — Level **${pastelStats(p).level}** • 🏆 **${Number(p.pastelWins||0)} Wins** • 💀 **${Number(p.pastelLosses||0)} Losses** • 🚪 **${Number(p.pastelQuits||0)} Quits**`);await sendText(env,interaction,`🌈 **PASTEL PANIC LEADERBOARD**\n\n${lines.join("\n")}`);}
+async function handlePastelRules(env,interaction){await sendText(env,interaction,pastelRulesText());}
+
 /* =========================================================
    DISCORD COMMAND DEFINITIONS
 ========================================================= */
@@ -16060,6 +16948,32 @@ const COMMANDS = [
         name: "end",
         description: "End the current heist (host only)"
       }
+    ]
+  },
+
+  {
+    name: "battle",
+    description: "Challenge another player's tree to a Tree Battle",
+    options: [
+      { type: 6, name: "user", description: "Player to battle", required: true }
+    ]
+  },
+
+  {
+    name: "battleshop",
+    description: "Open the Tree Battle item shop"
+  },
+
+  {
+    name: "pastelpanic",
+    description: "Start Pastel Panic and choose a game mode"
+  },
+
+  {
+    name: "pastel",
+    description: "Pastel Panic leaderboard and stats",
+    options: [
+      { type: 1, name: "leaderboard", description: "View the Pastel Panic leaderboard" }
     ]
   },
 
@@ -16500,19 +17414,28 @@ export default {
       interaction.type === 2 && interaction.data?.name === "heist";
     const isIslandCommand =
       interaction.type === 2 && interaction.data?.name === "island";
-    const isHeistComponent =
-      interaction.type === 3 && String(interaction.data?.custom_id || "").startsWith("heist:");
-    const isIslandComponent =
-      interaction.type === 3 && String(interaction.data?.custom_id || "").startsWith("island:");
+    const isBattleCommand =
+      interaction.type === 2 && (interaction.data?.name === "battle" || interaction.data?.name === "battleshop");
+    const isPastelCommand =
+      interaction.type === 2 && (interaction.data?.name === "pastelpanic" || interaction.data?.name === "pastel");
+    const customId = String(interaction.data?.custom_id || "");
+    const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
+    const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
+    const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
+    const isPastelComponent = interaction.type === 3 && customId.startsWith("pastel:");
 
     const relevant =
-      isHeistCommand || isIslandCommand || isHeistComponent || isIslandComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent;
 
     if (relevant) {
       let update = false;
       let ephemeral = false;
 
-      if (isHeistCommand) {
+      if (isBattleCommand) {
+        ephemeral = interaction.data?.name === "battleshop";
+      } else if (isPastelCommand) {
+        ephemeral = interaction.data?.name === "pastel";
+      } else if (isHeistCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
         ephemeral = ["join", "leave", "start", "status", "end"].includes(sub);
       } else if (isIslandCommand) {
@@ -16523,6 +17446,10 @@ export default {
       } else if (isIslandComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
         update = ["join", "leave", "rounds", "back", "start", "choice"].includes(action);
+      } else if (isBattleComponent) {
+        update = true;
+      } else if (isPastelComponent) {
+        update = true;
       }
 
       const responseType = update ? 6 : 5;
@@ -16584,7 +17511,9 @@ export default {
    Every scheduled pass checks:
    - Raccoon Heist timers
    - Chaos Island round timers
-   - Chaos events (their one-hour schedule)
+
+   Standalone hourly Chaos Events are disabled; Chaos Island is now
+   the main home for chaos gameplay.
 ======================================================= */
 
   async scheduled(
@@ -16594,9 +17523,6 @@ export default {
   ) {
     ctx.waitUntil(
       Promise.all([
-        processChaosEvents(
-          env
-        ),
         processHeistTimers(
           env
         ),
