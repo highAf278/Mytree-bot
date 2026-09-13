@@ -487,7 +487,9 @@ function defaultPlayer() {
     pastelWins: 0,
     pastelLosses: 0,
     pastelQuits: 0,
+    pastelSparklesEarned: 0,
     battleWins: 0,
+    battleSparklesEarned: 0,
     battleLosses: 0,
     battleStreak: 0,
     battleBestStreak: 0,
@@ -1022,6 +1024,20 @@ async function sendText(
     );
   }
 
+  return response;
+}
+
+async function sendEphemeralFollowup(
+  env,
+  interaction,
+  content,
+  components = []
+) {
+  const response = await fetch(
+    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, components, flags: 64 }) }
+  );
+  if (!response.ok) console.error("Ephemeral followup failed:", response.status, await response.text());
   return response;
 }
 
@@ -11906,12 +11922,14 @@ async function handleTitleUnequip(env, interaction) {
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
-const HEIST_NIGHT_DURATION = 30 * 1000;
+const HEIST_NIGHT_DURATION = 60 * 1000;
 const HEIST_VOTE_DURATION = 3 * 60 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
 const HEIST_STEAL_MAX = 1500;
 const HEIST_WIN_REWARD = 500;
+const BATTLE_WIN_REWARD = 500;
+const PASTEL_WIN_REWARD = 500;
 
 const HEIST_PERMISSIONS = {
   SEND_MESSAGES: 2048n,
@@ -13494,6 +13512,17 @@ async function resolveHeistNight(
     } else if (illusions.has(target.id)) {
       result =
         "🪄 The evidence looked strangely distorted. Your investigation was fooled.";
+    } else if (heistPlayerCount(game) === 3) {
+      /*
+        Three-player games are intentionally noisy. The Detective gets a
+        clue, not a guaranteed solve, so one investigation cannot instantly
+        identify the Thief by elimination.
+      */
+      const trulySuspicious = target.role === "thief" || target.role === "jimothy_jester" || framed.has(target.id);
+      const reportedSuspicious = Math.random() < 0.65 ? trulySuspicious : !trulySuspicious;
+      result = reportedSuspicious
+        ? "🚨 **SUSPICIOUS CLUE — BUT NOT CERTAIN.** The evidence points toward this player, but the tiny crew has too much overlap and the clue may be misleading."
+        : "🟢 **QUIET CLUE — BUT NOT CERTAIN.** Nothing suspicious showed up, but the evidence is unreliable in a three-player heist.";
     } else if (
       target.role === "thief" ||
       target.role === "jimothy_jester" ||
@@ -16579,6 +16608,9 @@ async function finishBattle(env, game, winnerId, loserId, reason) {
   if(Number(winner?.hp||0)<=20)unlockBattleTitle("battle_clutch");
   loserPlayer.battleLosses = Number(loserPlayer.battleLosses||0)+1;
   loserPlayer.battleStreak = 0;
+  winnerPlayer.sparkles = Number(winnerPlayer.sparkles || 0) + BATTLE_WIN_REWARD;
+  winnerPlayer.battleSparklesEarned = Number(winnerPlayer.battleSparklesEarned || 0) + BATTLE_WIN_REWARD;
+  game.log.push(`✨ **${winner?.name || "Winner"}** banked **+${BATTLE_WIN_REWARD} sparkles** for winning the Tree Battle!`);
   await savePlayer(env,winnerPlayer); await savePlayer(env,loserPlayer);
   const state = await getGuildState(env,game.guildId);
   if (state.battle?.id === game.id) { state.battle=null; await saveGuildState(env,game.guildId,state); }
@@ -16589,9 +16621,9 @@ async function handleBattleAction(env, interaction, action, gameId) {
   const state = await getGuildState(env,interaction.guild_id);
   const game = state.battle;
   const user = getUserFromInteraction(interaction);
-  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env,interaction,"❌ That Tree Battle is over or no longer exists.");
-  if (!user || !game.players[user.id]) return sendText(env,interaction,"❌ You aren't in this Tree Battle.");
-  if (game.turn !== user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
+  if (!game || game.id !== gameId || game.status !== "playing") return sendEphemeralFollowup(env,interaction,"❌ That Tree Battle is over or no longer exists.");
+  if (!user || !game.players[user.id]) return sendEphemeralFollowup(env,interaction,"❌ You aren't in this Tree Battle.");
+  if (game.turn !== user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   game.interactionToken = interaction.token;
   const me = battlePlayer(game,user.id), foe = battleOpponent(game,user.id);
   if (me.stunned) { me.stunned=false; game.turn=foe.userId; game.log.push(`😵 **${me.name}** was stunned and lost their turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
@@ -16620,14 +16652,14 @@ async function handleBattleAction(env, interaction, action, gameId) {
     const move=BATTLE_MOVES.defense[randomInt(0,BATTLE_MOVES.defense.length-1)];
     me.defending=true; me.special=Math.min(100,me.special+15); if(ability.healOnDefend) me.hp=Math.min(me.maxHp,me.hp+ability.healOnDefend); game.log.push(`🛡️ **${me.name}** used **${move[0]}** — ${move[2]}${ability.healOnDefend?` (+${ability.healOnDefend} HP)`:""}`);
   } else if (action === "special") {
-    if (me.special<100) return sendText(env,interaction,`❌ Your Special is only **${me.special}%** charged.`);
+    if (me.special<100) return sendEphemeralFollowup(env,interaction,`❌ Your Special is only **${me.special}%** charged.`);
     me.special=0;
     let damage=30+Number(ability.specialBonus||0)+randomInt(-4,8);
     const result=battleApplyDamage(foe,damage);
     me.hp=Math.min(me.maxHp,me.hp+Number(ability.regen||0));
     game.log.push(`✨ **${me.name}** unleashed a **SPECIAL MOVE** for **${result.damage} damage**!`);
     if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** Their Special move ended the battle.`);return;}
-  } else return sendText(env,interaction,"❌ Invalid battle action.");
+  } else return sendEphemeralFollowup(env,interaction,"❌ Invalid battle action.");
   game.round++;
   game.turn=foe.userId;
   await saveGuildState(env,game.guildId,{...state,battle:game});
@@ -16636,19 +16668,19 @@ async function handleBattleAction(env, interaction, action, gameId) {
 
 async function handleBattleForfeit(env, interaction, gameId) {
   const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||!user||!game.players[user.id]) return sendText(env,interaction,"❌ That battle is no longer active.");
-  const foe=battleOpponent(game,user.id); if(!foe) return sendText(env,interaction,"❌ Battle opponent not found.");
+  if(!game||game.id!==gameId||!user||!game.players[user.id]) return sendEphemeralFollowup(env,interaction,"❌ That battle is no longer active.");
+  const foe=battleOpponent(game,user.id); if(!foe) return sendEphemeralFollowup(env,interaction,"❌ Battle opponent not found.");
   game.interactionToken = interaction.token;
   await finishBattle(env,game,foe.userId,user.id,`🚪 **${battlePlayer(game,user.id).name} forfeited!** The other tree wins.`);
 }
 
 async function handleBattleItems(env, interaction, gameId) {
   const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="playing") return sendText(env,interaction,"❌ That battle is no longer active.");
-  if(game.turn!==user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
+  if(!game||game.id!==gameId||game.status!=="playing") return sendEphemeralFollowup(env,interaction,"❌ That battle is no longer active.");
+  if(game.turn!==user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   const player=await getPlayer(env,user.id); const owned=battleShopItems(player);
   const ownedIds=Object.entries(owned).filter(([id,count])=>Number(count)>0).map(([id])=>id);
-  if(!ownedIds.length) return sendText(env,interaction,"🎒 You don't have any Tree Battle items. Use `/battleshop` to shop.");
+  if(!ownedIds.length) return sendEphemeralFollowup(env,interaction,"🎒 You don't have any Tree Battle items. Use `/battleshop` to shop.");
   const rows=[]; for(let i=0;i<ownedIds.length;i+=5) rows.push(row(...ownedIds.slice(i,i+5).map(id=>button(`${BATTLE_SHOP_ITEMS[id]?.name||id}`.slice(0,80),`battleitem:${game.id}:${id}`,2))));
   rows.push(row(button("⬅️ Back",`battle:back:${game.id}`,2)));
   await sendText(env,interaction,"🎒 **YOUR TREE BATTLE ITEMS**\n\nChoose an item to use:",rows);
@@ -16656,10 +16688,10 @@ async function handleBattleItems(env, interaction, gameId) {
 
 async function useBattleItem(env,interaction,gameId,itemId) {
   const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="playing") return sendText(env,interaction,"❌ Battle is no longer active.");
-  if(game.turn!==user.id) return sendText(env,interaction,"⏳ It isn't your turn.");
-  const def=BATTLE_SHOP_ITEMS[itemId]; if(!def) return sendText(env,interaction,"❌ Unknown battle item.");
-  const player=await getPlayer(env,user.id); const inv=battleShopItems(player); if(Number(inv[itemId]||0)<=0) return sendText(env,interaction,"❌ You don't own that item.");
+  if(!game||game.id!==gameId||game.status!=="playing") return sendEphemeralFollowup(env,interaction,"❌ Battle is no longer active.");
+  if(game.turn!==user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
+  const def=BATTLE_SHOP_ITEMS[itemId]; if(!def) return sendEphemeralFollowup(env,interaction,"❌ Unknown battle item.");
+  const player=await getPlayer(env,user.id); const inv=battleShopItems(player); if(Number(inv[itemId]||0)<=0) return sendEphemeralFollowup(env,interaction,"❌ You don't own that item.");
   inv[itemId]--; await savePlayer(env,player);
   const me=battlePlayer(game,user.id), foe=battleOpponent(game,user.id);
   let msg="";
@@ -16725,15 +16757,11 @@ function pastelNeighbors(board,r,c,mode){
   const h=board.length; const out=[];
   if(mode==="triangle"){
     const width=board[r]?.length||0;
-    if(c>0)out.push([r,c-1]); if(c<width-1)out.push([r,c+1]);
-    if(r>0){
-      const center=c/2; const a=Math.floor(center); const b=Math.ceil(center);
-      out.push([r-1,a], [r-1,b]);
-    }
-    if(r<h-1){
-      const center=c/2; const a=Math.floor(center); const b=Math.ceil(center);
-      out.push([r+1,Math.floor(center*2)], [r+1,Math.floor(center*2)+1], [r+1,Math.floor(center*2)+2]);
-    }
+    if(c>0)out.push([r,c-1]);
+    if(c<width-1)out.push([r,c+1]);
+    /* Symmetrical square-cell adjacency for the centered triangle. */
+    if(r>0){out.push([r-1,c-1],[r-1,c]);}
+    if(r<h-1){out.push([r+1,c],[r+1,c+1]);}
   }else{
     const w=board[0]?.length||0;
     if(r>0)out.push([r-1,c]);if(r<h-1)out.push([r+1,c]);if(c>0)out.push([r,c-1]);if(c<w-1)out.push([r,c+1]);
@@ -16750,8 +16778,8 @@ function pastelGenerateBoard(mode,players){
     board.push(Array.from({length:width},()=>({color:randomInt(0,PASTEL_COLORS.length-1),owner:null,heart:false,wild:Math.random()<0.075})));
   }
   /* Seed fair starting corners and give each player a small safe region. */
-  const starts=mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
-  players.forEach((p,i)=>{const [r,c]=starts[i]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=i;board[r][c].heart=false;board[r][c].wild=false;}});
+  const starts=mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length<=2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
+  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % PASTEL_COLORS.length;board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
   let hearts=Math.max(8,Math.floor(pastelCellCount(mode)*0.035));
   let attempts=0;
   while(hearts>0&&attempts<3000){attempts++;const r=randomInt(0,board.length-1);const c=randomInt(0,board[r].length-1);const cell=board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;}
@@ -16760,7 +16788,7 @@ function pastelGenerateBoard(mode,players){
 function pastelStartingPlayers(game){return Object.values(game.players||{}).sort((a,b)=>a.slot-b.slot);}
 function pastelFindOwned(game,userId){return Object.values(game.players).find(p=>p.id===userId)||null;}
 function pastelClaimedCells(game,userId){let n=0;for(const row of game.board)for(const c of row)if(c.owner===userId)n++;return n;}
-function pastelTerritoryTotal(game){let n=0;for(const row of game.board)for(const c of row)if(c.owner)n++;return n;}
+function pastelTerritoryTotal(game){let n=0;for(const row of game.board)for(const c of row)if(c.owner&&c.owner!=="blackout")n++;return n;}
 function pastelAdjacentColors(game,player){const colors=new Set();for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){const cell=game.board[r][c];if(cell.owner!==player.id)continue;for(const [rr,cc] of pastelNeighbors(game.board,r,c,game.mode)) {const n=game.board[rr][cc];if(n.owner!==player.id)colors.add(n.color);}}return [...colors];}
 function pastelFlood(game,player,color){
   const board=game.board; const seen=new Set(); const queue=[]; let capturedHearts=0;
@@ -16821,11 +16849,12 @@ function pastelRegenerate(game){
   game.board=pastelGenerateBoard(game.mode,players);
   /* Preserve each living player's approximate territory size by rebuilding
      a contiguous region around their original starting corner. */
-  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
+  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(game.needed===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
   const assigned=new Set();
   for(let i=0;i<players.length;i++){
     const p=players[i]; const target=Math.max(1,Math.min(oldCounts[p.id]||1,pastelCellCount(game.mode)-players.length+1));
-    const [sr,sc]=starts[i]||starts[0];
+    const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;
+    const [sr,sc]=starts[slot]||starts[i]||starts[0];
     const cells=[];
     for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
       const key=`${r},${c}`; if(assigned.has(key))continue;
@@ -16837,7 +16866,7 @@ function pastelRegenerate(game){
       if(taken>=target)break;
       const cell=game.board[pos.r][pos.c]; const key=`${pos.r},${pos.c}`;
       if(assigned.has(key))continue;
-      cell.owner=p.id; cell.color=p.slot % PASTEL_COLORS.length; cell.heart=false; cell.wild=false; assigned.add(key); taken++;
+      cell.owner=p.id; cell.color=slot % PASTEL_COLORS.length; cell.start=(pos.r===sr&&pos.c===sc); cell.heart=false; cell.wild=false; assigned.add(key); taken++;
     }
   }
   /* Re-seed a small number of fresh Hearts and Wild Blocks only in unclaimed cells. */
@@ -16855,23 +16884,66 @@ function pastelRegenerate(game){
 
 async function pastelSave(env,game){const state=await getGuildState(env,game.guildId);if(state.pastel?.id!==game.id)return false;state.pastel=game;await saveGuildState(env,game.guildId,state);return true;}
 async function renderPastelBoard(env,game){
-  let browser;try{browser=await puppeteer.launch(env.BROWSER);const page=await browser.newPage();await page.setViewport({width:1100,height:900,deviceScaleFactor:1});
-    const rows=game.board.map((cells,r)=>{const indent=game.mode==="triangle"?(19-r)*13:0;return `<div class="row" style="margin-left:${indent}px">${cells.map((cell,c)=>{let color=cell.owner?PASTEL_COLORS[cell.color]?.hex:PASTEL_COLORS[cell.color]?.hex;let inner=cell.heart?"♥":cell.wild?"":cell.owner?"":"";let border=cell.owner?"#ffffff":"#e9e1da";return `<div class="cell" style="background:${cell.wild?PASTEL_WILD_COLOR:color};border-color:${border}">${inner}</div>`;}).join("")}</div>`}).join("");
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif}.wrap{width:1100px;height:900px;display:flex;align-items:center;justify-content:center}.board{padding:20px}.row{height:26px;display:flex;justify-content:flex-start}.cell{width:24px;height:24px;border:1px solid #e9e1da;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border-radius:5px;margin:1px}</style></head><body><div class="wrap"><div class="board">${rows}</div></div></body></html>`;
-    await page.setContent(html,{waitUntil:"load"});return await page.screenshot({type:"png"});
-  }catch(error){const m=error?.message||String(error);if(m.includes("429")||m.toLowerCase().includes("rate limit"))throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another Pastel Panic board.");throw error;}finally{if(browser)try{await browser.close();}catch{}}}
+  let browser;
+  try{
+    browser=await puppeteer.launch(env.BROWSER);
+    const page=await browser.newPage();
+    await page.setViewport({width:1100,height:700,deviceScaleFactor:1});
+    const rows=game.board.map((cells,r)=>{
+      const indent=game.mode==="triangle"?(19-r)*24:0;
+      return `<div class="row" style="margin-left:${indent}px">${cells.map(cell=>{
+        const color=PASTEL_COLORS[cell.color]?.hex || "#ffffff";
+        const fill=cell.wild?PASTEL_WILD_COLOR:(cell.heart?PASTEL_HEART_COLOR:color);
+        const marker=cell.heart?"♥":"";
+        const startMark=cell.start?" start":"";
+        return `<div class="cell${startMark}" style="background:${fill}">${marker}</div>`;
+      }).join("")}</div>`;
+    }).join("");
+    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif;overflow:hidden}.wrap{width:1100px;height:700px;display:flex;align-items:center;justify-content:center}.board{padding:10px;background:#000;border:4px solid #000;box-shadow:0 0 0 4px #000}.row{height:24px;display:flex;gap:0;justify-content:flex-start}.cell{width:24px;height:24px;border:2px solid #000;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;line-height:1;border-radius:0}.cell.start{box-shadow:inset 0 0 0 3px #000,0 0 0 1px #000;position:relative;z-index:2}</style></head><body><div class="wrap"><div class="board">${rows}</div></div></body></html>`;
+    await page.setContent(html,{waitUntil:"load"});
+    return await page.screenshot({type:"png"});
+  }catch(error){
+    const m=error?.message||String(error);
+    if(m.includes("429")||m.toLowerCase().includes("rate limit"))throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another Pastel Panic board.");
+    throw error;
+  }finally{if(browser)try{await browser.close();}catch{}}
+}
 async function sendPastelBoard(env,interaction,game){const image=await renderPastelBoard(env,game);const form=new FormData();form.append("payload_json",JSON.stringify({content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"pastel-panic.png"}],components:pastelChoiceComponents(game)}));form.append("files[0]",new Blob([image],{type:"image/png"}),"pastel-panic.png");return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});}
 async function handlePastelStart(env,interaction){await sendText(env,interaction,"🌈 **PASTEL PANIC**\n\nChoose your game mode!",pastelModeComponents());}
 async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.board=pastelGenerateBoard(game.mode,players);game.turnsSinceRefresh=0;game.lastRefresh="";await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
 async function handlePastelJoin(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false};await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Pastel Panic game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Pastel Panic lobby cancelled.");}
-async function pastelFinish(env,game,winnerId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=pastelFindOwned(game,winnerId);for(const p of pastelStartingPlayers(game)){const player=await getPlayer(env,p.id);if(p.id===winnerId){player.pastelWins=Number(player.pastelWins||0)+1;player.pastelRating=Number(player.pastelRating||0)+100;}else if(!p.alive||p.id!==winnerId){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}player.pastelLevel=pastelRatingLevel(player.pastelRating);await savePlayer(env,player);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}return winner;}
-async function handlePastelChoose(env,interaction,gameId,colorIndex){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Pastel Panic game is over or missing.");if(game.turnId!==user.id)return sendText(env,interaction,"⏳ It isn't your turn.");const player=pastelFindOwned(game,user.id);if(!player?.alive)return sendText(env,interaction,"💀 You're out of the game.");const color=Number(colorIndex);if(!Number.isInteger(color)||!PASTEL_COLORS[color]||!pastelValidColor(game,player,color))return sendText(env,interaction,"❌ You can only choose a color touching your territory.");const before=pastelClaimedCells(game,user.id);const flood=pastelFlood(game,player,color);const after=pastelClaimedCells(game,user.id);const gained=after-before;const extra=Number(flood.capturedHearts||0)>0;game.round++;game.turnsSinceRefresh++;game.lastMove=`🎨 <@${user.id}> chose **${PASTEL_COLORS[color].name}** and gained **${gained} cells**.${extra?" ❤️ HEART BONUS — EXTRA TURN!":""}`;if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");return sendText(env,interaction,`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!`);}const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");return sendText(env,interaction,`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!`);}if(game.turnsSinceRefresh>=game.refreshEvery){pastelRegenerate(game);}if(!extra){const currentIndex=pastelStartingPlayers(game).findIndex(p=>p.id===user.id);let nextIndex=currentIndex;for(let i=0;i<pastelStartingPlayers(game).length;i++){nextIndex=(nextIndex+1)%pastelStartingPlayers(game).length;const n=pastelStartingPlayers(game)[nextIndex];if(n?.alive){game.turnId=n.id;break;}}}else game.turnId=user.id;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}}
-async function handlePastelQuit(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Pastel Panic game is over or missing.");const quitter=pastelFindOwned(game,user.id);if(!quitter?.alive)return sendText(env,interaction,"❌ You're already out of this game.");quitter.alive=false;const player=await getPlayer(env,user.id);player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelQuits=Number(player.pastelQuits||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);player.pastelLevel=pastelRatingLevel(player.pastelRating);await savePlayer(env,player);if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,"🚪 You quit. It counts as a loss, and your opponent wins.");}for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;}const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,"🚪 You quit. Your territory is blacked out and you are eliminated.");}if(game.turnId===user.id)game.turnId=alive[0].id;await pastelSave(env,game);await sendText(env,interaction,"🚪 **RAGE QUIT RECORDED.** Your territory has been blacked out and you are out of the game.");}
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.pastelLevel=pastelRatingLevel(wp.pastelRating);await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinish(env,game,winnerId,reason){
+  game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
+  const winner=pastelFindOwned(game,winnerId);
+  for(const p of pastelStartingPlayers(game)){
+    const player=await getPlayer(env,p.id);
+    if(p.id===winnerId){player.pastelWins=Number(player.pastelWins||0)+1;player.pastelRating=Number(player.pastelRating||0)+100;player.sparkles=Number(player.sparkles||0)+PASTEL_WIN_REWARD;player.pastelSparklesEarned=Number(player.pastelSparklesEarned||0)+PASTEL_WIN_REWARD;}
+    else if(!p.alive||p.id!==winnerId){if(!p.lossRecorded){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}}
+    player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
+  }
+  const state=await getGuildState(env,game.guildId); if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);} return winner;
+}
+async function handlePastelChoose(env,interaction,gameId,colorIndex){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Pastel Panic game is over or missing.");if(game.turnId!==user.id)return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn.");const player=pastelFindOwned(game,user.id);if(!player?.alive)return sendEphemeralFollowup(env,interaction,"💀 You're out of the game.");const color=Number(colorIndex);if(!Number.isInteger(color)||!PASTEL_COLORS[color]||!pastelValidColor(game,player,color))return sendEphemeralFollowup(env,interaction,"❌ You can only choose a color touching your territory.");const before=pastelClaimedCells(game,user.id);const flood=pastelFlood(game,player,color);const after=pastelClaimedCells(game,user.id);const gained=after-before;const extra=Number(flood.capturedHearts||0)>0;game.round++;game.turnsSinceRefresh++;game.lastMove=`🎨 <@${user.id}> chose **${PASTEL_COLORS[color].name}** and gained **${gained} cells**.${extra?" ❤️ HEART BONUS — EXTRA TURN!":""}`;if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");return sendText(env,interaction,`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_REWARD} sparkles** have been banked!`);}const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");return sendText(env,interaction,`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_REWARD} sparkles** have been banked!`);}if(game.turnsSinceRefresh>=game.refreshEvery){pastelRegenerate(game);}if(!extra){const currentIndex=pastelStartingPlayers(game).findIndex(p=>p.id===user.id);let nextIndex=currentIndex;for(let i=0;i<pastelStartingPlayers(game).length;i++){nextIndex=(nextIndex+1)%pastelStartingPlayers(game).length;const n=pastelStartingPlayers(game)[nextIndex];if(n?.alive){game.turnId=n.id;break;}}}else game.turnId=user.id;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}}
+async function handlePastelQuit(env,interaction,gameId){
+  const state=await getGuildState(env,interaction.guild_id); const game=state.pastel; const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Pastel Panic game is over or missing.");
+  const quitter=pastelFindOwned(game,user.id); if(!quitter?.alive)return sendEphemeralFollowup(env,interaction,"❌ You're already out of this game.");
+  quitter.alive=false; quitter.lossRecorded=true;
+  const player=await getPlayer(env,user.id); player.pastelLosses=Number(player.pastelLosses||0)+1; player.pastelQuits=Number(player.pastelQuits||0)+1; player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50); player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
+  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.\n✨ The winner banks **+${PASTEL_WIN_REWARD} sparkles**.`);}
+  for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;c.start=false;}
+  const alive=Object.values(game.players).filter(p=>p.alive);
+  if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!\n✨ The winner banks **+${PASTEL_WIN_REWARD} sparkles**.`);}
+  if(game.turnId===user.id)game.turnId=alive[0].id;
+  game.lastMove=`🚪 **<@${user.id}> rage quit!** Their territory is now blacked out. The game continues with **${alive.length} players**.`;
+  await pastelSave(env,game);
+  try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
+}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.sparkles=Number(wp.sparkles||0)+PASTEL_WIN_REWARD;wp.pastelSparklesEarned=Number(wp.pastelSparklesEarned||0)+PASTEL_WIN_REWARD;wp.pastelLevel=pastelRatingLevel(wp.pastelRating);await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
 async function handlePastelLeaderboard(env,interaction){const keys=await listAllPlayerKeys(env);const players=[];for(const key of keys){const p=await getPlayer(env,key);pastelStats(p);players.push(p);}players.sort((a,b)=>{const r=Number(b.pastelRating||0)-Number(a.pastelRating||0);if(r)return r;const w=Number(b.pastelWins||0)-Number(a.pastelWins||0);if(w)return w;return Number(a.pastelQuits||0)-Number(b.pastelQuits||0);});const top=players.slice(0,10);if(!top.length)return sendText(env,interaction,"🌈 Nobody has played Pastel Panic yet!");const lines=top.map((p,i)=>`**${i+1}.** ${getDisplayName(p)} — Level **${pastelStats(p).level}** • 🏆 **${Number(p.pastelWins||0)} Wins** • 💀 **${Number(p.pastelLosses||0)} Losses** • 🚪 **${Number(p.pastelQuits||0)} Quits**`);await sendText(env,interaction,`🌈 **PASTEL PANIC LEADERBOARD**\n\n${lines.join("\n")}`);}
-async function handlePastelRules(env,interaction){await sendText(env,interaction,pastelRulesText());}
+async function handlePastelRules(env,interaction){await sendEphemeralFollowup(env,interaction,pastelRulesText());}
 
 /* =========================================================
    DISCORD COMMAND DEFINITIONS
