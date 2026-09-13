@@ -925,10 +925,44 @@ async function getGuildTextChannels(
    INTERACTION RESPONSES
 ========================================================= */
 
+async function deferInteraction(
+  env,
+  interaction,
+  options = {}
+) {
+  if (interaction.__deferred || interaction.__acknowledged) return true;
+
+  const isUpdate = Boolean(options.update);
+  const ephemeral = Boolean(options.ephemeral) && !isUpdate;
+  const responseType = isUpdate ? 6 : 5;
+  const data = ephemeral ? { flags: 64 } : {};
+
+  const response = await fetch(
+    `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: responseType, data })
+    }
+  );
+
+  if (!response.ok) {
+    console.error("Interaction defer failed:", response.status, await response.text());
+    return false;
+  }
+
+  interaction.__deferred = true;
+  interaction.__deferredUpdate = isUpdate;
+  interaction.__deferredEphemeral = ephemeral;
+  return true;
+}
+
 async function acknowledge(
   env,
   interaction
 ) {
+  if (interaction.__deferred || interaction.__acknowledged) return true;
+
   const response =
     await fetch(
       `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
@@ -958,24 +992,28 @@ async function sendText(
   content,
   components = []
 ) {
-  const response =
-    await fetch(
-      `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          type: 4,
-          data: {
-            content,
-            components,
-            flags: 64
-          }
-        })
-      }
-    );
+  const response = interaction.__deferred
+    ? await editOriginalResponse(env, interaction, {
+        content,
+        components
+      })
+    : await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            type: 4,
+            data: {
+              content,
+              components,
+              flags: 64
+            }
+          })
+        }
+      );
 
   if (!response.ok) {
     console.error(
@@ -994,23 +1032,24 @@ async function sendPublicText(
   content,
   components = []
 ) {
-  const response =
-    await fetch(
-      `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          type: 4,
-          data: {
-            content,
-            components
-          }
-        })
-      }
-    );
+  const response = interaction.__deferred
+    ? await editOriginalResponse(env, interaction, { content, components })
+    : await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            type: 4,
+            data: {
+              content,
+              components
+            }
+          })
+        }
+      );
 
   if (!response.ok) {
     console.error(
@@ -12504,183 +12543,43 @@ async function setHeistChannelLock(
   game,
   locked
 ) {
-  if (
-    !game?.guildId ||
-    !game?.channelId
-  ) {
+  /* Channel locking has been permanently disabled. If an older version
+     locked this channel, restore the permissions that version saved. */
+  if (!game?.guildId || !game?.channelId || !game.originalPermissionOverwrites) {
     return false;
   }
 
+  const originals = game.originalPermissionOverwrites;
   try {
-    const channelResponse =
-      await discordRequest(
-        env,
-        `/channels/${game.channelId}`
-      );
-
-    if (!channelResponse.ok) {
-      console.error(
-        "Heist channel lookup failed:",
-        channelResponse.status,
-        await channelResponse.text()
-      );
-      return false;
-    }
-
-    const channel =
-      await channelResponse.json();
-
-    if (locked) {
-      if (!game.originalPermissionOverwrites) {
-        const current =
-          Array.isArray(channel.permission_overwrites)
-            ? channel.permission_overwrites
-            : [];
-
-        const botRoleId =
-          await getHeistBotRoleId(
-            env,
-            game.guildId
-          );
-
-        game.botRoleId =
-          botRoleId || null;
-
-        game.originalPermissionOverwrites = {
-          everyone:
-            current.find(
-              overwrite =>
-                overwrite.id === game.guildId &&
-                overwrite.type === 0
-            ) || null,
-          bot:
-            botRoleId
-              ? current.find(
-                  overwrite =>
-                    overwrite.id === botRoleId &&
-                    overwrite.type === 0
-                ) || null
-              : null
-        };
-      }
-
-      const deny =
-        (
-          HEIST_PERMISSIONS.SEND_MESSAGES |
-          HEIST_PERMISSIONS.SEND_MESSAGES_IN_THREADS |
-          HEIST_PERMISSIONS.CREATE_PUBLIC_THREADS |
-          HEIST_PERMISSIONS.CREATE_PRIVATE_THREADS
-        ).toString();
-
-      let allow =
-        (
-          HEIST_PERMISSIONS.SEND_MESSAGES |
-          HEIST_PERMISSIONS.SEND_MESSAGES_IN_THREADS
-        ).toString();
-
-      const everyoneResponse =
-        await discordRequest(
-          env,
-          `/channels/${game.channelId}/permissions/${game.guildId}`,
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              type: 0,
-              deny,
-              allow: "0"
-            })
-          }
-        );
-
-      if (!everyoneResponse.ok) {
-        console.error(
-          "Could not lock heist channel:",
-          everyoneResponse.status,
-          await everyoneResponse.text()
-        );
-        return false;
-      }
-
-      if (game.botRoleId) {
-        const botResponse =
-          await discordRequest(
-            env,
-            `/channels/${game.channelId}/permissions/${game.botRoleId}`,
-            {
-              method: "PUT",
-              body: JSON.stringify({
-                type: 0,
-                deny: "0",
-                allow
-              })
-            }
-          );
-
-        if (!botResponse.ok) {
-          console.error(
-            "Could not allow bot during heist lock:",
-            botResponse.status,
-            await botResponse.text()
-          );
-        }
-      }
-
-      return true;
-    }
-
-    const originals =
-      game.originalPermissionOverwrites;
-
-    if (originals?.everyone) {
-      await discordRequest(
-        env,
-        `/channels/${game.channelId}/permissions/${game.guildId}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(
-            originals.everyone
-          )
-        }
-      );
+    if (originals.everyone) {
+      await discordRequest(env, `/channels/${game.channelId}/permissions/${game.guildId}`, {
+        method: "PUT",
+        body: JSON.stringify(originals.everyone)
+      });
     } else {
-      await discordRequest(
-        env,
-        `/channels/${game.channelId}/permissions/${game.guildId}`,
-        {
-          method: "DELETE"
-        }
-      );
+      await discordRequest(env, `/channels/${game.channelId}/permissions/${game.guildId}`, {
+        method: "DELETE"
+      });
     }
 
     if (game.botRoleId) {
-      if (originals?.bot) {
-        await discordRequest(
-          env,
-          `/channels/${game.channelId}/permissions/${game.botRoleId}`,
-          {
-            method: "PUT",
-            body: JSON.stringify(
-              originals.bot
-            )
-          }
-        );
+      if (originals.bot) {
+        await discordRequest(env, `/channels/${game.channelId}/permissions/${game.botRoleId}`, {
+          method: "PUT",
+          body: JSON.stringify(originals.bot)
+        });
       } else {
-        await discordRequest(
-          env,
-          `/channels/${game.channelId}/permissions/${game.botRoleId}`,
-          {
-            method: "DELETE"
-          }
-        );
+        await discordRequest(env, `/channels/${game.channelId}/permissions/${game.botRoleId}`, {
+          method: "DELETE"
+        });
       }
     }
 
+    game.originalPermissionOverwrites = null;
+    game.botRoleId = null;
     return true;
   } catch (error) {
-    console.error(
-      "Heist channel lock error:",
-      error
-    );
+    console.error("Heist channel permission restore error:", error);
     return false;
   }
 }
@@ -15069,6 +14968,8 @@ async function handleHeistComponent(
     return true;
   }
 
+  await setHeistChannelLock(env, game, false);
+
   const user =
     getUserFromInteraction(
       interaction
@@ -16624,6 +16525,28 @@ export default {
     }
 
     try {
+      /* Discord requires an interaction acknowledgement within ~3 seconds.
+         Heist and Chaos Island do KV/Discord work before replying, so defer
+         those interactions immediately. */
+      if (interaction.type === 2 && interaction.data?.name === "heist") {
+        const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
+        await deferInteraction(env, interaction, {
+          ephemeral: ["join", "leave", "start", "status", "end"].includes(sub)
+        });
+      } else if (interaction.type === 2 && interaction.data?.name === "island") {
+        const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
+        await deferInteraction(env, interaction, {
+          ephemeral: ["rules", "status"].includes(sub)
+        });
+      } else if (interaction.type === 3 && interaction.data?.custom_id?.startsWith("heist:")) {
+        await deferInteraction(env, interaction, { ephemeral: true });
+      } else if (interaction.type === 3 && interaction.data?.custom_id?.startsWith("island:")) {
+        const action = String(interaction.data.custom_id).split(":")[1];
+        await deferInteraction(env, interaction, {
+          update: ["join", "leave", "rounds", "back", "start", "choice"].includes(action)
+        });
+      }
+
       if (
         interaction.type === 2
       ) {
