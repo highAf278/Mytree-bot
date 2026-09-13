@@ -16767,7 +16767,7 @@ async function handleBattleShopBuy(env,interaction,itemId){
 ========================================================= */
 
 const PASTEL_COLORS = [
-  {id:"cotton_candy_kiss",name:"Cotton Candy Kiss",hex:"#e89bc5",label:"🩷"},
+  {id:"cotton_candy_kiss",name:"Cotton Candy Kiss",hex:"#d982b1",label:"🩷"},
   {id:"marine_blue",name:"Marine Blue",hex:"#9fc7e8",label:"💙"},
   {id:"lemon_meringue",name:"Lemon Meringue",hex:"#f7e6a6",label:"💛"},
   {id:"sage_sauce",name:"Sage Sauce",hex:"#b8d6bd",label:"💚"},
@@ -16805,9 +16805,11 @@ function pastelNeighbors(board,r,c,mode){
     const width=board[r]?.length||0;
     if(c>0)out.push([r,c-1]);
     if(c<width-1)out.push([r,c+1]);
-    /* Symmetrical square-cell adjacency for the centered triangle. */
-    if(r>0){out.push([r-1,c-1],[r-1,c]);}
-    if(r<h-1){out.push([r+1,c],[r+1,c+1]);}
+    /* IMPORTANT: triangle cells that only touch at a corner are NOT neighbors.
+       With the centered 1,3,5...39 layout, each cell shares an edge with only
+       one cell in the row above and one in the row below. */
+    if(r>0)out.push([r-1,c-1]);
+    if(r<h-1)out.push([r+1,c+1]);
   }else{
     const w=board[0]?.length||0;
     if(r>0)out.push([r-1,c]);if(r<h-1)out.push([r+1,c]);if(c>0)out.push([r,c-1]);if(c<w-1)out.push([r,c+1]);
@@ -16952,42 +16954,61 @@ function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive
 function pastelRegenerate(game){
   const players=pastelStartingPlayers(game).filter(p=>p.alive);
   const oldCounts={};
-  for(const p of players) oldCounts[p.id]=pastelClaimedCells(game,p.id);
-  const oldBoard=game.board;
+  for(const p of players)oldCounts[p.id]=pastelClaimedCells(game,p.id);
+  const oldBoard=game.board||[];
   game.board=pastelGenerateBoard(game.mode,players);
-  /* Preserve each living player's approximate territory size by rebuilding
-     a contiguous region around their original starting corner. */
-  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(game.needed===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
+
+  /* Preserve BLACKOUT territory exactly across refreshes. It must never disappear. */
   const assigned=new Set();
+  for(let r=0;r<oldBoard.length;r++)for(let c=0;c<oldBoard[r].length;c++){
+    const old=oldBoard[r][c];
+    const cell=game.board[r]?.[c];
+    if(!cell||old?.owner!=="blackout")continue;
+    cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;
+    assigned.add(`${r},${c}`);
+  }
+
+  /* Preserve each living player's approximate territory size around their corner,
+     while never placing territory on top of another player or a blackout. */
+  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(game.needed===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
   for(let i=0;i<players.length;i++){
-    const p=players[i]; const target=Math.max(1,Math.min(oldCounts[p.id]||1,pastelCellCount(game.mode)-players.length+1));
+    const p=players[i];
+    const target=Math.max(1,Math.min(oldCounts[p.id]||1,pastelCellCount(game.mode)-assigned.size-players.length+1));
     const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;
     const [sr,sc]=starts[slot]||starts[i]||starts[0];
     const cells=[];
     for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
-      const key=`${r},${c}`; if(assigned.has(key))continue;
-      const d=Math.abs(r-sr)+Math.abs(c-sc); cells.push({r,c,d});
+      const key=`${r},${c}`;if(assigned.has(key))continue;
+      const d=Math.abs(r-sr)+Math.abs(c-sc);cells.push({r,c,d});
     }
     cells.sort((a,b)=>a.d-b.d);
     let taken=0;
     for(const pos of cells){
       if(taken>=target)break;
-      const cell=game.board[pos.r][pos.c]; const key=`${pos.r},${pos.c}`;
-      if(assigned.has(key))continue;
-      cell.owner=p.id; cell.color=Number.isInteger(Number(p.selectedColor))?Number(p.selectedColor):slot % PASTEL_COLORS.length; cell.start=(pos.r===sr&&pos.c===sc); cell.heart=false; cell.wild=false; assigned.add(key); taken++;
+      const key=`${pos.r},${pos.c}`;if(assigned.has(key))continue;
+      const cell=game.board[pos.r][pos.c];
+      cell.owner=p.id;
+      cell.color=Number.isInteger(Number(p.selectedColor))?Number(p.selectedColor):slot%PASTEL_COLORS.length;
+      cell.start=(pos.r===sr&&pos.c===sc);
+      cell.heart=false;cell.wild=false;
+      assigned.add(key);taken++;
     }
   }
-  /* Re-seed a small number of fresh Hearts and Wild Blocks only in unclaimed cells. */
+
+  /* Fresh Hearts/Wild Blocks only appear in truly unclaimed cells. */
   for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
     const cell=game.board[r][c];
     if(cell.owner)continue;
-    cell.heart=false; cell.wild=Math.random()<0.075;
+    cell.heart=false;cell.wild=Math.random()<0.075;
   }
   let hearts=Math.max(8,Math.floor(pastelCellCount(game.mode)*0.035));
   let attempts=0;
-  while(hearts>0&&attempts<3000){attempts++;const r=randomInt(0,game.board.length-1);const c=randomInt(0,game.board[r].length-1);const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;}
-  game.turnsSinceRefresh=0; game.refreshCount=Number(game.refreshCount||0)+1;
-  game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Your territories carried over, but the map around them changed.`;
+  while(hearts>0&&attempts<3000){
+    attempts++;const r=randomInt(0,game.board.length-1);const c=randomInt(0,game.board[r].length-1);const cell=game.board[r][c];
+    if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;
+  }
+  game.turnsSinceRefresh=0;game.refreshCount=Number(game.refreshCount||0)+1;
+  game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Territories, colors, and blacked-out areas were preserved.`;
 }
 
 async function pastelSave(env,game){const state=await getGuildState(env,game.guildId);if(state.pastel?.id!==game.id)return false;state.pastel=game;await saveGuildState(env,game.guildId,state);return true;}
@@ -16997,31 +17018,55 @@ async function renderPastelBoard(env,game){
     browser=await puppeteer.launch(env.BROWSER);
     const page=await browser.newPage();
     await page.setViewport({width:1200,height:760,deviceScaleFactor:1});
-    const rows=game.board.map((cells,r)=>{
-      const indent=game.mode==="triangle"?(19-r)*24:0;
-      return `<div class="row" style="margin-left:${indent}px">${cells.map((cell,c)=>{
-        const owner=cell.owner&&cell.owner!=="blackout"?cell.owner:null;
-        const fill=cell.owner==="blackout"?"#202020":cell.wild?PASTEL_WILD_COLOR:(cell.heart?PASTEL_HEART_COLOR:(PASTEL_COLORS[cell.color]?.hex||"#ffffff"));
-        const marker=cell.heart?"♥":"";
-        const same=(rr,cc)=>!!(game.board[rr]&&game.board[rr][cc]&&game.board[rr][cc].owner===cell.owner&&cell.owner&&cell.owner!=="blackout");
-        const sameBlackout=(rr,cc)=>!!(game.board[rr]&&game.board[rr][cc]&&game.board[rr][cc].owner==="blackout"&&cell.owner==="blackout");
-        const solidOwner=!!owner||cell.owner==="blackout";
-        const sameTerritory=(rr,cc)=>solidOwner?(owner?same(rr,cc):sameBlackout(rr,cc)):false;
-        const shadow=[];
-        if(solidOwner){
-          if(!sameTerritory(r-1,c))shadow.push("inset 0 2px 0 #fff");
-          if(!sameTerritory(r,c+1))shadow.push("inset -2px 0 0 #fff");
-          if(!sameTerritory(r+1,c))shadow.push("inset 0 -2px 0 #fff");
-          if(!sameTerritory(r,c-1))shadow.push("inset 2px 0 0 #fff");
+    const size=24;
+    const boardW=game.mode==="triangle"?39*size:20*size;
+    const boardH=20*size;
+    const cellX=(r,c)=>game.mode==="triangle"?(19-r+c)*size:c*size;
+    const sameOwner=(r,c,owner)=>!!(game.board[r]?.[c]&&game.board[r][c].owner===owner);
+    const edgeSegments=[];
+    const starts=[];
+    const rects=[];
+
+    for(let r=0;r<game.board.length;r++){
+      for(let c=0;c<game.board[r].length;c++){
+        const cell=game.board[r][c];
+        const x=cellX(r,c),y=r*size;
+        let fill=PASTEL_COLORS[cell.color]?.hex||"#ffffff";
+        if(cell.owner==="blackout")fill="#202020";
+        else if(cell.wild)fill=PASTEL_WILD_COLOR;
+        else if(cell.heart)fill=PASTEL_HEART_COLOR;
+        rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
+        if(cell.start&&cell.owner&&cell.owner!=="blackout")starts.push(`<rect x="${x+2}" y="${y+2}" width="${size-4}" height="${size-4}" fill="none" stroke="#000" stroke-width="3"/>`);
+
+        const owner=cell.owner;
+        if(!owner)continue;
+        const border=owner==="blackout"?"#fff":"#000";
+        const edges=game.mode==="triangle"
+          ? [[r-1,c-1,"top"],[r,c+1,"right"],[r+1,c+1,"bottom"],[r,c-1,"left"]]
+          : [[r-1,c,"top"],[r,c+1,"right"],[r+1,c,"bottom"],[r,c-1,"left"]];
+        for(const [rr,cc,side] of edges){
+          if(sameOwner(rr,cc,owner))continue;
+          if(side==="top")edgeSegments.push(`<line x1="${x}" y1="${y}" x2="${x+size}" y2="${y}" stroke="${border}" stroke-width="3" stroke-linecap="square"/>`);
+          else if(side==="right")edgeSegments.push(`<line x1="${x+size}" y1="${y}" x2="${x+size}" y2="${y+size}" stroke="${border}" stroke-width="3" stroke-linecap="square"/>`);
+          else if(side==="bottom")edgeSegments.push(`<line x1="${x}" y1="${y+size}" x2="${x+size}" y2="${y+size}" stroke="${border}" stroke-width="3" stroke-linecap="square"/>`);
+          else edgeSegments.push(`<line x1="${x}" y1="${y}" x2="${x}" y2="${y+size}" stroke="${border}" stroke-width="3" stroke-linecap="square"/>`);
         }
-        const startMark=cell.start?" start":"";
-        const startShadow=cell.start?", inset 0 0 0 3px #000":"";
-        const box=shadow.length?`box-shadow:${shadow.join(",")}${startShadow};`:cell.start?`box-shadow:inset 0 0 0 3px #000;`:"";
-        const cellStyle=`background:${fill};${box}`;
-        return `<div class="cell${startMark}" style="${cellStyle}">${marker}</div>`;
-      }).join("")}</div>`;
-    }).join("");
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{padding:8px;background:#000;border:5px solid #000;box-shadow:0 0 0 3px #000}.row{height:24px;display:flex;gap:0;justify-content:flex-start}.cell{width:24px;height:24px;border:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;line-height:1;border-radius:0}.cell.start{position:relative;z-index:2}</style></head><body><div class="wrap"><div class="board">${rows}</div></div></body></html>`;
+      }
+    }
+
+    /* Deduplicate identical boundary segments so the outline is one clean line,
+       not stacked lines where two territory cells meet. */
+    const seenEdges=new Set(),uniqueEdges=[];
+    for(const seg of edgeSegments){
+      const m=seg.match(/x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)" stroke="([^"]+)"/);
+      if(!m){uniqueEdges.push(seg);continue;}
+      const nums=[Number(m[1]),Number(m[2]),Number(m[3]),Number(m[4])];
+      const key=`${Math.min(nums[0],nums[2])},${Math.min(nums[1],nums[3])},${Math.max(nums[0],nums[2])},${Math.max(nums[1],nums[3])},${m[5]}`;
+      if(seenEdges.has(key))continue;seenEdges.add(key);uniqueEdges.push(seg);
+    }
+
+    const svg=`<svg class="overlay" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}">${uniqueEdges.join("")}${starts.join("")}</svg>`;
+    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{position:relative;width:${boardW}px;height:${boardH}px;background:#000;overflow:hidden}.cells{position:absolute;inset:0}.cellrow{display:flex;height:${size}px}.cell{width:${size}px;height:${size}px;display:block}.overlay{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}</style></head><body><div class="wrap"><div class="board"><div class="cells">${rects.join("")}</div>${svg}</div></div></body></html>`;
     await page.setContent(html,{waitUntil:"load"});
     return await page.screenshot({type:"png"});
   }catch(error){
@@ -17030,6 +17075,7 @@ async function renderPastelBoard(env,game){
     throw error;
   }finally{if(browser)try{await browser.close();}catch{}}
 }
+
 async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction.token;
   const image=await renderPastelBoard(env,game);
