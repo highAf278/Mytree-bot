@@ -15089,9 +15089,7 @@ async function handleHeistDayAction(env, interaction, gameId, action) {
   if(action!=="nudge") return sendText(env,interaction,"❌ Unknown daytime action.");
   const targets=heistAlivePlayers(game).filter(p=>p.id!==user.id);
   if(!targets.length) return sendText(env,interaction,"❌ There is nobody to nudge.");
-  await sendText(env,interaction,"☀️ **DAYTIME NUDGE**
-
-Choose one living player. Their vote will be silenced this round.",heistDayTargetButtons(game,user.id));
+  await sendText(env,interaction,"☀️ **DAYTIME NUDGE**\n\nChoose one living player. Their vote will be silenced this round.",heistDayTargetButtons(game,user.id));
 }
 
 function heistDayTargetButtons(game,userId){
