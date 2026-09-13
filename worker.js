@@ -11091,6 +11091,7 @@ async function handleIslandCreate(env, interaction) {
     return;
   }
   const user=getUserFromInteraction(interaction);
+  const player=await getPlayer(env, user.id);
   const game={
     id:`island-${Date.now()}-${user.id}`,
     guildId:interaction.guild_id,
@@ -11117,6 +11118,7 @@ async function handleIslandJoin(env, interaction) {
   const game=state.island;
   if (!game || game.status !== "lobby") return sendText(env, interaction, "❌ There isn't an open Chaos Island lobby right now.");
   const user=getUserFromInteraction(interaction);
+  const player=await getPlayer(env, user.id);
   if (game.players[user.id]) return sendText(env, interaction, "🏝️ You're already on the island!", islandLobbyComponents(game));
   if (Object.keys(game.players).length >= ISLAND_MAX_PLAYERS) return sendText(env, interaction, "❌ The island is full! 10 players maximum.");
   game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""};
@@ -12543,45 +12545,9 @@ async function setHeistChannelLock(
   game,
   locked
 ) {
-  /* Channel locking has been permanently disabled. If an older version
-     locked this channel, restore the permissions that version saved. */
-  if (!game?.guildId || !game?.channelId || !game.originalPermissionOverwrites) {
-    return false;
-  }
-
-  const originals = game.originalPermissionOverwrites;
-  try {
-    if (originals.everyone) {
-      await discordRequest(env, `/channels/${game.channelId}/permissions/${game.guildId}`, {
-        method: "PUT",
-        body: JSON.stringify(originals.everyone)
-      });
-    } else {
-      await discordRequest(env, `/channels/${game.channelId}/permissions/${game.guildId}`, {
-        method: "DELETE"
-      });
-    }
-
-    if (game.botRoleId) {
-      if (originals.bot) {
-        await discordRequest(env, `/channels/${game.channelId}/permissions/${game.botRoleId}`, {
-          method: "PUT",
-          body: JSON.stringify(originals.bot)
-        });
-      } else {
-        await discordRequest(env, `/channels/${game.channelId}/permissions/${game.botRoleId}`, {
-          method: "DELETE"
-        });
-      }
-    }
-
-    game.originalPermissionOverwrites = null;
-    game.botRoleId = null;
-    return true;
-  } catch (error) {
-    console.error("Heist channel permission restore error:", error);
-    return false;
-  }
+  // Channel locking is permanently disabled. Heists never change
+  // channel permissions, including during Night phases.
+  return false;
 }
 
 async function heistSendPublic(
@@ -12649,7 +12615,6 @@ async function startHeistNight(
     heistNightOpenButton(game)
   );
 
-  await setHeistChannelLock(env, game, true);
 
   const state = await getGuildState(env, game.guildId);
   state.heist = game;
@@ -13662,7 +13627,6 @@ async function resolveHeistNight(
     game
   );
 
-  await setHeistChannelLock(env, game, false);
 
   game.status = "voting";
   game.phaseEndsAt =
@@ -14150,7 +14114,6 @@ async function finishHeist(
     `🏁 **RACCOON HEIST OVER!**\n\n${reason}\n\n💰 Total stolen: **${game.totalStolen} ✨**\n💰 Winner prize pool: **${prizePool} ✨**\n🎁 Guaranteed winner reward: **${HEIST_WIN_REWARD} ✨ each**\n\n🏆 **WINNERS**\n${winnerText}\n\n🎭 **ROLE REVEAL**\n${roleReveal}\n\n🦝 Thank you for committing raccoon crimes.`
   );
 
-  await setHeistChannelLock(env, game, false);
 
   const latestState = await getGuildState(env, game.guildId);
   if (latestState.heist?.id === game.id) {
@@ -14968,7 +14931,6 @@ async function handleHeistComponent(
     return true;
   }
 
-  await setHeistChannelLock(env, game, false);
 
   const user =
     getUserFromInteraction(
@@ -16414,7 +16376,8 @@ async function verifySignature(
 export default {
   async fetch(
     request,
-    env
+    env,
+    ctx
   ) {
     const url =
       new URL(
@@ -16524,84 +16487,91 @@ export default {
       );
     }
 
-    try {
-      /* Discord requires an interaction acknowledgement within ~3 seconds.
-         Heist and Chaos Island do KV/Discord work before replying, so defer
-         those interactions immediately. */
-      if (interaction.type === 2 && interaction.data?.name === "heist") {
+    /*
+      IMPORTANT: Discord only gives us about 3 seconds to acknowledge an
+      interaction. Do NOT make a KV/Discord API call before returning the
+      acknowledgement. We return the acknowledgement directly from this
+      Worker request, then continue the game work in waitUntil().
+
+      This is especially important for Heist and Chaos Island because their
+      handlers do several KV reads/writes and Discord message updates.
+    */
+    const isHeistCommand =
+      interaction.type === 2 && interaction.data?.name === "heist";
+    const isIslandCommand =
+      interaction.type === 2 && interaction.data?.name === "island";
+    const isHeistComponent =
+      interaction.type === 3 && String(interaction.data?.custom_id || "").startsWith("heist:");
+    const isIslandComponent =
+      interaction.type === 3 && String(interaction.data?.custom_id || "").startsWith("island:");
+
+    const relevant =
+      isHeistCommand || isIslandCommand || isHeistComponent || isIslandComponent;
+
+    if (relevant) {
+      let update = false;
+      let ephemeral = false;
+
+      if (isHeistCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
-        await deferInteraction(env, interaction, {
-          ephemeral: ["join", "leave", "start", "status", "end"].includes(sub)
-        });
-      } else if (interaction.type === 2 && interaction.data?.name === "island") {
+        ephemeral = ["join", "leave", "start", "status", "end"].includes(sub);
+      } else if (isIslandCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
-        await deferInteraction(env, interaction, {
-          ephemeral: ["rules", "status"].includes(sub)
-        });
-      } else if (interaction.type === 3 && interaction.data?.custom_id?.startsWith("heist:")) {
-        await deferInteraction(env, interaction, { ephemeral: true });
-      } else if (interaction.type === 3 && interaction.data?.custom_id?.startsWith("island:")) {
+        ephemeral = ["rules", "status"].includes(sub);
+      } else if (isHeistComponent) {
+        ephemeral = true;
+      } else if (isIslandComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
-        await deferInteraction(env, interaction, {
-          update: ["join", "leave", "rounds", "back", "start", "choice"].includes(action)
-        });
+        update = ["join", "leave", "rounds", "back", "start", "choice"].includes(action);
       }
 
-      if (
-        interaction.type === 2
-      ) {
-        await handleCommand(
-          env,
-          interaction
-        );
-      } else if (
-        interaction.type === 3
-      ) {
-        await handleComponent(
-          env,
-          interaction
-        );
-      }
+      const responseType = update ? 6 : 5;
+      const responseData = ephemeral && !update ? { flags: 64 } : {};
 
-      return new Response(
-        "OK",
-        {
-          status: 200
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Interaction error:",
-        error
-      );
+      // Mark the interaction as already acknowledged so the handlers edit
+      // the deferred response instead of trying to acknowledge it a second time.
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = update;
+      interaction.__deferredEphemeral = ephemeral;
 
-      try {
-        await editOriginalResponse(
-          env,
-          interaction,
-          {
-            content:
-              `❌ Something went wrong: ${error?.message || "Unknown error"}`,
-            components:
-              treeButtons()
-          }
-        );
-      } catch {
+      ctx.waitUntil((async () => {
         try {
-          await sendText(
-            env,
-            interaction,
-            `❌ Something went wrong: ${error?.message || "Unknown error"}`
-          );
-        } catch {}
-      }
+          if (interaction.type === 2) {
+            await handleCommand(env, interaction);
+          } else {
+            await handleComponent(env, interaction);
+          }
+        } catch (error) {
+          console.error("Interaction error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Something went wrong: ${error?.message || "Unknown error"}`
+            });
+          } catch (editError) {
+            console.error("Could not send interaction error message:", editError);
+          }
+        }
+      })());
 
       return new Response(
-        "OK",
+        JSON.stringify({ type: responseType, data: responseData }),
         {
-          status: 200
+          status: 200,
+          headers: { "Content-Type": "application/json" }
         }
       );
+    }
+
+    try {
+      if (interaction.type === 2) {
+        await handleCommand(env, interaction);
+      } else if (interaction.type === 3) {
+        await handleComponent(env, interaction);
+      }
+      return new Response("OK", { status: 200 });
+    } catch (error) {
+      console.error("Interaction error:", error);
+      return new Response("OK", { status: 200 });
     }
   },
 
