@@ -16026,9 +16026,12 @@ async function handleCommand(
   }
 
   if (name === "pastelpanic") {
-    const sub = interaction.data?.options?.find(o => o.type === 1)?.name;
-    if (sub === "end") await handlePastelEndCommand(env, interaction);
-    else await handlePastelStart(env, interaction);
+    await handlePastelStart(env, interaction);
+    return;
+  }
+
+  if (name === "pastelpanic-end") {
+    await handlePastelEndCommand(env, interaction);
     return;
   }
 
@@ -17201,10 +17204,12 @@ const COMMANDS = [
 
   {
     name: "pastelpanic",
-    description: "Start Pastel Panic and choose a game mode",
-    options: [
-      { type: 1, name: "end", description: "Request to end the active Pastel Panic game" }
-    ]
+    description: "Start Pastel Panic and choose a game mode"
+  },
+
+  {
+    name: "pastelpanic-end",
+    description: "Request to end the active Pastel Panic game"
   },
 
   {
@@ -17657,7 +17662,7 @@ export default {
     const isSoloCommand =
       interaction.type === 2 && interaction.data?.name === "solo";
     const isPastelCommand =
-      interaction.type === 2 && (interaction.data?.name === "pastelpanic" || interaction.data?.name === "pastel");
+      interaction.type === 2 && (interaction.data?.name === "pastelpanic" || interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end");
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -17677,7 +17682,7 @@ export default {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isPastelCommand) {
-        ephemeral = interaction.data?.name === "pastel";
+        ephemeral = interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end";
       } else if (isHeistCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
         ephemeral = ["join", "leave", "start", "status", "end"].includes(sub);
