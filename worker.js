@@ -4995,6 +4995,7 @@ async function handleComponent(
   if (id.startsWith("pastel:")) {
     const parts=id.split(":"); const action=parts[1];
     if(action==="mode") { await handlePastelMode(env,interaction,parts[2]); return; }
+    if(action==="resume") { await handlePastelResume(env,interaction,parts[2]); return; }
     if(action==="join") { await handlePastelJoin(env,interaction,parts[2]); return; }
     if(action==="cancel") { await handlePastelCancel(env,interaction,parts[2]); return; }
     if(action==="choose") { await handlePastelChoose(env,interaction,parts[2],parts[3]); return; }
@@ -16909,7 +16910,28 @@ async function renderPastelBoard(env,game){
   }finally{if(browser)try{await browser.close();}catch{}}
 }
 async function sendPastelBoard(env,interaction,game){const image=await renderPastelBoard(env,game);const form=new FormData();form.append("payload_json",JSON.stringify({content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"pastel-panic.png"}],components:pastelChoiceComponents(game)}));form.append("files[0]",new Blob([image],{type:"image/png"}),"pastel-panic.png");return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});}
-async function handlePastelStart(env,interaction){await sendText(env,interaction,"🌈 **PASTEL PANIC**\n\nChoose your game mode!",pastelModeComponents());}
+async function handlePastelStart(env,interaction){
+  if(interaction.guild_id){
+    const state=await getGuildState(env,interaction.guild_id);
+    const active=state.pastel;
+    if(active&&active.status!=="ended"){
+      return sendText(env,interaction,`🌈 **PASTEL PANIC GAME ALREADY ACTIVE**\n\nA Pastel Panic game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2))]);
+    }
+  }
+  await sendText(env,interaction,"🌈 **PASTEL PANIC**\n\nChoose your game mode!",pastelModeComponents());
+}
+async function handlePastelResume(env,interaction,gameId){
+  if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Pastel Panic is server-only.");
+  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
+  if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Pastel Panic game to restore.");
+  if(game.status==="lobby"){
+    await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
+    return;
+  }
+  try{await sendPastelBoard(env,interaction,game);}catch(error){
+    await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});
+  }
+}
 async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.board=pastelGenerateBoard(game.mode,players);game.turnsSinceRefresh=0;game.lastRefresh="";await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
 async function handlePastelJoin(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false};await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
