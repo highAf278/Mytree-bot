@@ -67,7 +67,10 @@ const IMAGES = {
   cozyCat: "IMG_7317.png",
   greenGlowTree: "IMG_7327.png",
   greenGlowBackground: "IMG_7324.png",
-  greenGlowEffect: "IMG_7325.png"
+  greenGlowEffect: "IMG_7325.png",
+  prismFlutterTree: "IMG_7363.png",
+  prismFlutterBackground: "IMG_7362.png",
+  prismFlutterEffect: "IMG_7361.png"
 };
 
 const SHOP_ITEMS = {
@@ -214,6 +217,27 @@ const SHOP_ITEMS = {
     price: 10000,
     type: "effect",
     value: "green_glow",
+    limited: true
+  },
+  prism_flutter_tree: {
+    name: "🌈🦋 Prism Flutter Tree",
+    price: 25000,
+    type: "tree",
+    value: "prism_flutter",
+    limited: true
+  },
+  prism_flutter_background: {
+    name: "🌈🦋 Prism Flutter Background",
+    price: 15000,
+    type: "background",
+    value: "prism_flutter",
+    limited: true
+  },
+  prism_flutter_effect: {
+    name: "🌈🦋 Prism Flutter Effect",
+    price: 10000,
+    type: "effect",
+    value: "prism_flutter",
     limited: true
   }
 };
@@ -1393,6 +1417,9 @@ function getBackgroundImage(player) {
     case "green_glow":
       return IMAGES.greenGlowBackground;
 
+    case "prism_flutter":
+      return IMAGES.prismFlutterBackground;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1431,6 +1458,9 @@ function getTreeImage(player) {
 
     case "green_glow":
       return IMAGES.greenGlowTree;
+
+    case "prism_flutter":
+      return IMAGES.prismFlutterTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1477,6 +1507,9 @@ function getEffectImage(player) {
 
     case "green_glow":
       return IMAGES.greenGlowEffect;
+
+    case "prism_flutter":
+      return IMAGES.prismFlutterEffect;
 
     default:
       return null;
@@ -3119,6 +3152,9 @@ async function showLimitedShop(
     ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
     ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
     ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"],
+    ["prism_flutter_tree", "🌈🦋 Prism Flutter Tree", "buy_prism_flutter_tree"],
+    ["prism_flutter_background", "🌈🦋 Prism Flutter Background", "buy_prism_flutter_background"],
+    ["prism_flutter_effect", "🌈🦋 Prism Flutter Effect", "buy_prism_flutter_effect"],
     ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
     ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
     ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
@@ -5300,7 +5336,16 @@ async function handleComponent(
       "green_glow_background",
 
     buy_green_glow_effect:
-      "green_glow_effect"
+      "green_glow_effect",
+
+    buy_prism_flutter_tree:
+      "prism_flutter_tree",
+
+    buy_prism_flutter_background:
+      "prism_flutter_background",
+
+    buy_prism_flutter_effect:
+      "prism_flutter_effect"
   };
 
   if (
