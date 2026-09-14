@@ -5581,6 +5581,15 @@ async function handleComponent(
     return;
   }
 
+  // Limited Shop set navigation. The set buttons are generated with
+  // custom IDs like `limited_set:ocean_opal`, so route every set through
+  // the same handler instead of falling through to "Unknown button".
+  if (id.startsWith("limited_set:")) {
+    const setId = id.slice("limited_set:".length);
+    await showLimitedSet(env, interaction, setId);
+    return;
+  }
+
   if (
     id === "shop_special"
   ) {
