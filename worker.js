@@ -1191,8 +1191,14 @@ async function checkGamePunishment(env, interaction) {
   if (!user) return "";
   const player = await getPlayer(env, user.id);
   const punishment = await refreshPunishmentState(env, player);
-  // Pickle Jail does NOT stop games — the criminal warning is part of the fun.
+  // Pickle Jail does NOT stop games — it publicly exposes the criminal instead.
   // Corner Time is the punishment that blocks game participation.
+  if (punishment === "pickle") {
+    if (interaction.guild_id && interaction.channel_id) {
+      await sendChannelMessage(env, interaction.channel_id, "🥒 **the pickles knows what you did YOU CRIMINAL** 🚨");
+    }
+    return "";
+  }
   if (punishment === "corner") {
     await sendText(env, interaction, punishmentBlockedText(player, punishment));
     return punishment;
@@ -1203,27 +1209,63 @@ async function checkGamePunishment(env, interaction) {
 async function buildTitlesResponseData(env, interaction) {
   const user = getUserFromInteraction(interaction);
   if (!user) throw new Error("Could not determine your Discord account.");
+
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   unlockNameEffects(player);
-  const owned = player.titles.filter(id => SOLO_TITLES[id]);
-  const locked = Object.entries(SOLO_TITLES).filter(([id]) => !player.titles.includes(id));
-  const effects = Object.entries(NAME_EFFECTS).map(([id, e]) => `${player.unlockedNameEffects.includes(id) ? "✨" : "🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect === id ? " — ⭐ EQUIPPED" : ""}`).join("\n");
-  const ownedText = owned.length ? owned.map(id => `${player.equippedTitle === id ? "⭐" : "🏷️"} **${SOLO_TITLES[id].name}**`).join("\n") : "No titles unlocked yet.";
-  const lockedText = locked.length ? locked.map(([id, t]) => `🔒 **${t.name}** — ${t.description}`).join("\n") : "You've unlocked every title! 👑";
+
+  const owned = (Array.isArray(player.titles) ? player.titles : []).filter(id => SOLO_TITLES[id]);
+  const locked = Object.entries(SOLO_TITLES).filter(([id]) => !owned.includes(id));
+  const effectIds = (Array.isArray(player.unlockedNameEffects) ? player.unlockedNameEffects : []).filter(id => NAME_EFFECTS[id]);
+
+  const ownedText = owned.length
+    ? owned.map(id => `${player.equippedTitle === id ? "⭐" : "🏷️"} **${SOLO_TITLES[id].name}**`).join("\n")
+    : "No titles unlocked yet.";
+  const lockedText = locked.length
+    ? locked.map(([id, t]) => `🔒 **${t.name}** — ${t.description}`).join("\n")
+    : "You've unlocked every title! 👑";
+
+  const effectLines = Object.entries(NAME_EFFECTS).map(([id, e]) => {
+    const unlocked = effectIds.includes(id);
+    return `${unlocked ? "✨" : "🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect === id ? " — ⭐ EQUIPPED" : ""}`;
+  });
+
+  // Discord limits component rows, so keep the menu compact while making sure
+  // both title and effect buttons are actually reachable.
   const rows = [];
-  for (let i = 0; i < owned.length && rows.length < 4; i += 5) rows.push(row(...owned.slice(i, i + 5).map(id => button(`Equip ${SOLO_TITLES[id].name}`.slice(0, 80), `title:equip:${id}`, 2))));
-  const effectIds = player.unlockedNameEffects.filter(id => NAME_EFFECTS[id]);
-  for (let i = 0; i < effectIds.length && rows.length < 4; i += 5) rows.push(row(...effectIds.slice(i, i + 5).map(id => button(NAME_EFFECTS[id].name.slice(0, 80), `nameeffect:equip:${id}`, 2))));
-  rows.push(row(button("❌ Unequip Title", "title:unequip", 4), button("✨ Unequip Effect", "nameeffect:equip:none", 4)));
-  const description = `⭐ **Equipped Title:** ${player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? SOLO_TITLES[player.equippedTitle].name : "None"}\n✨ **Equipped Name Effect:** ${player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect] ? NAME_EFFECTS[player.equippedNameEffect].name : "None"}\n\n**🏆 My Titles**\n${ownedText}\n\n**🔒 Titles to Unlock**\n${lockedText}\n\n**✨ Name Effects**\n${effects}`;
+  for (let i = 0; i < owned.length && rows.length < 2; i += 5) {
+    rows.push(row(...owned.slice(i, i + 5).map(id =>
+      button(`🏷️ ${SOLO_TITLES[id].name}`.slice(0, 80), `title:equip:${id}`, 2)
+    )));
+  }
+  for (let i = 0; i < effectIds.length && rows.length < 4; i += 5) {
+    rows.push(row(...effectIds.slice(i, i + 5).map(id =>
+      button(NAME_EFFECTS[id].name.slice(0, 80), `nameeffect:equip:${id}`, 2)
+    )));
+  }
+  rows.push(row(
+    button("❌ Unequip Title", "title:unequip", 4),
+    button("✨ Unequip Effect", "nameeffect:equip:none", 4)
+  ));
+
+  const titleDescription =
+    `⭐ **Equipped Title:** ${player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? SOLO_TITLES[player.equippedTitle].name : "None"}` +
+    `\n\n**🏆 My Titles**\n${ownedText}` +
+    `\n\n**🔒 Titles to Unlock**\n${lockedText}`;
+
+  const effectDescription =
+    `✨ **Equipped Name Effect:** ${player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect] ? NAME_EFFECTS[player.equippedNameEffect].name : "None"}` +
+    `\n\n**✨ Name Effects**\n${effectLines.join("\n")}`;
+
   return {
-    embeds: [{ title: "🏷️ TITLES & NAME EFFECTS", description: description.slice(0, 4090) }],
+    embeds: [
+      { title: "🏷️ TITLES", description: titleDescription.slice(0, 4090) },
+      { title: "✨ NAME EFFECTS", description: effectDescription.slice(0, 4090) }
+    ],
     components: rows,
     flags: 64
   };
 }
-
 async function handleTitlesMenu(env, interaction) {
   const data = await buildTitlesResponseData(env, interaction);
   if (interaction.__deferred) {
@@ -16834,12 +16876,24 @@ function getOption(
   interaction,
   name
 ) {
-  return (
-    interaction.data?.options?.find(
-      option =>
-        option.name === name
-    )?.value ?? null
-  );
+  const options = Array.isArray(interaction.data?.options)
+    ? interaction.data.options
+    : [];
+
+  function find(optionsList) {
+    for (const option of optionsList) {
+      if (option?.name === name && option?.value !== undefined) {
+        return option.value;
+      }
+      if (Array.isArray(option?.options)) {
+        const nested = find(option.options);
+        if (nested !== undefined && nested !== null) return nested;
+      }
+    }
+    return null;
+  }
+
+  return find(options);
 }
 
 const FORTUNES = [
