@@ -3420,7 +3420,8 @@ async function showCustomBackgrounds(
     ["field_day_background", "🌾 Field Day", "field_day"],
     ["red_forest_background", "🌲 Red Forest", "red_forest"],
     ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"],
-    ["green_glow_background", "💚 Green Glow", "green_glow"]
+    ["green_glow_background", "💚 Green Glow", "green_glow"],
+    ["prism_flutter_background", "🌈🦋 Prism Flutter", "prism_flutter"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
@@ -3489,7 +3490,8 @@ async function showCustomTrees(
     ["soul", "💙 Soul", "soul_tree"],
     ["kitty_tree", "🐱 Kitty Tree", "kitty_tree"],
     ["halloween_tree", "🎃 Halloween", "halloween_tree"],
-    ["green_glow", "💚 Green Glow", "green_glow_tree"]
+    ["green_glow", "💚 Green Glow", "green_glow_tree"],
+    ["prism_flutter", "🌈🦋 Prism Flutter", "prism_flutter_tree"]
   ];
 
   const ownedItems = items.filter(([value, label, inventoryId]) =>
@@ -3577,6 +3579,16 @@ async function showCustomEffects(
         "💚 Green Glow",
         "equip_effect_green_glow",
         player.equipped.effect === "green_glow" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("prism_flutter_effect")) {
+    buttons.push(
+      button(
+        "🌈🦋 Prism Flutter",
+        "equip_effect_prism_flutter",
+        player.equipped.effect === "prism_flutter" ? 3 : 2
       )
     );
   }
@@ -3749,6 +3761,7 @@ async function equipTheme(
   interaction,
   theme
 ) {
+  await deferInteraction(env, interaction, { update: true });
   const user =
     getUserFromInteraction(
       interaction
@@ -3801,6 +3814,11 @@ async function equipTheme(
     green_glow:
       player.inventory.includes(
         "green_glow_background"
+      ),
+
+    prism_flutter:
+      player.inventory.includes(
+        "prism_flutter_background"
       )
   };
 
@@ -3834,6 +3852,7 @@ async function equipTree(
   interaction,
   tree
 ) {
+  await deferInteraction(env, interaction, { update: true });
   const user =
     getUserFromInteraction(
       interaction
@@ -3896,6 +3915,11 @@ async function equipTree(
     green_glow:
       player.inventory.includes(
         "green_glow_tree"
+      ),
+
+    prism_flutter:
+      player.inventory.includes(
+        "prism_flutter_tree"
       )
   };
 
@@ -3929,6 +3953,7 @@ async function equipEffect(
   interaction,
   effect
 ) {
+  await deferInteraction(env, interaction, { update: true });
   const user =
     getUserFromInteraction(
       interaction
@@ -3947,7 +3972,8 @@ async function equipEffect(
       butterflies: "butterflies_effect",
       hearts: "hearts_effect",
       purr_princess: "purr_princess_effect",
-      green_glow: "green_glow_effect"
+      green_glow: "green_glow_effect",
+      prism_flutter: "prism_flutter_effect"
     }[effect];
 
     if (
@@ -4200,15 +4226,17 @@ async function showInventory(
     magic_mushroom_background: "🍄 Magic Mushroom Background",
     field_day_background: "🌾 Field Day Background",
     red_forest_background: "🌲 Red Forest Background",
-    halloween_tree: "🎃🌳 Halloween Tree"
+    halloween_tree: "🎃🌳 Halloween Tree",
+    prism_flutter_tree: "🌈🦋 Prism Flutter Tree",
+    prism_flutter_background: "🌈🦋 Prism Flutter Background",
+    prism_flutter_effect: "🌈🦋 Prism Flutter Effect"
   };
 
-  const items =
-    player.inventory.map(
-      item =>
-        names[item] ||
-        item
-    );
+  const items = Array.from(new Set(player.inventory)).map(
+    item =>
+      names[item] ||
+      item
+  );
 
   await sendText(
     env,
