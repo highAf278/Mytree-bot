@@ -16923,7 +16923,9 @@ function pastelGameText(game){
     const color=PASTEL_COLORS[colorIndex]||PASTEL_COLORS[Number(p.slot)%PASTEL_COLORS.length];
     return `• **${pct}%** — <@${p.id}> — ${color.label} **${color.name}**`;
   }).join("\n");
-  return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,lines].join("\n");
+  const remaining=Math.max(0,Number(game.refreshEvery||0)-Number(game.turnsSinceRefresh||0));
+  const reshuffleLabel=remaining===1?"1 turn":"${remaining} turns";
+  return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,lines,``,`🔄 **Reshuffle in: ${reshuffleLabel}**`].join("\n");
 }
 function pastelEndVoteCount(game){
   const active=Object.values(game.players||{}).filter(p=>p.alive!==false);
@@ -16952,63 +16954,51 @@ function pastelRulesText(){return [`🌈 **PASTEL PANIC — HOW TO PLAY**`,``,`�
 function pastelGameIsUnbeatable(game){const total=pastelCellCount(game.mode);const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1)return true;const leader=Math.max(...alive.map(p=>pastelClaimedCells(game,p.id)));const others=total-leader;return leader>others;}
 function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive).sort((a,b)=>pastelClaimedCells(game,b.id)-pastelClaimedCells(game,a.id))[0]||null;}
 function pastelRegenerate(game){
-  const players=pastelStartingPlayers(game).filter(p=>p.alive);
-  const oldCounts={};
-  for(const p of players)oldCounts[p.id]=pastelClaimedCells(game,p.id);
   const oldBoard=game.board||[];
-  game.board=pastelGenerateBoard(game.mode,players);
+  const rows=game.mode==="triangle"?20:20;
+  const next=[];
 
-  /* Preserve BLACKOUT territory exactly across refreshes. It must never disappear. */
-  const assigned=new Set();
-  for(let r=0;r<oldBoard.length;r++)for(let c=0;c<oldBoard[r].length;c++){
-    const old=oldBoard[r][c];
-    const cell=game.board[r]?.[c];
-    if(!cell||old?.owner!=="blackout")continue;
-    cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;
-    assigned.add(`${r},${c}`);
-  }
-
-  /* Preserve each living player's approximate territory size around their corner,
-     while never placing territory on top of another player or a blackout. */
-  const starts=game.mode==="triangle"?[[0,0],[19,0],[19,38]]:(game.needed===2?[[0,0],[19,19]]:[[0,0],[0,19],[19,0],[19,19]]);
-  for(let i=0;i<players.length;i++){
-    const p=players[i];
-    const target=Math.max(1,Math.min(oldCounts[p.id]||1,pastelCellCount(game.mode)-assigned.size-players.length+1));
-    const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;
-    const [sr,sc]=starts[slot]||starts[i]||starts[0];
-    const cells=[];
-    for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
-      const key=`${r},${c}`;if(assigned.has(key))continue;
-      const d=Math.abs(r-sr)+Math.abs(c-sc);cells.push({r,c,d});
+  /* IMPORTANT: refreshes NEVER rebuild or move owned territory.
+     Every existing coordinate keeps its owner, color, start state, and blackout.
+     Only cells that were truly unclaimed are randomized. */
+  for(let r=0;r<rows;r++){
+    const width=game.mode==="triangle"?(2*r+1):20;
+    const row=[];
+    for(let c=0;c<width;c++){
+      const old=oldBoard[r]?.[c];
+      if(old?.owner){
+        if(old.owner==="blackout") row.push({owner:"blackout",color:0,heart:false,wild:false,start:false});
+        else row.push({owner:old.owner,color:Number.isInteger(Number(old.color))?Number(old.color):0,heart:false,wild:false,start:!!old.start});
+      }else{
+        row.push({color:randomInt(0,PASTEL_COLORS.length-1),owner:null,heart:false,wild:Math.random()<0.075,start:false});
+      }
     }
-    cells.sort((a,b)=>a.d-b.d);
-    let taken=0;
-    for(const pos of cells){
-      if(taken>=target)break;
-      const key=`${pos.r},${pos.c}`;if(assigned.has(key))continue;
-      const cell=game.board[pos.r][pos.c];
-      cell.owner=p.id;
-      cell.color=Number.isInteger(Number(p.selectedColor))?Number(p.selectedColor):slot%PASTEL_COLORS.length;
-      cell.start=(pos.r===sr&&pos.c===sc);
-      cell.heart=false;cell.wild=false;
-      assigned.add(key);taken++;
-    }
+    next.push(row);
   }
+  game.board=next;
 
-  /* Fresh Hearts/Wild Blocks only appear in truly unclaimed cells. */
+  /* Put fresh power cells ONLY on unclaimed cells. */
   for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
     const cell=game.board[r][c];
     if(cell.owner)continue;
-    cell.heart=false;cell.wild=Math.random()<0.075;
+    cell.heart=false;
+    cell.wild=Math.random()<0.075;
   }
   let hearts=Math.max(8,Math.floor(pastelCellCount(game.mode)*0.035));
   let attempts=0;
-  while(hearts>0&&attempts<3000){
-    attempts++;const r=randomInt(0,game.board.length-1);const c=randomInt(0,game.board[r].length-1);const cell=game.board[r][c];
-    if(cell.owner||cell.heart)continue;cell.heart=true;hearts--;
+  while(hearts>0&&attempts<5000){
+    attempts++;
+    const r=randomInt(0,game.board.length-1);
+    const c=randomInt(0,game.board[r].length-1);
+    const cell=game.board[r][c];
+    if(cell.owner||cell.heart)continue;
+    cell.heart=true;
+    cell.wild=false;
+    hearts--;
   }
-  game.turnsSinceRefresh=0;game.refreshCount=Number(game.refreshCount||0)+1;
-  game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Territories, colors, and blacked-out areas were preserved.`;
+  game.turnsSinceRefresh=0;
+  game.refreshCount=Number(game.refreshCount||0)+1;
+  game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Territories, colors, shapes, and blacked-out areas were preserved.`;
 }
 
 async function pastelSave(env,game){const state=await getGuildState(env,game.guildId);if(state.pastel?.id!==game.id)return false;state.pastel=game;await saveGuildState(env,game.guildId,state);return true;}
@@ -17026,6 +17016,7 @@ async function renderPastelBoard(env,game){
     const edgeSegments=[];
     const starts=[];
     const rects=[];
+    const heartMarks=[];
 
     for(let r=0;r<game.board.length;r++){
       for(let c=0;c<game.board[r].length;c++){
@@ -17036,6 +17027,7 @@ async function renderPastelBoard(env,game){
         else if(cell.wild)fill=PASTEL_WILD_COLOR;
         else if(cell.heart)fill=PASTEL_HEART_COLOR;
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
+        if(cell.heart&&!cell.owner)heartMarks.push(`<text x="${x+size/2}" y="${y+size*0.76}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*0.72)}" font-weight="700" fill="#d94f83">♥</text>`);
         if(cell.start&&cell.owner&&cell.owner!=="blackout")starts.push(`<rect x="${x+2}" y="${y+2}" width="${size-4}" height="${size-4}" fill="none" stroke="#000" stroke-width="3"/>`);
 
         const owner=cell.owner;
@@ -17065,7 +17057,7 @@ async function renderPastelBoard(env,game){
       if(seenEdges.has(key))continue;seenEdges.add(key);uniqueEdges.push(seg);
     }
 
-    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}"><rect x="0" y="0" width="${boardW}" height="${boardH}" fill="#fff"/>${rects.join("")}${uniqueEdges.join("")}${starts.join("")}</svg>`;
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}"><rect x="0" y="0" width="${boardW}" height="${boardH}" fill="#fff"/>${rects.join("")}${heartMarks.join("")}${uniqueEdges.join("")}${starts.join("")}</svg>`;
     const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#fff8fc;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{width:${boardW}px;height:${boardH}px;background:#fff;overflow:hidden}.board>svg{display:block;width:${boardW}px;height:${boardH}px}</style></head><body><div class="wrap"><div class="board">${svg}</div></div></body></html>`;
     await page.setContent(html,{waitUntil:"load"});
     return await page.screenshot({type:"png"});
