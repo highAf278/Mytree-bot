@@ -645,6 +645,7 @@ function defaultPlayer() {
     unlockedNameEffects: [],
     equippedNameEffect: "",
     profileColor: "#ffd9ef",
+    surpriseAlertClaimed: false,
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -882,6 +883,84 @@ async function handleProfile(env, interaction) {
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
 async function handleNameEffectEquip(env,interaction,effectId){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);if(effectId==="none"){player.equippedNameEffect="";await savePlayer(env,player);return sendText(env,interaction,"✨ Name Effect unequipped.");}if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");player.equippedNameEffect=effectId;await savePlayer(env,player);await sendText(env,interaction,`✨ **${NAME_EFFECTS[effectId].name}** is now equipped!`);}
+
+/* =========================================================
+   PRIVATE SURPRISE ALERT — LOVA
+
+   Each player gets this one-time surprise on their next normal bot
+   interaction. It is sent as an ephemeral follow-up so nobody else
+   in the server can see it. The correct choice is NO KILL.
+========================================================= */
+
+function surpriseAlertComponents() {
+  return [
+    row(
+      button("🔪 KILL", "surprise_alert:kill", 4),
+      button("🕊️ NO KILL", "surprise_alert:no_kill", 3)
+    )
+  ];
+}
+
+async function showSurpriseAlert(env, interaction) {
+  const content = [
+    "🚨 **ALERT** 🚨",
+    "",
+    "**LOVA HAS BEEN VOTED TO THE STAND.**",
+    "",
+    "🔪 **KILL** or 🕊️ **NO KILL?**",
+    "",
+    "Choose carefully... 👀"
+  ].join("\n");
+  await sendEphemeralFollowup(env, interaction, content, surpriseAlertComponents());
+}
+
+async function maybeShowSurpriseAlert(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return false;
+  // Alert choices themselves must never spawn another alert.
+  const customId = String(interaction.data?.custom_id || "");
+  if (customId.startsWith("surprise_alert:")) return false;
+
+  // Keep this surprise one-time per player, including players who already
+  // existed before this feature was added. Missing means not yet claimed.
+  const player = await getPlayer(env, user.id);
+  if (player.surpriseAlertClaimed) return false;
+
+  // Claim before sending so two near-simultaneous interactions cannot create
+  // duplicate alerts. The normal interaction handler runs afterward.
+  player.surpriseAlertClaimed = true;
+  await savePlayer(env, player);
+  await showSurpriseAlert(env, interaction);
+  return true;
+}
+
+async function handleSurpriseAlertChoice(env, interaction, choice) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+
+  if (choice === "kill") {
+    await savePlayer(env, player);
+    await sendText(
+      env,
+      interaction,
+      "🚨 **LOVA IS INNOCENT, you lose NAB!** 😭💀",
+      []
+    );
+    return;
+  }
+
+  if (choice === "no_kill") {
+    player.sparkles = Number(player.sparkles || 0) + 1000;
+    await savePlayer(env, player);
+    await sendText(
+      env,
+      interaction,
+      "🚨 **LOVA IS INNOCENT!** 🕊️\n\nYOU DIDN'T KILL HER! 😭💖\n\n🎉 **+1,000 sparkles!** ✨",
+      []
+    );
+  }
+}
 
 async function handleTitlesMenu(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const owned=player.titles.filter(id=>SOLO_TITLES[id]);const locked=Object.entries(SOLO_TITLES).filter(([id])=>!player.titles.includes(id));const effects=Object.entries(NAME_EFFECTS).map(([id,e])=>`${player.unlockedNameEffects.includes(id)?"✨":"🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect===id?" — ⭐ EQUIPPED":""}`).join("\n");const ownedText=owned.length?owned.map(id=>`${player.equippedTitle===id?"⭐":"🏷️"} **${SOLO_TITLES[id].name}**`).join("\n"):"No titles unlocked yet.";const lockedText=locked.length?locked.map(([id,t])=>`🔒 **${t.name}** — ${t.description}`).join("\n"):"You've unlocked every title! 👑";const rows=[];for(let i=0;i<owned.length;i+=5)rows.push(row(...owned.slice(i,i+5).map(id=>button(`Equip ${SOLO_TITLES[id].name}`.slice(0,80),`title:equip:${id}`,2))));const effectIds=player.unlockedNameEffects.filter(id=>NAME_EFFECTS[id]);for(let i=0;i<effectIds.length;i+=5)rows.push(row(...effectIds.slice(i,i+5).map(id=>button(NAME_EFFECTS[id].name.slice(0,80),`nameeffect:equip:${id}`,2))));rows.push(row(button("❌ Unequip Title","title:unequip",4),button("✨ Unequip Effect","nameeffect:equip:none",4)));await sendText(env,interaction,`🏷️ **TITLES & NAME EFFECTS**\n\n⭐ **Equipped Title:** ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"None"}\n✨ **Equipped Name Effect:** ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n\n**🏆 My Titles**\n${ownedText}\n\n**🔒 Titles to Unlock**\n${lockedText}\n\n**✨ Name Effects**\n${effects}`,rows);}
 
@@ -5573,6 +5652,14 @@ async function handleComponent(
   const id =
     interaction.data?.custom_id ||
     "";
+
+  if (id.startsWith("surprise_alert:")) {
+    const choice = id.split(":")[1];
+    if (choice === "kill" || choice === "no_kill") {
+      await handleSurpriseAlertChoice(env, interaction, choice);
+    }
+    return;
+  }
 
   if (id.startsWith("battle:")) {
     const parts=id.split(":"); const action=parts[1]; const gameId=parts[2];
@@ -18797,6 +18884,7 @@ export default {
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
     const isPastelComponent = interaction.type === 3 && customId.startsWith("pastel:");
+    const isSurpriseAlertComponent = interaction.type === 3 && customId.startsWith("surprise_alert:");
     // Tree buttons can involve KV reads and optional Browser Rendering.
     // Acknowledge them immediately so Discord never leaves the button
     // spinning on "Bot is thinking..." while the tree action finishes.
@@ -18823,7 +18911,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTreeComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
@@ -18855,6 +18943,11 @@ export default {
         update = true;
       } else if (isPastelComponent) {
         update = true;
+      } else if (isSurpriseAlertComponent) {
+        // The alert is an ephemeral follow-up message. Updating the
+        // component interaction edits that private alert in place.
+        update = true;
+        ephemeral = true;
       } else if (isTreeComponent) {
         // Tree actions should update the existing /tree message rather than
         // showing a long-running ephemeral "Bot is thinking..." state.
@@ -18878,6 +18971,10 @@ export default {
 
       ctx.waitUntil((async () => {
         try {
+          // Surprise alert is shown privately on the player's next normal
+          // interaction, without replacing or blocking the interaction's
+          // normal bot action.
+          await maybeShowSurpriseAlert(env, interaction);
           if (interaction.type === 2) {
             await handleCommand(env, interaction);
           } else {
