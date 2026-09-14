@@ -832,14 +832,14 @@ async function renderAnimatedProfile(env, player) {
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
     await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
-    const frameCount=8;
+    const frameCount=6;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
       await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
       frames.push(await page.screenshot({type:"png"}));
     }
-    return await encodePNGFramesToGIF(frames,800,500,12);
+    return await encodePNGFramesToGIF(frames,800,500,15);
   } finally { if(browser) await browser.close().catch(()=>{}); }
 }
 
@@ -862,7 +862,22 @@ function nearestPaletteIndex(r,g,b,p){
   const bb=Math.max(0,Math.min(5,Math.round(b/51)));
   return rr*36+gg*6+bb;
 }
-function gifLZW(indices){const clear=256,end=257;let codeSize=9,next=258,dict=new Map(),bits=0,buf=[];const emit=c=>{for(let i=0;i<codeSize;i++){buf.push((c>>i)&1);bits++;}};emit(clear);let prefix=indices[0]??0;for(let i=1;i<indices.length;i++){const k=indices[i],key=prefix*256+k;if(dict.has(key)){prefix=dict.get(key);continue;}emit(prefix);if(next<4096){dict.set(key,next++);if(next===1<<codeSize&&codeSize<12)codeSize++;}else{emit(clear);dict=new Map();codeSize=9;next=258;}prefix=k;}emit(prefix);emit(end);const bytes=[];for(let i=0;i<bits;i+=8){let v=0;for(let j=0;j<8&&i+j<bits;j++)v|=(buf[i+j]||0)<<j;bytes.push(v);}return bytes;}
+function gifLZW(indices){
+  // Deliberately use a conservative literal-code encoder. It is larger than a
+  // fully compressed LZW stream, but is extremely reliable in Workers and
+  // avoids the malformed-GIF issue caused by dictionary/code-size edge cases.
+  const clear=256,end=257,codeSize=9,bits=[],emit=c=>{for(let i=0;i<codeSize;i++)bits.push((c>>i)&1);};
+  const chunkSize=200;
+  for(let start=0;start<indices.length;start+=chunkSize){
+    emit(clear);
+    const stop=Math.min(indices.length,start+chunkSize);
+    for(let i=start;i<stop;i++)emit(indices[i]);
+  }
+  emit(end);
+  const bytes=[];
+  for(let i=0;i<bits.length;i+=8){let v=0;for(let j=0;j<8&&i+j<bits.length;j++)v|=(bits[i+j]||0)<<j;bytes.push(v);}
+  return bytes;
+}
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
 
