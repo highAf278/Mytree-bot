@@ -791,13 +791,13 @@ function nameEffectText(effectId, titleText, phase = 0) {
   if (effectId === "rainbow") {
     const chars = [...text].map((ch, i) => {
       const hue = Math.round(((phase + i / Math.max(1, text.length)) % 1) * 360);
-      return `<span style="color:hsl(${hue},90%,70%);text-shadow:0 0 8px rgba(255,255,255,.9),0 0 18px rgba(255,120,220,.55)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
+      return `<span style="color:hsl(${hue},90%,70%);text-shadow:0 0 1px rgba(255,255,255,.95),0 0 3px rgba(255,120,220,.35)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
     }).join("");
     return `<span class="effect-rainbow">${chars}</span>`;
   }
   if (effectId === "candy_rush") {
     const hues=[330,205,275,48];
-    const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 10px rgba(255,255,255,.95),0 0 20px rgba(255,160,220,.6)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
+    const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 1px rgba(255,255,255,.95),0 0 3px rgba(255,160,220,.35)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
     return `<span class="effect-candy_rush">${chars}</span>`;
   }
 
@@ -838,8 +838,8 @@ function profileCardHTML(player, phase = 0) {
   const particles = (particleMap[effectId] || []).map((x,i)=>`<span class="particle p${i}" style="left:${12+i*24}%;top:${24+((i*13)%36)}%;transform:translateY(${Math.sin((phase+i/4)*Math.PI*2)*8}px);">${x}</span>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
-    .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.72);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.58);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
-    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 3px #fff,0 0 8px rgba(255,135,205,.9),0 0 15px rgba(255,170,225,.55)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 3px #fff,0 0 7px rgba(120,125,255,.9),0 0 15px rgba(150,105,255,.55)}.cosmicOrbit{position:absolute;left:-12px;right:-12px;top:48%;height:20px;border:2px solid rgba(120,140,255,.7);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 7px rgba(120,150,255,.65);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 3px #fff,0 0 7px rgba(80,255,100,.9),0 0 15px rgba(75,255,95,.5)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9))}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
+    .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.88);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.94);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9))}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -12112,10 +12112,22 @@ async function resolveChaosIslandRound(env, game, interaction=null, timedOut=fal
 }
 
 async function handleIslandChoice(env, interaction, choiceIndex) {
-  if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
+  /* Acknowledge the button immediately. Cloudflare/KV work can otherwise make Discord
+     mark the interaction as failed before the island can update its message. */
+  await deferInteraction(env, interaction, {update:true});
+  if (!interaction.guild_id) return sendEphemeralFollowup(env, interaction, "❌ Chaos Island is server-only.");
   const state=await getGuildState(env,interaction.guild_id);
   const game=state.island;
-  if (!game || game.status!=="playing") return sendText(env,interaction,"❌ There isn't an active Chaos Island round.");
+  if (!game || game.status!=="playing") return sendEphemeralFollowup(env,interaction,"❌ There isn't an active Chaos Island round.");
+  /* Self-heal if the scheduled trigger was delayed or not configured: any island
+     interaction after the round deadline resolves the expired round first. */
+  if (Number(game.phaseEndsAt||0)>0 && Date.now()>=Number(game.phaseEndsAt||0)) {
+    await resolveChaosIslandRound(env,game,null,true);
+    const refreshed=await getGuildState(env,interaction.guild_id);
+    const current=refreshed.island;
+    if (!current || current.status!=="playing") return sendEphemeralFollowup(env,interaction,"🏝️ That Chaos Island round just ended. Start a new game to keep playing!");
+    return sendEphemeralFollowup(env,interaction,"⏰ That Chaos Island round timed out, so the island resolved it automatically. The next round is ready!");
+  }
   const user=getUserFromInteraction(interaction);
   const player=game.players[user.id];
   if (!player) return sendText(env,interaction,"❌ You're not in this Chaos Island game.");
@@ -12127,12 +12139,10 @@ async function handleIslandChoice(env, interaction, choiceIndex) {
   player.choice=index;
   game.currentChoices[user.id]=index;
   if (islandAllAliveChosen(game)) {
-    await acknowledge(env,interaction);
     await resolveChaosIslandRound(env,game,interaction,false);
     return;
   }
   await islandSave(env,game);
-  await acknowledge(env,interaction);
   const scenario=getIslandCurrentScenario(game);
   await islandPublicUpdate(env,interaction,islandGameText(game,scenario,game.currentVersion),islandChoiceRows(game,scenario));
 }
@@ -17829,7 +17839,16 @@ function pastelOpponentColors(game,player){
 function pastelAvailableColors(game,player){
   const blocked=pastelOpponentColors(game,player);
   const own=Number(player?.selectedColor);
-  return pastelColorsForGame(game).map((_,i)=>i).filter(i=>!blocked.has(i)&&i!==own);
+  const heartColors=new Set();
+  for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
+    const cell=game.board[r][c];
+    if(cell.owner!==player.id)continue;
+    for(const [rr,cc] of pastelNeighbors(game.board,r,c,game.mode)){
+      const n=game.board[rr]?.[cc];
+      if(n?.owner===null&&n.heart)heartColors.add(Number(n.color));
+    }
+  }
+  return pastelColorsForGame(game).map((_,i)=>i).filter(i=>i!==own&&(!blocked.has(i)||heartColors.has(i)));
 }
 function pastelFlood(game,player,color){
   const board=game.board;
@@ -17858,7 +17877,13 @@ function pastelFlood(game,player,color){
       if(n.owner && n.owner!==player.id && n.owner!=='blackout')continue;
       if(n.owner==='blackout')continue;
 
-      const capturable = n.owner===null && (n.color===color || n.wild);
+      const blockedColor=pastelOpponentColors(game,player).has(color);
+      /* A Power Cell is special: if it is directly reachable, it can be claimed
+         even when its underlying color belongs to another player's current color.
+         Normal cells still obey the no-opponent-color rule. */
+      const capturable = n.owner===null && (
+        n.heart || (!blockedColor && (n.color===color || n.wild))
+      );
       if(!capturable)continue;
 
       if(n.heart)capturedHearts++;
@@ -18031,7 +18056,10 @@ async function renderPastelBoard(env,game){
         else if(cell.wild)fill=PASTEL_WILD_COLOR;
         else if(cell.heart)fill=PASTEL_HEART_COLOR;
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
-        if(cell.heart&&!cell.owner)heartMarks.push(`<circle cx="${x+size/2}" cy="${y+size/2}" r="${Math.max(6,Math.round(size*0.36))}" fill="#ffffff" stroke="#d46f9c" stroke-width="1.5"/><text x="${x+size/2}" y="${y+size*0.80}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.18)}" font-weight="900" fill="#ef6f9e">♥</text>`);
+        if(cell.heart&&!cell.owner){
+          const cx=x+size/2,cy=y+size/2,rr=Math.max(10,Math.round(size*0.46));
+          heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+4}" fill="#fff3a6" stroke="#ffd45c" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="${rr}" fill="#ff3f9f" stroke="#ffffff" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="${Math.max(5,Math.round(rr*0.62))}" fill="#ff74bd" opacity="0.9"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.12)}" font-weight="900" fill="#ffffff">♥</text>`);
+        }
 
         const owner=cell.owner;
         if(!owner)continue;
@@ -18134,8 +18162,6 @@ async function pastelFinish(env,game,winnerId,reason){
       player.pastelWins=Number(player.pastelWins||0)+1;
       player.pastelRating=Number(player.pastelRating||0)+100;
       player.exp=Number(player.exp||0)+PASTEL_WIN_XP;
-      player.sparkles=Number(player.sparkles||0)+250;
-      player.pastelSparklesEarned=Number(player.pastelSparklesEarned||0)+250;
       if(!player.titles.includes("pastel_winner")) player.titles.push("pastel_winner");
       const leveledUp=applyLevelUps(player);
       player.pastelLevel=pastelRatingLevel(player.pastelRating);
@@ -18184,6 +18210,27 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   const before=pastelClaimedCells(game,user.id);player.selectedColor=color;
   for(const row of game.board)for(const cell of row)if(cell.owner===player.id)cell.color=color;
   const flood=pastelFlood(game,player,color);
+  let extraHeartCaptures=Number(flood.capturedHearts||0);
+  /* Power Cells are neutral pickups: once a player's territory reaches one,
+     capture every connected Power Cell regardless of that cell's displayed color.
+     Repeat so touching Power Cells chain together in the same move. */
+  let heartChanged=true;
+  while(heartChanged){
+    heartChanged=false;
+    for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++){
+      const cell=game.board[r][c];
+      if(!cell||cell.owner||!cell.heart)continue;
+      const adjacent=pastelNeighbors(game.board,r,c,game.mode).some(([rr,cc])=>game.board[rr]?.[cc]?.owner===player.id);
+      if(!adjacent)continue;
+      cell.owner=player.id;
+      cell.color=color;
+      cell.wild=false;
+      cell.heart=false;
+      extraHeartCaptures++;
+      heartChanged=true;
+    }
+  }
+  flood.capturedHearts=extraHeartCaptures;
   for(const row of game.board)for(const cell of row)if(cell.owner===player.id)cell.color=color;
   const after=pastelClaimedCells(game,user.id);
   const gained=after-before;
@@ -18241,7 +18288,7 @@ async function handlePastelQuit(env,interaction,gameId){
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;wp.sparkles=Number(wp.sparkles||0)+250;wp.pastelSparklesEarned=Number(wp.pastelSparklesEarned||0)+250;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,components:[]})});
