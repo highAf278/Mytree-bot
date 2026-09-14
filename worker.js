@@ -17919,6 +17919,10 @@ export default {
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
     const isPastelComponent = interaction.type === 3 && customId.startsWith("pastel:");
+    // Tree buttons can involve KV reads and optional Browser Rendering.
+    // Acknowledge them immediately so Discord never leaves the button
+    // spinning on "Bot is thinking..." while the tree action finishes.
+    const isTreeComponent = interaction.type === 3 && customId.startsWith("tree:");
     // Shop buttons can involve KV reads/writes before the response is ready.
     // Acknowledge them immediately so Discord never hits the 3-second timeout.
     const isShopComponent =
@@ -17938,7 +17942,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isTreeComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
@@ -17965,6 +17969,10 @@ export default {
       } else if (isBattleComponent) {
         update = true;
       } else if (isPastelComponent) {
+        update = true;
+      } else if (isTreeComponent) {
+        // Tree actions should update the existing /tree message rather than
+        // showing a long-running ephemeral "Bot is thinking..." state.
         update = true;
       } else if (isShopComponent) {
         // Use a normal deferred response because shop handlers edit the
