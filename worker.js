@@ -3252,9 +3252,9 @@ async function showLimitedShop(
 
   const rows = [];
   /* Discord allows a maximum of 5 action rows total.
-     With 18 limited items, use 4 buttons per row = 5 total rows including Back. */
-  for (let i = 0; i < buttons.length; i += 4) {
-    rows.push(row(...buttons.slice(i, i + 4)));
+     With 18 limited items, use 5 buttons per row = 4 item rows + 1 Back row. */
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
   }
 
   rows.push(row(button("⬅️ Back", "shop", 2)));
@@ -18118,9 +18118,11 @@ export default {
         // showing a long-running ephemeral "Bot is thinking..." state.
         update = true;
       } else if (isShopComponent) {
-        // Use a normal deferred response because shop handlers edit the
-        // interaction response after doing KV work.
-        ephemeral = true;
+        // Shop handlers edit the existing shop message after KV work.
+        // A type-6 update ACK removes the Discord "Bot is thinking..."
+        // state immediately and avoids leaving the button interaction
+        // spinning while the shop is being rebuilt.
+        update = true;
       }
 
       const responseType = update ? 6 : 5;
