@@ -1028,7 +1028,23 @@ async function handleProfile(env, interaction) {
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
-async function handleNameEffectEquip(env,interaction,effectId){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);if(effectId==="none"){player.equippedNameEffect="";await savePlayer(env,player);return editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));}if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");player.equippedNameEffect=effectId;await savePlayer(env,player);await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));}
+async function handleNameEffectEquip(env,interaction,effectId){
+  const user=getUserFromInteraction(interaction);
+  if(!user)return;
+  const player=await getPlayer(env,user.id);
+  if(effectId==="none"){
+    player.equippedNameEffect="";
+    await savePlayer(env,player);
+    const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));
+    if(!response.ok) console.error("Name effect unequip menu refresh failed:",response.status,await response.text());
+    return;
+  }
+  if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");
+  player.equippedNameEffect=effectId;
+  await savePlayer(env,player);
+  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));
+  if(!response.ok) console.error("Name effect menu refresh failed:",response.status,await response.text());
+}
 
 /* =========================================================
    PRIVATE SURPRISE ALERT — LOVA
@@ -1357,7 +1373,58 @@ async function handleCourt(env, interaction) {
   const full=guilty
     ? `🦝⚖️ **THE RACCOON COURT**\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}\n\n🦝 The court has spoken. Do not argue with the raccoons.`
     : `🦝⚖️ **THE RACCOON COURT**\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n${innocentLine}\n\n**CASE CLOSED.**`;
-  await sendUserDM(env,targetId,full); if(env.COURT_CHANNEL_ID) await sendChannelMessage(env,env.COURT_CHANNEL_ID,full);
+  await sendUserDM(env,targetId,full);
+
+  // Court uses the channel configured by /announcements. This keeps the
+  // court public notice in the same place the server already uses for
+  // Werewives announcements, so no separate COURT_CHANNEL_ID binding is
+  // required.
+  const guildState = interaction.guild_id ? await getGuildState(env, interaction.guild_id) : null;
+  const announcementChannelId = guildState?.announcementChannelId || null;
+
+  if (announcementChannelId) {
+    let avatarUrl = "https://cdn.discordapp.com/embed/avatars/0.png";
+    try {
+      const userResponse = await discordRequest(env, `/users/${targetId}`);
+      if (userResponse.ok) {
+        const discordUser = await userResponse.json();
+        if (discordUser.avatar) {
+          const extension = String(discordUser.avatar).startsWith("a_") ? "gif" : "png";
+          avatarUrl = `https://cdn.discordapp.com/avatars/${targetId}/${discordUser.avatar}.${extension}?size=128`;
+        } else if (discordUser.id) {
+          const discriminator = Number(BigInt(discordUser.id) >> 22n) % 6;
+          avatarUrl = `https://cdn.discordapp.com/embed/avatars/${discriminator}.png`;
+        }
+      }
+    } catch (avatarError) {
+      console.error("Court avatar lookup failed:", avatarError);
+    }
+
+    const publicEmbed = {
+      title: "🦝⚖️ THE RACCOON COURT",
+      description: guilty
+        ? `**${verdict}**\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}`
+        : `**${verdict}**\n\n${innocentLine}\n\n**CASE CLOSED.**`,
+      color: guilty ? 0xD94A4A : 0x4CAF50,
+      fields: [
+        { name: "📁 Case", value: `**${caseNumber}**`, inline: true },
+        { name: "👤 Defendant", value: `<@${targetId}>`, inline: true },
+        { name: "📜 Charge", value: charge, inline: false }
+      ],
+      author: {
+        name: `${target.displayName || target.username || "Werewife"} — Court Defendant`,
+        icon_url: avatarUrl
+      },
+      thumbnail: { url: avatarUrl },
+      footer: { text: "Raccoon Court • Judge Raccoon has spoken. 🦝⚖️" },
+      timestamp: new Date().toISOString()
+    };
+
+    await sendChannelMessage(env, announcementChannelId, "🦝⚖️ **Raccoon Court Case Filed**", [], { embeds: [publicEmbed] });
+  } else {
+    console.error("Raccoon Court public notice skipped: no announcement channel configured. Use /announcements first.");
+  }
+
   await sendText(env,interaction,`🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
 }
 
@@ -1798,7 +1865,8 @@ async function sendChannelMessage(
   env,
   channelId,
   content,
-  components = []
+  components = [],
+  extraData = {}
 ) {
   if (!channelId) return null;
 
@@ -1810,7 +1878,8 @@ async function sendChannelMessage(
         method: "POST",
         body: JSON.stringify({
           content,
-          components
+          components,
+          ...extraData
         })
       }
     );
@@ -6338,7 +6407,7 @@ async function handleComponent(
 
   if (id.startsWith("nameeffect:")) {
     const parts=id.split(":");
-    if(parts[1]==="list"){await handleTitleList(env,interaction); return;}
+    if(parts[1]==="list"){await handleNameEffectList(env,interaction); return;}
     if(parts[1]==="equip"){await handleNameEffectEquip(env,interaction,parts[2]);return;}
     if(parts[1]==="page"){const page=Number(parts[2]||0);const data=await buildTitlesResponseData(env,interaction,"effects",page);await editOriginalResponse(env,interaction,data);return;}
   }
@@ -13355,6 +13424,7 @@ async function handleSoloLeaderboard(env, interaction) {
 }
 
 async function handleTitleList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"titles",0); return interaction.__deferred?editOriginalResponse(env,interaction,data):sendText(env,interaction,"🏆 **MY TITLES**",data.components); }
+async function handleNameEffectList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"effects",0); return interaction.__deferred?editOriginalResponse(env,interaction,data):sendText(env,interaction,"✨ **NAME EFFECTS**",data.components); }
 async function handleTitleEquip(env,interaction,titleId){
   const user=getUserFromInteraction(interaction); if(!user)return;
   const punishmentPlayer=await getPlayer(env,user.id); await refreshPunishmentState(env,punishmentPlayer);
@@ -13363,12 +13433,16 @@ async function handleTitleEquip(env,interaction,titleId){
   if(Number(punishmentPlayer.courtRaccoonTitleUntil||0)>Date.now()) return sendText(env,interaction,"🦝 The court-appointed raccoon chose your title. You cannot change it yet. 😭");
   const player=punishmentPlayer; updatePlayerIdentity(player,interaction);
   if(!player.titles.includes(titleId)||!SOLO_TITLES[titleId])return sendText(env,interaction,"🔒 You haven't unlocked that title yet.");
-  player.equippedTitle=titleId; await savePlayer(env,player); await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  player.equippedTitle=titleId; await savePlayer(env,player);
+  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  if(!response.ok) console.error("Title menu refresh failed:",response.status,await response.text());
 }
 async function handleTitleUnequip(env,interaction){
   const user=getUserFromInteraction(interaction); if(!user)return; const player=await getPlayer(env,user.id); await refreshPunishmentState(env,player);
   if(Number(player.pickleJailUntil||0)>Date.now()||Number(player.courtCriminalRecordUntil||0)>Date.now()||Number(player.courtRaccoonTitleUntil||0)>Date.now())return sendText(env,interaction,"⚖️ Your current court sentence does not allow you to change your title. 😭");
-  player.equippedTitle=""; await savePlayer(env,player); await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  player.equippedTitle=""; await savePlayer(env,player);
+  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  if(!response.ok) console.error("Title unequip menu refresh failed:",response.status,await response.text());
 }
 
 /* =========================================================
@@ -17104,12 +17178,18 @@ function getOption(
   interaction,
   name
 ) {
-  return (
-    interaction.data?.options?.find(
-      option =>
-        option.name === name
-    )?.value ?? null
-  );
+  const options = interaction.data?.options || [];
+  // Discord puts options for slash-command subcommands inside the
+  // subcommand option. Pickle Jail uses /pickle jail, so search both
+  // the top level and nested subcommand options.
+  for (const option of options) {
+    if (option.name === name && option.value !== undefined) return option.value;
+    if (Array.isArray(option.options)) {
+      const nested = option.options.find(child => child.name === name);
+      if (nested?.value !== undefined) return nested.value;
+    }
+  }
+  return null;
 }
 
 const FORTUNES = [
