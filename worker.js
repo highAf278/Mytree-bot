@@ -1196,16 +1196,6 @@ function punishmentBlockedText(player, punishment) {
   }
   return "";
 }
-function punishmentBlockedText(player, punishment) {
-  if (punishment === "pickle") {
-    return `🥒 **PICKLE JAIL!**\n\nYou are locked up for **${punishmentTimeText(player.pickleJailUntil)}** more.\n\n🎮 Games are still allowed.\n🥒 **THE PICKLES KNOW WHAT YOU DID🥒**`;
-  }
-  if (punishment === "corner") {
-    return `🪑 **CORNER TIME!**\n\nGo sit in the corner for **${punishmentTimeText(player.timeoutCornerUntil)}** more. 😭\n\n🚫 Games are off-limits until your sentence is over.`;
-  }
-  return "";
-}
-
 async function requireOwner(env, interaction) {
   const user = getUserFromInteraction(interaction);
   if (!user || user.id !== env.OWNER_ID) {
@@ -17290,44 +17280,6 @@ async function handleRaccoon(env, interaction) {
   await sendUserDM(env, targetId, dmText);
 }
 
-async function sendUserDM(env, userId, content) {
-  try {
-    const response = await discordRequest(
-      env,
-      "/users/@me/channels",
-      {
-        method: "POST",
-        body: JSON.stringify({ recipients: [userId] })
-      }
-    );
-
-    if (!response.ok) {
-      console.error("User DM channel failed:", response.status, await response.text());
-      return false;
-    }
-
-    const channel = await response.json();
-
-    const messageResponse = await discordRequest(
-      env,
-      `/channels/${channel.id}/messages`,
-      {
-        method: "POST",
-        body: JSON.stringify({ content })
-      }
-    );
-
-    if (!messageResponse.ok) {
-      console.error("User DM message failed:", messageResponse.status, await messageResponse.text());
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error("User DM error:", error);
-    return false;
-  }
-}
 
 /* =========================================================
    ACHIEVEMENTS
