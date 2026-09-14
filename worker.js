@@ -4011,7 +4011,9 @@ async function showCustomBackgrounds(
     ["lavender_twilight_background", "💜🌙 Lavender Twilight", "lavender_twilight"],
     ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"],
     ["ocean_opal_background", "🩵🌊 Ocean Opal", "ocean_opal"],
-    ["werewives_background", "🐺🌙 Werewives", "werewives"]
+    ["werewives_background", "🐺🌙 Werewives", "werewives"],
+    ["golden_pickle_background", "🥒💛 Golden Pickle", "golden_pickle"],
+    ["midnight_rider_background", "🏍️🌙 Midnight Rider", "midnight_rider"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
