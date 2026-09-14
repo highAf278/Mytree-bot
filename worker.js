@@ -16767,12 +16767,12 @@ async function handleBattleShopBuy(env,interaction,itemId){
 ========================================================= */
 
 const PASTEL_COLORS = [
-  {id:"cotton_candy_kiss",name:"Cotton Candy Kiss",hex:"#d982b1",label:"🩷"},
+  {id:"cotton_candy_kiss",name:"Supr Pink",hex:"#d982b1",label:"🩷"},
   {id:"marine_blue",name:"Marine Blue",hex:"#9fc7e8",label:"💙"},
-  {id:"lemon_meringue",name:"Lemon Meringue",hex:"#f7e6a6",label:"💛"},
+  {id:"lemon_meringue",name:"Yellow Bean",hex:"#f7e6a6",label:"💛"},
   {id:"sage_sauce",name:"Sage Sauce",hex:"#b8d6bd",label:"💚"},
-  {id:"lavender_lullaby",name:"Lavender Lullaby",hex:"#d7b9f2",label:"💜"},
-  {id:"coral_crush",name:"Coral Crush",hex:"#f2a9a9",label:"❤️"}
+  {id:"lavender_lullaby",name:"Purple Stone",hex:"#d7b9f2",label:"💜"},
+  {id:"coral_crush",name:"Coral Coal",hex:"#f2a9a9",label:"❤️"}
 ];
 const PASTEL_HEART_COLOR="#ef9fbd";
 const PASTEL_WILD_COLOR="#fffaf2";
@@ -16948,7 +16948,7 @@ function pastelModeComponents(){return [row(button("💗 1v1",`pastel:mode:1`,1)
 function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:{mode:"square",modeLabel:"4 Player",needed:4};}
 function pastelLobbyText(game){return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...",`🛑 **End Game votes:** ${pastelEndVoteCount(game).votes}/${pastelEndVoteCount(game).total} (everyone must agree)`,"",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.`,`❤️ Hearts grant an extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
 function pastelRulesText(){return [`🌈 **PASTEL PANIC — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`❤️ Absorb a Heart for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,
-    `🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🩷 Cotton Candy Kiss • 💙 Marine Blue • 💛 Lemon Meringue • 💚 Sage Sauce • 💜 Lavender Lullaby • ❤️ Coral Crush`].join("\n");}
+    `🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🩷 Supr Pink • 💙 Marine Blue • 💛 Yellow Bean • 💚 Sage Sauce • 💜 Purple Stone • ❤️ Coral Coal`].join("\n");}
 function pastelGameIsUnbeatable(game){const total=pastelCellCount(game.mode);const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1)return true;const leader=Math.max(...alive.map(p=>pastelClaimedCells(game,p.id)));const others=total-leader;return leader>others;}
 function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive).sort((a,b)=>pastelClaimedCells(game,b.id)-pastelClaimedCells(game,a.id))[0]||null;}
 function pastelRegenerate(game){
