@@ -882,7 +882,28 @@ function nearestPaletteIndex(r,g,b,p){
   const bb=Math.max(0,Math.min(5,Math.round(b/51)));
   return rr*36+gg*6+bb;
 }
-function gifLZW(indices){const clear=256,end=257;let codeSize=9,next=258,dict=new Map(),bits=0,buf=[];const emit=c=>{for(let i=0;i<codeSize;i++){buf.push((c>>i)&1);bits++;}};emit(clear);let prefix=indices[0]??0;for(let i=1;i<indices.length;i++){const k=indices[i],key=prefix*256+k;if(dict.has(key)){prefix=dict.get(key);continue;}emit(prefix);if(next<4096){dict.set(key,next++);if(next===1<<codeSize&&codeSize<12)codeSize++;}else{emit(clear);dict=new Map();codeSize=9;next=258;}prefix=k;}emit(prefix);emit(end);const bytes=[];for(let i=0;i<bits;i+=8){let v=0;for(let j=0;j<8&&i+j<bits;j++)v|=(buf[i+j]||0)<<j;bytes.push(v);}return bytes;}
+function gifLZW(indices){
+  // Conservative GIF LZW encoder: emit literal palette indices in small blocks.
+  // Keeping the code size at 9 bits and clearing frequently avoids decoder/dictionary
+  // edge cases that can produce a corrupted GIF in Discord.
+  const clear=256,end=257,codeSize=9,blockSize=240;
+  const codes=[];
+  for(let start=0;start<indices.length;start+=blockSize){
+    codes.push(clear);
+    const endAt=Math.min(indices.length,start+blockSize);
+    for(let i=start;i<endAt;i++) codes.push(indices[i]);
+  }
+  codes.push(end);
+  const bytes=[];
+  let cur=0,bits=0;
+  for(const code of codes){
+    cur|=(code<<bits);
+    bits+=codeSize;
+    while(bits>=8){bytes.push(cur&255);cur>>=8;bits-=8;}
+  }
+  if(bits>0) bytes.push(cur&255);
+  return bytes;
+}
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
 
