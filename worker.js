@@ -89,7 +89,13 @@ const IMAGES = {
   oceanOpalEffect: "IMG_7379.png",
   werewivesTree: "IMG_7382.png",
   werewivesBackground: "IMG_7381.png",
-  werewivesEffect: "IMG_7383.png"
+  werewivesEffect: "IMG_7383.png",
+  goldenPickleTree: "IMG_7421.png",
+  goldenPickleBackground: "IMG_7422.png",
+  goldenPickleEffect: "IMG_7423.png",
+  midnightRiderTree: "IMG_7424.png",
+  midnightRiderBackground: "IMG_7425.png",
+  midnightRiderEffect: "IMG_7426.png"
 };
 
 const SHOP_ITEMS = {
@@ -379,7 +385,13 @@ const SHOP_ITEMS = {
     type: "effect",
     value: "werewives",
     freeOnly: true
-  }
+  },
+  golden_pickle_tree: { name: "🥒✨ Golden Pickle Tree", price: 0, type: "tree", value: "golden_pickle", freeOnly: true },
+  golden_pickle_background: { name: "🥒💛 Golden Pickle Background", price: 0, type: "background", value: "golden_pickle", freeOnly: true },
+  golden_pickle_effect: { name: "🥒✨ Golden Pickle Effect", price: 0, type: "effect", value: "golden_pickle", freeOnly: true },
+  midnight_rider_tree: { name: "🏍️🌙 Midnight Rider Tree", price: 0, type: "tree", value: "midnight_rider", freeOnly: true },
+  midnight_rider_background: { name: "🏍️🌙 Midnight Rider Background", price: 0, type: "background", value: "midnight_rider", freeOnly: true },
+  midnight_rider_effect: { name: "🏍️✨ Midnight Rider Effect", price: 0, type: "effect", value: "midnight_rider", freeOnly: true }
 };
 
 const RIDDLES = [
@@ -646,6 +658,9 @@ function defaultPlayer() {
     equippedNameEffect: "",
     profileColor: "#ffd9ef",
     surpriseAlertClaimed: false,
+    freeGiftClaimed: false,
+    freeGoldenPickleClaimed: false,
+    freeMidnightRiderClaimed: false,
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -658,6 +673,7 @@ function defaultPlayer() {
     pastelGamesPlayed: 0,
     pastelSparklesEarned: 0,
     chaosIslandWins: 0,
+    heistWins: 0,
     battleWins: 0,
     battleSparklesEarned: 0,
     battleLosses: 0,
@@ -746,7 +762,16 @@ const NAME_EFFECTS = {
   inferno: { name: "🔥 Inferno", requirement: "Win Chaos Island." },
   green_glow: { name: "💚 Green Glow", requirement: "Own the Green Glow Tree." },
   candy_rush: { name: "🍭 Candy Rush", requirement: "Win Pastel Panic." },
-  cosmic: { name: "🌌 Cosmic", requirement: "Grow your tree to 5 ft." }
+  cosmic: { name: "🌌 Cosmic", requirement: "Grow your tree to 5 ft." },
+  firework: { name: "🎆 Firework", requirement: "Win 10 Chaos Island games." },
+  royal_blood: { name: "🩸 Royal Blood", requirement: "Win 25 Chaos Island games." },
+  enchanted: { name: "🪄 Enchanted", requirement: "Complete 10 Solo Missions." },
+  royal_purple: { name: "👑 Royal Purple", requirement: "Reach Pastel Panic Level 25." },
+  butterflies: { name: "🦋 Butterflies", requirement: "Complete 5 different Limited Shop sets." },
+  shadow: { name: "🖤 Shadow", requirement: "Win 50 Heist games." },
+  frostbite: { name: "❄️ Frostbite", requirement: "Win 25 Pastel Panic games." },
+  golden: { name: "💛✨ Golden", requirement: "Reach 100,000 sparkles." },
+  spooky: { name: "👻 Spooky", requirement: "Own the complete Halloween set." }
 };
 
 function unlockOwnedTitle(player, id) {
@@ -769,6 +794,17 @@ function unlockNameEffects(player) {
     "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"
   ]);
   const treeCount = owned.filter(id => treeIds.has(id)).length + (owned.includes("cherry") ? 0 : 1);
+  const limitedSets = [
+    ["cats", ["purr_princess_effect", "kitty_tree", "cozy_cat_background"]],
+    ["green_glow", ["green_glow_tree", "green_glow_background", "green_glow_effect"]],
+    ["prism_flutter", ["prism_flutter_tree", "prism_flutter_background", "prism_flutter_effect"]],
+    ["lavender_twilight", ["lavender_twilight_tree", "lavender_twilight_background", "lavender_twilight_effect"]],
+    ["world_of_flags", ["world_of_flags_tree", "world_of_flags_background", "world_of_flags_effect"]],
+    ["ocean_opal", ["ocean_opal_tree", "ocean_opal_background", "ocean_opal_effect"]],
+    ["halloween", ["halloween_tree", "halloween_background", "halloween_effect"]]
+  ];
+  const completedLimitedSets = limitedSets.filter(([,ids]) => ids.every(id => owned.includes(id))).length;
+  const halloweenComplete = ["halloween_tree", "halloween_background", "halloween_effect"].every(id => owned.includes(id));
   const checks = {
     rainbow: shopOwned >= 10,
     starlight: Number(player.sparkles || 0) >= 50000,
@@ -776,9 +812,27 @@ function unlockNameEffects(player) {
     inferno: Number(player.chaosIslandWins || 0) > 0,
     green_glow: owned.includes("green_glow_tree"),
     candy_rush: Number(player.pastelWins || 0) > 0,
-    cosmic: Number(getTreeHeight(player) || 0) >= 5
+    cosmic: Number(getTreeHeight(player) || 0) >= 5,
+    firework: Number(player.chaosIslandWins || 0) >= 10,
+    royal_blood: Number(player.chaosIslandWins || 0) >= 25,
+    enchanted: Number(player.soloRuns || 0) >= 10,
+    royal_purple: Number(player.pastelLevel || 0) >= 25,
+    butterflies: completedLimitedSets >= 5,
+    shadow: Number(player.heistWins || 0) >= 50,
+    frostbite: Number(player.pastelWins || 0) >= 25,
+    golden: Number(player.sparkles || 0) >= 100000,
+    spooky: halloweenComplete
   };
   for (const [id, ok] of Object.entries(checks)) if (ok && !player.unlockedNameEffects.includes(id)) player.unlockedNameEffects.push(id);
+  if (checks.firework) unlockOwnedTitle(player, "firework_fiend");
+  if (checks.royal_blood) unlockOwnedTitle(player, "royal_blood");
+  if (checks.enchanted) unlockOwnedTitle(player, "enchanted_one");
+  if (checks.royal_purple) unlockOwnedTitle(player, "royal_purple");
+  if (checks.butterflies) unlockOwnedTitle(player, "butterfly_keeper");
+  if (checks.shadow) unlockOwnedTitle(player, "shadow_walker");
+  if (checks.frostbite) unlockOwnedTitle(player, "frostbite");
+  if (checks.golden) unlockOwnedTitle(player, "golden_legend");
+  if (checks.spooky) unlockOwnedTitle(player, "haunted");
   if (player.equippedNameEffect && !player.unlockedNameEffects.includes(player.equippedNameEffect)) player.equippedNameEffect = "";
 }
 
@@ -786,8 +840,6 @@ function nameEffectText(effectId, titleText, phase = 0) {
   const text = String(titleText || "").trim();
   if (!text) return `<span class="titlePlain">No Title</span>`;
   const safe = escapeHTML(text);
-
-  // Rainbow + Candy Rush are intentionally left exactly as they were.
   if (effectId === "rainbow") {
     const chars = [...text].map((ch, i) => {
       const hue = Math.round(((phase + i / Math.max(1, text.length)) % 1) * 360);
@@ -800,27 +852,36 @@ function nameEffectText(effectId, titleText, phase = 0) {
     const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 1px rgba(255,255,255,.95),0 0 3px rgba(255,160,220,.35)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
     return `<span class="effect-candy_rush">${chars}</span>`;
   }
-
-  if (effectId === "petals") {
-    return `<span class="effect-petals"><span class="petalGlow">${safe}</span><span class="petalAccent petalA">🌸</span><span class="petalAccent petalB">🌷</span></span>`;
-  }
-  if (effectId === "cosmic") {
-    return `<span class="effect-cosmic"><span class="cosmicGlow">${safe}</span><span class="cosmicOrbit"></span><span class="cosmicSpark cs1">✦</span><span class="cosmicSpark cs2">✧</span><span class="cosmicSpark cs3">✦</span></span>`;
-  }
-  if (effectId === "green_glow") {
-    return `<span class="effect-green_glow"><span class="greenGlowText">${safe}</span><span class="greenHeart gh1">💚</span><span class="greenHeart gh2">💚</span><span class="greenSpark gs1">✦</span><span class="greenSpark gs2">✦</span></span>`;
-  }
-
-  const chars = [...text].map((ch, i) => {
-    const x = (phase + i / Math.max(1, text.length)) % 1;
-    let color = "#ffffff", shadow = "0 0 12px rgba(255,255,255,.65)";
-    if (effectId === "starlight") { color = `hsl(${230 + Math.round(Math.sin(x * Math.PI * 2) * 25)},100%,${78 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 8)}%)`; shadow = "0 0 8px #fff, 0 0 20px rgba(190,210,255,.9)"; }
-    else if (effectId === "inferno") { color = `hsl(${18 + Math.round(Math.sin(x * Math.PI * 2) * 15)},100%,${58 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 10)}%)`; shadow = "0 0 10px #ff7b22, 0 0 24px rgba(255,60,0,.85)"; }
+  if (effectId === "petals") return `<span class="effect-petals"><span class="petalGlow">${safe}</span><span class="petalAccent petalA">🌸</span><span class="petalAccent petalB">🌷</span></span>`;
+  if (effectId === "cosmic") return `<span class="effect-cosmic"><span class="cosmicGlow">${safe}</span><span class="cosmicOrbit"></span><span class="cosmicSpark cs1">✦</span><span class="cosmicSpark cs2">✧</span><span class="cosmicSpark cs3">✦</span></span>`;
+  if (effectId === "green_glow") return `<span class="effect-green_glow"><span class="greenGlowText">${safe}</span><span class="greenHeart gh1">💚</span><span class="greenHeart gh2">💚</span><span class="greenSpark gs1">✦</span><span class="greenSpark gs2">✦</span></span>`;
+  const configs={
+    starlight:{colors:["#ffffff","#c9d7ff"],shadow:"0 0 6px #fff,0 0 18px rgba(170,195,255,.95)"},
+    inferno:{colors:["#ffd36a","#ff8b32","#ff3b22"],shadow:"0 0 8px #ff8b32,0 0 20px rgba(255,60,0,.9)"},
+    firework:{colors:["#ff7ac8","#7ddcff","#ffe56b","#c79cff"],shadow:"0 0 6px #fff,0 0 18px rgba(255,180,240,.9)"},
+    royal_blood:{colors:["#ff4a5f","#a40022","#ffd36b"],shadow:"0 0 7px #ff2948,0 0 20px rgba(150,0,35,.9)"},
+    enchanted:{colors:["#ff9be8","#c28cff","#8e7cff","#ffd4ff"],shadow:"0 0 7px #fff,0 0 19px rgba(190,120,255,.9)"},
+    royal_purple:{colors:["#d9a7ff","#8e4dff","#f5d77a"],shadow:"0 0 7px #fff,0 0 20px rgba(125,60,255,.9)"},
+    butterflies:{colors:["#ffb7ee","#9fe7ff","#d8b5ff","#fff"],shadow:"0 0 6px #fff,0 0 17px rgba(190,170,255,.85)"},
+    shadow:{colors:["#eeeeee","#777777","#222222"],shadow:"0 0 3px #fff,0 0 12px rgba(0,0,0,.95)"},
+    frostbite:{colors:["#ffffff","#b9efff","#72cfff","#dff9ff"],shadow:"0 0 7px #fff,0 0 21px rgba(80,205,255,.95)"},
+    golden:{colors:["#fff7b0","#ffd95a","#fff2a0","#d99a16"],shadow:"0 0 4px #fff,0 0 10px #ffe477,0 0 22px rgba(255,190,35,.95),0 0 34px rgba(255,220,100,.7)"},
+    spooky:{colors:["#ffffff","#d49cff","#ff9b45","#9d6bff"],shadow:"0 0 5px #fff,0 0 17px rgba(150,80,255,.9)"}
+  };
+  const cfg=configs[effectId]||{colors:["#ffffff"],shadow:"0 0 12px rgba(255,255,255,.65)"};
+  const chars=[...text].map((ch,i)=>{
+    const x=(phase+i/Math.max(1,text.length))%1;
+    const idx=Math.floor(x*cfg.colors.length)%cfg.colors.length;
+    let color=cfg.colors[idx],shadow=cfg.shadow;
+    if(effectId==="golden"){
+      const shimmer=Math.sin((phase+i/Math.max(1,text.length))*Math.PI*2);
+      color=shimmer>.35?"#ffffff":(shimmer<-.35?"#e7ad27":"#ffe56b");
+      shadow=`${cfg.shadow},0 0 ${Math.round(8+(shimmer+1)*5)}px rgba(255,255,255,.9)`;
+    }
     return `<span style="color:${color};text-shadow:${shadow}">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
   }).join("");
   return `<span class="effect-${escapeHTML(effectId)}">${chars}</span>`;
 }
-
 function profileCardHTML(player, phase = 0) {
   const bg = /^#[0-9a-fA-F]{6}$/.test(player.profileColor || "") ? player.profileColor : "#ffd9ef";
   const titleId = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? player.equippedTitle : "";
@@ -833,13 +894,16 @@ function profileCardHTML(player, phase = 0) {
   const titleMarkup = nameEffectText(effectId, title, phase);
   const particleMap = {
     rainbow: ["🌈","✨","💫","🌈"], starlight:["✦","✧","★","✦"], petals:["🌸","🌷","🌺","🌸"],
-    inferno:["🔥","🔥","✦","🔥"], green_glow:["✦","💚","✦","💚"], candy_rush:["🍬","🍭","✨","🍬"], cosmic:["✦","✧","☄️","★"]
+    inferno:["🔥","🔥","✦","🔥"], green_glow:["✦","💚","✦","💚"], candy_rush:["🍬","🍭","✨","🍬"], cosmic:["✦","✧","☄️","★"],
+    firework:["🎆","✦","✨","💥"], royal_blood:["🩸","👑","✦","🩸"], enchanted:["🪄","✨","💜","✦"],
+    royal_purple:["👑","✦","💜","✨"], butterflies:["🦋","🦋","✨","🦋"], shadow:["🖤","🌑","✦","🖤"],
+    frostbite:["❄️","✧","❄️","💎"], golden:["✨","💛","💎","✨"], spooky:["👻","🦇","🕸️","🖤"]
   };
   const particles = (particleMap[effectId] || []).map((x,i)=>`<span class="particle p${i}" style="left:${12+i*24}%;top:${24+((i*13)%36)}%;transform:translateY(${Math.sin((phase+i/4)*Math.PI*2)*8}px);">${x}</span>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
     .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.88);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.94);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
-    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9))}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9))}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -1869,6 +1933,12 @@ function getBackgroundImage(player) {
     case "werewives":
       return IMAGES.werewivesBackground;
 
+    case "golden_pickle":
+      return IMAGES.goldenPickleBackground;
+
+    case "midnight_rider":
+      return IMAGES.midnightRiderBackground;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1922,6 +1992,12 @@ function getTreeImage(player) {
 
     case "werewives":
       return IMAGES.werewivesTree;
+
+    case "golden_pickle":
+      return IMAGES.goldenPickleTree;
+
+    case "midnight_rider":
+      return IMAGES.midnightRiderTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -2001,6 +2077,12 @@ function getEffectImage(player) {
 
     case "werewives":
       return IMAGES.werewivesEffect;
+
+    case "golden_pickle":
+      return IMAGES.goldenPickleEffect;
+
+    case "midnight_rider":
+      return IMAGES.midnightRiderEffect;
 
     default:
       return null;
@@ -4003,7 +4085,9 @@ async function showCustomTrees(
     ["lavender_twilight", "💜🌙 Lavender Twilight", "lavender_twilight_tree"],
     ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_tree"],
     ["ocean_opal", "🩵🌊 Ocean Opal", "ocean_opal_tree"],
-    ["werewives", "🐺🌙 Werewives", "werewives_tree"]
+    ["werewives", "🐺🌙 Werewives", "werewives_tree"],
+    ["golden_pickle", "🥒✨ Golden Pickle", "golden_pickle_tree"],
+    ["midnight_rider", "🏍️🌙 Midnight Rider", "midnight_rider_tree"]
   ];
 
   const ownedItems = items.filter(([value, label, inventoryId]) =>
@@ -4144,6 +4228,8 @@ async function showCustomEffects(
       )
     );
   }
+  if (player.inventory.includes("golden_pickle_effect")) buttons.push(button("🥒✨ Golden Pickle", "equip_effect_golden_pickle", player.equipped.effect === "golden_pickle" ? 3 : 2));
+  if (player.inventory.includes("midnight_rider_effect")) buttons.push(button("🏍️🌙 Midnight Rider", "equip_effect_midnight_rider", player.equipped.effect === "midnight_rider" ? 3 : 2));
 
   if (player.inventory.includes("purr_princess_effect")) {
     buttons.push(
@@ -4840,7 +4926,13 @@ const INVENTORY_NAMES = {
   ocean_opal_effect: "🫧 Ocean Opal Effect",
   werewives_tree: "🐺🌙 Werewives Tree",
   werewives_background: "🐺🌙 Werewives Background",
-  werewives_effect: "🐺🌙 Werewives Effect"
+  werewives_effect: "🐺🌙 Werewives Effect",
+  golden_pickle_tree: "🥒✨ Golden Pickle Tree",
+  golden_pickle_background: "🥒💛 Golden Pickle Background",
+  golden_pickle_effect: "🥒✨ Golden Pickle Effect",
+  midnight_rider_tree: "🏍️🌙 Midnight Rider Tree",
+  midnight_rider_background: "🏍️🌙 Midnight Rider Background",
+  midnight_rider_effect: "🏍️✨ Midnight Rider Effect"
 };
 
 const INVENTORY_CATEGORIES = [
@@ -4852,11 +4944,11 @@ const INVENTORY_CATEGORIES = [
 ];
 
 const INVENTORY_CATEGORY_IDS = {
-  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"],
-  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect"],
+  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
+  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration"],
-  gifts: ["werewives_tree", "werewives_background", "werewives_effect"]
+  gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
 
 async function showInventory(env, interaction) {
@@ -12430,7 +12522,16 @@ const SOLO_TITLES = {
   story_master: { name: "the Story Master", description: "Finish a Solo Mission with 8,000+ score." },
   island_champion: { name: "the Island Champion", description: "Win Chaos Island." },
   pastel_winner: { name: "the Pastel Menace", description: "Win Pastel Panic." },
-  collector: { name: "the Collector", description: "Own 10 shop items." }
+  collector: { name: "the Collector", description: "Own 10 shop items." },
+  firework_fiend: { name: "the Firework Fiend", description: "Win 10 Chaos Island games." },
+  royal_blood: { name: "Royal Blood", description: "Win 25 Chaos Island games." },
+  enchanted_one: { name: "the Enchanted One", description: "Complete 10 Solo Missions." },
+  royal_purple: { name: "Royal Purple", description: "Reach Pastel Panic Level 25." },
+  butterfly_keeper: { name: "the Butterfly Keeper", description: "Complete 5 different Limited Shop sets." },
+  shadow_walker: { name: "the Shadow Walker", description: "Win 50 Heist games." },
+  frostbite: { name: "Frostbite", description: "Win 25 Pastel Panic games." },
+  golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
+  haunted: { name: "the Haunted", description: "Own the complete Halloween set." }
 };
 
 const SOLO_STORY_LEVELS = [
@@ -15160,6 +15261,7 @@ async function finishHeist(
   if (winnerReward > 0) {
     for (const winner of winnerPlayers) {
       const winnerPlayer = await getPlayer(env, winner.id);
+      winnerPlayer.heistWins = Number(winnerPlayer.heistWins || 0) + 1;
       winnerPlayer.sparkles =
         Number(winnerPlayer.sparkles || 0) + winnerReward;
       await savePlayer(env, winnerPlayer);
@@ -16800,34 +16902,19 @@ async function handleGift(env, interaction) {
 }
 
 async function handleFree(env, interaction, guess) {
-  const normalized = String(guess || "").trim().toLowerCase();
-  const hint = "🐺💅 Silly hint: think of a chaotic wolf pack where the wives are somehow in charge of the whole game. 🌙😂";
-  if (normalized !== "werewives") {
-    await sendText(env, interaction, `🎁 **FREE GIFT MYSTERY**\n\n${hint}\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈`);
-    return;
-  }
-
-  const user = getUserFromInteraction(interaction);
-  if (!user) return;
-  const player = await getPlayer(env, user.id);
-  updatePlayerIdentity(player, interaction);
-  player.inventory = Array.isArray(player.inventory) ? player.inventory : [];
-  const giftIds = ["werewives_tree", "werewives_background", "werewives_effect"];
-  const missing = giftIds.filter(id => !player.inventory.includes(id));
-  if (!missing.length) {
-    await sendText(env, interaction, "🐺🌙 You already claimed the **Werewives Gift Set**! It is safely in your inventory. 💗");
-    return;
-  }
-  for (const id of missing) player.inventory.push(id);
-  player.freeWerewivesClaimed = true;
-  await savePlayer(env, player);
-  await sendText(
-    env,
-    interaction,
-    "🎁🐺🌙 **YOU GOT IT!**\n\nYou guessed **WEREWIVES** and unlocked the FREE **Werewives Gift Set**!\n\n🌳 Werewives Tree\n🖼️ Werewives Background\n✨ Werewives Effect\n\nEverything is now in your inventory. 💗🐺"
-  );
+  const normalized=String(guess||"").trim().toLowerCase();
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  if(normalized!=="tanner"&&normalized!=="bob"){await sendText(env,interaction,`🎁 **FREE GIFT MYSTERY**\n\n💡 **Hint:** your name\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈`);return;}
+  const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
+  if(player.freeGiftClaimed){await sendText(env,interaction,"🎁 You already claimed your FREE Werewives gift! 💗");return;}
+  const isTanner=normalized==="tanner";
+  const giftIds=isTanner?["golden_pickle_tree","golden_pickle_background","golden_pickle_effect"]:["midnight_rider_tree","midnight_rider_background","midnight_rider_effect"];
+  for(const id of giftIds)if(!player.inventory.includes(id))player.inventory.push(id);
+  player.freeGiftClaimed=true; if(isTanner)player.freeGoldenPickleClaimed=true; else player.freeMidnightRiderClaimed=true;
+  await savePlayer(env,player);
+  if(isTanner)await sendText(env,interaction,"🥒✨ **GOLDEN PICKLE UNLOCKED!**\n\nYou guessed **TANNER** and received the FREE **Golden Pickle Set**!\n\n🌳 Golden Pickle Tree\n🖼️ Golden Pickle Background\n✨ Golden Pickle Effect\n\n✨ **You are golden pickle hoe ✨**");
+  else await sendText(env,interaction,"🏍️🌙 **MIDNIGHT RIDER UNLOCKED!**\n\nYou guessed **BOB** and received the FREE **Midnight Rider Set**!\n\n🌳 Midnight Rider Tree\n🖼️ Midnight Rider Background\n✨ Midnight Rider Effect");
 }
-
 async function handleBlame(env, interaction) {
   if (!interaction.guild_id) {
     await sendText(env, interaction, "❌ `/blame` can only be used inside a server.");
@@ -17799,7 +17886,9 @@ function pastelGenerateBoard(mode,players){
   }
   /* Seed fair starting corners and give each player a small safe region. */
   const maxIndex=31;
-  const starts=mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length<=2?[[0,0],[maxIndex,maxIndex]]:[[0,0],[0,maxIndex],[maxIndex,0],[maxIndex,maxIndex]]);
+  /* Fair 3P triangle starts: keep the exact 20-row/400-cell board and all game mechanics,
+     but use three equivalent boundary points with the same immediate edge mobility. */
+  const starts=mode==="triangle"?[[1,0],[18,0],[18,36]]:(players.length<=2?[[0,0],[maxIndex,maxIndex]]:[[0,0],[0,maxIndex],[maxIndex,0],[maxIndex,maxIndex]]);
   players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % (players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT);board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
   /* Every board gets at least 2 visible Heart Power Cells, with a chance for more. */
   let hearts=2+randomInt(0,4);
@@ -18973,12 +19062,15 @@ export default {
       interaction.type === 2 && interaction.data?.name === "blame";
     const isProfileCommand =
       interaction.type === 2 && interaction.data?.name === "profile";
+    const isTitlesCommand =
+      interaction.type === 2 && (interaction.data?.name === "title" || interaction.data?.name === "titles");
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
     const isPastelComponent = interaction.type === 3 && customId.startsWith("pastel:");
     const isSurpriseAlertComponent = interaction.type === 3 && customId.startsWith("surprise_alert:");
+    const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     // Tree buttons can involve KV reads and optional Browser Rendering.
     // Acknowledge them immediately so Discord never leaves the button
     // spinning on "Bot is thinking..." while the tree action finishes.
@@ -19005,7 +19097,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
@@ -19018,9 +19110,8 @@ export default {
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isPastelCommand) {
         ephemeral = interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end";
-      } else if (isFreeCommand) {
-        // The FREE Werewives riddle must be private so hints and the answer
-        // can never be revealed to the rest of the server.
+      } else if (isFreeCommand || isTitlesCommand) {
+        // FREE guesses and the Titles menu are private.
         ephemeral = true;
       } else if (isHeistCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
@@ -19036,6 +19127,8 @@ export default {
       } else if (isBattleComponent) {
         update = true;
       } else if (isPastelComponent) {
+        update = true;
+      } else if (isTitlesComponent) {
         update = true;
       } else if (isSurpriseAlertComponent) {
         // The alert is an ephemeral follow-up message. Updating the
