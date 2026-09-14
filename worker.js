@@ -785,21 +785,40 @@ function unlockNameEffects(player) {
 function nameEffectText(effectId, titleText, phase = 0) {
   const text = String(titleText || "").trim();
   if (!text) return `<span class="titlePlain">No Title</span>`;
-  const chars = [...text];
-  const spans = chars.map((ch, i) => {
-    const x = (phase + i / Math.max(1, chars.length)) % 1;
-    let color = "#ffffff";
-    let shadow = "0 0 12px rgba(255,255,255,.65)";
-    if (effectId === "rainbow") color = `hsl(${Math.round(x * 360)}, 90%, 70%)`;
-    else if (effectId === "starlight") { color = `hsl(${230 + Math.round(Math.sin(x * Math.PI * 2) * 25)}, 100%, ${78 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 8)}%)`; shadow = "0 0 8px #fff, 0 0 20px rgba(190,210,255,.9)"; }
-    else if (effectId === "petals") { color = `hsl(${320 + Math.round(Math.sin(x * Math.PI * 2) * 18)}, 75%, 78%)`; shadow = "0 0 14px rgba(255,170,220,.9)"; }
-    else if (effectId === "inferno") { color = `hsl(${18 + Math.round(Math.sin(x * Math.PI * 2) * 15)}, 100%, ${58 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 10)}%)`; shadow = "0 0 10px #ff7b22, 0 0 24px rgba(255,60,0,.85)"; }
-    else if (effectId === "green_glow") { color = `hsl(${118 + Math.round(Math.sin(x * Math.PI * 2) * 12)}, 100%, ${65 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 7)}%)`; shadow = "0 0 10px #62ff72, 0 0 28px rgba(40,255,80,.85)"; }
-    else if (effectId === "candy_rush") { const hues=[330,205,275,48]; color=`hsl(${hues[i%4] + Math.round(Math.sin(x*Math.PI*2)*10)}, 90%, 75%)`; shadow="0 0 12px rgba(255,255,255,.9), 0 0 22px rgba(255,160,220,.65)"; }
-    else if (effectId === "cosmic") { color=`hsl(${245 + Math.round(x*80)}, 95%, 78%)`; shadow="0 0 9px #fff, 0 0 22px rgba(110,120,255,.9)"; }
+  const safe = escapeHTML(text);
+
+  // Rainbow + Candy Rush are intentionally left exactly as they were.
+  if (effectId === "rainbow") {
+    const chars = [...text].map((ch, i) => {
+      const hue = Math.round(((phase + i / Math.max(1, text.length)) % 1) * 360);
+      return `<span style="color:hsl(${hue},90%,70%);text-shadow:0 0 8px rgba(255,255,255,.9),0 0 18px rgba(255,120,220,.55)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
+    }).join("");
+    return `<span class="effect-rainbow">${chars}</span>`;
+  }
+  if (effectId === "candy_rush") {
+    const hues=[330,205,275,48];
+    const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 10px rgba(255,255,255,.95),0 0 20px rgba(255,160,220,.6)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
+    return `<span class="effect-candy_rush">${chars}</span>`;
+  }
+
+  if (effectId === "petals") {
+    return `<span class="effect-petals"><span class="petalGlow">${safe}</span><span class="petalAccent petalA">🌸</span><span class="petalAccent petalB">🌷</span></span>`;
+  }
+  if (effectId === "cosmic") {
+    return `<span class="effect-cosmic"><span class="cosmicGlow">${safe}</span><span class="cosmicOrbit"></span><span class="cosmicSpark cs1">✦</span><span class="cosmicSpark cs2">✧</span><span class="cosmicSpark cs3">✦</span></span>`;
+  }
+  if (effectId === "green_glow") {
+    return `<span class="effect-green_glow"><span class="greenGlowText">${safe}</span><span class="greenHeart gh1">💚</span><span class="greenHeart gh2">💚</span><span class="greenSpark gs1">✦</span><span class="greenSpark gs2">✦</span></span>`;
+  }
+
+  const chars = [...text].map((ch, i) => {
+    const x = (phase + i / Math.max(1, text.length)) % 1;
+    let color = "#ffffff", shadow = "0 0 12px rgba(255,255,255,.65)";
+    if (effectId === "starlight") { color = `hsl(${230 + Math.round(Math.sin(x * Math.PI * 2) * 25)},100%,${78 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 8)}%)`; shadow = "0 0 8px #fff, 0 0 20px rgba(190,210,255,.9)"; }
+    else if (effectId === "inferno") { color = `hsl(${18 + Math.round(Math.sin(x * Math.PI * 2) * 15)},100%,${58 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 10)}%)`; shadow = "0 0 10px #ff7b22, 0 0 24px rgba(255,60,0,.85)"; }
     return `<span style="color:${color};text-shadow:${shadow}">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
   }).join("");
-  return `<span class="effect-${escapeHTML(effectId)}">${spans}</span>`;
+  return `<span class="effect-${escapeHTML(effectId)}">${chars}</span>`;
 }
 
 function profileCardHTML(player, phase = 0) {
@@ -819,7 +838,8 @@ function profileCardHTML(player, phase = 0) {
   const particles = (particleMap[effectId] || []).map((x,i)=>`<span class="particle p${i}" style="left:${12+i*24}%;top:${24+((i*13)%36)}%;transform:translateY(${Math.sin((phase+i/4)*Math.PI*2)*8}px);">${x}</span>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
-    .wash{position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,.08));}.tree{position:absolute;left:4%;bottom:-3%;width:310px;height:390px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15));}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.72);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.58);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:16px}.badge{margin-top:18px;font-size:14px;opacity:.8}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9));}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
+    .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.72);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.58);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 3px #fff,0 0 8px rgba(255,135,205,.9),0 0 15px rgba(255,170,225,.55)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 3px #fff,0 0 7px rgba(120,125,255,.9),0 0 15px rgba(150,105,255,.55)}.cosmicOrbit{position:absolute;left:-12px;right:-12px;top:48%;height:20px;border:2px solid rgba(120,140,255,.7);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 7px rgba(120,150,255,.65);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 3px #fff,0 0 7px rgba(80,255,100,.9),0 0 15px rgba(75,255,95,.5)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9))}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -832,14 +852,14 @@ async function renderAnimatedProfile(env, player) {
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
     await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
-    const frameCount=6;
+    const frameCount=8;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
       await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
       frames.push(await page.screenshot({type:"png"}));
     }
-    return await encodePNGFramesToGIF(frames,800,500,15);
+    return await encodePNGFramesToGIF(frames,800,500,12);
   } finally { if(browser) await browser.close().catch(()=>{}); }
 }
 
@@ -862,22 +882,7 @@ function nearestPaletteIndex(r,g,b,p){
   const bb=Math.max(0,Math.min(5,Math.round(b/51)));
   return rr*36+gg*6+bb;
 }
-function gifLZW(indices){
-  // Deliberately use a conservative literal-code encoder. It is larger than a
-  // fully compressed LZW stream, but is extremely reliable in Workers and
-  // avoids the malformed-GIF issue caused by dictionary/code-size edge cases.
-  const clear=256,end=257,codeSize=9,bits=[],emit=c=>{for(let i=0;i<codeSize;i++)bits.push((c>>i)&1);};
-  const chunkSize=200;
-  for(let start=0;start<indices.length;start+=chunkSize){
-    emit(clear);
-    const stop=Math.min(indices.length,start+chunkSize);
-    for(let i=start;i<stop;i++)emit(indices[i]);
-  }
-  emit(end);
-  const bytes=[];
-  for(let i=0;i<bits.length;i+=8){let v=0;for(let j=0;j<8&&i+j<bits.length;j++)v|=(bits[i+j]||0)<<j;bytes.push(v);}
-  return bytes;
-}
+function gifLZW(indices){const clear=256,end=257;let codeSize=9,next=258,dict=new Map(),bits=0,buf=[];const emit=c=>{for(let i=0;i<codeSize;i++){buf.push((c>>i)&1);bits++;}};emit(clear);let prefix=indices[0]??0;for(let i=1;i<indices.length;i++){const k=indices[i],key=prefix*256+k;if(dict.has(key)){prefix=dict.get(key);continue;}emit(prefix);if(next<4096){dict.set(key,next++);if(next===1<<codeSize&&codeSize<12)codeSize++;}else{emit(clear);dict=new Map();codeSize=9;next=258;}prefix=k;}emit(prefix);emit(end);const bytes=[];for(let i=0;i<bits;i+=8){let v=0;for(let j=0;j<8&&i+j<bits;j++)v|=(buf[i+j]||0)<<j;bytes.push(v);}return bytes;}
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
 
