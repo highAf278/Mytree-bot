@@ -1858,7 +1858,7 @@ async function renderTree(
           #tree {
             position: absolute;
             left: 50%;
-            top: 66%;
+            top: 63%;
             transform: translate(-50%, -50%);
             width: 90%;
             height: 90%;
@@ -18421,6 +18421,10 @@ export default {
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isPastelCommand) {
         ephemeral = interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end";
+      } else if (isFreeCommand) {
+        // The FREE Werewives riddle must be private so hints and the answer
+        // can never be revealed to the rest of the server.
+        ephemeral = true;
       } else if (isHeistCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
         ephemeral = ["join", "leave", "start", "status", "end"].includes(sub);
