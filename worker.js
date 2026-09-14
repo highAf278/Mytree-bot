@@ -656,6 +656,10 @@ function defaultPlayer() {
     equippedTitle: "",
     unlockedNameEffects: [],
     equippedNameEffect: "",
+    pickleJailUntil: 0,
+    pickleJailPreviousTitle: "",
+    pickleJailFinePaid: false,
+    timeoutCornerUntil: 0,
     profileColor: "#ffd9ef",
     surpriseAlertClaimed: false,
     freeGiftClaimed: false,
@@ -1082,7 +1086,156 @@ async function handleSurpriseAlertChoice(env, interaction, choice) {
   }
 }
 
-async function handleTitlesMenu(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;await deferInteraction(env,interaction);const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);unlockNameEffects(player);const owned=player.titles.filter(id=>SOLO_TITLES[id]);const locked=Object.entries(SOLO_TITLES).filter(([id])=>!player.titles.includes(id));const effects=Object.entries(NAME_EFFECTS).map(([id,e])=>`${player.unlockedNameEffects.includes(id)?"✨":"🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect===id?" — ⭐ EQUIPPED":""}`).join("\n");const ownedText=owned.length?owned.map(id=>`${player.equippedTitle===id?"⭐":"🏷️"} **${SOLO_TITLES[id].name}**`).join("\n"):"No titles unlocked yet.";const lockedText=locked.length?locked.map(([id,t])=>`🔒 **${t.name}** — ${t.description}`).join("\n"):"You've unlocked every title! 👑";const rows=[];for(let i=0;i<owned.length;i+=5)rows.push(row(...owned.slice(i,i+5).map(id=>button(`Equip ${SOLO_TITLES[id].name}`.slice(0,80),`title:equip:${id}`,2))));const effectIds=player.unlockedNameEffects.filter(id=>NAME_EFFECTS[id]);for(let i=0;i<effectIds.length;i+=5)rows.push(row(...effectIds.slice(i,i+5).map(id=>button(NAME_EFFECTS[id].name.slice(0,80),`nameeffect:equip:${id}`,2))));rows.push(row(button("❌ Unequip Title","title:unequip",4),button("✨ Unequip Effect","nameeffect:equip:none",4)));await sendText(env,interaction,`🏷️ **TITLES & NAME EFFECTS**\n\n⭐ **Equipped Title:** ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"None"}\n✨ **Equipped Name Effect:** ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n\n**🏆 My Titles**\n${ownedText}\n\n**🔒 Titles to Unlock**\n${lockedText}\n\n**✨ Name Effects**\n${effects}`,rows);}
+
+function punishmentTimeText(until) {
+  const remaining = Math.max(0, Number(until || 0) - Date.now());
+  const totalMinutes = Math.ceil(remaining / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} hour${hours === 1 ? "" : "s"}${minutes > 0 ? ` and ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}`;
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function activePunishment(player) {
+  const now = Date.now();
+  if (Number(player.pickleJailUntil || 0) > now) return "pickle";
+  if (Number(player.timeoutCornerUntil || 0) > now) return "corner";
+  return "";
+}
+
+async function refreshPunishmentState(env, player) {
+  const now = Date.now();
+  let changed = false;
+  if (Number(player.pickleJailUntil || 0) > 0 && Number(player.pickleJailUntil || 0) <= now) {
+    player.equippedTitle = player.pickleJailPreviousTitle || "";
+    player.pickleJailUntil = 0;
+    player.pickleJailPreviousTitle = "";
+    player.pickleJailFinePaid = false;
+    changed = true;
+  }
+  if (Number(player.timeoutCornerUntil || 0) > 0 && Number(player.timeoutCornerUntil || 0) <= now) {
+    player.timeoutCornerUntil = 0;
+    changed = true;
+  }
+  if (changed) {
+    await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+  }
+  return activePunishment(player);
+}
+
+function punishmentBlockedText(player, punishment) {
+  if (punishment === "pickle") {
+    return `🥒 **PICKLE JAIL!**\n\nYou are locked up for **${punishmentTimeText(player.pickleJailUntil)}** more.\n\n🚫 You cannot play games while you're locked up.\n🥒 **The pickles knows what you did YOU CRIMINAL.**`;
+  }
+  if (punishment === "corner") {
+    return `🪑 **CORNER TIME!**\n\nGo sit in the corner for **${punishmentTimeText(player.timeoutCornerUntil)}** more. 😭\n\n🚫 Games are off-limits until your sentence is over.`;
+  }
+  return "";
+}
+
+async function requireOwner(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || user.id !== env.OWNER_ID) {
+    await sendText(env, interaction, "❌ Nice try. These punishment commands belong to the Werewives owner. 😭");
+    return false;
+  }
+  return true;
+}
+
+async function handlePickleJail(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const targetId = getOption(interaction, "user");
+  const duration = Number(getOption(interaction, "duration") || 0);
+  if (!targetId || !duration || duration < 1 || duration > 10080) {
+    return sendText(env, interaction, "🥒 Pickle Jail needs a player and a duration from **1–10080 minutes**.");
+  }
+  const target = await getPlayer(env, targetId);
+  await refreshPunishmentState(env, target);
+  const now = Date.now();
+  if (!target.pickleJailUntil || target.pickleJailUntil <= now) {
+    target.pickleJailPreviousTitle = target.equippedTitle || "";
+  }
+  target.pickleJailUntil = now + duration * 60000;
+  target.pickleJailFinePaid = true;
+  target.equippedTitle = "criminal";
+  const requestedFine = randomInt(100, 2000);
+  const actualFine = Math.min(requestedFine, Math.max(0, Number(target.sparkles || 0)));
+  target.sparkles = Math.max(0, Number(target.sparkles || 0) - actualFine);
+  await env.TREE_DATA.put(target.userId, JSON.stringify(target));
+  const fineText = actualFine === requestedFine ? `${actualFine.toLocaleString()} sparkles` : `${actualFine.toLocaleString()} sparkles (they didn't have enough for the full fine 😭)`;
+  await sendText(env, interaction, `🥒 **PICKLE JAIL SENTENCE!**\n\n<@${targetId}> has been locked up for **${punishmentTimeText(target.pickleJailUntil)}**.\n\n💸 **Guard Fine:** ${fineText}\n\n🚨 The guards searched their pockets and confiscated the sparkles.\n🥒 **THE PICKLES KNOWS WHAT YOU DID.**`);
+}
+
+async function handleCornerTimeout(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const targetId = getOption(interaction, "user");
+  const duration = Number(getOption(interaction, "duration") || 0);
+  if (!targetId || !duration || duration < 1 || duration > 10080) {
+    return sendText(env, interaction, "🪑 Corner Time needs a player and a duration from **1–10080 minutes**.");
+  }
+  const target = await getPlayer(env, targetId);
+  await refreshPunishmentState(env, target);
+  target.timeoutCornerUntil = Date.now() + duration * 60000;
+  await env.TREE_DATA.put(target.userId, JSON.stringify(target));
+  await sendText(env, interaction, `🪑 **CORNER TIME!**\n\n<@${targetId}> has been sentenced to the corner for **${punishmentTimeText(target.timeoutCornerUntil)}**. 😭\n\n🚫 No games until the sentence is over.\n\nPlease sit there quietly and reconsider your life choices.`);
+}
+
+function gamePunishmentMessage(punishment) {
+  if (punishment === "pickle") return "🥒 **the pickles knows what you did YOU CRIMINAL** 🚨";
+  if (punishment === "corner") return "🪑 **CORNER TIME!** You are supposed to be sitting in the corner, not playing games. 😭";
+  return "";
+}
+
+async function checkGamePunishment(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return "";
+  const player = await getPlayer(env, user.id);
+  const punishment = await refreshPunishmentState(env, player);
+  // Pickle Jail does NOT stop games — the criminal warning is part of the fun.
+  // Corner Time is the punishment that blocks game participation.
+  if (punishment === "corner") {
+    await sendText(env, interaction, punishmentBlockedText(player, punishment));
+    return punishment;
+  }
+  return "";
+}
+
+async function buildTitlesResponseData(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) throw new Error("Could not determine your Discord account.");
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  unlockNameEffects(player);
+  const owned = player.titles.filter(id => SOLO_TITLES[id]);
+  const locked = Object.entries(SOLO_TITLES).filter(([id]) => !player.titles.includes(id));
+  const effects = Object.entries(NAME_EFFECTS).map(([id, e]) => `${player.unlockedNameEffects.includes(id) ? "✨" : "🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect === id ? " — ⭐ EQUIPPED" : ""}`).join("\n");
+  const ownedText = owned.length ? owned.map(id => `${player.equippedTitle === id ? "⭐" : "🏷️"} **${SOLO_TITLES[id].name}**`).join("\n") : "No titles unlocked yet.";
+  const lockedText = locked.length ? locked.map(([id, t]) => `🔒 **${t.name}** — ${t.description}`).join("\n") : "You've unlocked every title! 👑";
+  const rows = [];
+  for (let i = 0; i < owned.length && rows.length < 4; i += 5) rows.push(row(...owned.slice(i, i + 5).map(id => button(`Equip ${SOLO_TITLES[id].name}`.slice(0, 80), `title:equip:${id}`, 2))));
+  const effectIds = player.unlockedNameEffects.filter(id => NAME_EFFECTS[id]);
+  for (let i = 0; i < effectIds.length && rows.length < 4; i += 5) rows.push(row(...effectIds.slice(i, i + 5).map(id => button(NAME_EFFECTS[id].name.slice(0, 80), `nameeffect:equip:${id}`, 2))));
+  rows.push(row(button("❌ Unequip Title", "title:unequip", 4), button("✨ Unequip Effect", "nameeffect:equip:none", 4)));
+  const description = `⭐ **Equipped Title:** ${player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? SOLO_TITLES[player.equippedTitle].name : "None"}\n✨ **Equipped Name Effect:** ${player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect] ? NAME_EFFECTS[player.equippedNameEffect].name : "None"}\n\n**🏆 My Titles**\n${ownedText}\n\n**🔒 Titles to Unlock**\n${lockedText}\n\n**✨ Name Effects**\n${effects}`;
+  return {
+    embeds: [{ title: "🏷️ TITLES & NAME EFFECTS", description: description.slice(0, 4090) }],
+    components: rows,
+    flags: 64
+  };
+}
+
+async function handleTitlesMenu(env, interaction) {
+  const data = await buildTitlesResponseData(env, interaction);
+  if (interaction.__deferred) {
+    await editOriginalResponse(env, interaction, data);
+  } else {
+    await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 4, data })
+    });
+  }
+}
 
 async function savePlayer(env, player) {
   updateAchievements(player);
@@ -3150,6 +3303,15 @@ async function handleRecycle(
   interaction,
   amountInput
 ) {
+  const punishmentUser = getUserFromInteraction(interaction);
+  if (punishmentUser) {
+    const punishmentPlayer = await getPlayer(env, punishmentUser.id);
+    if (await refreshPunishmentState(env, punishmentPlayer) === "pickle") {
+      await sendText(env, interaction, punishmentBlockedText(punishmentPlayer, "pickle"));
+      return;
+    }
+  }
+
   const user =
     getUserFromInteraction(
       interaction
@@ -3303,6 +3465,15 @@ async function handleDailyRiddle(
   interaction,
   answer = ""
 ) {
+  const punishmentUser = getUserFromInteraction(interaction);
+  if (punishmentUser) {
+    const punishmentPlayer = await getPlayer(env, punishmentUser.id);
+    if (await refreshPunishmentState(env, punishmentPlayer) === "pickle") {
+      await sendText(env, interaction, punishmentBlockedText(punishmentPlayer, "pickle"));
+      return;
+    }
+  }
+
   const user =
     getUserFromInteraction(
       interaction
@@ -12073,6 +12244,8 @@ async function islandSave(env, game) {
 }
 
 async function handleIslandCreate(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
+
   if (!interaction.guild_id) {
     await sendText(env, interaction, "❌ Chaos Island can only be played inside a server.");
     return;
@@ -12106,6 +12279,7 @@ async function handleIslandCreate(env, interaction) {
 }
 
 async function handleIslandJoin(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
   if (!interaction.guild_id) return sendText(env, interaction, "❌ Chaos Island is server-only.");
   const state=await getGuildState(env, interaction.guild_id);
   const game=state.island;
@@ -12115,6 +12289,8 @@ async function handleIslandJoin(env, interaction) {
   if (game.players[user.id]) return sendText(env, interaction, "🏝️ You're already on the island!", islandLobbyComponents(game));
   if (Object.keys(game.players).length >= ISLAND_MAX_PLAYERS) return sendText(env, interaction, "❌ The island is full! 10 players maximum.");
   game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""};
+  const joiningPunishment = await refreshPunishmentState(env, player);
+  if (joiningPunishment === "pickle") await sendChannelMessage(env, interaction.channel_id, gamePunishmentMessage(joiningPunishment));
   await islandSave(env, game);
   await acknowledge(env, interaction);
   await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game), game);
@@ -12594,7 +12770,8 @@ const SOLO_TITLES = {
   shadow_walker: { name: "the Shadow Walker", description: "Win 50 Heist games." },
   frostbite: { name: "Frostbite", description: "Win 25 Pastel Panic games." },
   golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
-  haunted: { name: "the Haunted", description: "Own the complete Halloween set." }
+  haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
+  criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" }
 };
 
 const SOLO_STORY_LEVELS = [
@@ -12765,6 +12942,8 @@ async function handleGamesMenu(env, interaction) {
 }
 
 async function handleSoloStart(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
+
   const user = getUserFromInteraction(interaction);
   if (!user) return;
   const player = await getPlayer(env, user.id);
@@ -12900,6 +13079,10 @@ async function handleTitleList(env, interaction) {
 async function handleTitleEquip(env, interaction, titleId) {
   const user = getUserFromInteraction(interaction);
   if (!user) return;
+  const punishmentPlayer = await getPlayer(env, user.id);
+  if (await refreshPunishmentState(env, punishmentPlayer) === "pickle") {
+    return sendText(env, interaction, "🥒 You are in Pickle Jail. Your **Criminal** title is not optional. 😭");
+  }
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   if (!player.titles.includes(titleId) || !SOLO_TITLES[titleId]) return sendText(env, interaction, "🔒 You haven't unlocked that title yet.");
@@ -15432,6 +15615,8 @@ async function handleHeistCreate(
   env,
   interaction
 ) {
+  if (await checkGamePunishment(env, interaction)) return;
+
   if (!interaction.guild_id) {
     await sendText(
       env,
@@ -15503,6 +15688,10 @@ async function handleHeistCreate(
 
   state.heist = game;
 
+  const joiningPlayer = await getPlayer(env, user.id);
+  const joiningPunishment = await refreshPunishmentState(env, joiningPlayer);
+  if (joiningPunishment === "pickle") await sendChannelMessage(env, interaction.channel_id, gamePunishmentMessage(joiningPunishment));
+
   await saveGuildState(
     env,
     interaction.guild_id,
@@ -15521,6 +15710,8 @@ async function handleHeistJoin(
   env,
   interaction
 ) {
+  if (await checkGamePunishment(env, interaction)) return;
+
   if (!interaction.guild_id) {
     await sendText(
       env,
@@ -16679,6 +16870,15 @@ async function handleSparkleBalance(env, interaction) {
 }
 
 async function handleFortune(env, interaction) {
+  const punishmentUser = getUserFromInteraction(interaction);
+  if (punishmentUser) {
+    const punishmentPlayer = await getPlayer(env, punishmentUser.id);
+    if (await refreshPunishmentState(env, punishmentPlayer) === "pickle") {
+      await sendText(env, interaction, punishmentBlockedText(punishmentPlayer, "pickle"));
+      return;
+    }
+  }
+
   const user = getUserFromInteraction(interaction);
   if (!user) return;
 
@@ -17052,6 +17252,18 @@ async function handleCommand(
 
   if (name === "title" || name === "titles") {
     await handleTitlesMenu(env, interaction);
+    return;
+  }
+
+  if (name === "pickle") {
+    const sub = interaction.data?.options?.find(option => option.type === 1)?.name;
+    if (sub === "jail") await handlePickleJail(env, interaction);
+    return;
+  }
+
+  if (name === "timeout") {
+    const sub = interaction.data?.options?.find(option => option.type === 1)?.name;
+    if (sub === "corner") await handleCornerTimeout(env, interaction);
     return;
   }
 
@@ -17667,6 +17879,8 @@ async function sendBattleMessage(env, interaction, game) {
 }
 
 async function handleBattleStart(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
+
   const user = getUserFromInteraction(interaction);
   if (!user) return;
   if (!interaction.guild_id) return sendText(env,interaction,"❌ Tree Battle can only be played inside a server.");
@@ -18279,6 +18493,8 @@ async function handlePastelEndCommand(env,interaction){
   await sendText(env,interaction,`🛑 **End Pastel Panic?**\n\nEveryone currently playing must agree before the game is ended.\n\nCurrent agreement: **${vote.votes}/${vote.total}**`,[row(button("🛑 I Agree — End Game",`pastel:endvote:${game.id}`,4))]);
 }
 async function handlePastelStart(env,interaction){
+  if (await checkGamePunishment(env, interaction)) return;
+
   if(interaction.guild_id){
     const state=await getGuildState(env,interaction.guild_id);
     const active=state.pastel;
@@ -18300,13 +18516,13 @@ async function handlePastelResume(env,interaction,gameId){
     await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});
   }
 }
-async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function handlePastelMode(env,interaction,mode){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players);
   /* Defensive guarantee: every fresh board has at least 2 visible Power Cells. */
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
   game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
-async function handlePastelJoin(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function handlePastelJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};const joiningPunishment=await refreshPunishmentState(env,player);if(joiningPunishment === "pickle")await sendChannelMessage(env,interaction.channel_id,gamePunishmentMessage(joiningPunishment));game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Pastel Panic game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Pastel Panic lobby cancelled.");}
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
@@ -18502,6 +18718,40 @@ const COMMANDS = [
   {
     name: "titles",
     description: "View owned titles, unlockable titles, and Name Effects"
+  },
+
+  {
+    name: "pickle",
+    description: "Owner-only punishment commands",
+    default_member_permissions: "8",
+    options: [
+      {
+        type: 1,
+        name: "jail",
+        description: "Lock a player in Pickle Jail",
+        options: [
+          { type: 6, name: "user", description: "Player to jail", required: true },
+          { type: 4, name: "duration", description: "Sentence length in minutes (1–10080)", required: true, min_value: 1, max_value: 10080 }
+        ]
+      }
+    ]
+  },
+
+  {
+    name: "timeout",
+    description: "Owner-only punishment commands",
+    default_member_permissions: "8",
+    options: [
+      {
+        type: 1,
+        name: "corner",
+        description: "Send a player to the corner",
+        options: [
+          { type: 6, name: "user", description: "Player to send to the corner", required: true },
+          { type: 4, name: "duration", description: "Sentence length in minutes (1–10080)", required: true, min_value: 1, max_value: 10080 }
+        ]
+      }
+    ]
   },
 
   {
@@ -19130,6 +19380,8 @@ export default {
       interaction.type === 2 && interaction.data?.name === "profile";
     const isTitlesCommand =
       interaction.type === 2 && (interaction.data?.name === "title" || interaction.data?.name === "titles");
+    const isPunishmentCommand =
+      interaction.type === 2 && (interaction.data?.name === "pickle" || interaction.data?.name === "timeout");
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -19163,42 +19415,28 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
-    // Titles gets a tiny immediate type-4 response instead of a deferred
-    // response. This is extra-defensive for Discord clients that can keep
-    // showing 'MyTree is thinking...' when a deferred slash-command
-    // response is slow to resolve. The real Titles menu replaces this
-    // placeholder as soon as the KV reads finish.
+    // Titles must return the actual menu in the initial Discord response.
+    // Waiting on waitUntil() after sending a placeholder can leave some Discord
+    // clients stuck on the loading message forever. Build the small menu here.
     if (isTitlesCommand) {
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = true;
-      ctx.waitUntil((async () => {
-        try {
-          // Do not run the one-time surprise alert here. Titles is a private
-          // utility menu, and the alert's extra KV/Discord work can delay the
-          // edit of the loading response. Normal game interactions still run
-          // maybeShowSurpriseAlert through the generic path.
-          await handleCommand(env, interaction);
-        } catch (error) {
-          console.error("Titles interaction error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ Something went wrong: ${error?.message || "Unknown error"}`
-            });
-          } catch (editError) {
-            console.error("Could not send Titles error message:", editError);
-          }
-        }
-      })());
-      return new Response(JSON.stringify({
-        type: 4,
-        data: { content: "🌸 Loading your Titles & Name Effects...", flags: 64 }
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+      try {
+        const data = await buildTitlesResponseData(env, interaction);
+        return new Response(JSON.stringify({ type: 4, data }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (error) {
+        console.error("Titles initial response error:", error);
+        return new Response(JSON.stringify({
+          type: 4,
+          data: { content: `❌ Couldn't load Titles & Name Effects: ${error?.message || "Unknown error"}`, flags: 64 }
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
     if (relevant) {
@@ -19212,7 +19450,7 @@ export default {
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isPastelCommand) {
         ephemeral = interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end";
-      } else if (isFreeCommand || isTitlesCommand) {
+      } else if (isFreeCommand || isTitlesCommand || isPunishmentCommand) {
         // FREE guesses and the Titles menu are private.
         ephemeral = true;
       } else if (isHeistCommand) {
@@ -19263,7 +19501,7 @@ export default {
           // Surprise alert is shown privately on the player's next normal
           // interaction, without replacing or blocking the interaction's
           // normal bot action.
-          await maybeShowSurpriseAlert(env, interaction);
+          if (!isPunishmentCommand) await maybeShowSurpriseAlert(env, interaction);
           if (interaction.type === 2) {
             await handleCommand(env, interaction);
           } else {
