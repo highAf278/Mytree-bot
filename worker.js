@@ -17874,9 +17874,26 @@ export default {
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
     const isPastelComponent = interaction.type === 3 && customId.startsWith("pastel:");
+    // Shop buttons can involve KV reads/writes before the response is ready.
+    // Acknowledge them immediately so Discord never hits the 3-second timeout.
+    const isShopComponent =
+      interaction.type === 3 &&
+      (
+        customId === "shop" ||
+        customId === "shop_backgrounds" ||
+        customId === "shop_trees" ||
+        customId === "shop_decorations" ||
+        customId === "shop_effects" ||
+        customId === "shop_limited" ||
+        customId === "shop_limited_halloween" ||
+        customId === "shop_special" ||
+        customId === "back_tree" ||
+        customId === "customize" ||
+        customId.startsWith("buy_")
+      );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
@@ -17904,6 +17921,10 @@ export default {
         update = true;
       } else if (isPastelComponent) {
         update = true;
+      } else if (isShopComponent) {
+        // Use a normal deferred response because shop handlers edit the
+        // interaction response after doing KV work.
+        ephemeral = true;
       }
 
       const responseType = update ? 6 : 5;
