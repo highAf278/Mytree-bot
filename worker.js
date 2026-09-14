@@ -4494,6 +4494,16 @@ async function equipTheme(
     werewives:
       player.inventory.includes(
         "werewives_background"
+      ),
+
+    golden_pickle:
+      player.inventory.includes(
+        "golden_pickle_background"
+      ),
+
+    midnight_rider:
+      player.inventory.includes(
+        "midnight_rider_background"
       )
   };
 
@@ -4615,6 +4625,16 @@ async function equipTree(
     werewives:
       player.inventory.includes(
         "werewives_tree"
+      ),
+
+    golden_pickle:
+      player.inventory.includes(
+        "golden_pickle_tree"
+      ),
+
+    midnight_rider:
+      player.inventory.includes(
+        "midnight_rider_tree"
       )
   };
 
@@ -4674,7 +4694,9 @@ async function equipEffect(
       lavender_twilight: "lavender_twilight_effect",
       world_of_flags: "world_of_flags_effect",
       ocean_opal: "ocean_opal_effect",
-      werewives: "werewives_effect"
+      werewives: "werewives_effect",
+      golden_pickle: "golden_pickle_effect",
+      midnight_rider: "midnight_rider_effect"
     }[effect];
 
     if (
