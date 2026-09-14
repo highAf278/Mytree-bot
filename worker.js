@@ -11932,7 +11932,7 @@ const HEIST_STEAL_MIN = 500;
 const HEIST_STEAL_MAX = 1500;
 const HEIST_WIN_REWARD = 500;
 const BATTLE_WIN_REWARD = 500;
-const PASTEL_WIN_REWARD = 500;
+const PASTEL_WIN_XP = 100;
 
 const HEIST_PERMISSIONS = {
   SEND_MESSAGES: 2048n,
@@ -17010,7 +17010,7 @@ async function renderPastelBoard(env,game){
     browser=await puppeteer.launch(env.BROWSER);
     const page=await browser.newPage();
     await page.setViewport({width:1200,height:760,deviceScaleFactor:1});
-    const size=20;
+    const size=game.mode==="triangle"?20:28;
     const boardW=game.mode==="triangle"?39*size:(game.mode==="square24"?24*size:20*size);
     const boardH=game.mode==="square24"?24*size:20*size;
     const cellX=(r,c)=>game.mode==="triangle"?(19-r+c)*size:c*size;
@@ -17123,22 +17123,26 @@ async function pastelFinish(env,game,winnerId,reason){
   const winner=pastelFindOwned(game,winnerId);
   for(const p of pastelStartingPlayers(game)){
     const player=await getPlayer(env,p.id);
-    if(p.id===winnerId){player.pastelWins=Number(player.pastelWins||0)+1;player.pastelRating=Number(player.pastelRating||0)+100;player.sparkles=Number(player.sparkles||0)+PASTEL_WIN_REWARD;player.pastelSparklesEarned=Number(player.pastelSparklesEarned||0)+PASTEL_WIN_REWARD;}
+    if(p.id===winnerId){
+      player.pastelWins=Number(player.pastelWins||0)+1;
+      player.pastelRating=Number(player.pastelRating||0)+100;
+      player.exp=Number(player.exp||0)+PASTEL_WIN_XP;
+      const leveledUp=applyLevelUps(player);
+      player.pastelLevel=pastelRatingLevel(player.pastelRating);
+      player.pastelLastXpEarned=PASTEL_WIN_XP;
+      player.pastelLastLeveledUp=leveledUp;
+    }
     else if(!p.alive||p.id!==winnerId){if(!p.lossRecorded){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}}
     player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
   }
   const state=await getGuildState(env,game.guildId); if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);} return winner;
 }
 async function sendPastelTurnMessage(env,game,turnId){
-  const image=await renderPastelBoard(env,game);
-  const components=pastelChoiceComponents(game);
-  const form=new FormData();
-  form.append("payload_json",JSON.stringify({content:`🌈 **PASTEL PANIC**\n\n<@${turnId}> **it's your turn!**\n\n${pastelGameText(game)}`,attachments:[{id:0,filename:"pastel-panic.png"}],components,allowed_mentions:{users:[turnId]}}));
-  form.append("files[0]",new Blob([image],{type:"image/png"}),"pastel-panic.png");
-  const response=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:form});
-  if(!response.ok){console.error("Pastel turn message failed:",response.status,await response.text());return false;}
-  const msg=await response.json().catch(()=>null);
-  if(msg?.id)game.messageId=msg.id;
+  const response=await discordRequest(env,`/channels/${game.channelId}/messages`,{
+    method:"POST",
+    body:JSON.stringify({content:`🌈 **PASTEL PANIC** — <@${turnId}> **it's your turn!**`,allowed_mentions:{users:[turnId]}})
+  });
+  if(!response.ok){console.error("Pastel turn ping failed:",response.status,await response.text());return false;}
   return true;
 }
 async function handlePastelChoose(env,interaction,gameId,colorIndex){
@@ -17160,9 +17164,9 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   const extra=Number(player.pendingPastelTurns||0)>0;
   game.round++;game.turnsSinceRefresh++;
   game.lastMove=`🎨 <@${user.id}> chose **${PASTEL_COLORS[color].name}** and gained **${gained} cells**.${heartsCaptured?` ❤️ **${heartsCaptured} HEART${heartsCaptured===1?"":"S"} CAPTURED — EXTRA TURN${heartsCaptured===1?"":"S"} STACKED!**`:""}`;
-  if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_REWARD} sparkles** have been banked!`,components:[]});return;}
+  if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");await editOriginalResponse(env,interaction,{content:`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_REWARD} sparkles** have been banked!`,components:[]});return;}
+  if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
   if(game.turnsSinceRefresh>=game.refreshEvery)pastelRegenerate(game);
   if(extra){
     player.pendingPastelTurns=Math.max(0,Number(player.pendingPastelTurns||0)-1);
@@ -17177,9 +17181,13 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
     }
   }
   await pastelSave(env,game);
-  const sent=await sendPastelTurnMessage(env,game,game.turnId).catch(error=>{console.error("Pastel new turn message error:",error);return false;});
-  if(sent)await editOriginalResponse(env,interaction,{content:`↪️ <@${game.turnId}> is next. A new Pastel Panic board has been posted below.`,components:[]});
-  else {try{await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ The new turn message could not be posted, but the controls are still active below.`,components:pastelChoiceComponents(game)});}catch{}}
+  try{
+    await sendPastelBoard(env,interaction,game);
+  }catch(error){
+    console.error("Pastel same-message board refresh error:",error);
+    try{await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ The board could not refresh, but the game controls are still active.`,components:pastelChoiceComponents(game)});}catch{}
+  }
+  await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel turn ping error:",error));
 }
 async function handlePastelQuit(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id); const game=state.pastel; const user=getUserFromInteraction(interaction);
@@ -17187,16 +17195,16 @@ async function handlePastelQuit(env,interaction,gameId){
   const quitter=pastelFindOwned(game,user.id); if(!quitter?.alive)return sendEphemeralFollowup(env,interaction,"❌ You're already out of this game.");
   quitter.alive=false; quitter.lossRecorded=true;
   const player=await getPlayer(env,user.id); player.pastelLosses=Number(player.pastelLosses||0)+1; player.pastelQuits=Number(player.pastelQuits||0)+1; player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50); player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
-  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.\n✨ The winner banks **+${PASTEL_WIN_REWARD} sparkles**.`);}
+  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.`);}
   for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;c.start=false;}
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!\n✨ The winner banks **+${PASTEL_WIN_REWARD} sparkles**.`);}
+  if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!`);}
   if(game.turnId===user.id)game.turnId=alive[0].id;
   game.lastMove=`🚪 **<@${user.id}> rage quit!** Their territory is now blacked out. The game continues with **${alive.length} players**.`;
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.sparkles=Number(wp.sparkles||0)+PASTEL_WIN_REWARD;wp.pastelSparklesEarned=Number(wp.pastelSparklesEarned||0)+PASTEL_WIN_REWARD;wp.pastelLevel=pastelRatingLevel(wp.pastelRating);await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,components:[]})});
