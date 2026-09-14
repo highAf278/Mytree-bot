@@ -74,7 +74,7 @@ const IMAGES = {
   lavenderTwilightTree: "IMG_7366.png",
   lavenderTwilightBackground: "IMG_7367.png",
   lavenderTwilightEffect: "IMG_7368.png",
-  worldOfFlagsTree: "IMG_7369.png",
+  worldOfFlagsTree: "IMG_7376.png",
   worldOfFlagsBackground: "IMG_7370.png",
   worldOfFlagsEffect: "IMG_7371.png"
 };
