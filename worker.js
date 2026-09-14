@@ -3251,9 +3251,10 @@ async function showLimitedShop(
   });
 
   const rows = [];
-  /* Discord allows a maximum of 5 action rows. Keep Limited Shop to 4 item rows + Back. */
-  for (let i = 0; i < buttons.length; i += 3) {
-    rows.push(row(...buttons.slice(i, i + 3)));
+  /* Discord allows a maximum of 5 action rows total.
+     With 18 limited items, use 4 buttons per row = 5 total rows including Back. */
+  for (let i = 0; i < buttons.length; i += 4) {
+    rows.push(row(...buttons.slice(i, i + 4)));
   }
 
   rows.push(row(button("⬅️ Back", "shop", 2)));
