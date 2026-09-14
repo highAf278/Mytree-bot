@@ -3471,7 +3471,6 @@ async function showEffectShop(
   const items = [
     ["butterflies_effect", "🦋 Butterflies", "buy_butterflies"],
     ["hearts_effect", "💕 Hearts", "buy_hearts"],
-    ["candy_effect", "🍭 Candy Effect", "buy_candy_effect"],
     ["halloween_effect", "👻 Halloween Effect", "buy_halloween_effect"]
   ];
 
@@ -3520,7 +3519,7 @@ async function showRegularShop(env, interaction) {
   rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
   rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2)));
   rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
-  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle here. Forest and nature items are organized in their individual cosmetic categories. ✨",rows);
+  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle in the Regular Shop. Forest and nature cosmetics are sold in their proper individual categories. Candyland items are bundle-only here. ✨",rows);
 }
 
 async function showRegularSet(env,interaction,setId){
