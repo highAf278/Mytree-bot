@@ -661,6 +661,7 @@ function defaultPlayer() {
     pickleJailUntil: 0,
     pickleJailPreviousTitle: "",
     pickleJailFinePaid: false,
+    pickleJailInteractionCount: 0,
     timeoutCornerUntil: 0,
     profileColor: "#ffd9ef",
     raccoonCourtTreeUntil: 0,
@@ -1151,6 +1152,7 @@ async function refreshPunishmentState(env, player) {
     player.pickleJailUntil = 0;
     player.pickleJailPreviousTitle = "";
     player.pickleJailFinePaid = false;
+    player.pickleJailInteractionCount = 0;
     changed = true;
   }
   if (Number(player.timeoutCornerUntil || 0) > 0 && Number(player.timeoutCornerUntil || 0) <= now) {
@@ -1443,6 +1445,7 @@ async function handlePickleJail(env, interaction) {
   }
   target.pickleJailUntil = now + duration * 60000;
   target.pickleJailFinePaid = true;
+  target.pickleJailInteractionCount = 0;
   target.equippedTitle = "criminal";
   const requestedFine = randomInt(100, 2000);
   const actualFine = Math.min(requestedFine, Math.max(0, Number(target.sparkles || 0)));
@@ -1474,10 +1477,24 @@ function gamePunishmentMessage(punishment) {
   return "";
 }
 
+async function maybePickleJailReminder(env, interaction, player) {
+  if (!player || !interaction?.channel_id) return;
+  const until = Number(player.pickleJailUntil || 0);
+  if (until <= Date.now()) return;
+  player.pickleJailInteractionCount = Number(player.pickleJailInteractionCount || 0) + 1;
+  if (player.pickleJailInteractionCount >= 15) {
+    player.pickleJailInteractionCount = 0;
+    await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+    await sendChannelMessage(env, interaction.channel_id, gamePunishmentMessage("pickle"));
+    return;
+  }
+  await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+}
+
 async function checkGamePunishment(env, interaction) {
   const user=getUserFromInteraction(interaction); if(!user)return "";
   const player=await getPlayer(env,user.id); const punishment=await refreshPunishmentState(env,player);
-  if(punishment==="pickle") { await sendChannelMessage(env,interaction.channel_id,gamePunishmentMessage("pickle")); return ""; }
+  if(punishment==="pickle") { await maybePickleJailReminder(env,interaction,player); return ""; }
   if(["corner","court_game","court_shame_corner"].includes(punishment)) { await sendText(env,interaction,punishmentBlockedText(player,punishment)); return punishment; }
   return "";
 }
@@ -1541,7 +1558,13 @@ async function buildTitlesResponseData(env, interaction, section="home", page=0)
   const list=section==="titles"?owned:effectIds;
   const size=5, pageCount=Math.max(1,Math.ceil(list.length/size)); page=Math.max(0,Math.min(Number(page)||0,pageCount-1));
   const slice=list.slice(page*size,page*size+size);
-  rows.push(...slice.map(id=>row(button(section==="titles"?(player.equippedTitle===id?`⭐ ${SOLO_TITLES[id].name}`:`🏷️ ${SOLO_TITLES[id].name}`): (player.equippedNameEffect===id?`⭐ ${NAME_EFFECTS[id].name}`:NAME_EFFECTS[id].name),section==="titles"?`title:equip:${id}`:`nameeffect:equip:${id}`,player.equippedTitle===id||player.equippedNameEffect===id?3:2))));
+  if (slice.length) rows.push(row(...slice.map(id=>button(
+    section==="titles"
+      ? (player.equippedTitle===id?`⭐ ${SOLO_TITLES[id].name}`:`🏷️ ${SOLO_TITLES[id].name}`)
+      : (player.equippedNameEffect===id?`⭐ ${NAME_EFFECTS[id].name}`:NAME_EFFECTS[id].name),
+    section==="titles"?`title:equip:${id}`:`nameeffect:equip:${id}`,
+    player.equippedTitle===id||player.equippedNameEffect===id?3:2
+  ))));
   if(pageCount>1) rows.push(row(button("⬅️ Previous",`${section}:page:${page-1}`,2,page===0),button(`Page ${page+1}/${pageCount}`,`${section}:page:current`,2,true),button("Next ➡️",`${section}:page:${page+1}`,2,page===pageCount-1)));
   rows.push(row(button("⬅️ Back", "titles:home", 2)));
   const description=section==="titles"
@@ -18422,8 +18445,8 @@ const PASTEL_COLORS = [
   {id:"lemon_meringue",name:"Yellow Bean",hex:"#f7e6a6",label:"💛"},
   {id:"sage_sauce",name:"Sage Sauce",hex:"#b8d6bd",label:"💚"},
   {id:"lavender_lullaby",name:"Purple Stone",hex:"#d7b9f2",label:"💜"},
-  {id:"coral_crush",name:"Coral Coal",hex:"#f2a9a9",label:"❤️"},
   {id:"savvy_cocoa",name:"Savvy Cocoa",hex:"#b89b8a",label:"🤎"},
+  {id:"coral_crush",name:"Coral Coal",hex:"#f2a9a9",label:"❤️"},
   {id:"devu_dew",name:"Devu Dew",hex:"#86b3a5",label:"🩵"}
 ];
 const PASTEL_CLASSIC_COLOR_COUNT=6;
@@ -18839,7 +18862,7 @@ async function pastelStartGame(env,game,interaction){const players=pastelStartin
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
   game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
-async function handlePastelJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};const joiningPunishment=await refreshPunishmentState(env,player);if(joiningPunishment === "pickle")await sendChannelMessage(env,interaction.channel_id,gamePunishmentMessage(joiningPunishment));game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function handlePastelJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Pastel Panic lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Pastel Panic lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Pastel Panic lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Pastel Panic game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Pastel Panic lobby cancelled.");}
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
@@ -19780,7 +19803,9 @@ export default {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isPastelCommand) {
-        ephemeral = interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end";
+        // Pastel Panic lobbies must be public so other players can actually see
+        // and join them. Only the end-game command remains private.
+        ephemeral = interaction.data?.name === "pastelpanic-end";
       } else if (isFreeCommand || isTitlesCommand || isPunishmentCommand) {
         // FREE guesses and the Titles menu are private.
         ephemeral = true;
