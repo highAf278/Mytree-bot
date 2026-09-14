@@ -19165,6 +19165,39 @@ export default {
     const relevant =
       isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
+    // Titles gets a tiny immediate type-4 response instead of a deferred
+    // response. This is extra-defensive for Discord clients that can keep
+    // showing 'MyTree is thinking...' when a deferred slash-command
+    // response is slow to resolve. The real Titles menu replaces this
+    // placeholder as soon as the KV reads finish.
+    if (isTitlesCommand) {
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = true;
+      ctx.waitUntil((async () => {
+        try {
+          await maybeShowSurpriseAlert(env, interaction);
+          await handleCommand(env, interaction);
+        } catch (error) {
+          console.error("Titles interaction error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Something went wrong: ${error?.message || "Unknown error"}`
+            });
+          } catch (editError) {
+            console.error("Could not send Titles error message:", editError);
+          }
+        }
+      })());
+      return new Response(JSON.stringify({
+        type: 4,
+        data: { content: "🌸 Loading your Titles & Name Effects...", flags: 64 }
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     if (relevant) {
       let update = false;
       let ephemeral = false;
