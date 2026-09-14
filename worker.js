@@ -41,16 +41,16 @@ const BASE_URL =
 
 const IMAGES = {
   pinkSky: "IMG_7251.jpeg",
-  halloween: "IMG_7254.jpeg",
-  candyland: "IMG_7261.jpeg",
+  halloween: "IMG_7389.png",
+  candyland: "IMG_7396.png",
   cherryTree: "IMG_7259.png",
-  cottonCandyTree: "IMG_7263.png",
+  cottonCandyTree: "IMG_7395.png",
   pumpkinCat: "IMG_7272.png",
   stonedTree: "IMG_7283.png",
   stonedBalloon: "IMG_7277.png",
   stonedBackground: "IMG_7275.jpeg",
-  panda: "IMG_7287.png",
-  cat: "IMG_7288.png",
+  panda: "IMG_7401.png",
+  cat: "IMG_7399.png",
   shadowTree: "IMG_7311.png",
   fullCherryTree: "IMG_7310.png",
   pineTree: "IMG_7308.png",
@@ -61,13 +61,20 @@ const IMAGES = {
   magicMushroom: "IMG_7300.jpeg",
   fieldDay: "IMG_7299.jpeg",
   redForest: "IMG_7291.jpeg",
-  halloweenTree: "IMG_7309.png",
+  halloweenTree: "IMG_7387.png",
   purrPrincess: "IMG_7315.png",
   kittyTree: "IMG_7314.png",
   cozyCat: "IMG_7317.png",
   greenGlowTree: "IMG_7327.png",
   greenGlowBackground: "IMG_7324.png",
   greenGlowEffect: "IMG_7325.png",
+  candyEffect: "IMG_7397.png",
+  halloweenEffect: "IMG_7390.png",
+  raccoonThief: "IMG_7402.png",
+  frankFrog: "IMG_7403.png",
+  duckHatBoots: "IMG_7405.png",
+  cheddarFalls: "IMG_7404.png",
+  suggestionBox: "IMG_7406.png",
   prismFlutterTree: "IMG_7363.png",
   prismFlutterBackground: "IMG_7362.png",
   prismFlutterEffect: "IMG_7361.png",
@@ -313,6 +320,43 @@ const SHOP_ITEMS = {
     price: 10000,
     type: "effect",
     value: "ocean_opal",
+    limited: true
+  },
+  candy_effect: {
+    name: "🍭 Candy Rush Effect",
+    price: 1000,
+    type: "effect",
+    value: "candy_rush"
+  },
+  raccoon_thief_decoration: {
+    name: "🦝 Raccoon Thief",
+    price: 4000,
+    type: "decoration",
+    value: "raccoon_thief"
+  },
+  frank_frog_decoration: {
+    name: "🐸 Frank the Frog",
+    price: 4000,
+    type: "decoration",
+    value: "frank_frog"
+  },
+  duck_hat_boots_decoration: {
+    name: "🦆 Duck With Hat & Boots",
+    price: 4500,
+    type: "decoration",
+    value: "duck_hat_boots"
+  },
+  cheddar_falls_decoration: {
+    name: "🧀 Cheddar Falls",
+    price: 5000,
+    type: "decoration",
+    value: "cheddar_falls"
+  },
+  halloween_effect: {
+    name: "👻 Halloween Effect",
+    price: 10000,
+    type: "effect",
+    value: "halloween",
     limited: true
   },
   werewives_tree: {
@@ -598,6 +642,9 @@ function defaultPlayer() {
     soloHighestHeat: 0,
     titles: [],
     equippedTitle: "",
+    unlockedNameEffects: [],
+    equippedNameEffect: "",
+    profileColor: "#ffd9ef",
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -609,6 +656,7 @@ function defaultPlayer() {
     pastelQuits: 0,
     pastelGamesPlayed: 0,
     pastelSparklesEarned: 0,
+    chaosIslandWins: 0,
     battleWins: 0,
     battleSparklesEarned: 0,
     battleLosses: 0,
@@ -653,7 +701,11 @@ async function getPlayer(env, userId) {
           : [],
       titles:
         Array.isArray(player.titles)
-          ? player.titles
+          ? [...new Set(player.titles)]
+          : [],
+      unlockedNameEffects:
+        Array.isArray(player.unlockedNameEffects)
+          ? [...new Set(player.unlockedNameEffects)]
           : [],
       sparklesOnTree:
         Array.isArray(player.sparklesOnTree)
@@ -681,8 +733,162 @@ async function getPlayer(env, userId) {
   }
 }
 
+
+/* =========================================================
+   TITLES + NAME EFFECTS + PROFILE CARDS
+========================================================= */
+
+const NAME_EFFECTS = {
+  rainbow: { name: "🌈 Rainbow", requirement: "Own 10 or more shop items." },
+  starlight: { name: "✨ Starlight", requirement: "Reach 50,000 sparkles." },
+  petals: { name: "🌸 Petals", requirement: "Own 4 or more trees." },
+  inferno: { name: "🔥 Inferno", requirement: "Win Chaos Island." },
+  green_glow: { name: "💚 Green Glow", requirement: "Own the Green Glow Tree." },
+  candy_rush: { name: "🍭 Candy Rush", requirement: "Win Pastel Panic." },
+  cosmic: { name: "🌌 Cosmic", requirement: "Grow your tree to 5 ft." }
+};
+
+function unlockOwnedTitle(player, id) {
+  if (!Array.isArray(player.titles)) player.titles = [];
+  if (!player.titles.includes(id) && SOLO_TITLES[id]) {
+    player.titles.push(id);
+    return true;
+  }
+  return false;
+}
+
+function unlockNameEffects(player) {
+  if (!Array.isArray(player.unlockedNameEffects)) player.unlockedNameEffects = [];
+  const owned = Array.isArray(player.inventory) ? player.inventory : [];
+  const shopOwned = owned.filter(id => Boolean(SHOP_ITEMS[id])).length;
+  const treeIds = new Set([
+    "cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree",
+    "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree",
+    "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree",
+    "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"
+  ]);
+  const treeCount = owned.filter(id => treeIds.has(id)).length + (owned.includes("cherry") ? 0 : 1);
+  const checks = {
+    rainbow: shopOwned >= 10,
+    starlight: Number(player.sparkles || 0) >= 50000,
+    petals: treeCount >= 4,
+    inferno: Number(player.chaosIslandWins || 0) > 0,
+    green_glow: owned.includes("green_glow_tree"),
+    candy_rush: Number(player.pastelWins || 0) > 0,
+    cosmic: Number(getTreeHeight(player) || 0) >= 5
+  };
+  for (const [id, ok] of Object.entries(checks)) if (ok && !player.unlockedNameEffects.includes(id)) player.unlockedNameEffects.push(id);
+  if (player.equippedNameEffect && !player.unlockedNameEffects.includes(player.equippedNameEffect)) player.equippedNameEffect = "";
+}
+
+function nameEffectText(effectId, titleText, phase = 0) {
+  const text = String(titleText || "").trim();
+  if (!text) return `<span class="titlePlain">No Title</span>`;
+  const chars = [...text];
+  const spans = chars.map((ch, i) => {
+    const x = (phase + i / Math.max(1, chars.length)) % 1;
+    let color = "#ffffff";
+    let shadow = "0 0 12px rgba(255,255,255,.65)";
+    if (effectId === "rainbow") color = `hsl(${Math.round(x * 360)}, 90%, 70%)`;
+    else if (effectId === "starlight") { color = `hsl(${230 + Math.round(Math.sin(x * Math.PI * 2) * 25)}, 100%, ${78 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 8)}%)`; shadow = "0 0 8px #fff, 0 0 20px rgba(190,210,255,.9)"; }
+    else if (effectId === "petals") { color = `hsl(${320 + Math.round(Math.sin(x * Math.PI * 2) * 18)}, 75%, 78%)`; shadow = "0 0 14px rgba(255,170,220,.9)"; }
+    else if (effectId === "inferno") { color = `hsl(${18 + Math.round(Math.sin(x * Math.PI * 2) * 15)}, 100%, ${58 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 10)}%)`; shadow = "0 0 10px #ff7b22, 0 0 24px rgba(255,60,0,.85)"; }
+    else if (effectId === "green_glow") { color = `hsl(${118 + Math.round(Math.sin(x * Math.PI * 2) * 12)}, 100%, ${65 + Math.round((Math.sin(x * Math.PI * 2) + 1) * 7)}%)`; shadow = "0 0 10px #62ff72, 0 0 28px rgba(40,255,80,.85)"; }
+    else if (effectId === "candy_rush") { const hues=[330,205,275,48]; color=`hsl(${hues[i%4] + Math.round(Math.sin(x*Math.PI*2)*10)}, 90%, 75%)`; shadow="0 0 12px rgba(255,255,255,.9), 0 0 22px rgba(255,160,220,.65)"; }
+    else if (effectId === "cosmic") { color=`hsl(${245 + Math.round(x*80)}, 95%, 78%)`; shadow="0 0 9px #fff, 0 0 22px rgba(110,120,255,.9)"; }
+    return `<span style="color:${color};text-shadow:${shadow}">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`;
+  }).join("");
+  return `<span class="effect-${escapeHTML(effectId)}">${spans}</span>`;
+}
+
+function profileCardHTML(player, phase = 0) {
+  const bg = /^#[0-9a-fA-F]{6}$/.test(player.profileColor || "") ? player.profileColor : "#ffd9ef";
+  const titleId = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? player.equippedTitle : "";
+  const title = titleId ? SOLO_TITLES[titleId].name : "No Title";
+  const effectId = player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect] ? player.equippedNameEffect : "";
+  const effect = effectId ? NAME_EFFECTS[effectId].name : "No Name Effect";
+  const tree = imageUrl(getTreeImage(player));
+  const decor = getDecorationImage(player);
+  const decorUrl = decor ? imageUrl(decor) : "";
+  const titleMarkup = nameEffectText(effectId, title, phase);
+  const particleMap = {
+    rainbow: ["🌈","✨","💫","🌈"], starlight:["✦","✧","★","✦"], petals:["🌸","🌷","🌺","🌸"],
+    inferno:["🔥","🔥","✦","🔥"], green_glow:["✦","💚","✦","💚"], candy_rush:["🍬","🍭","✨","🍬"], cosmic:["✦","✧","☄️","★"]
+  };
+  const particles = (particleMap[effectId] || []).map((x,i)=>`<span class="particle p${i}" style="left:${12+i*24}%;top:${24+((i*13)%36)}%;transform:translateY(${Math.sin((phase+i/4)*Math.PI*2)*8}px);">${x}</span>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
+    .wash{position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,.08));}.tree{position:absolute;left:4%;bottom:-3%;width:310px;height:390px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15));}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:rgba(255,255,255,.72);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:rgba(255,255,255,.58);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:16px}.badge{margin-top:18px;font-size:14px;opacity:.8}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9));}.p0{animation:none}.p1{animation:none}.p2{animation:none}.p3{animation:none}
+  </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
+}
+
+async function renderAnimatedProfile(env, player) {
+  let browser;
+  try {
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width:800,height:500,deviceScaleFactor:1});
+    await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
+    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+    const frames=[];
+    const frameCount=8;
+    for(let i=0;i<frameCount;i++){
+      const phase=i/frameCount;
+      await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
+      await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+      frames.push(await page.screenshot({type:"png"}));
+    }
+    return await encodePNGFramesToGIF(frames,800,500,12);
+  } finally { if(browser) await browser.close().catch(()=>{}); }
+}
+
+async function decodePNG(pngBytes) {
+  const b=pngBytes instanceof Uint8Array?pngBytes:new Uint8Array(pngBytes); const sig=[137,80,78,71,13,10,26,10]; for(let i=0;i<8;i++)if(b[i]!==sig[i])throw new Error("Invalid PNG");
+  let pos=8,w=0,h=0,ct=0,bd=0,parts=[];
+  while(pos<b.length){const len=(b[pos]<<24|b[pos+1]<<16|b[pos+2]<<8|b[pos+3])>>>0;const type=String.fromCharCode(...b.slice(pos+4,pos+8));const data=b.slice(pos+8,pos+8+len);pos+=12+len;if(type==="IHDR"){w=(data[0]<<24|data[1]<<16|data[2]<<8|data[3])>>>0;h=(data[4]<<24|data[5]<<16|data[6]<<8|data[7])>>>0;bd=data[8];ct=data[9];}else if(type==="IDAT")parts.push(data);else if(type==="IEND")break;}
+  if(bd!==8||(ct!==6&&ct!==2))throw new Error("Unsupported PNG format");
+  const compressed=new Uint8Array(parts.reduce((a,x)=>a+x.length,0));let off=0;for(const x of parts){compressed.set(x,off);off+=x.length;}
+  let raw;try{raw=new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer());}catch{raw=new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());}
+  const bpp=ct===6?4:3,stride=w*bpp,out=new Uint8Array(w*h*4);let rp=0,prev=new Uint8Array(stride);
+  for(let y=0;y<h;y++){const filter=raw[rp++];const row=raw.slice(rp,rp+stride);rp+=stride;for(let x=0;x<stride;x++){const left=x>=bpp?row[x-bpp]:0,up=prev[x]||0,ul=x>=bpp?(prev[x-bpp]||0):0;let v=row[x];if(filter===1)v=(v+left)&255;else if(filter===2)v=(v+up)&255;else if(filter===3)v=(v+Math.floor((left+up)/2))&255;else if(filter===4){const p=left+up-ul,pa=Math.abs(p-left),pb=Math.abs(p-up),pc=Math.abs(p-ul);v=(v+(pa<=pb&&pa<=pc?left:pb<=pc?up:ul))&255;}row[x]=v;}for(let x=0;x<w;x++){const q=y*w+x,o=x*bpp;out[q*4]=row[o];out[q*4+1]=row[o+1];out[q*4+2]=row[o+2];out[q*4+3]=ct===6?row[o+3]:255;}prev=row;}
+  return {width:w,height:h,data:out};
+}
+
+function gifPalette(){const p=[];for(let r=0;r<6;r++)for(let g=0;g<6;g++)for(let b=0;b<6;b++)p.push([r*51,g*51,b*51]);for(let i=0;i<40;i++){const v=Math.round(i*255/39);p.push([v,v,v]);}return p;}
+function nearestPaletteIndex(r,g,b,p){
+  const rr=Math.max(0,Math.min(5,Math.round(r/51)));
+  const gg=Math.max(0,Math.min(5,Math.round(g/51)));
+  const bb=Math.max(0,Math.min(5,Math.round(b/51)));
+  return rr*36+gg*6+bb;
+}
+function gifLZW(indices){const clear=256,end=257;let codeSize=9,next=258,dict=new Map(),bits=0,buf=[];const emit=c=>{for(let i=0;i<codeSize;i++){buf.push((c>>i)&1);bits++;}};emit(clear);let prefix=indices[0]??0;for(let i=1;i<indices.length;i++){const k=indices[i],key=prefix*256+k;if(dict.has(key)){prefix=dict.get(key);continue;}emit(prefix);if(next<4096){dict.set(key,next++);if(next===1<<codeSize&&codeSize<12)codeSize++;}else{emit(clear);dict=new Map();codeSize=9;next=258;}prefix=k;}emit(prefix);emit(end);const bytes=[];for(let i=0;i<bits;i+=8){let v=0;for(let j=0;j<8&&i+j<bits;j++)v|=(buf[i+j]||0)<<j;bytes.push(v);}return bytes;}
+function u16(n){return [n&255,(n>>8)&255];}
+async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
+
+async function handleProfile(env, interaction) {
+  const user = getUserFromInteraction(interaction); if(!user)return;
+  const targetId = getOption(interaction,"user") || user.id;
+  const player = await getPlayer(env,targetId);
+  if(targetId===user.id) updatePlayerIdentity(player,interaction);
+  await savePlayer(env,player);
+  try{
+    const gif=await renderAnimatedProfile(env,player); const form=new FormData();
+    form.append("payload_json",JSON.stringify({content:`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,attachments:[{id:0,filename:"werewives-profile.gif"}]}));
+    form.append("files[0]",new Blob([gif],{type:"image/gif"}),"werewives-profile.gif");
+    await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",body:form});
+  }catch(error){console.error("Profile render failed",error);await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}'s Profile**\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);}
+}
+
+async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
+
+async function handleNameEffectEquip(env,interaction,effectId){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);if(effectId==="none"){player.equippedNameEffect="";await savePlayer(env,player);return sendText(env,interaction,"✨ Name Effect unequipped.");}if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");player.equippedNameEffect=effectId;await savePlayer(env,player);await sendText(env,interaction,`✨ **${NAME_EFFECTS[effectId].name}** is now equipped!`);}
+
+async function handleTitlesMenu(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const owned=player.titles.filter(id=>SOLO_TITLES[id]);const locked=Object.entries(SOLO_TITLES).filter(([id])=>!player.titles.includes(id));const effects=Object.entries(NAME_EFFECTS).map(([id,e])=>`${player.unlockedNameEffects.includes(id)?"✨":"🔒"} **${e.name}** — ${e.requirement}${player.equippedNameEffect===id?" — ⭐ EQUIPPED":""}`).join("\n");const ownedText=owned.length?owned.map(id=>`${player.equippedTitle===id?"⭐":"🏷️"} **${SOLO_TITLES[id].name}**`).join("\n"):"No titles unlocked yet.";const lockedText=locked.length?locked.map(([id,t])=>`🔒 **${t.name}** — ${t.description}`).join("\n"):"You've unlocked every title! 👑";const rows=[];for(let i=0;i<owned.length;i+=5)rows.push(row(...owned.slice(i,i+5).map(id=>button(`Equip ${SOLO_TITLES[id].name}`.slice(0,80),`title:equip:${id}`,2))));const effectIds=player.unlockedNameEffects.filter(id=>NAME_EFFECTS[id]);for(let i=0;i<effectIds.length;i+=5)rows.push(row(...effectIds.slice(i,i+5).map(id=>button(NAME_EFFECTS[id].name.slice(0,80),`nameeffect:equip:${id}`,2))));rows.push(row(button("❌ Unequip Title","title:unequip",4),button("✨ Unequip Effect","nameeffect:equip:none",4)));await sendText(env,interaction,`🏷️ **TITLES & NAME EFFECTS**\n\n⭐ **Equipped Title:** ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"None"}\n✨ **Equipped Name Effect:** ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n\n**🏆 My Titles**\n${ownedText}\n\n**🔒 Titles to Unlock**\n${lockedText}\n\n**✨ Name Effects**\n${effects}`,rows);}
+
 async function savePlayer(env, player) {
   updateAchievements(player);
+  unlockNameEffects(player);
+  if (Array.isArray(player.inventory) && player.inventory.filter(id => id !== "pink_sky_background").length >= 10) unlockOwnedTitle(player, "collector");
   await env.TREE_DATA.put(
     player.userId,
     JSON.stringify(player)
@@ -1607,6 +1813,18 @@ function getDecorationImage(player) {
     case "cat":
       return IMAGES.cat;
 
+    case "raccoon_thief":
+      return IMAGES.raccoonThief;
+
+    case "frank_frog":
+      return IMAGES.frankFrog;
+
+    case "duck_hat_boots":
+      return IMAGES.duckHatBoots;
+
+    case "cheddar_falls":
+      return IMAGES.cheddarFalls;
+
     default:
       return null;
   }
@@ -1627,6 +1845,12 @@ function getEffectImage(player) {
 
     case "green_glow":
       return IMAGES.greenGlowEffect;
+
+    case "candy_rush":
+      return IMAGES.candyEffect;
+
+    case "halloween":
+      return IMAGES.halloweenEffect;
 
     case "prism_flutter":
       return IMAGES.prismFlutterEffect;
@@ -3020,51 +3244,7 @@ async function showShop(
   env,
   interaction
 ) {
-  await sendText(
-    env,
-    interaction,
-    "🛍️ **Werewives Tree Shop**\n\nChoose a category:",
-    [
-      row(
-        button(
-          "🌌 Backgrounds",
-          "shop_backgrounds",
-          2
-        ),
-        button(
-          "🌳 Trees",
-          "shop_trees",
-          2
-        ),
-        button(
-          "🎀 Decorations",
-          "shop_decorations",
-          2
-        ),
-        button(
-          "✨ Effects",
-          "shop_effects",
-          2
-        )
-      ),
-
-      row(
-        button(
-          "🎁 Limited / Holiday",
-          "shop_limited",
-          1
-        )
-      ),
-
-      row(
-        button(
-          "🌳 Back to Tree",
-          "back_tree",
-          2
-        )
-      )
-    ]
-  );
+  await showRegularShop(env, interaction);
 }
 
 async function showBackgroundShop(
@@ -3169,67 +3349,18 @@ async function showTreeShop(
     rows
   );
 }
-async function showDecorationShop(
-  env,
-  interaction
-) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
-  const pandaOwned =
-    player.inventory.includes(
-      "panda_decoration"
-    );
-
-  const catOwned =
-    player.inventory.includes(
-      "cat_decoration"
-    );
-
-  await sendText(
-    env,
-    interaction,
-    `🎀 **Decoration Shop**\n\n🐼 **Panda Decoration** — 3000 sparkles\n${pandaOwned ? "✅ Owned" : ""}\n\n🐱 **Cat Decoration** — 1500 sparkles\n${catOwned ? "✅ Owned" : ""}`,
-    [
-      row(
-        button(
-          pandaOwned
-            ? "🐼 Panda Owned"
-            : "🐼 Buy Panda — 3000",
-          "buy_panda",
-          pandaOwned ? 2 : 1,
-          pandaOwned
-        ),
-
-        button(
-          catOwned
-            ? "🐱 Cat Owned"
-            : "🐱 Buy Cat — 1500",
-          "buy_cat",
-          catOwned ? 2 : 1,
-          catOwned
-        )
-      ),
-
-      row(
-        button(
-          "⬅️ Back",
-          "shop",
-          2
-        )
-      )
-    ]
-  );
+async function showDecorationShop(env, interaction) {
+  const user=getUserFromInteraction(interaction); const player=await getPlayer(env,user.id);
+  const items=[
+    ["panda_decoration","🐼 Panda","buy_panda"], ["cat_decoration","🐱 Cat","buy_cat"],
+    ["raccoon_thief_decoration","🦝 Raccoon Thief","buy_raccoon_thief"],
+    ["frank_frog_decoration","🐸 Frank the Frog","buy_frank_frog"],
+    ["duck_hat_boots_decoration","🦆 Duck With Hat & Boots","buy_duck_hat_boots"],
+    ["cheddar_falls_decoration","🧀 Cheddar Falls","buy_cheddar_falls"]
+  ];
+  const buttons=items.map(([id,label,buy])=>{const owned=player.inventory.includes(id);return button(owned?`${label} Owned`:`${label} — ${SHOP_ITEMS[id].price}`,buy,owned?2:1,owned);});
+  const rows=[];for(let i=0;i<buttons.length;i+=3)rows.push(row(...buttons.slice(i,i+3)));rows.push(row(button("⬅️ Back","shop",2)));await sendText(env,interaction,"🎀 **Decoration Shop**\n\nChoose a decoration. ✨",rows);
 }
-
 async function showEffectShop(
   env,
   interaction
@@ -3247,7 +3378,9 @@ async function showEffectShop(
 
   const items = [
     ["butterflies_effect", "🦋 Butterflies", "buy_butterflies"],
-    ["hearts_effect", "💕 Hearts", "buy_hearts"]
+    ["hearts_effect", "💕 Hearts", "buy_hearts"],
+    ["candy_effect", "🍭 Candy Effect", "buy_candy_effect"],
+    ["halloween_effect", "👻 Halloween Effect", "buy_halloween_effect"]
   ];
 
   const buttons = items.map(
@@ -3273,6 +3406,62 @@ async function showEffectShop(
       row(button("⬅️ Back", "shop", 2))
     ]
   );
+}
+
+const REGULAR_SHOP_SETS = [
+  {
+    id: "candyland",
+    label: "🍭 Candyland",
+    description: "Dreamy pastel candy set",
+    items: [
+      ["cotton_candy_tree", "🍭 Cotton Candy Tree", "buy_cotton_candy"],
+      ["candyland_background", "🍬 Candyland Background", "buy_candyland"],
+      ["candy_effect", "🍭 Candy Effect", "buy_candy_effect"]
+    ]
+  },
+  {
+    id: "forest",
+    label: "🌲 Forest Collection",
+    description: "Permanent woodland favorites",
+    items: [
+      ["shadow_tree", "🌑 Shadow Tree", "buy_shadow_tree"],
+      ["full_cherry_tree", "🌸 Full Cherry Tree", "buy_full_cherry_tree"],
+      ["pine_tree", "🌲 Pine Tree", "buy_pine_tree"],
+      ["red_tree", "❤️ Red Tree", "buy_red_tree"],
+      ["soul_tree", "💙 Soul Tree", "buy_soul_tree"]
+    ]
+  },
+  {
+    id: "nature",
+    label: "🍄 Nature Collection",
+    description: "Permanent backgrounds and tree decorations",
+    items: [
+      ["magic_mushroom_background", "🍄 Magic Mushroom", "buy_magic_mushroom"],
+      ["field_day_background", "🌾 Field Day", "buy_field_day"],
+      ["red_forest_background", "🌲 Red Forest", "buy_red_forest"],
+      ["panda_decoration", "🐼 Panda Decoration", "buy_panda"],
+      ["cat_decoration", "🐱 Cat Decoration", "buy_cat"]
+    ]
+  }
+];
+
+async function showRegularShop(env, interaction) {
+  await deferInteraction(env, interaction, { update: true });
+  const buttons = REGULAR_SHOP_SETS.map(set => button(set.label, `regular_set:${set.id}`, 1));
+  const rows=[]; for(let i=0;i<buttons.length;i+=2) rows.push(row(...buttons.slice(i,i+2)));
+  rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
+  rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2)));
+  rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
+  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\nChoose a permanent bundle, or browse by cosmetic category. ✨",rows);
+}
+
+async function showRegularSet(env,interaction,setId){
+  await deferInteraction(env,interaction,{update:true});
+  const set=REGULAR_SHOP_SETS.find(x=>x.id===setId); if(!set)return sendText(env,interaction,"❌ That regular bundle doesn't exist.");
+  const user=getUserFromInteraction(interaction); const player=await getPlayer(env,user.id);
+  const buttons=set.items.map(([itemId,label,buyId])=>{const owned=player.inventory.includes(itemId);const item=SHOP_ITEMS[itemId];return button(owned?`${label} Owned`:`${label} — ${item?.price||0}`,buyId,owned?2:1,owned);});
+  const rows=[];for(let i=0;i<buttons.length;i+=3)rows.push(row(...buttons.slice(i,i+3)));rows.push(row(button("⬅️ Back to Regular Shop","shop",2)));
+  await sendText(env,interaction,`🛍️ **${set.label}**\n\n${set.description}\n\nChoose an item to purchase. ✨`,rows);
 }
 
 const LIMITED_SHOP_SETS = [
@@ -3342,8 +3531,8 @@ const LIMITED_SHOP_SETS = [
     description: "Holiday limited items",
     items: [
       ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
-      ["pumpkin_cat_decoration", "🎃 Pumpkin Cat", "buy_pumpkin_cat"],
-      ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
+      ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"],
+      ["halloween_effect", "👻 Halloween Effect", "buy_halloween_effect"]
     ]
   }
 ];
@@ -3858,6 +4047,13 @@ async function showCustomEffects(
     );
   }
 
+  if (player.inventory.includes("candy_effect")) {
+    buttons.push(button("🍭 Candy Rush", "equip_effect_candy_rush", player.equipped.effect === "candy_rush" ? 3 : 2));
+  }
+  if (player.inventory.includes("halloween_effect")) {
+    buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
+  }
+
   buttons.push(
     button(
       "❌ Remove",
@@ -3963,6 +4159,16 @@ async function showCustomDecorations(
           : 2
       )
     );
+  }
+
+  const newDecorations = [
+    ["raccoon_thief_decoration", "🦝 Raccoon Thief", "raccoon_thief"],
+    ["frank_frog_decoration", "🐸 Frank the Frog", "frank_frog"],
+    ["duck_hat_boots_decoration", "🦆 Duck With Hat & Boots", "duck_hat_boots"],
+    ["cheddar_falls_decoration", "🧀 Cheddar Falls", "cheddar_falls"]
+  ];
+  for (const [itemId,label,value] of newDecorations) {
+    if (player.inventory.includes(itemId)) buttons.push(button(label, `equip_decoration_${value}`, player.equipped.decoration === value ? 3 : 2));
   }
 
   buttons.push(
@@ -4268,6 +4474,8 @@ async function equipEffect(
       hearts: "hearts_effect",
       purr_princess: "purr_princess_effect",
       green_glow: "green_glow_effect",
+      candy_rush: "candy_effect",
+      halloween: "halloween_effect",
       prism_flutter: "prism_flutter_effect",
       lavender_twilight: "lavender_twilight_effect",
       world_of_flags: "world_of_flags_effect",
@@ -4337,7 +4545,19 @@ async function equipDecoration(
         "panda_decoration",
 
       cat:
-        "cat_decoration"
+        "cat_decoration",
+
+      raccoon_thief:
+        "raccoon_thief_decoration",
+
+      frank_frog:
+        "frank_frog_decoration",
+
+      duck_hat_boots:
+        "duck_hat_boots_decoration",
+
+      cheddar_falls:
+        "cheddar_falls_decoration"
     }[decoration];
 
     if (
@@ -4526,8 +4746,8 @@ const INVENTORY_CATEGORIES = [
 const INVENTORY_CATEGORY_IDS = {
   trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"],
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect"],
-  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "stoned_balloon_decoration"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect"],
+  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect"]
 };
 
@@ -5431,6 +5651,17 @@ async function handleComponent(
     return;
   }
 
+  if (id === "delete:confirm") { await handleDeleteConfirm(env,interaction); return; }
+  if (id === "delete:cancel") { await handleDeleteCancel(env,interaction); return; }
+
+  if (id.startsWith("nameeffect:")) {
+    const parts=id.split(":"); if(parts[1]==="equip"){await handleNameEffectEquip(env,interaction,parts[2]);return;}
+  }
+
+  if (id.startsWith("regular_set:")) {
+    await showRegularSet(env,interaction,id.slice("regular_set:".length)); return;
+  }
+
   if (id.startsWith("title:")) {
     const parts = id.split(":");
     if (parts[1] === "list") { await handleTitleList(env, interaction); return; }
@@ -5658,6 +5889,24 @@ async function handleComponent(
 
     buy_hearts:
       "hearts_effect",
+
+    buy_candy_effect:
+      "candy_effect",
+
+    buy_halloween_effect:
+      "halloween_effect",
+
+    buy_raccoon_thief:
+      "raccoon_thief_decoration",
+
+    buy_frank_frog:
+      "frank_frog_decoration",
+
+    buy_duck_hat_boots:
+      "duck_hat_boots_decoration",
+
+    buy_cheddar_falls:
+      "cheddar_falls_decoration",
 
     buy_magic_mushroom:
       "magic_mushroom_background",
@@ -11712,6 +11961,7 @@ async function resolveChaosIslandRound(env, game, interaction=null, timedOut=fal
       const winnerReward = winners.some(w=>w.id===p.id) ? ISLAND_WINNER_REWARD : 0;
       p.finalReward = Number(p.sparklesEarned||0) + survivorReward + winnerReward;
       player.sparkles=Number(player.sparkles||0)+p.finalReward;
+      if (winners.some(w=>w.id===p.id)) { player.chaosIslandWins = Number(player.chaosIslandWins || 0) + 1; if (!player.titles.includes("island_champion")) player.titles.push("island_champion"); }
       await savePlayer(env,player);
     }
     const finalLines=Object.values(game.players).sort((a,b)=>Number(b.points||0)-Number(a.points||0)).map(p=>`• <@${p.id}> — ${p.alive?"❤️ Survived":"💀 Eliminated"} — **${p.points} pts** — **${p.finalReward || 0} ✨ earned**`).join("\n");
@@ -11775,7 +12025,7 @@ async function processChaosIslandTimers(env) {
    SINGLE-PLAYER CHAOTIC STRATEGY GAME
 ========================================================= */
 
-const SOLO_MISSION_ROUNDS = 8;
+const SOLO_MISSION_ROUNDS = 10;
 const SOLO_START_CASH = 500;
 const SOLO_START_HEALTH = 3;
 const SOLO_START_HEAT = 0;
@@ -12033,8 +12283,35 @@ const SOLO_TITLES = {
   battle_streak: { name: "the Bark Streak", description: "Win 3 Tree Battles in a row." },
   battle_master: { name: "the Battle Master", description: "Win 10 Tree Battles." },
   battle_legend: { name: "the Tree Battle Legend", description: "Win 25 Tree Battles." },
-  battle_clutch: { name: "the One-HP Menace", description: "Win a Tree Battle while at 20 HP or less." }
+  battle_clutch: { name: "the One-HP Menace", description: "Win a Tree Battle while at 20 HP or less." },
+  ten_level_survivor: { name: "the Story Survivor", description: "Complete all 10 Solo Mission levels." },
+  story_master: { name: "the Story Master", description: "Finish a Solo Mission with 8,000+ score." },
+  island_champion: { name: "the Island Champion", description: "Win Chaos Island." },
+  pastel_winner: { name: "the Pastel Menace", description: "Win Pastel Panic." },
+  collector: { name: "the Collector", description: "Own 10 shop items." }
 };
+
+const SOLO_STORY_LEVELS = [
+  ["Level 1 — The Invitation", "A suspicious invitation pulls you into the first job."],
+  ["Level 2 — The Hidden Route", "The easy route disappears and a stranger route opens."],
+  ["Level 3 — The Raccoon Deal", "The raccoons know something. They want something in return."],
+  ["Level 4 — The Locked Room", "A sealed room contains the next clue and several terrible ideas."],
+  ["Level 5 — The Double Cross", "Someone may be helping you. Someone may absolutely not be."],
+  ["Level 6 — The Glitter Trap", "The mission gets louder, shinier, and much more dangerous."],
+  ["Level 7 — The Escape", "Everything goes wrong at approximately the same time."],
+  ["Level 8 — The Final Heist", "The real objective finally comes into view."],
+  ["Level 9 — The Last Choice", "One final decision determines what kind of legend you become."],
+  ["Level 10 — The Ending", "Your choices catch up with you. The ending is yours." ]
+];
+
+function soloEnding(game) {
+  if (game.health <= 0) return "💀 You survived the story only in the form of a very dramatic cautionary tale.";
+  if (game.highestHeat >= 90 && game.cash >= 2500) return "👑 THE CHAOTIC TYCOON — You escaped rich, notorious, and absolutely unrepentant.";
+  if (game.heat <= 10 && game.health === SOLO_START_HEALTH) return "🕶️ THE GHOST — Nobody can prove you were ever there.";
+  if (game.riskyChoices >= 6) return "🔥 THE CHAOS LEGEND — You made terrible choices with astonishing confidence.";
+  if (game.cash >= 4000) return "💰 THE GREAT GETAWAY — You left with a ridiculous fortune.";
+  return "🌳 THE UNEXPECTED HERO — Somehow, your questionable decisions saved the day.";
+}
 
 function soloPlayerName(player) {
   const name = player.displayName || player.username || "Werewife";
@@ -12057,8 +12334,10 @@ function soloChoiceRows(game) {
 
 function soloGameText(game) {
   return [
-    `🕵️ **SOLO MISSION — ROUND ${game.round}/${game.maxRounds}**`,
-    `👤 **${game.playerName}**`,
+    `🕵️ **SOLO MISSION — LEVEL ${game.round}/${game.maxRounds}**`,
+    `📖 **${SOLO_STORY_LEVELS[Math.max(0, Math.min(SOLO_STORY_LEVELS.length - 1, game.round - 1))]?.[0] || "Story Level"}**`,
+    `_${SOLO_STORY_LEVELS[Math.max(0, Math.min(SOLO_STORY_LEVELS.length - 1, game.round - 1))]?.[1] || "The story continues..."}_`,
+    `👤 **${game.playerName}**`, 
     "",
     `❤️ **Health:** ${game.health}/3`,
     `💰 **Stash:** ${game.cash}`,
@@ -12141,7 +12420,13 @@ async function getSoloLeaderboard(env) {
 
 function unlockSoloTitles(player, mission) {
   if (!Array.isArray(player.titles)) player.titles = [];
-  const unlock = id => { if (!player.titles.includes(id)) player.titles.push(id); };
+  const newlyUnlocked = [];
+  const unlock = id => {
+    if (!player.titles.includes(id)) {
+      player.titles.push(id);
+      newlyUnlocked.push(id);
+    }
+  };
   unlock("survivor");
   if (mission.raccoonChoice) unlock("rabid_raccoon");
   if (mission.cash >= 3000) unlock("cheese_boss");
@@ -12154,6 +12439,9 @@ function unlockSoloTitles(player, mission) {
   if (mission.cash >= 2000) unlock("rich_goblin");
   if (mission.health === SOLO_START_HEALTH) unlock("iron_will");
   if (mission.buttonChoices >= 3) unlock("button_goblin");
+  if (mission.round >= 10 && mission.finalScore >= 3500) unlock("ten_level_survivor");
+  if (mission.finalScore >= 8000) unlock("story_master");
+  return newlyUnlocked;
 }
 
 async function handleGamesMenu(env, interaction) {
@@ -12220,15 +12508,14 @@ async function finishSoloMission(env, interaction, player, game, aborted = false
   const reward = aborted ? 0 : Math.min(1000, Math.max(50, Math.floor(finalScore / 20)));
   player.soloSparklesEarned = Number(player.soloSparklesEarned || 0) + reward;
   player.sparkles = Number(player.sparkles || 0) + reward;
-  unlockSoloTitles(player, { ...game, finalScore });
+  const newlyUnlockedTitles = unlockSoloTitles(player, { ...game, finalScore });
   player.soloMission = null;
   await savePlayer(env, player);
   if (!aborted) await updateSoloLeaderboard(env, player, finalScore);
-  const unlocked = player.titles.map(id => SOLO_TITLES[id]?.name).filter(Boolean);
-  const titleText = unlocked.length ? `\n🏷️ **Titles unlocked:** ${unlocked.slice(-4).map(x => `**${x}**`).join(", ")}` : "";
+  const titleText = newlyUnlockedTitles.length ? `\n🏷️ **NEW titles unlocked:** ${newlyUnlockedTitles.map(id => `**${SOLO_TITLES[id]?.name || id}**`).join(", ")}` : "";
   const content = aborted
     ? `🛑 **SOLO MISSION ABORTED**\n\nYour run score was **${finalScore}**. No sparkles awarded.\n\nYou can try again anytime. 🕵️`
-    : `🏁 **SOLO MISSION COMPLETE!**\n\n👤 **${soloPlayerName(player)}**\n🏆 **Final Score:** ${finalScore}\n💰 **Final Stash:** ${game.cash}\n❤️ **Health:** ${game.health}/3\n🚨 **Highest Heat:** ${game.highestHeat}/100\n✨ **Sparkles Earned:** +${reward}${titleText}\n\n🏆 Check **/solo-leaderboard** to see where you rank!`;
+    : `🏁 **SOLO MISSION COMPLETE!**\n\n${soloEnding(game)}\n\n👤 **${soloPlayerName(player)}**\n🏆 **Final Score:** ${finalScore}\n💰 **Final Stash:** ${game.cash}\n❤️ **Health:** ${game.health}/3\n🚨 **Highest Heat:** ${game.highestHeat}/100\n✨ **Sparkles Earned:** +${reward}${titleText}\n\n🏆 Check **/solo-leaderboard** to see where you rank!`;
   await editOriginalResponse(env, interaction, { content, components: [row(button("🕵️ Play Again", "solo:start", 1), button("🏆 Leaderboard", "games:solo_leaderboard", 2)), row(button("🏷️ Titles", "title:list", 3), button("🎮 Games", "games:menu", 2))] });
 }
 
@@ -12301,17 +12588,7 @@ async function handleSoloLeaderboard(env, interaction) {
 }
 
 async function handleTitleList(env, interaction) {
-  const user = getUserFromInteraction(interaction);
-  if (!user) return;
-  const player = await getPlayer(env, user.id);
-  updatePlayerIdentity(player, interaction);
-  const equipped = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? SOLO_TITLES[player.equippedTitle].name : "None";
-  const lines = Object.entries(SOLO_TITLES).map(([id, t]) => `${player.titles.includes(id) ? "🏆" : "🔒"} **${t.name}** — ${t.description}${player.equippedTitle === id ? " — ⭐ EQUIPPED" : ""}`);
-  await sendText(env, interaction, `🏷️ **YOUR TITLES**\n\nCurrently equipped: **${equipped}**\n\n${lines.join("\n\n")}`, [
-    row(...player.titles.slice(0, 5).map(id => button(`Equip ${SOLO_TITLES[id]?.name || id}`, `title:equip:${id}`, 2))),
-    ...(player.titles.length > 5 ? [row(...player.titles.slice(5, 10).map(id => button(`Equip ${SOLO_TITLES[id]?.name || id}`, `title:equip:${id}`, 2)))] : []),
-    row(button("❌ Unequip Title", "title:unequip", 4), button("🎮 Games", "games:menu", 2))
-  ]);
+  return handleTitlesMenu(env, interaction);
 }
 
 async function handleTitleEquip(env, interaction, titleId) {
@@ -15994,6 +16271,63 @@ async function handleHeistCommand(
   );
 }
 
+
+/* =========================================================
+   PLAYER ITEM GIFTING / DELETE / SUGGEST / HELP
+========================================================= */
+
+function resolveInventoryItemId(player, raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  if (!value) return null;
+  const ids = Object.keys(SHOP_ITEMS);
+  const direct = ids.find(id => id.toLowerCase() === value);
+  if (direct && player.inventory.includes(direct)) return direct;
+  const byName = ids.find(id => player.inventory.includes(id) && String(SHOP_ITEMS[id].name).toLowerCase() === value);
+  if (byName) return byName;
+  const partial = ids.find(id => player.inventory.includes(id) && (id.toLowerCase().includes(value) || String(SHOP_ITEMS[id].name).toLowerCase().includes(value)));
+  return partial || null;
+}
+
+async function handlePresentItem(env, interaction, targetId, rawItem) {
+  const user=getUserFromInteraction(interaction);
+  if(!user||!interaction.guild_id)return sendText(env,interaction,"❌ `/present` can only be used inside a server.");
+  if(!targetId||targetId===user.id)return sendText(env,interaction,"❌ Choose another player to receive the item.");
+  const sender=await getPlayer(env,user.id); const receiver=await getPlayer(env,targetId);
+  const itemId=resolveInventoryItemId(sender,rawItem);
+  if(!itemId)return sendText(env,interaction,"❌ You don't own that item. Use `/inventory` to see your owned items and their IDs.");
+  if(!Array.isArray(receiver.inventory))receiver.inventory=[];
+  if(receiver.inventory.includes(itemId))return sendText(env,interaction,`❌ <@${targetId}> already owns **${SHOP_ITEMS[itemId].name}**.`);
+  sender.inventory=sender.inventory.filter(id=>id!==itemId); receiver.inventory.push(itemId);
+  if(sender.equipped?.tree && SHOP_ITEMS[itemId]?.type==="tree" && SHOP_ITEMS[itemId].value===sender.equipped.tree) sender.equipped.tree="cherry";
+  if(sender.equipped?.theme && SHOP_ITEMS[itemId]?.type==="background" && SHOP_ITEMS[itemId].value===sender.equipped.theme) sender.equipped.theme="cherry";
+  if(sender.equipped?.effect && SHOP_ITEMS[itemId]?.type==="effect" && SHOP_ITEMS[itemId].value===sender.equipped.effect) sender.equipped.effect=null;
+  if(sender.equipped?.decoration && SHOP_ITEMS[itemId]?.type==="decoration" && SHOP_ITEMS[itemId].value===sender.equipped.decoration) sender.equipped.decoration=null;
+  await savePlayer(env,sender);await savePlayer(env,receiver);
+  await sendText(env,interaction,`🎁 You gifted **${SHOP_ITEMS[itemId].name}** to <@${targetId}>! 💖`);
+  await sendUserDM(env,targetId,`🎁 **You received a Werewives gift!**\n\n<@${user.id}> gifted you **${SHOP_ITEMS[itemId].name}**. ✨`);
+}
+
+async function handleDeleteItem(env,interaction,rawItem){
+  const user=getUserFromInteraction(interaction);if(!user)return;
+  const player=await getPlayer(env,user.id);const itemId=resolveInventoryItemId(player,rawItem);
+  if(!itemId)return sendText(env,interaction,"❌ You don't own that item. Use `/inventory` to see your items.");
+  player.pendingDeleteItem=itemId;await savePlayer(env,player);
+  await sendText(env,interaction,`⚠️ **Delete ${SHOP_ITEMS[itemId].name}?**\n\nThis removes it from your inventory. If you later want it again, you may need to earn or buy it again.\n\nAre you sure?`,[row(button("🗑️ Yes, Delete","delete:confirm",4),button("❌ Cancel","delete:cancel",2))]);
+}
+
+async function handleDeleteConfirm(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const itemId=player.pendingDeleteItem;delete player.pendingDeleteItem;if(!itemId||!player.inventory.includes(itemId))return sendText(env,interaction,"❌ That item is no longer in your inventory.");player.inventory=player.inventory.filter(id=>id!==itemId);const item=SHOP_ITEMS[itemId];if(item?.type==="tree"&&item.value===player.equipped?.tree)player.equipped.tree="cherry";if(item?.type==="background"&&item.value===player.equipped?.theme)player.equipped.theme="cherry";if(item?.type==="effect"&&item.value===player.equipped?.effect)player.equipped.effect=null;if(item?.type==="decoration"&&item.value===player.equipped?.decoration)player.equipped.decoration=null;await savePlayer(env,player);await sendText(env,interaction,`🗑️ Deleted **${item?.name||itemId}** from your inventory.`);}
+async function handleDeleteCancel(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);delete player.pendingDeleteItem;await savePlayer(env,player);await sendText(env,interaction,"💗 Delete cancelled. Your item is safe.");}
+
+async function sendOwnerSuggestion(env,interaction,message){
+  const user=getUserFromInteraction(interaction);const channel=interaction.channel_id||"DM";const guild=interaction.guild_id?`Server ID: ${interaction.guild_id}`:"Direct Message";
+  const text=`💡 **WEREWIVES SUGGESTION / BUG REPORT**\n\nFrom: ${user?.username||"Unknown"} (<@${user?.id||""}>)\n${guild}\nChannel ID: ${channel}\n\n${String(message||"").trim()}`;
+  let dmChannel=null;try{const r=await discordRequest(env,"/users/@me/channels",{method:"POST",body:JSON.stringify({recipients:[env.OWNER_ID]})});if(!r.ok)throw new Error(`DM channel ${r.status}`);dmChannel=await r.json();const box=await fetch(imageUrl(IMAGES.suggestionBox));const blob=await box.blob();const form=new FormData();form.append("content",text);form.append("files[0]",blob,"suggestion-box.png");const mr=await discordRequest(env,`/channels/${dmChannel.id}/messages`,{method:"POST",body:form});if(!mr.ok)throw new Error(`DM message ${mr.status}`);return true;}catch(error){console.error("Suggestion DM failed",error);return false;}
+}
+async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
+
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/pastelpanic` — Start Pastel Panic","`/pastel leaderboard` — View Pastel Panic rankings","`/pastelpanic-end` — Request to end Pastel Panic","`/blame` — Nudge the current Pastel Panic player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/profilecolor` — Choose your profile HEX background","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Pastel Panic's existing game system is unchanged."] .join("\n");}
+async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
+
 /* =========================================================
    COMMAND ROUTER
 ========================================================= */
@@ -16421,10 +16755,17 @@ async function handleCommand(
     return;
   }
 
-  if (name === "title") {
-    await handleTitleList(env, interaction);
+  if (name === "title" || name === "titles") {
+    await handleTitlesMenu(env, interaction);
     return;
   }
+
+  if (name === "profile") { await handleProfile(env, interaction); return; }
+  if (name === "profilecolor") { await handleProfileColor(env, interaction, getOption(interaction,"hex")); return; }
+  if (name === "present") { await handlePresentItem(env, interaction, getOption(interaction,"user"), getOption(interaction,"item")); return; }
+  if (name === "delete") { await handleDeleteItem(env, interaction, getOption(interaction,"item")); return; }
+  if (name === "suggest") { await handleSuggestion(env, interaction, getOption(interaction,"message")); return; }
+  if (name === "help") { await handleHelp(env, interaction); return; }
 
   if (name === "island") {
     await handleIslandCommand(env, interaction);
@@ -16835,8 +17176,15 @@ const BATTLE_COSMETIC_ABILITIES = {
 const BATTLE_EFFECT_ABILITIES = {
   hearts: { healOnAttack: 5 },
   butterflies: { dodgeChance: 0.15 },
-  purr_princess: { confuseChance: 0.20 },
-  green_glow: { specialBonus: 4 }
+  purr_princess: { confuseChance: 0.20, specialMove: "Royal Purr" },
+  green_glow: { specialBonus: 4, specialMove: "Toxic Glow" },
+  prism_flutter: { specialMove: "Prism Flurry" },
+  lavender_twilight: { specialMove: "Moonlight Lullaby" },
+  world_of_flags: { specialMove: "Global Rally" },
+  ocean_opal: { specialMove: "Bubble Burst" },
+  werewives: { specialMove: "Werewolf Howl" },
+  halloween: { specialMove: "Spook" },
+  candy_rush: { specialMove: "Candy Rush" }
 };
 
 const BATTLE_DECORATION_ABILITIES = {
@@ -16901,7 +17249,8 @@ function getBattleAbility(player) {
     fatalSave: Boolean(tree.fatalSave),
     confuseChance: Number(effect.confuseChance || 0),
     specialBonus: Number(tree.specialBonus || 0) + Number(effect.specialBonus || 0) + Number(background.specialBonus || 0),
-    randomEffect: Boolean(background.randomEffect)
+    randomEffect: Boolean(background.randomEffect),
+    specialMove: effect.specialMove || ""
   };
 }
 
@@ -17075,7 +17424,7 @@ async function finishBattle(env, game, winnerId, loserId, reason) {
   winnerPlayer.battleBestStreak = Math.max(Number(winnerPlayer.battleBestStreak||0), Number(winnerPlayer.battleStreak||0));
   if (Number(winner?.hp||0) <= 20) winnerPlayer.battleLowHpWins = Number(winnerPlayer.battleLowHpWins||0)+1;
   if (!Array.isArray(winnerPlayer.titles)) winnerPlayer.titles=[];
-  const unlockBattleTitle=id=>{if(!winnerPlayer.titles.includes(id))winnerPlayer.titles.push(id);};
+  const newlyUnlockedBattleTitles=[]; const unlockBattleTitle=id=>{if(!winnerPlayer.titles.includes(id)){winnerPlayer.titles.push(id);newlyUnlockedBattleTitles.push(id);}};
   unlockBattleTitle("battle_champion");
   if(winnerPlayer.battleWins>=5)unlockBattleTitle("battle_brawler");
   if(winnerPlayer.battleBestStreak>=3)unlockBattleTitle("battle_streak");
@@ -17087,6 +17436,7 @@ async function finishBattle(env, game, winnerId, loserId, reason) {
   winnerPlayer.sparkles = Number(winnerPlayer.sparkles || 0) + BATTLE_WIN_REWARD;
   winnerPlayer.battleSparklesEarned = Number(winnerPlayer.battleSparklesEarned || 0) + BATTLE_WIN_REWARD;
   game.log.push(`✨ **${winner?.name || "Winner"}** banked **+${BATTLE_WIN_REWARD} sparkles** for winning the Tree Battle!`);
+  if (newlyUnlockedBattleTitles.length) game.log.push(`🏷️ **New title unlocked:** ${newlyUnlockedBattleTitles.map(id => SOLO_TITLES[id]?.name || id).join(", ")}`);
   await savePlayer(env,winnerPlayer); await savePlayer(env,loserPlayer);
   const state = await getGuildState(env,game.guildId);
   if (state.battle?.id === game.id) { state.battle=null; await saveGuildState(env,game.guildId,state); }
@@ -17102,6 +17452,7 @@ async function handleBattleAction(env, interaction, action, gameId) {
   if (game.turn !== user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   game.interactionToken = interaction.token;
   const me = battlePlayer(game,user.id), foe = battleOpponent(game,user.id);
+  if (Number(me.stunnedTurns||0)>0) { me.stunnedTurns=Math.max(0,Number(me.stunnedTurns)-1); game.turn=foe.userId; game.log.push(`😵 **${me.name}** is stunned and lost this turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
   if (me.stunned) { me.stunned=false; game.turn=foe.userId; game.log.push(`😵 **${me.name}** was stunned and lost their turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
   if (me.confused && Math.random()<0.5) { me.confused=false; game.log.push(`🤪 **${me.name}** got confused and did absolutely nothing.`); game.turn=foe.userId; await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
   me.defending = false;
@@ -17130,11 +17481,30 @@ async function handleBattleAction(env, interaction, action, gameId) {
   } else if (action === "special") {
     if (me.special<100) return sendEphemeralFollowup(env,interaction,`❌ Your Special is only **${me.special}%** charged.`);
     me.special=0;
+    const specialName=ability.specialMove || "Tree Cataclysm";
     let damage=30+Number(ability.specialBonus||0)+randomInt(-4,8);
+    if(specialName==="Bubble Burst") damage=34;
+    if(specialName==="Spook") damage=24;
+    if(specialName==="Prism Flurry") damage=38;
+    if(specialName==="Moonlight Lullaby") damage=28;
+    if(specialName==="Global Rally") damage=31;
+    if(specialName==="Werewolf Howl") damage=36;
+    if(specialName==="Toxic Glow") damage=33;
+    if(specialName==="Candy Rush") damage=32;
+    if(specialName==="Royal Purr") damage=29;
     const result=battleApplyDamage(foe,damage);
+    if(specialName==="Bubble Burst") foe.stunnedTurns=Math.max(Number(foe.stunnedTurns||0),1);
+    if(specialName==="Spook") foe.stunnedTurns=Math.max(Number(foe.stunnedTurns||0),2);
+    if(specialName==="Moonlight Lullaby") foe.stunnedTurns=Math.max(Number(foe.stunnedTurns||0),1);
+    if(specialName==="Prism Flurry") me.dodgeBonus=Math.max(Number(me.dodgeBonus||0),0.25);
+    if(specialName==="Toxic Glow") me.hp=Math.min(me.maxHp,me.hp+12);
+    if(specialName==="Werewolf Howl") foe.confused=true;
+    if(specialName==="Global Rally") me.hp=Math.min(me.maxHp,me.hp+10);
+    if(specialName==="Candy Rush") me.hp=Math.min(me.maxHp,me.hp+8);
+    if(specialName==="Royal Purr") foe.confused=true;
     me.hp=Math.min(me.maxHp,me.hp+Number(ability.regen||0));
-    game.log.push(`✨ **${me.name}** unleashed a **SPECIAL MOVE** for **${result.damage} damage**!`);
-    if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** Their Special move ended the battle.`);return;}
+    game.log.push(`✨ **${me.name}** unleashed **${specialName}** for **${result.damage} damage**!`);
+    if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** Their **${specialName}** ended the battle.`);return;}
   } else return sendEphemeralFollowup(env,interaction,"❌ Invalid battle action.");
   game.round++;
   game.turn=foe.userId;
@@ -17632,6 +18002,9 @@ async function pastelFinish(env,game,winnerId,reason){
       player.pastelWins=Number(player.pastelWins||0)+1;
       player.pastelRating=Number(player.pastelRating||0)+100;
       player.exp=Number(player.exp||0)+PASTEL_WIN_XP;
+      player.sparkles=Number(player.sparkles||0)+250;
+      player.pastelSparklesEarned=Number(player.pastelSparklesEarned||0)+250;
+      if(!player.titles.includes("pastel_winner")) player.titles.push("pastel_winner");
       const leveledUp=applyLevelUps(player);
       player.pastelLevel=pastelRatingLevel(player.pastelRating);
       player.pastelLastXpEarned=PASTEL_WIN_XP;
@@ -17736,7 +18109,7 @@ async function handlePastelQuit(env,interaction,gameId){
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;wp.sparkles=Number(wp.sparkles||0)+250;wp.pastelSparklesEarned=Number(wp.pastelSparklesEarned||0)+250;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,components:[]})});
@@ -17791,6 +18164,48 @@ const COMMANDS = [
   {
     name: "title",
     description: "View and equip your earned titles"
+  },
+  {
+    name: "titles",
+    description: "View owned titles, unlockable titles, and Name Effects"
+  },
+
+  {
+    name: "profile",
+    description: "View a Werewives player profile",
+    options: [{ type: 6, name: "user", description: "Player whose profile to view", required: false }]
+  },
+
+  {
+    name: "profilecolor",
+    description: "Choose your profile card background HEX color",
+    options: [{ type: 3, name: "hex", description: "HEX color like #FFB6E6, or reset", required: true, max_length: 7 }]
+  },
+
+  {
+    name: "present",
+    description: "Gift an item you own to another player",
+    options: [
+      { type: 6, name: "user", description: "Player receiving the item", required: true },
+      { type: 3, name: "item", description: "Inventory item ID (shown in /inventory)", required: true, max_length: 80 }
+    ]
+  },
+
+  {
+    name: "delete",
+    description: "Delete an unwanted cosmetic from your inventory",
+    options: [{ type: 3, name: "item", description: "Inventory item ID to delete", required: true, max_length: 80 }]
+  },
+
+  {
+    name: "suggest",
+    description: "Send a suggestion or bug report privately to the bot owner",
+    options: [{ type: 3, name: "message", description: "Your suggestion or bug report", required: true, max_length: 1000 }]
+  },
+
+  {
+    name: "help",
+    description: "See player commands and what they do"
   },
 
   {
