@@ -866,6 +866,16 @@ function gifLZW(indices){const clear=256,end=257;let codeSize=9,next=258,dict=ne
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
 
+async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif") {
+  const form = new FormData();
+  form.append("payload_json", JSON.stringify({ content, attachments: [{ id: 0, filename }] }));
+  form.append("files[0]", new Blob([bytes], { type: contentType }), filename);
+  return fetch(
+    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
+    { method: "PATCH", body: form }
+  );
+}
+
 async function handleProfile(env, interaction) {
   const user = getUserFromInteraction(interaction); if(!user)return;
   const targetId = getOption(interaction,"user") || user.id;
@@ -873,13 +883,18 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
   try{
-    const gif=await renderAnimatedProfile(env,player); const form=new FormData();
-    form.append("payload_json",JSON.stringify({content:`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,attachments:[{id:0,filename:"werewives-profile.gif"}]}));
-    form.append("files[0]",new Blob([gif],{type:"image/gif"}),"werewives-profile.gif");
-    await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",body:form});
-  }catch(error){console.error("Profile render failed",error);await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}'s Profile**\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);}
+    const gif=await renderAnimatedProfile(env,player);
+    const response = await editOriginalResponseWithFile(
+      env, interaction,
+      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
+      "werewives-profile.gif", gif
+    );
+    if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
+  }catch(error){
+    console.error("Profile render failed",error);
+    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);
+  }
 }
-
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
 async function handleNameEffectEquip(env,interaction,effectId){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);if(effectId==="none"){player.equippedNameEffect="";await savePlayer(env,player);return sendText(env,interaction,"✨ Name Effect unequipped.");}if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");player.equippedNameEffect=effectId;await savePlayer(env,player);await sendText(env,interaction,`✨ **${NAME_EFFECTS[effectId].name}** is now equipped!`);}
@@ -3342,7 +3357,6 @@ async function showBackgroundShop(
     );
 
   const items = [
-    ["candyland_background", "🍬 Candy Land", "buy_candyland"],
     ["magic_mushroom_background", "🍄 Magic Mushroom", "buy_magic_mushroom"],
     ["field_day_background", "🌾 Field Day", "buy_field_day"],
     ["red_forest_background", "🌲 Red Forest", "buy_red_forest"]
@@ -3392,7 +3406,6 @@ async function showTreeShop(
     );
 
   const items = [
-    ["cotton_candy_tree", "🍭 Cotton Candy", "buy_cotton_candy"],
     ["shadow_tree", "🌑 Shadow", "buy_shadow_tree"],
     ["full_cherry_tree", "🌸 Full Cherry", "buy_full_cherry_tree"],
     ["pine_tree", "🌲 Pine", "buy_pine_tree"],
@@ -3490,36 +3503,12 @@ async function showEffectShop(
 const REGULAR_SHOP_SETS = [
   {
     id: "candyland",
-    label: "🍭 Candyland",
+    label: "🍭 Candyland Bundle",
     description: "Dreamy pastel candy set",
     items: [
       ["cotton_candy_tree", "🍭 Cotton Candy Tree", "buy_cotton_candy"],
       ["candyland_background", "🍬 Candyland Background", "buy_candyland"],
       ["candy_effect", "🍭 Candy Effect", "buy_candy_effect"]
-    ]
-  },
-  {
-    id: "forest",
-    label: "🌲 Forest Collection",
-    description: "Permanent woodland favorites",
-    items: [
-      ["shadow_tree", "🌑 Shadow Tree", "buy_shadow_tree"],
-      ["full_cherry_tree", "🌸 Full Cherry Tree", "buy_full_cherry_tree"],
-      ["pine_tree", "🌲 Pine Tree", "buy_pine_tree"],
-      ["red_tree", "❤️ Red Tree", "buy_red_tree"],
-      ["soul_tree", "💙 Soul Tree", "buy_soul_tree"]
-    ]
-  },
-  {
-    id: "nature",
-    label: "🍄 Nature Collection",
-    description: "Permanent backgrounds and tree decorations",
-    items: [
-      ["magic_mushroom_background", "🍄 Magic Mushroom", "buy_magic_mushroom"],
-      ["field_day_background", "🌾 Field Day", "buy_field_day"],
-      ["red_forest_background", "🌲 Red Forest", "buy_red_forest"],
-      ["panda_decoration", "🐼 Panda Decoration", "buy_panda"],
-      ["cat_decoration", "🐱 Cat Decoration", "buy_cat"]
     ]
   }
 ];
@@ -3531,7 +3520,7 @@ async function showRegularShop(env, interaction) {
   rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
   rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2)));
   rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
-  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\nChoose a permanent bundle, or browse by cosmetic category. ✨",rows);
+  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle here. Forest and nature items are organized in their individual cosmetic categories. ✨",rows);
 }
 
 async function showRegularSet(env,interaction,setId){
@@ -4857,7 +4846,10 @@ async function showInventoryCategory(env, interaction, category, page = 0) {
   const pageCount = Math.max(1, Math.ceil(owned.length / pageSize));
   page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
   const pageItems = owned.slice(page * pageSize, page * pageSize + pageSize);
-  const lines = pageItems.map(id => `• ${id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || id)}`);
+  const lines = pageItems.map(id => {
+    const label = id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || SHOP_ITEMS[id]?.name || id);
+    return `• ${label} — ID: \`${id}\``;
+  });
   const rows = [];
   if (pageCount > 1) {
     rows.push(row(
@@ -5855,6 +5847,19 @@ async function handleComponent(
       interaction
     );
 
+    return;
+  }
+
+  if (id === "inventory") {
+    await showInventory(env, interaction);
+    return;
+  }
+
+  if (id.startsWith("inventory:")) {
+    const parts = id.split(":");
+    const category = parts[1];
+    const page = Number(parts[2] || 0);
+    await showInventoryCategory(env, interaction, category, page);
     return;
   }
 
@@ -16365,10 +16370,10 @@ async function handleHeistCommand(
 
 function resolveInventoryItemId(player, raw) {
   const value = String(raw || "").trim().toLowerCase();
-  if (!value) return null;
+  if (!value || value === "cherry" || value === "cherry tree") return null;
   const ids = Object.keys(SHOP_ITEMS);
-  const direct = ids.find(id => id.toLowerCase() === value);
-  if (direct && player.inventory.includes(direct)) return direct;
+  const direct = ids.find(id => id.toLowerCase() === value && player.inventory.includes(id));
+  if (direct) return direct;
   const byName = ids.find(id => player.inventory.includes(id) && String(SHOP_ITEMS[id].name).toLowerCase() === value);
   if (byName) return byName;
   const partial = ids.find(id => player.inventory.includes(id) && (id.toLowerCase().includes(value) || String(SHOP_ITEMS[id].name).toLowerCase().includes(value)));
@@ -18879,6 +18884,8 @@ export default {
       interaction.type === 2 && interaction.data?.name === "free";
     const isBlameCommand =
       interaction.type === 2 && interaction.data?.name === "blame";
+    const isProfileCommand =
+      interaction.type === 2 && interaction.data?.name === "profile";
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -18911,7 +18918,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTreeComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
