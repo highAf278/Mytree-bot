@@ -1650,16 +1650,21 @@ async function renderTree(
     let effectHTML = "";
 
     if (effect) {
+      /* Keep the effect atmospheric and behind the tree so the tree stays
+         the clear centerpiece instead of being covered by the overlay. */
       effectHTML = `
         <img
           src="${effect}"
           style="
             position:absolute;
-            inset:0;
-            width:100%;
-            height:100%;
+            left:-5%;
+            top:-5%;
+            width:110%;
+            height:110%;
             object-fit:contain;
-            z-index:5;
+            opacity:0.42;
+            mix-blend-mode:screen;
+            z-index:2;
             pointer-events:none;
           "
         />
@@ -1721,12 +1726,12 @@ async function renderTree(
           #tree {
             position: absolute;
             left: 50%;
-            top: 72%;
+            top: 66%;
             transform: translate(-50%, -50%);
-            width: 82%;
-            height: 82%;
+            width: 90%;
+            height: 90%;
             object-fit: contain;
-            z-index: 3;
+            z-index: 4;
           }
         </style>
       </head>
