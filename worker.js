@@ -11983,7 +11983,31 @@ function islandChoiceRows(game, scenario) {
   return rows;
 }
 
-async function islandPublicUpdate(env, interaction, content, components=[]) {
+async function islandPublicUpdate(env, interaction, content, components=[], game=null) {
+  /* Prefer the saved public channel message. This lets scheduled timers update the
+     real island message even though there is no button interaction token available. */
+  if (game?.channelId && game?.messageId) {
+    let response=await discordRequest(env,`/channels/${game.channelId}/messages/${game.messageId}`,{
+      method:"PATCH",
+      body:JSON.stringify({content,components})
+    });
+    if (response.ok) return response;
+
+    /* If the old message was deleted, recreate it instead of leaving the island
+       stuck with a dead/missing board. */
+    console.error("Chaos Island saved message update failed:", response.status, await response.text());
+    if (response.status===404) {
+      const created=await sendChannelMessage(env,game.channelId,content,components);
+      if (created?.id) {
+        game.messageId=created.id;
+        try { await islandSave(env,game); } catch(error) { console.error("Chaos Island message-id save failed:",error); }
+        return new Response(null,{status:200});
+      }
+    }
+    return response;
+  }
+
+  /* Compatibility fallback for older island games that have no saved message ID. */
   const response=await editOriginalResponse(env, interaction, {content,components});
   if (!response.ok) console.error("Chaos Island message update failed:", response.status, await response.text());
   return response;
@@ -12040,6 +12064,7 @@ async function handleIslandCreate(env, interaction) {
     id:`island-${Date.now()}-${user.id}`,
     guildId:interaction.guild_id,
     channelId:interaction.channel_id,
+    messageId:null,
     hostId:user.id,
     status:"lobby",
     maxRounds: ISLAND_DEFAULT_ROUNDS,
@@ -12068,7 +12093,7 @@ async function handleIslandJoin(env, interaction) {
   game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""};
   await islandSave(env, game);
   await acknowledge(env, interaction);
-  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game), game);
 }
 
 async function handleIslandLeave(env, interaction) {
@@ -12087,12 +12112,12 @@ async function handleIslandLeave(env, interaction) {
     state.island=null;
     await saveGuildState(env, interaction.guild_id, state);
     await acknowledge(env, interaction);
-    await islandPublicUpdate(env, interaction, "🏝️ **CHAOS ISLAND LOBBY CLOSED**\n\nEveryone left the island.", []);
+    await islandPublicUpdate(env, interaction, "🏝️ **CHAOS ISLAND LOBBY CLOSED**\n\nEveryone left the island.", [], game);
     return;
   }
   await islandSave(env, game);
   await acknowledge(env, interaction);
-  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+  await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game), game);
 }
 
 async function handleIslandSettings(env, interaction, rounds = null) {
@@ -12109,7 +12134,7 @@ async function handleIslandSettings(env, interaction, rounds = null) {
     game.maxRounds = value;
     await islandSave(env, game);
     await acknowledge(env, interaction);
-    await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game));
+    await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game), game);
     return;
   }
   await sendText(env, interaction, islandSettingsText(game), islandSettingsComponents(game));
@@ -12135,6 +12160,15 @@ async function handleIslandStart(env, interaction) {
   for (const p of Object.values(game.players)) { p.hearts=3; p.alive=true; p.choice=null; p.points=0; p.sparklesEarned=0; }
   await islandSave(env, game);
   await sendPublicText(env, interaction, islandGameText(game,scenario,game.currentVersion), islandChoiceRows(game,scenario));
+  /* Fetch the public interaction response so future button presses and scheduled
+     timers can edit the same channel message reliably. */
+  try {
+    const original=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{headers:{Authorization:`Bot ${env.BOT_TOKEN}`}});
+    if (original.ok) {
+      const data=await original.json();
+      if (data?.id) { game.messageId=data.id; await islandSave(env,game); }
+    }
+  } catch(error) { console.error("Chaos Island message ID capture failed:",error); }
 }
 
 async function handleIslandStatus(env, interaction) {
@@ -12193,14 +12227,14 @@ async function resolveChaosIslandRound(env, game, interaction=null, timedOut=fal
     const content=`🏝️ **CHAOS ISLAND IS OVER!**\n\n${resultLines.join("\n\n")}\n\n🏆 **WINNER${winners.length===1?"":"S"}**\n${winnerText}\n\n🎁 Survivors received **${ISLAND_SURVIVOR_REWARD} ✨**.\n🏆 Winners received an extra **${ISLAND_WINNER_REWARD} ✨**.\n\n📊 **FINAL STANDINGS**\n${finalLines}\n\n🦝 The island has been returned to the raccoons.`;
     const state=await getGuildState(env,game.guildId);
     if (state.island?.id===game.id) { state.island=null; await saveGuildState(env,game.guildId,state); }
-    if (interaction) await islandPublicUpdate(env,interaction,content,[]);
+    if (interaction) await islandPublicUpdate(env,interaction,content,[],game);
     return;
   }
   game.round++;
   const scenario=islandPickScenario(game);
   game.phaseEndsAt=Date.now()+ISLAND_ROUND_TIMEOUT;
   await islandSave(env,game);
-  if (interaction) await islandPublicUpdate(env,interaction,`${resultLines.join("\n\n")}\n\n${islandGameText(game,scenario,game.currentVersion)}`,islandChoiceRows(game,scenario));
+  if (interaction) await islandPublicUpdate(env,interaction,`${resultLines.join("\n\n")}\n\n${islandGameText(game,scenario,game.currentVersion)}`,islandChoiceRows(game,scenario),game);
 }
 
 async function handleIslandChoice(env, interaction, choiceIndex) {
@@ -12236,7 +12270,7 @@ async function handleIslandChoice(env, interaction, choiceIndex) {
   }
   await islandSave(env,game);
   const scenario=getIslandCurrentScenario(game);
-  await islandPublicUpdate(env,interaction,islandGameText(game,scenario,game.currentVersion),islandChoiceRows(game,scenario));
+  await islandPublicUpdate(env,interaction,islandGameText(game,scenario,game.currentVersion),islandChoiceRows(game,scenario),game);
 }
 
 async function processChaosIslandTimers(env) {
@@ -12249,7 +12283,12 @@ async function processChaosIslandTimers(env) {
       if (Date.now() < Number(game.phaseEndsAt||0)) continue;
       await resolveChaosIslandRound(env,game,null,true);
       const refreshed=await getGuildState(env,guildId);
-      if (game.status!=="ended" && refreshed.island?.id===game.id) { refreshed.island=game; await saveGuildState(env,guildId,refreshed); }
+      if (game.status!=="ended" && refreshed.island?.id===game.id) {
+        refreshed.island=game;
+        await saveGuildState(env,guildId,refreshed);
+        const currentScenario=getIslandCurrentScenario(game);
+        if (currentScenario) await islandPublicUpdate(env,null,islandGameText(game,currentScenario,game.currentVersion),islandChoiceRows(game,currentScenario),game);
+      }
     } catch(error) { console.error(`Chaos Island timer failed for guild ${guildId}:`,error); }
   }
 }
@@ -16906,11 +16945,14 @@ async function handleFree(env, interaction, guess) {
   const user=getUserFromInteraction(interaction); if(!user)return;
   if(normalized!=="tanner"&&normalized!=="bob"){await sendText(env,interaction,`🎁 **FREE GIFT MYSTERY**\n\n💡 **Hint:** your name\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈`);return;}
   const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
-  if(player.freeGiftClaimed){await sendText(env,interaction,"🎁 You already claimed your FREE Werewives gift! 💗");return;}
   const isTanner=normalized==="tanner";
+  const claimKey=isTanner?"freeGoldenPickleClaimed":"freeMidnightRiderClaimed";
+  if(player[claimKey]){await sendText(env,interaction,`🎁 You already claimed the FREE **${isTanner?"Golden Pickle":"Midnight Rider"}** gift! 💗`);return;}
   const giftIds=isTanner?["golden_pickle_tree","golden_pickle_background","golden_pickle_effect"]:["midnight_rider_tree","midnight_rider_background","midnight_rider_effect"];
   for(const id of giftIds)if(!player.inventory.includes(id))player.inventory.push(id);
-  player.freeGiftClaimed=true; if(isTanner)player.freeGoldenPickleClaimed=true; else player.freeMidnightRiderClaimed=true;
+  player[claimKey]=true;
+  /* Keep the old flag for backwards compatibility, but do not use it to block the other code. */
+  player.freeGiftClaimed=true;
   await savePlayer(env,player);
   if(isTanner)await sendText(env,interaction,"🥒✨ **GOLDEN PICKLE UNLOCKED!**\n\nYou guessed **TANNER** and received the FREE **Golden Pickle Set**!\n\n🌳 Golden Pickle Tree\n🖼️ Golden Pickle Background\n✨ Golden Pickle Effect\n\n✨ **You are golden pickle hoe ✨**");
   else await sendText(env,interaction,"🏍️🌙 **MIDNIGHT RIDER UNLOCKED!**\n\nYou guessed **BOB** and received the FREE **Midnight Rider Set**!\n\n🌳 Midnight Rider Tree\n🖼️ Midnight Rider Background\n✨ Midnight Rider Effect");
