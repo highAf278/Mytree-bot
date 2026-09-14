@@ -1522,6 +1522,12 @@ function getBackgroundImage(player) {
     case "world_of_flags":
       return IMAGES.worldOfFlagsBackground;
 
+    case "ocean_opal":
+      return IMAGES.oceanOpalBackground;
+
+    case "werewives":
+      return IMAGES.werewivesBackground;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1569,6 +1575,12 @@ function getTreeImage(player) {
 
     case "world_of_flags":
       return IMAGES.worldOfFlagsTree;
+
+    case "ocean_opal":
+      return IMAGES.oceanOpalTree;
+
+    case "werewives":
+      return IMAGES.werewivesTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1624,6 +1636,12 @@ function getEffectImage(player) {
 
     case "world_of_flags":
       return IMAGES.worldOfFlagsEffect;
+
+    case "ocean_opal":
+      return IMAGES.oceanOpalEffect;
+
+    case "werewives":
+      return IMAGES.werewivesEffect;
 
     default:
       return null;
