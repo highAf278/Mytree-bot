@@ -18168,6 +18168,51 @@ async function verifySignature(
    MAIN WORKER
 ========================================================= */
 
+async function processPastelTimers(env){
+  const guildIds=await getKnownGuildIds(env);
+  const now=Date.now();
+  for(const guildId of guildIds){
+    try{
+      const state=await getGuildState(env,guildId);
+      const game=state.pastel;
+      if(!game||game.status!=="playing")continue;
+      if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
+      if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
+      const current=pastelFindOwned(game,game.turnId);
+      if(!current?.alive)continue;
+      current.alive=false;
+      current.lossRecorded=true;
+      current.afkForfeited=true;
+      for(const row of game.board||[])for(const cell of row){if(cell.owner===current.id){cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;}}
+      const player=await getPlayer(env,current.id);
+      player.pastelLosses=Number(player.pastelLosses||0)+1;
+      player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
+      player.pastelLevel=pastelRatingLevel(player.pastelRating);
+      await savePlayer(env,player);
+      const alive=Object.values(game.players||{}).filter(p=>p.alive);
+      if(alive.length<=1){
+        const winner=alive[0];
+        if(winner){
+          await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
+          const wp=await getPlayer(env,winner.id);
+          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Pastel Panic!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}!**`:""}`).catch(()=>null);
+        }
+        continue;
+      }
+      game.turnId=alive[0].id;
+      game.turnStartedAt=now;
+      game.lastMove=`⏰ **<@${current.id}> timed out!** They were AFK for more than 2 minutes and forfeited. Their territory is blacked out.`;
+      if(!pastelAnyLegalMoves(game)){
+        await pastelFinishNoMoves(env,game);
+        continue;
+      }
+      await pastelSave(env,game);
+      await sendPastelBoard(env,{token:game.interactionToken},game).catch(error=>console.error("Pastel AFK board update failed:",error));
+      await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel AFK turn ping failed:",error));
+    }catch(error){console.error(`Pastel timer failed for guild ${guildId}:`,error);}
+  }
+}
+
 export default {
   async fetch(
     request,
@@ -18426,50 +18471,6 @@ export default {
     }
   },
 
-async function processPastelTimers(env){
-  const guildIds=await getKnownGuildIds(env);
-  const now=Date.now();
-  for(const guildId of guildIds){
-    try{
-      const state=await getGuildState(env,guildId);
-      const game=state.pastel;
-      if(!game||game.status!=="playing")continue;
-      if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
-      if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
-      const current=pastelFindOwned(game,game.turnId);
-      if(!current?.alive)continue;
-      current.alive=false;
-      current.lossRecorded=true;
-      current.afkForfeited=true;
-      for(const row of game.board||[])for(const cell of row){if(cell.owner===current.id){cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;}}
-      const player=await getPlayer(env,current.id);
-      player.pastelLosses=Number(player.pastelLosses||0)+1;
-      player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
-      player.pastelLevel=pastelRatingLevel(player.pastelRating);
-      await savePlayer(env,player);
-      const alive=Object.values(game.players||{}).filter(p=>p.alive);
-      if(alive.length<=1){
-        const winner=alive[0];
-        if(winner){
-          await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
-          const wp=await getPlayer(env,winner.id);
-          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Pastel Panic!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}!**`:""}`).catch(()=>null);
-        }
-        continue;
-      }
-      game.turnId=alive[0].id;
-      game.turnStartedAt=now;
-      game.lastMove=`⏰ **<@${current.id}> timed out!** They were AFK for more than 2 minutes and forfeited. Their territory is blacked out.`;
-      if(!pastelAnyLegalMoves(game)){
-        await pastelFinishNoMoves(env,game);
-        continue;
-      }
-      await pastelSave(env,game);
-      await sendPastelBoard(env,{token:game.interactionToken},game).catch(error=>console.error("Pastel AFK board update failed:",error));
-      await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel AFK turn ping failed:",error));
-    }catch(error){console.error(`Pastel timer failed for guild ${guildId}:`,error);}
-  }
-}
 
  /* =======================================================
    SCHEDULED TASKS
