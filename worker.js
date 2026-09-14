@@ -76,7 +76,13 @@ const IMAGES = {
   lavenderTwilightEffect: "IMG_7368.png",
   worldOfFlagsTree: "IMG_7376.png",
   worldOfFlagsBackground: "IMG_7370.png",
-  worldOfFlagsEffect: "IMG_7371.png"
+  worldOfFlagsEffect: "IMG_7371.png",
+  oceanOpalTree: "IMG_7377.png",
+  oceanOpalBackground: "IMG_7378.png",
+  oceanOpalEffect: "IMG_7379.png",
+  werewivesTree: "IMG_7382.png",
+  werewivesBackground: "IMG_7381.png",
+  werewivesEffect: "IMG_7383.png"
 };
 
 const SHOP_ITEMS = {
@@ -287,6 +293,48 @@ const SHOP_ITEMS = {
     type: "effect",
     value: "world_of_flags",
     limited: true
+  },
+  ocean_opal_tree: {
+    name: "🩵🌊 Ocean Opal Tree",
+    price: 20000,
+    type: "tree",
+    value: "ocean_opal",
+    limited: true
+  },
+  ocean_opal_background: {
+    name: "🩵🌊 Ocean Opal Background",
+    price: 15000,
+    type: "background",
+    value: "ocean_opal",
+    limited: true
+  },
+  ocean_opal_effect: {
+    name: "🩵🌊 Ocean Opal Effect",
+    price: 10000,
+    type: "effect",
+    value: "ocean_opal",
+    limited: true
+  },
+  werewives_tree: {
+    name: "🐺🌙 Werewives Tree",
+    price: 0,
+    type: "tree",
+    value: "werewives",
+    freeOnly: true
+  },
+  werewives_background: {
+    name: "🐺🌙 Werewives Background",
+    price: 0,
+    type: "background",
+    value: "werewives",
+    freeOnly: true
+  },
+  werewives_effect: {
+    name: "🐺🌙 Werewives Effect",
+    price: 0,
+    type: "effect",
+    value: "werewives",
+    freeOnly: true
   }
 };
 
@@ -3209,37 +3257,107 @@ async function showEffectShop(
   );
 }
 
-async function showLimitedShop(
-  env,
-  interaction
-) {
-  /* Acknowledge immediately so Discord never times out while KV/player data loads. */
+const LIMITED_SHOP_SETS = [
+  {
+    id: "cats",
+    label: "🐱 Cat Bundle",
+    description: "Special limited cat items",
+    items: [
+      ["purr_princess_effect", "👑 Purr Princess", "buy_purr_princess"],
+      ["kitty_tree", "🐱 Kitty Tree", "buy_kitty_tree"],
+      ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"]
+    ]
+  },
+  {
+    id: "green_glow",
+    label: "💚 Green Glow",
+    description: "Limited glowing forest set",
+    items: [
+      ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
+      ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
+      ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"]
+    ]
+  },
+  {
+    id: "prism_flutter",
+    label: "🌈🦋 Prism Flutter",
+    description: "Rainbow butterfly fantasy set",
+    items: [
+      ["prism_flutter_tree", "🌈🦋 Prism Flutter Tree", "buy_prism_flutter_tree"],
+      ["prism_flutter_background", "🌈🦋 Prism Flutter Background", "buy_prism_flutter_background"],
+      ["prism_flutter_effect", "🌈🦋 Prism Flutter Effect", "buy_prism_flutter_effect"]
+    ]
+  },
+  {
+    id: "lavender_twilight",
+    label: "💜🌙 Lavender Twilight",
+    description: "Dreamy purple moonlit set",
+    items: [
+      ["lavender_twilight_tree", "💜🌙 Lavender Twilight Tree", "buy_lavender_twilight_tree"],
+      ["lavender_twilight_background", "💜🌙 Lavender Twilight Background", "buy_lavender_twilight_background"],
+      ["lavender_twilight_effect", "💜🌙 Lavender Twilight Effect", "buy_lavender_twilight_effect"]
+    ]
+  },
+  {
+    id: "world_of_flags",
+    label: "🌎🏳️ World of Flags",
+    description: "International unity set",
+    items: [
+      ["world_of_flags_tree", "🌎🏳️ World of Flags Tree", "buy_world_of_flags_tree"],
+      ["world_of_flags_background", "🌎🏳️ World of Flags Background", "buy_world_of_flags_background"],
+      ["world_of_flags_effect", "🌎🏳️ World of Flags Effect", "buy_world_of_flags_effect"]
+    ]
+  },
+  {
+    id: "ocean_opal",
+    label: "🩵🌊 Ocean Opal",
+    description: "Pastel underwater pearl set",
+    items: [
+      ["ocean_opal_tree", "🩵🌊 Ocean Opal Tree", "buy_ocean_opal_tree"],
+      ["ocean_opal_background", "🩵🌊 Ocean Opal Background", "buy_ocean_opal_background"],
+      ["ocean_opal_effect", "🫧 Ocean Opal Effect", "buy_ocean_opal_effect"]
+    ]
+  },
+  {
+    id: "halloween",
+    label: "🎃 Halloween",
+    description: "Holiday limited items",
+    items: [
+      ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
+      ["pumpkin_cat_decoration", "🎃 Pumpkin Cat", "buy_pumpkin_cat"],
+      ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
+    ]
+  }
+];
+
+async function showLimitedShop(env, interaction) {
   await deferInteraction(env, interaction, { update: true });
+  const buttons = LIMITED_SHOP_SETS.map(set =>
+    button(set.label, `limited_set:${set.id}`, 1)
+  );
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(row(...buttons.slice(i, i + 2)));
+  }
+  rows.push(row(button("⬅️ Back", "shop", 2)));
+  await sendText(
+    env,
+    interaction,
+    "🎁 **LIMITED SHOP**\n\nChoose a set to see its individual Tree, Background, and Effect items. ✨",
+    rows
+  );
+}
+
+async function showLimitedSet(env, interaction, setId) {
+  await deferInteraction(env, interaction, { update: true });
+  const set = LIMITED_SHOP_SETS.find(x => x.id === setId);
+  if (!set) {
+    await sendText(env, interaction, "❌ That limited set doesn't exist.");
+    return;
+  }
   const user = getUserFromInteraction(interaction);
   const player = await getPlayer(env, user.id);
-
-  const items = [
-    ["purr_princess_effect", "👑 Purr Princess", "buy_purr_princess"],
-    ["kitty_tree", "🐱 Kitty Tree", "buy_kitty_tree"],
-    ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"],
-    ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
-    ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
-    ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"],
-    ["prism_flutter_tree", "🌈🦋 Prism Flutter Tree", "buy_prism_flutter_tree"],
-    ["prism_flutter_background", "🌈🦋 Prism Flutter Background", "buy_prism_flutter_background"],
-    ["prism_flutter_effect", "🌈🦋 Prism Flutter Effect", "buy_prism_flutter_effect"],
-    ["lavender_twilight_tree", "💜🌙 Lavender Twilight Tree", "buy_lavender_twilight_tree"],
-    ["lavender_twilight_background", "💜🌙 Lavender Twilight Background", "buy_lavender_twilight_background"],
-    ["lavender_twilight_effect", "💜🌙 Lavender Twilight Effect", "buy_lavender_twilight_effect"],
-    ["world_of_flags_tree", "🌎🏳️ World of Flags Tree", "buy_world_of_flags_tree"],
-    ["world_of_flags_background", "🌎🏳️ World of Flags Background", "buy_world_of_flags_background"],
-    ["world_of_flags_effect", "🌎🏳️ World of Flags Effect", "buy_world_of_flags_effect"],
-    ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
-    ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
-    ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
-  ];
-
-  const buttons = items.map(([itemId, label, buttonId]) => {
+  const buttons = set.items.map(([itemId, label, buttonId]) => {
     const owned = player.inventory.includes(itemId);
     const price = SHOP_ITEMS[itemId].price;
     return button(
@@ -3249,20 +3367,13 @@ async function showLimitedShop(
       owned
     );
   });
-
   const rows = [];
-  /* Discord allows a maximum of 5 action rows total.
-     With 18 limited items, use 5 buttons per row = 4 item rows + 1 Back row. */
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(row(...buttons.slice(i, i + 5)));
-  }
-
-  rows.push(row(button("⬅️ Back", "shop", 2)));
-
+  for (let i = 0; i < buttons.length; i += 3) rows.push(row(...buttons.slice(i, i + 3)));
+  rows.push(row(button("⬅️ Back to Limited Shop", "shop_limited", 2)));
   await sendText(
     env,
     interaction,
-    "🎁 **LIMITED / HOLIDAY SHOP**\n\n🐱 **CAT BUNDLE** — special limited items\n💚 **GREEN GLOW SET** — limited items\n🌈🦋 **PRISM FLUTTER** — limited set\n💜🌙 **LAVENDER TWILIGHT** — limited set\n🌎🏳️ **WORLD OF FLAGS** — limited set\n🎃 **HALLOWEEN** — holiday items",
+    `🎁 **${set.label}**\n\n${set.description}\n\nChoose an item to purchase. ✨`,
     rows
   );
 }
@@ -3501,7 +3612,9 @@ async function showCustomBackgrounds(
     ["green_glow_background", "💚 Green Glow", "green_glow"],
     ["prism_flutter_background", "🌈🦋 Prism Flutter", "prism_flutter"],
     ["lavender_twilight_background", "💜🌙 Lavender Twilight", "lavender_twilight"],
-    ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"]
+    ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"],
+    ["ocean_opal_background", "🩵🌊 Ocean Opal", "ocean_opal"],
+    ["werewives_background", "🐺🌙 Werewives", "werewives"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
@@ -3573,7 +3686,9 @@ async function showCustomTrees(
     ["green_glow", "💚 Green Glow", "green_glow_tree"],
     ["prism_flutter", "🌈🦋 Prism Flutter", "prism_flutter_tree"],
     ["lavender_twilight", "💜🌙 Lavender Twilight", "lavender_twilight_tree"],
-    ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_tree"]
+    ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_tree"],
+    ["ocean_opal", "🩵🌊 Ocean Opal", "ocean_opal_tree"],
+    ["werewives", "🐺🌙 Werewives", "werewives_tree"]
   ];
 
   const ownedItems = items.filter(([value, label, inventoryId]) =>
@@ -3691,6 +3806,26 @@ async function showCustomEffects(
         "🌎🏳️ World of Flags",
         "equip_effect_world_of_flags",
         player.equipped.effect === "world_of_flags" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("ocean_opal_effect")) {
+    buttons.push(
+      button(
+        "🩵🌊 Ocean Opal",
+        "equip_effect_ocean_opal",
+        player.equipped.effect === "ocean_opal" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("werewives_effect")) {
+    buttons.push(
+      button(
+        "🐺🌙 Werewives",
+        "equip_effect_werewives",
+        player.equipped.effect === "werewives" ? 3 : 2
       )
     );
   }
@@ -3931,6 +4066,16 @@ async function equipTheme(
     world_of_flags:
       player.inventory.includes(
         "world_of_flags_background"
+      ),
+
+    ocean_opal:
+      player.inventory.includes(
+        "ocean_opal_background"
+      ),
+
+    werewives:
+      player.inventory.includes(
+        "werewives_background"
       )
   };
 
@@ -4042,6 +4187,16 @@ async function equipTree(
     world_of_flags:
       player.inventory.includes(
         "world_of_flags_tree"
+      ),
+
+    ocean_opal:
+      player.inventory.includes(
+        "ocean_opal_tree"
+      ),
+
+    werewives:
+      player.inventory.includes(
+        "werewives_tree"
       )
   };
 
@@ -4097,7 +4252,9 @@ async function equipEffect(
       green_glow: "green_glow_effect",
       prism_flutter: "prism_flutter_effect",
       lavender_twilight: "lavender_twilight_effect",
-      world_of_flags: "world_of_flags_effect"
+      world_of_flags: "world_of_flags_effect",
+      ocean_opal: "ocean_opal_effect",
+      werewives: "werewives_effect"
     }[effect];
 
     if (
@@ -4295,105 +4452,109 @@ async function showLeaderboard(
    INVENTORY
 ========================================================= */
 
-async function showInventory(
-  env,
-  interaction
-) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
+const INVENTORY_NAMES = {
+  pink_sky_background: "💖 Pink Sky Background",
+  candyland_background: "🍬 Candy Land Background",
+  halloween_background: "🎃 Halloween Background",
+  cotton_candy_tree: "🍭 Cotton Candy Tree",
+  pumpkin_cat_decoration: "🎃 Pumpkin Cat",
+  stoned_birthday_tree: "🎂 Birthday Tree",
+  stoned_balloon_decoration: "🎈 Birthday Balloon",
+  stoned_birthday_background: "🎂 Birthday Background",
+  panda_decoration: "🐼 Panda Decoration",
+  cat_decoration: "🐱 Cat Decoration",
+  shadow_tree: "🌑 Shadow Tree",
+  full_cherry_tree: "🌸 Full Cherry Tree",
+  pine_tree: "🌲 Pine Tree",
+  red_tree: "❤️ Red Tree",
+  soul_tree: "💙 Soul Tree",
+  butterflies_effect: "🦋 Butterflies",
+  hearts_effect: "💕 Hearts",
+  magic_mushroom_background: "🍄 Magic Mushroom Background",
+  field_day_background: "🌾 Field Day Background",
+  red_forest_background: "🌲 Red Forest Background",
+  halloween_tree: "🎃🌳 Halloween Tree",
+  purr_princess_effect: "👑 Purr Princess Effect",
+  kitty_tree: "🐱 Kitty Tree",
+  cozy_cat_background: "🐱 Cozy Cat Background",
+  green_glow_tree: "💚 Green Glow Tree",
+  green_glow_background: "💚 Green Glow Background",
+  green_glow_effect: "💚 Green Glow Effect",
+  prism_flutter_tree: "🌈🦋 Prism Flutter Tree",
+  prism_flutter_background: "🌈🦋 Prism Flutter Background",
+  prism_flutter_effect: "🌈🦋 Prism Flutter Effect",
+  lavender_twilight_tree: "💜🌙 Lavender Twilight Tree",
+  lavender_twilight_background: "💜🌙 Lavender Twilight Background",
+  lavender_twilight_effect: "💜🌙 Lavender Twilight Effect",
+  world_of_flags_tree: "🌎🏳️ World of Flags Tree",
+  world_of_flags_background: "🌎🏳️ World of Flags Background",
+  world_of_flags_effect: "🌎🏳️ World of Flags Effect",
+  ocean_opal_tree: "🩵🌊 Ocean Opal Tree",
+  ocean_opal_background: "🩵🌊 Ocean Opal Background",
+  ocean_opal_effect: "🫧 Ocean Opal Effect",
+  werewives_tree: "🐺🌙 Werewives Tree",
+  werewives_background: "🐺🌙 Werewives Background",
+  werewives_effect: "🐺🌙 Werewives Effect"
+};
 
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
+const INVENTORY_CATEGORIES = [
+  ["trees", "🌳 Trees"],
+  ["backgrounds", "🖼️ Backgrounds"],
+  ["effects", "✨ Effects"],
+  ["decorations", "🎀 Decorations"],
+  ["gifts", "🎁 Gift Sets"]
+];
 
-  const names = {
-    pink_sky_background:
-      "💖 Pink Sky Background",
+const INVENTORY_CATEGORY_IDS = {
+  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"],
+  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect"],
+  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "stoned_balloon_decoration"],
+  gifts: ["werewives_tree", "werewives_background", "werewives_effect"]
+};
 
-    candyland_background:
-      "🍬 Candy Land Background",
-
-    halloween_background:
-      "🎃 Halloween Background",
-
-    cotton_candy_tree:
-      "🍭 Cotton Candy Tree",
-
-    pumpkin_cat_decoration:
-      "🎃 Pumpkin Cat",
-
-    stoned_birthday_tree:
-      "🎂 Birthday Tree",
-
-    stoned_balloon_decoration:
-      "🎈 Birthday Balloon",
-
-    stoned_birthday_background:
-      "🎂 Birthday Background",
-
-    panda_decoration:
-      "🐼 Panda Decoration",
-
-    cat_decoration:
-      "🐱 Cat Decoration",
-    shadow_tree: "🌑 Shadow Tree",
-    full_cherry_tree: "🌸 Full Cherry Tree",
-    pine_tree: "🌲 Pine Tree",
-    red_tree: "❤️ Red Tree",
-    soul_tree: "💙 Soul Tree",
-    butterflies_effect: "🦋 Butterflies",
-    hearts_effect: "💕 Hearts",
-    magic_mushroom_background: "🍄 Magic Mushroom Background",
-    field_day_background: "🌾 Field Day Background",
-    red_forest_background: "🌲 Red Forest Background",
-    halloween_tree: "🎃🌳 Halloween Tree",
-    prism_flutter_tree: "🌈🦋 Prism Flutter Tree",
-    prism_flutter_background: "🌈🦋 Prism Flutter Background",
-    prism_flutter_effect: "🌈🦋 Prism Flutter Effect",
-    lavender_twilight_tree: "💜🌙 Lavender Twilight Tree",
-    lavender_twilight_background: "💜🌙 Lavender Twilight Background",
-    lavender_twilight_effect: "💜🌙 Lavender Twilight Effect",
-    world_of_flags_tree: "🌎🏳️ World of Flags Tree",
-    world_of_flags_background: "🌎🏳️ World of Flags Background",
-    world_of_flags_effect: "🌎🏳️ World of Flags Effect"
-  };
-
-  const items = Array.from(new Set(player.inventory)).map(
-    item =>
-      names[item] ||
-      item
-  );
-
+async function showInventory(env, interaction) {
+  const buttons = INVENTORY_CATEGORIES.map(([id, label]) => button(label, `inventory:${id}:0`, 2));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  rows.push(row(button("🌳 Back to Tree", "back_tree", 2)));
   await sendText(
     env,
     interaction,
-    `🎒 **Your Inventory**\n\n${
-      items.length
-        ? items
-            .map(
-              x => `• ${x}`
-            )
-            .join("\n")
-        : "Empty!"
-    }\n\n⭐ Sparkles: **${player.sparkles}**`,
-    [
-      row(
-        button(
-          "🎨 Customize",
-          "customize",
-          2
-        ),
-        button(
-          "🌳 Back to Tree",
-          "back_tree",
-          2
-        )
-      )
-    ]
+    "🎒 **YOUR INVENTORY**\n\nChoose a category to browse your owned items. The inventory is organized into sections so we can keep adding more without turning it into a giant list. ✨",
+    rows
+  );
+}
+
+async function showInventoryCategory(env, interaction, category, page = 0) {
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
+  const ids = INVENTORY_CATEGORY_IDS[category];
+  const categoryLabel = INVENTORY_CATEGORIES.find(x => x[0] === category)?.[1] || "🎒 Inventory";
+  if (!ids) {
+    await sendText(env, interaction, "❌ That inventory category doesn't exist.");
+    return;
+  }
+  const owned = ids.filter(id => id === "cherry" || player.inventory.includes(id));
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(owned.length / pageSize));
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+  const pageItems = owned.slice(page * pageSize, page * pageSize + pageSize);
+  const lines = pageItems.map(id => `• ${id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || id)}`);
+  const rows = [];
+  if (pageCount > 1) {
+    rows.push(row(
+      button("⬅️ Previous", `inventory:${category}:${page - 1}`, 2, page === 0),
+      button(`Page ${page + 1}/${pageCount}`, "inventory:current:0", 2, true),
+      button("Next ➡️", `inventory:${category}:${page + 1}`, 2, page === pageCount - 1)
+    ));
+  }
+  rows.push(row(button("🎒 Categories", "inventory", 2), button("🎨 Customize", "customize", 2)));
+  await sendText(
+    env,
+    interaction,
+    `🎒 **${categoryLabel}**\n\n${lines.length ? lines.join("\n") : "Nothing owned in this category yet."}\n\n⭐ Sparkles: **${player.sparkles}**${pageCount > 1 ? `\n📖 Page **${page + 1}/${pageCount}**` : ""}`,
+    rows
   );
 }
 
@@ -5526,7 +5687,16 @@ async function handleComponent(
       "world_of_flags_background",
 
     buy_world_of_flags_effect:
-      "world_of_flags_effect"
+      "world_of_flags_effect",
+
+    buy_ocean_opal_tree:
+      "ocean_opal_tree",
+
+    buy_ocean_opal_background:
+      "ocean_opal_background",
+
+    buy_ocean_opal_effect:
+      "ocean_opal_effect"
   };
 
   if (
@@ -16126,39 +16296,56 @@ async function handleGift(env, interaction) {
   );
 }
 
-async function handleFine(env, interaction) {
+async function handleFree(env, interaction, guess) {
+  const normalized = String(guess || "").trim().toLowerCase();
+  const hint = "🐺💅 Silly hint: think of a chaotic wolf pack where the wives are somehow in charge of the whole game. 🌙😂";
+  if (normalized !== "werewives") {
+    await sendText(env, interaction, `🎁 **FREE GIFT MYSTERY**\n\n${hint}\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈`);
+    return;
+  }
+
   const user = getUserFromInteraction(interaction);
-  if (!user || !interaction.guild_id) {
-    await sendText(env, interaction, "❌ This command can only be used inside a server.");
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  player.inventory = Array.isArray(player.inventory) ? player.inventory : [];
+  const giftIds = ["werewives_tree", "werewives_background", "werewives_effect"];
+  const missing = giftIds.filter(id => !player.inventory.includes(id));
+  if (!missing.length) {
+    await sendText(env, interaction, "🐺🌙 You already claimed the **Werewives Gift Set**! It is safely in your inventory. 💗");
     return;
   }
-
-  const target = getOption(interaction, "user");
-  const amount = Math.floor(Number(getOption(interaction, "amount")));
-
-  if (!target || target === user.id || !Number.isFinite(amount) || amount < 50 || amount > 50000) {
-    await sendText(env, interaction, "❌ Fines must be **50–50,000 sparkles**, and you can't fine yourself.");
-    return;
-  }
-
-  const targetPlayer = await getPlayer(env, target);
-  const actualFine = Math.min(amount, Math.max(0, Number(targetPlayer.sparkles || 0)));
-
-  if (actualFine <= 0) {
-    await sendText(env, interaction, `❌ <@${target}> has no sparkles to fine.`);
-    return;
-  }
-
-  const issuer = await getPlayer(env, user.id);
-  targetPlayer.sparkles -= actualFine;
-  issuer.sparkles += actualFine;
-  await savePlayer(env, targetPlayer);
-  await savePlayer(env, issuer);
-
+  for (const id of missing) player.inventory.push(id);
+  player.freeWerewivesClaimed = true;
+  await savePlayer(env, player);
   await sendText(
     env,
     interaction,
-    `⚖️ <@${target}> was fined **${actualFine} sparkles**. The sparkles went to you. ✨`
+    "🎁🐺🌙 **YOU GOT IT!**\n\nYou guessed **WEREWIVES** and unlocked the FREE **Werewives Gift Set**!\n\n🌳 Werewives Tree\n🖼️ Werewives Background\n✨ Werewives Effect\n\nEverything is now in your inventory. 💗🐺"
+  );
+}
+
+async function handleBlame(env, interaction) {
+  if (!interaction.guild_id) {
+    await sendText(env, interaction, "❌ `/blame` can only be used inside a server.");
+    return;
+  }
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.pastel;
+  if (!game || game.status !== "playing") {
+    await sendText(env, interaction, "🌈 There isn't an active Pastel Panic game to blame anyone in. 😭");
+    return;
+  }
+  const current = pastelFindOwned(game, game.turnId);
+  if (!current?.alive) {
+    await sendText(env, interaction, "🌈 The current player is already out. The game needs a moment to advance. 😭");
+    return;
+  }
+  await sendText(
+    env,
+    interaction,
+    `🚨 **BLAME ALERT!**\n\n<@${game.turnId}> IT'S YOUR TURN! 🌈🎨\n\nThe Pastel Panic board is waiting on you. Move before the 2-minute AFK timeout gets you! ⏰😂`,
+    undefined
   );
 }
 
@@ -16341,8 +16528,13 @@ async function handleCommand(
     return;
   }
 
-  if (name === "fine") {
-    await handleFine(env, interaction);
+  if (name === "free") {
+    await handleFree(env, interaction, getOption(interaction, "guess"));
+    return;
+  }
+
+  if (name === "blame") {
+    await handleBlame(env, interaction);
     return;
   }
 
@@ -17151,7 +17343,45 @@ function pastelFlood(game,player,color){
 
   return {capturedHearts};
 }
-function pastelValidColor(game,player,color){return pastelAdjacentColors(game,player).includes(color);}
+function pastelValidColor(game,player,color){return pastelAdjacentColors(game,player).includes(color);}function pastelColorCanCapture(game,player,color){
+  const board=game.board||[];
+  const seen=new Set();
+  const queue=[];
+  for(let r=0;r<board.length;r++)for(let c=0;c<board[r].length;c++){
+    if(board[r][c]?.owner===player.id)queue.push([r,c]);
+  }
+  while(queue.length){
+    const [r,c]=queue.shift();
+    for(const [rr,cc] of pastelNeighbors(board,r,c,game.mode)){
+      const cell=board[rr]?.[cc]; if(!cell)continue;
+      if(cell.owner && cell.owner!==player.id)continue;
+      if(cell.owner==="blackout")continue;
+      if(cell.owner===player.id)continue;
+      const key=`${rr},${cc}`; if(seen.has(key))continue;
+      const matches=cell.wild||cell.color===color;
+      if(!matches)continue;
+      seen.add(key);
+      return true;
+    }
+  }
+  return false;
+}
+function pastelPlayerHasLegalMove(game,player){
+  if(!player?.alive)return false;
+  return pastelAvailableColors(game,player).some(color=>pastelColorCanCapture(game,player,color));
+}
+function pastelAnyLegalMoves(game){
+  return pastelStartingPlayers(game).some(p=>pastelPlayerHasLegalMove(game,p));
+}
+async function pastelFinishNoMoves(env,game){
+  const winner=pastelWinner(game);
+  if(!winner)return false;
+  await pastelFinish(env,game,winner.id,"🏁 No legal moves remained for the active players.");
+  const wp=await getPlayer(env,winner.id);
+  await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`🏁 **PASTEL PANIC OVER!**\n\n🚫 No legal moves remained for the active players.\n🏆 <@${winner.id}> wins with the largest territory!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`).catch(()=>null);
+  return true;
+}
+
 function pastelBoardTextLegend(){return PASTEL_COLORS.map(c=>`${c.label} ${c.name}`).join(" • ");}
 function pastelRenderCell(cell){if(cell.owner&&cell.heart)return "❤️";if(cell.heart)return "💗";if(cell.wild)return "⬜";return PASTEL_COLORS[cell.color]?.label||"⬜";}
 function pastelAscii(game){
@@ -17171,7 +17401,8 @@ function pastelGameText(game){
   }).join("\n");
   const remaining=Math.max(0,Number(game.refreshEvery||0)-Number(game.turnsSinceRefresh||0));
   const reshuffleLabel=remaining===1?"1 turn":`${remaining} turns`;
-  return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,``,lines,``,`🔄 **Reshuffle in: ${reshuffleLabel}**`].join("\n");
+  const turnLine=game.turnId?`🎯 **WHO'S TURN:** <@${game.turnId}>`:`🎯 **WHO'S TURN:** —`;
+  return [`🌈 **PASTEL PANIC — ${game.modeLabel}**`,turnLine,``,lines,``,`🔄 **Reshuffle in: ${reshuffleLabel}**`].join("\n");
 }
 function pastelEndVoteCount(game){
   const active=Object.values(game.players||{}).filter(p=>p.alive!==false);
@@ -17271,7 +17502,7 @@ async function renderPastelBoard(env,game){
         else if(cell.wild)fill=PASTEL_WILD_COLOR;
         else if(cell.heart)fill=PASTEL_HEART_COLOR;
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
-        if(cell.heart&&!cell.owner)heartMarks.push(`<text x="${x+size/2}" y="${y+size*0.80}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.45)}" font-weight="700" fill="#ffffff" stroke="#d46f9c" stroke-width="1.5" paint-order="stroke">♥</text>`);
+        if(cell.heart&&!cell.owner)heartMarks.push(`<circle cx="${x+size/2}" cy="${y+size/2}" r="${Math.max(6,Math.round(size*0.36))}" fill="#ffffff" stroke="#d46f9c" stroke-width="1.5"/><text x="${x+size/2}" y="${y+size*0.80}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.18)}" font-weight="900" fill="#ef6f9e">♥</text>`);
 
         const owner=cell.owner;
         if(!owner)continue;
@@ -17357,8 +17588,8 @@ async function handlePastelResume(env,interaction,gameId){
     await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});
   }
 }
-async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
-async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players);
+async function handlePastelMode(env,interaction,mode){if(!interaction.guild_id)return sendText(env,interaction,"❌ Pastel Panic is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Pastel Panic game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players);
   /* Defensive guarantee: every fresh board has at least 2 visible Power Cells. */
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
@@ -17432,6 +17663,10 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
   const alive=Object.values(game.players).filter(p=>p.alive);
   if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`🏆 **PASTEL PANIC OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
+  if(!pastelAnyLegalMoves(game)){
+    await pastelFinishNoMoves(env,game);
+    return;
+  }
   if(game.turnsSinceRefresh>=game.refreshEvery)pastelRegenerate(game);
   if(extra){
     player.pendingPastelTurns=Math.max(0,Number(player.pendingPastelTurns||0)-1);
@@ -17445,6 +17680,7 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
       if(n?.alive){game.turnId=n.id;break;}
     }
   }
+  game.turnStartedAt=Date.now();
   await pastelSave(env,game);
   try{
     await sendPastelBoard(env,interaction,game);
@@ -17464,8 +17700,12 @@ async function handlePastelQuit(env,interaction,gameId){
   for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;c.start=false;}
   const alive=Object.values(game.players).filter(p=>p.alive);
   if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!`);}
-  if(game.turnId===user.id)game.turnId=alive[0].id;
+  if(game.turnId===user.id){game.turnId=alive[0].id;game.turnStartedAt=Date.now();}
   game.lastMove=`🚪 **<@${user.id}> rage quit!** Their territory is now blacked out. The game continues with **${alive.length} players**.`;
+  if(!pastelAnyLegalMoves(game)){
+    await pastelFinishNoMoves(env,game);
+    return;
+  }
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
@@ -17709,12 +17949,16 @@ const COMMANDS = [
   },
 
   {
-    name: "fine",
-    description: "Fine another member 50–50,000 sparkles",
+    name: "free",
+    description: "Guess the secret word to unlock a free Werewives gift set",
     options: [
-      { type: 6, name: "user", description: "Member being fined", required: true },
-      { type: 4, name: "amount", description: "Amount of sparkles (50–50,000)", required: true, min_value: 50, max_value: 50000 }
+      { type: 3, name: "guess", description: "Your guess for the secret word", required: true }
     ]
+  },
+
+  {
+    name: "blame",
+    description: "Ping the current Pastel Panic player who needs to move"
   },
 
   {
@@ -18057,6 +18301,10 @@ export default {
       interaction.type === 2 && interaction.data?.name === "solo";
     const isPastelCommand =
       interaction.type === 2 && (interaction.data?.name === "pastelpanic" || interaction.data?.name === "pastel" || interaction.data?.name === "pastelpanic-end");
+    const isFreeCommand =
+      interaction.type === 2 && interaction.data?.name === "free";
+    const isBlameCommand =
+      interaction.type === 2 && interaction.data?.name === "blame";
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -18081,11 +18329,14 @@ export default {
         customId === "shop_special" ||
         customId === "back_tree" ||
         customId === "customize" ||
-        customId.startsWith("buy_")
+        customId === "inventory" ||
+        customId.startsWith("buy_") ||
+        customId.startsWith("limited_set:") ||
+        customId.startsWith("inventory:")
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isTreeComponent || isShopComponent;
 
     if (relevant) {
       let update = false;
@@ -18175,6 +18426,51 @@ export default {
     }
   },
 
+async function processPastelTimers(env){
+  const guildIds=await getKnownGuildIds(env);
+  const now=Date.now();
+  for(const guildId of guildIds){
+    try{
+      const state=await getGuildState(env,guildId);
+      const game=state.pastel;
+      if(!game||game.status!=="playing")continue;
+      if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
+      if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
+      const current=pastelFindOwned(game,game.turnId);
+      if(!current?.alive)continue;
+      current.alive=false;
+      current.lossRecorded=true;
+      current.afkForfeited=true;
+      for(const row of game.board||[])for(const cell of row){if(cell.owner===current.id){cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;}}
+      const player=await getPlayer(env,current.id);
+      player.pastelLosses=Number(player.pastelLosses||0)+1;
+      player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
+      player.pastelLevel=pastelRatingLevel(player.pastelRating);
+      await savePlayer(env,player);
+      const alive=Object.values(game.players||{}).filter(p=>p.alive);
+      if(alive.length<=1){
+        const winner=alive[0];
+        if(winner){
+          await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
+          const wp=await getPlayer(env,winner.id);
+          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Pastel Panic!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}!**`:""}`).catch(()=>null);
+        }
+        continue;
+      }
+      game.turnId=alive[0].id;
+      game.turnStartedAt=now;
+      game.lastMove=`⏰ **<@${current.id}> timed out!** They were AFK for more than 2 minutes and forfeited. Their territory is blacked out.`;
+      if(!pastelAnyLegalMoves(game)){
+        await pastelFinishNoMoves(env,game);
+        continue;
+      }
+      await pastelSave(env,game);
+      await sendPastelBoard(env,{token:game.interactionToken},game).catch(error=>console.error("Pastel AFK board update failed:",error));
+      await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel AFK turn ping failed:",error));
+    }catch(error){console.error(`Pastel timer failed for guild ${guildId}:`,error);}
+  }
+}
+
  /* =======================================================
    SCHEDULED TASKS
 
@@ -18200,6 +18496,9 @@ export default {
           env
         ),
         processChaosIslandTimers(
+          env
+        ),
+        processPastelTimers(
           env
         )
       ])
