@@ -11964,7 +11964,7 @@ const HEIST_ROLE_DEFINITIONS = {
     name: "🦝☠️ Raccoon Reaper",
     team: "neutral",
     description:
-      "Once per game, choose one living player. If they are NOT the Thief, they are eliminated. If you choose the Thief, the Reaper's attack fails and the Thief survives.",
+      "Once per game, choose one living player. If you choose the Thief, the Thief is eliminated and the Good Team wins. If you choose anyone who is NOT the Thief, the Reaper dies instead.",
     action: "reap",
     actionLabel: "☠️ Reap"
   },
@@ -13247,25 +13247,34 @@ async function resolveHeistNight(
     delete actions[userId];
   }
 
-  /* Raccoon Reaper can eliminate one player once per game. */
+  /* Raccoon Reaper: once per game, choose one living player.
+     If the target is the Thief, the Thief dies and the Good Team wins.
+     If the target is anyone else, the Reaper dies instead. Protection does not change this gamble. */
+  let reaperGoodWin = false;
   for (const [userId, action] of Object.entries(actions)) {
     const actor = heistPlayer(game, userId);
     if (!actor?.alive || actor.role !== "raccoon_reaper" || action.action !== "reap" || canceled.has(userId) || actor.reaperUsed) continue;
     actor.reaperUsed = true;
     const target = heistPlayer(game, action.targetId);
     if (!target?.alive || target.id === userId) {
-      game.nightResults[userId] = "☠️ **THE REAPER MISSED.** No valid target was eliminated.";
+      game.nightResults[userId] = "☠️ **THE REAPER MISSED.** No valid target was chosen.";
       continue;
     }
     if (target.role === "thief") {
-      game.nightResults[userId] = `☠️ **REAPER FAILED!** ${heistDisplayName(target)} was the Thief. The Thief slipped away from your attack.`;
-    } else if (!protectedPlayers.has(target.id)) {
       target.alive = false;
-      game.nightResults[userId] = `☠️ **REAP SUCCESS!** ${heistDisplayName(target)} was eliminated.`;
-      publicEvents.push("☠️ **SOMETHING TERRIBLE HAPPENED IN THE DARK.** A player did not make it through the night.");
+      reaperGoodWin = true;
+      game.nightResults[userId] = `☠️ **REAPER STRIKE!** ${heistDisplayName(target)} was the Thief! The Thief has been caught!`;
+      publicEvents.push("☠️ **THE REAPER FOUND THE THIEF.** The Good Team has won!");
     } else {
-      game.nightResults[userId] = `🛡️ **REAPER BLOCKED!** Your target was protected by the Guard.`;
+      actor.alive = false;
+      game.nightResults[userId] = `☠️ **REAPER SACRIFICE!** ${heistDisplayName(target)} was not the Thief. The Reaper has been eliminated.`;
+      publicEvents.push("☠️ **THE REAPER MADE THE WRONG CHOICE.** The Reaper has been eliminated.");
     }
+  }
+
+  if (reaperGoodWin) {
+    await finishHeist(env, game, "THIEF HAS BEEN CAUGHT BY THE RACCOON REAPER");
+    return;
   }
 
   /*
@@ -16762,8 +16771,8 @@ async function handleBattleShopBuy(env,interaction,itemId){
 
 /* =========================================================
    PASTEL PANIC
-   1v1 = 20x20 square. 3P = 20-row triangular board with exactly
-   400 cells (1+3+5+...+39). 4P = 20x20 square.
+   1v1 = 32x32 square. 3P = 20-row triangular board with exactly
+   400 cells (1+3+5+...+39). 4P = 32x32 square.
 ========================================================= */
 
 const PASTEL_COLORS = [
@@ -16822,22 +16831,26 @@ function pastelNeighbors(board,r,c,mode){
   const seen=new Set();
   return out.filter(([rr,cc])=>board[rr]&&board[rr][cc]&&(!seen.has(`${rr},${cc}`)&&(seen.add(`${rr},${cc}`),true)));
 }
-function pastelCellCount(mode){return mode==="triangle"?400:576;}
+function pastelCellCount(mode){return mode==="triangle"?400:1024;}
 function pastelGenerateBoard(mode,players){
   const board=[];
   const rows=mode==="triangle"?20:20;
   for(let r=0;r<rows;r++){
-    const width=mode==="triangle"?(2*r+1):24;
-    const colorCount=mode==="square24"?8:PASTEL_CLASSIC_COLOR_COUNT;
+    const width=mode==="triangle"?(2*r+1):32;
+    const colorCount=players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT;
     board.push(Array.from({length:width},()=>({color:randomInt(0,colorCount-1),owner:null,heart:false,wild:Math.random()<0.075})));
   }
   /* Seed fair starting corners and give each player a small safe region. */
-  const maxIndex=23;
+  const maxIndex=31;
   const starts=mode==="triangle"?[[0,0],[19,0],[19,38]]:(players.length<=2?[[0,0],[maxIndex,maxIndex]]:[[0,0],[0,maxIndex],[maxIndex,0],[maxIndex,maxIndex]]);
-  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % (mode==="square24"?8:PASTEL_CLASSIC_COLOR_COUNT);board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
-  let hearts=Math.max(8,Math.floor(pastelCellCount(mode)*0.035));
+  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % (players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT);board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
+  /* Every board gets at least 2 visible Heart Power Cells, with a chance for more. */
+  let hearts=2+randomInt(0,4);
   let attempts=0;
-  while(hearts>0&&attempts<3000){attempts++;const r=randomInt(0,board.length-1);const c=randomInt(0,board[r].length-1);const cell=board[r][c];if(cell.owner||cell.heart||cell.wild)continue;cell.heart=true;hearts--;}
+  while(hearts>0&&attempts<10000){attempts++;const r=randomInt(0,board.length-1);const c=randomInt(0,board[r].length-1);const cell=board[r][c];if(cell.owner||cell.heart||cell.wild)continue;cell.heart=true;cell.wild=false;hearts--;}
+  /* Safety pass: never allow a board to start with fewer than 2 Heart Power Cells. */
+  let visibleHearts=0;for(const row of board)for(const cell of row)if(cell.heart&&!cell.owner)visibleHearts++;
+  if(visibleHearts<2){for(let r=0;r<board.length&&visibleHearts<2;r++)for(let c=0;c<board[r].length&&visibleHearts<2;c++){const cell=board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;visibleHearts++;}}
   return board;
 }
 function pastelStartingPlayers(game){return Object.values(game.players||{}).sort((a,b)=>a.slot-b.slot);}
@@ -16986,15 +16999,17 @@ function pastelRegenerate(game){
   }
 
   /* Only unclaimed cells receive fresh Hearts/Wild Blocks. */
-  let hearts=Math.max(8,Math.floor(pastelCellCount(game.mode)*0.035));
+  /* Every refreshed board gets at least 2 visible Heart Power Cells, with a chance for more. */
+  let hearts=2+randomInt(0,4);
   let attempts=0;
-  while(hearts>0&&attempts<3000){
+  while(hearts>0&&attempts<10000){
     attempts++;
     const r=randomInt(0,newBoard.length-1);
     const c=randomInt(0,newBoard[r].length-1);
     const cell=newBoard[r][c];
-    if(cell.owner||cell.heart)continue;
+    if(cell.owner||cell.heart||cell.wild)continue;
     cell.heart=true;
+    cell.wild=false;
     hearts--;
   }
   game.board=newBoard;
@@ -17009,10 +17024,11 @@ async function renderPastelBoard(env,game){
   try{
     browser=await puppeteer.launch(env.BROWSER);
     const page=await browser.newPage();
-    await page.setViewport({width:1200,height:760,deviceScaleFactor:1});
+    await page.setViewport({width:1000,height:1000,deviceScaleFactor:1});
     const size=game.mode==="triangle"?20:28;
-    const boardW=game.mode==="triangle"?39*size:24*size;
-    const boardH=game.mode==="triangle"?20*size:24*size;
+    const squareCells=32;
+    const boardW=game.mode==="triangle"?39*size:squareCells*size;
+    const boardH=game.mode==="triangle"?20*size:squareCells*size;
     const cellX=(r,c)=>game.mode==="triangle"?(19-r+c)*size:c*size;
     const sameOwner=(r,c,owner)=>!!(game.board[r]?.[c]&&game.board[r][c].owner===owner);
     const edgeSegments=[];
@@ -17028,7 +17044,7 @@ async function renderPastelBoard(env,game){
         else if(cell.wild)fill=PASTEL_WILD_COLOR;
         else if(cell.heart)fill=PASTEL_HEART_COLOR;
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
-        if(cell.heart&&!cell.owner)heartMarks.push(`<text x="${x+size/2}" y="${y+size*0.82}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.35)}" font-weight="700" fill="#ef9fbd">♥</text>`);
+        if(cell.heart&&!cell.owner)heartMarks.push(`<text x="${x+size/2}" y="${y+size*0.82}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.55)}" font-weight="700" fill="#ef9fbd">♥</text>`);
 
         const owner=cell.owner;
         if(!owner)continue;
@@ -17058,7 +17074,7 @@ async function renderPastelBoard(env,game){
     }
 
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}"><rect x="0" y="0" width="${boardW}" height="${boardH}" fill="#3b1834"/>${rects.join("")}${heartMarks.join("")}${uniqueEdges.join("")}</svg>`;
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#3b1834;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{width:${boardW}px;height:${boardH}px;background:#3b1834;overflow:hidden}.board>svg{display:block;width:${boardW}px;height:${boardH}px}</style></head><body><div class="wrap"><div class="board">${svg}</div></div></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#3b1834;overflow:hidden}.wrap{width:1000px;height:1000px;display:flex;align-items:center;justify-content:center}.board{width:${boardW}px;height:${boardH}px;background:#3b1834;overflow:hidden}.board>svg{display:block;width:${boardW}px;height:${boardH}px}</style></head><body><div class="wrap"><div class="board">${svg}</div></div></body></html>`;
     await page.setContent(html,{waitUntil:"load"});
     return await page.screenshot({type:"png"});
   }catch(error){
