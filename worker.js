@@ -17065,8 +17065,8 @@ async function renderPastelBoard(env,game){
       if(seenEdges.has(key))continue;seenEdges.add(key);uniqueEdges.push(seg);
     }
 
-    const svg=`<svg class="overlay" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}">${uniqueEdges.join("")}${starts.join("")}</svg>`;
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:0;background:#fff8fc;font-family:Arial,sans-serif;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{position:relative;width:${boardW}px;height:${boardH}px;background:#000;overflow:hidden}.cells{position:absolute;inset:0}.cellrow{display:flex;height:${size}px}.cell{width:${size}px;height:${size}px;display:block}.overlay{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}</style></head><body><div class="wrap"><div class="board"><div class="cells">${rects.join("")}</div>${svg}</div></div></body></html>`;
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}"><rect x="0" y="0" width="${boardW}" height="${boardH}" fill="#fff"/>${rects.join("")}${uniqueEdges.join("")}${starts.join("")}</svg>`;
+    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#fff8fc;overflow:hidden}.wrap{width:1200px;height:760px;display:flex;align-items:center;justify-content:center}.board{width:${boardW}px;height:${boardH}px;background:#fff;overflow:hidden}.board>svg{display:block;width:${boardW}px;height:${boardH}px}</style></head><body><div class="wrap"><div class="board">${svg}</div></div></body></html>`;
     await page.setContent(html,{waitUntil:"load"});
     return await page.screenshot({type:"png"});
   }catch(error){
