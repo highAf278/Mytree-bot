@@ -70,7 +70,13 @@ const IMAGES = {
   greenGlowEffect: "IMG_7325.png",
   prismFlutterTree: "IMG_7363.png",
   prismFlutterBackground: "IMG_7362.png",
-  prismFlutterEffect: "IMG_7361.png"
+  prismFlutterEffect: "IMG_7361.png",
+  lavenderTwilightTree: "IMG_7366.png",
+  lavenderTwilightBackground: "IMG_7367.png",
+  lavenderTwilightEffect: "IMG_7368.png",
+  worldOfFlagsTree: "IMG_7369.png",
+  worldOfFlagsBackground: "IMG_7370.png",
+  worldOfFlagsEffect: "IMG_7371.png"
 };
 
 const SHOP_ITEMS = {
@@ -238,6 +244,48 @@ const SHOP_ITEMS = {
     price: 10000,
     type: "effect",
     value: "prism_flutter",
+    limited: true
+  },
+  lavender_twilight_tree: {
+    name: "💜🌙 Lavender Twilight Tree",
+    price: 15000,
+    type: "tree",
+    value: "lavender_twilight",
+    limited: true
+  },
+  lavender_twilight_background: {
+    name: "💜🌙 Lavender Twilight Background",
+    price: 10000,
+    type: "background",
+    value: "lavender_twilight",
+    limited: true
+  },
+  lavender_twilight_effect: {
+    name: "💜🌙 Lavender Twilight Effect",
+    price: 10000,
+    type: "effect",
+    value: "lavender_twilight",
+    limited: true
+  },
+  world_of_flags_tree: {
+    name: "🌎🏳️ World of Flags Tree",
+    price: 20000,
+    type: "tree",
+    value: "world_of_flags",
+    limited: true
+  },
+  world_of_flags_background: {
+    name: "🌎🏳️ World of Flags Background",
+    price: 10000,
+    type: "background",
+    value: "world_of_flags",
+    limited: true
+  },
+  world_of_flags_effect: {
+    name: "🌎🏳️ World of Flags Effect",
+    price: 10000,
+    type: "effect",
+    value: "world_of_flags",
     limited: true
   }
 };
@@ -1420,6 +1468,12 @@ function getBackgroundImage(player) {
     case "prism_flutter":
       return IMAGES.prismFlutterBackground;
 
+    case "lavender_twilight":
+      return IMAGES.lavenderTwilightBackground;
+
+    case "world_of_flags":
+      return IMAGES.worldOfFlagsBackground;
+
     case "stoned_birthday":
       return IMAGES.stonedBackground;
 
@@ -1461,6 +1515,12 @@ function getTreeImage(player) {
 
     case "prism_flutter":
       return IMAGES.prismFlutterTree;
+
+    case "lavender_twilight":
+      return IMAGES.lavenderTwilightTree;
+
+    case "world_of_flags":
+      return IMAGES.worldOfFlagsTree;
 
     case "stoned_birthday":
       return IMAGES.stonedTree;
@@ -1510,6 +1570,12 @@ function getEffectImage(player) {
 
     case "prism_flutter":
       return IMAGES.prismFlutterEffect;
+
+    case "lavender_twilight":
+      return IMAGES.lavenderTwilightEffect;
+
+    case "world_of_flags":
+      return IMAGES.worldOfFlagsEffect;
 
     default:
       return null;
@@ -3162,6 +3228,12 @@ async function showLimitedShop(
     ["prism_flutter_tree", "🌈🦋 Prism Flutter Tree", "buy_prism_flutter_tree"],
     ["prism_flutter_background", "🌈🦋 Prism Flutter Background", "buy_prism_flutter_background"],
     ["prism_flutter_effect", "🌈🦋 Prism Flutter Effect", "buy_prism_flutter_effect"],
+    ["lavender_twilight_tree", "💜🌙 Lavender Twilight Tree", "buy_lavender_twilight_tree"],
+    ["lavender_twilight_background", "💜🌙 Lavender Twilight Background", "buy_lavender_twilight_background"],
+    ["lavender_twilight_effect", "💜🌙 Lavender Twilight Effect", "buy_lavender_twilight_effect"],
+    ["world_of_flags_tree", "🌎🏳️ World of Flags Tree", "buy_world_of_flags_tree"],
+    ["world_of_flags_background", "🌎🏳️ World of Flags Background", "buy_world_of_flags_background"],
+    ["world_of_flags_effect", "🌎🏳️ World of Flags Effect", "buy_world_of_flags_effect"],
     ["halloween_background", "🎃 Halloween Background", "buy_halloween"],
     ["pumpkin_cat_decoration", "🐈 Pumpkin Cat", "buy_pumpkin_cat"],
     ["halloween_tree", "🎃 Halloween Tree", "buy_halloween_tree"]
@@ -3189,7 +3261,7 @@ async function showLimitedShop(
   await sendText(
     env,
     interaction,
-    "🎁 **LIMITED / HOLIDAY SHOP**\n\n🐱 **CAT BUNDLE** — special limited items\n💚 **GREEN GLOW SET** — limited items\n🎃 **HALLOWEEN** — holiday items",
+    "🎁 **LIMITED / HOLIDAY SHOP**\n\n🐱 **CAT BUNDLE** — special limited items\n💚 **GREEN GLOW SET** — limited items\n🌈🦋 **PRISM FLUTTER** — limited set\n💜🌙 **LAVENDER TWILIGHT** — limited set\n🌎🏳️ **WORLD OF FLAGS** — limited set\n🎃 **HALLOWEEN** — holiday items",
     rows
   );
 }
@@ -3426,7 +3498,9 @@ async function showCustomBackgrounds(
     ["red_forest_background", "🌲 Red Forest", "red_forest"],
     ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"],
     ["green_glow_background", "💚 Green Glow", "green_glow"],
-    ["prism_flutter_background", "🌈🦋 Prism Flutter", "prism_flutter"]
+    ["prism_flutter_background", "🌈🦋 Prism Flutter", "prism_flutter"],
+    ["lavender_twilight_background", "💜🌙 Lavender Twilight", "lavender_twilight"],
+    ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"]
   ];
 
   for (const [itemId, label, value] of extraBackgrounds) {
@@ -3496,7 +3570,9 @@ async function showCustomTrees(
     ["kitty_tree", "🐱 Kitty Tree", "kitty_tree"],
     ["halloween_tree", "🎃 Halloween", "halloween_tree"],
     ["green_glow", "💚 Green Glow", "green_glow_tree"],
-    ["prism_flutter", "🌈🦋 Prism Flutter", "prism_flutter_tree"]
+    ["prism_flutter", "🌈🦋 Prism Flutter", "prism_flutter_tree"],
+    ["lavender_twilight", "💜🌙 Lavender Twilight", "lavender_twilight_tree"],
+    ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_tree"]
   ];
 
   const ownedItems = items.filter(([value, label, inventoryId]) =>
@@ -3594,6 +3670,26 @@ async function showCustomEffects(
         "🌈🦋 Prism Flutter",
         "equip_effect_prism_flutter",
         player.equipped.effect === "prism_flutter" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("lavender_twilight_effect")) {
+    buttons.push(
+      button(
+        "💜🌙 Lavender Twilight",
+        "equip_effect_lavender_twilight",
+        player.equipped.effect === "lavender_twilight" ? 3 : 2
+      )
+    );
+  }
+
+  if (player.inventory.includes("world_of_flags_effect")) {
+    buttons.push(
+      button(
+        "🌎🏳️ World of Flags",
+        "equip_effect_world_of_flags",
+        player.equipped.effect === "world_of_flags" ? 3 : 2
       )
     );
   }
@@ -3824,6 +3920,16 @@ async function equipTheme(
     prism_flutter:
       player.inventory.includes(
         "prism_flutter_background"
+      ),
+
+    lavender_twilight:
+      player.inventory.includes(
+        "lavender_twilight_background"
+      ),
+
+    world_of_flags:
+      player.inventory.includes(
+        "world_of_flags_background"
       )
   };
 
@@ -3925,6 +4031,16 @@ async function equipTree(
     prism_flutter:
       player.inventory.includes(
         "prism_flutter_tree"
+      ),
+
+    lavender_twilight:
+      player.inventory.includes(
+        "lavender_twilight_tree"
+      ),
+
+    world_of_flags:
+      player.inventory.includes(
+        "world_of_flags_tree"
       )
   };
 
@@ -3978,7 +4094,9 @@ async function equipEffect(
       hearts: "hearts_effect",
       purr_princess: "purr_princess_effect",
       green_glow: "green_glow_effect",
-      prism_flutter: "prism_flutter_effect"
+      prism_flutter: "prism_flutter_effect",
+      lavender_twilight: "lavender_twilight_effect",
+      world_of_flags: "world_of_flags_effect"
     }[effect];
 
     if (
@@ -4234,7 +4352,13 @@ async function showInventory(
     halloween_tree: "🎃🌳 Halloween Tree",
     prism_flutter_tree: "🌈🦋 Prism Flutter Tree",
     prism_flutter_background: "🌈🦋 Prism Flutter Background",
-    prism_flutter_effect: "🌈🦋 Prism Flutter Effect"
+    prism_flutter_effect: "🌈🦋 Prism Flutter Effect",
+    lavender_twilight_tree: "💜🌙 Lavender Twilight Tree",
+    lavender_twilight_background: "💜🌙 Lavender Twilight Background",
+    lavender_twilight_effect: "💜🌙 Lavender Twilight Effect",
+    world_of_flags_tree: "🌎🏳️ World of Flags Tree",
+    world_of_flags_background: "🌎🏳️ World of Flags Background",
+    world_of_flags_effect: "🌎🏳️ World of Flags Effect"
   };
 
   const items = Array.from(new Set(player.inventory)).map(
@@ -5383,7 +5507,25 @@ async function handleComponent(
       "prism_flutter_background",
 
     buy_prism_flutter_effect:
-      "prism_flutter_effect"
+      "prism_flutter_effect",
+
+    buy_lavender_twilight_tree:
+      "lavender_twilight_tree",
+
+    buy_lavender_twilight_background:
+      "lavender_twilight_background",
+
+    buy_lavender_twilight_effect:
+      "lavender_twilight_effect",
+
+    buy_world_of_flags_tree:
+      "world_of_flags_tree",
+
+    buy_world_of_flags_background:
+      "world_of_flags_background",
+
+    buy_world_of_flags_effect:
+      "world_of_flags_effect"
   };
 
   if (
