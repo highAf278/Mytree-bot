@@ -3195,7 +3195,7 @@ async function renderTree(
   }
 }
 
-function escapeHTML(value) {function escapeHTML(value) {
+function escapeHTML(value) {
   return String(value)
     .replaceAll(
       "&",
