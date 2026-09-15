@@ -6391,7 +6391,7 @@ async function handleComponent(
 
   if (id.startsWith("pastel:")) {
     const parts=id.split(":"); const action=parts[1];
-    if(action==="palette") { await handlePastelPalette(env,interaction,parts[2]||"menu"); return; }
+    if(action==="palette") { await handlePastelPalette(env,interaction,parts[2]||"menu",parts[3]||""); return; }
     if(action==="mode") { await handlePastelMode(env,interaction,parts[2]); return; }
     if(action==="resume") { await handlePastelResume(env,interaction,parts[2]); return; }
     if(action==="refresh") { await handlePastelRefresh(env,interaction,parts[2]); return; }
@@ -18862,8 +18862,9 @@ function pastelChoiceComponents(game){
   return rows;
 }
 function pastelLobbyComponents(game){
-  /* Join + How to Play are public. Palette + Cancel are host-only and are
-     enforced again in their handlers so the component IDs cannot be abused. */
+  /* Join + How to Play are public. Palette + Cancel are host-only.
+     The game ID is included with the palette controls so the handler can
+     enforce the host check on every palette click, not just on the first menu. */
   return [
     row(
       button("💗 Join Game",`pastel:join:${game.id}`,1),
@@ -18873,7 +18874,7 @@ function pastelLobbyComponents(game){
     row(button("📖 How to Play","pastel:rules:menu",2))
   ];
 }
-function colorChaosPaletteComponents(selected="pastel_dreams"){
+function colorChaosPaletteComponents(selected="pastel_dreams",gameId=""){
   const items=[
     ["pastel_dreams","🌈 Pastel Dreams",1],
     ["haunted_harvest","🎃 Haunted Harvest",3],
@@ -18884,9 +18885,9 @@ function colorChaosPaletteComponents(selected="pastel_dreams"){
   ];
   const rows=[];
   for(let i=0;i<items.length;i+=3){
-    rows.push(row(...items.slice(i,i+3).map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}`,style))));
+    rows.push(row(...items.slice(i,i+3).map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}${gameId?`:${gameId}`:""}`,style))));
   }
-  rows.push(row(button("⬅️ Back to Create","pastel:palette:back",2)));
+  rows.push(row(button("⬅️ Back to Create",`pastel:palette:back${gameId?`:${gameId}`:""}`,2)));
   return rows;
 }
 function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3),button("⭐ 5 Player",`pastel:mode:5`,2)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
@@ -18998,78 +18999,6 @@ async function renderPastelBoard(env,game){
   const ihdr=new Uint8Array(13),dv=new DataView(ihdr.buffer);dv.setUint32(0,width);dv.setUint32(4,height);ihdr[8]=8;ihdr[9]=6;ihdr[10]=0;ihdr[11]=0;ihdr[12]=0;
   const sig=new Uint8Array([137,80,78,71,13,10,26,10]);const chunks=[pastelPNGChunk("IHDR",ihdr),pastelPNGChunk("IDAT",compressed),pastelPNGChunk("IEND",new Uint8Array())];let total=sig.length+chunks.reduce((n,a)=>n+a.length,0),out=new Uint8Array(total);out.set(sig);let pos=sig.length;for(const ch of chunks){out.set(ch,pos);pos+=ch.length;}return out;
 }
-async function renderPastelBoard(env,game){
-  let browser;
-  try{
-    browser=await puppeteer.launch(env.BROWSER);
-    const page=await browser.newPage();
-    await page.setViewport({width:1040,height:1040,deviceScaleFactor:1});
-    const size=game.mode==="triangle"?20:game.mode==="star"?22:30;
-    const squareCells=32;
-    const boardW=game.mode==="triangle"?39*size:squareCells*size;
-    const boardH=game.mode==="triangle"?20*size:squareCells*size;
-    const cellX=(r,c)=>game.mode==="triangle"?(19-r+c)*size:c*size;
-    const sameOwner=(r,c,owner)=>!!(game.board[r]?.[c]&&game.board[r][c].owner===owner);
-    const edgeSegments=[];
-    const rects=[];
-    const heartMarks=[];
-
-    for(let r=0;r<game.board.length;r++){
-      for(let c=0;c<game.board[r].length;c++){
-        const cell=game.board[r][c];
-        const x=cellX(r,c),y=r*size;
-        let fill=pastelColors(game)[cell.color]?.hex||"#ffffff";
-        if(cell.blocked)fill=pastelPalette(game).boardColor;
-        else if(cell.owner==="blackout")fill="#202020";
-        else if(cell.wild)fill=pastelPalette(game).wildColor;
-        else if(cell.heart)fill=pastelPalette(game).heartColor;
-        rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
-        if(cell.heart&&!cell.owner){
-          const cx=x+size/2,cy=y+size/2,rr=Math.max(10,Math.round(size*0.46));
-          const symbol=pastelPalette(game).powerCell;
-          const isDark=game.palette==="haunted_harvest"||game.palette==="strawberry_galaxy";
-          heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="${isDark?"#17131a":"#fff3f8"}" stroke="${pastelPalette(game).heartColor}" stroke-width="3"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.22)}" font-weight="900">${symbol}</text>`);
-        }
-
-        if(cell.blocked)continue;
-        const owner=cell.owner;
-        if(!owner)continue;
-        const border=owner==="blackout"?"#fff":"#000";
-        const edges=game.mode==="triangle"
-          ? [[r-1,c-1,"top"],[r,c+1,"right"],[r+1,c+1,"bottom"],[r,c-1,"left"]]
-          : [[r-1,c,"top"],[r,c+1,"right"],[r+1,c,"bottom"],[r,c-1,"left"]];
-        for(const [rr,cc,side] of edges){
-          if(sameOwner(rr,cc,owner))continue;
-          if(side==="top")edgeSegments.push(`<line x1="${x}" y1="${y}" x2="${x+size}" y2="${y}" stroke="${border}" stroke-width="4" stroke-linecap="square"/>`);
-          else if(side==="right")edgeSegments.push(`<line x1="${x+size}" y1="${y}" x2="${x+size}" y2="${y+size}" stroke="${border}" stroke-width="4" stroke-linecap="square"/>`);
-          else if(side==="bottom")edgeSegments.push(`<line x1="${x}" y1="${y+size}" x2="${x+size}" y2="${y+size}" stroke="${border}" stroke-width="4" stroke-linecap="square"/>`);
-          else edgeSegments.push(`<line x1="${x}" y1="${y}" x2="${x}" y2="${y+size}" stroke="${border}" stroke-width="4" stroke-linecap="square"/>`);
-        }
-      }
-    }
-
-    /* Deduplicate identical boundary segments so the outline is one clean line,
-       not stacked lines where two territory cells meet. */
-    const seenEdges=new Set(),uniqueEdges=[];
-    for(const seg of edgeSegments){
-      const m=seg.match(/x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)" stroke="([^"]+)"/);
-      if(!m){uniqueEdges.push(seg);continue;}
-      const nums=[Number(m[1]),Number(m[2]),Number(m[3]),Number(m[4])];
-      const key=`${Math.min(nums[0],nums[2])},${Math.min(nums[1],nums[3])},${Math.max(nums[0],nums[2])},${Math.max(nums[1],nums[3])},${m[5]}`;
-      if(seenEdges.has(key))continue;seenEdges.add(key);uniqueEdges.push(seg);
-    }
-
-    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}" width="${boardW}" height="${boardH}"><rect x="0" y="0" width="${boardW}" height="${boardH}" fill="${pastelPalette(game).boardColor}"/>${rects.join("")}${heartMarks.join("")}${uniqueEdges.join("")}</svg>`;
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;background:${pastelPalette(game).boardColor};overflow:hidden}.wrap{width:1040px;height:1040px;display:flex;align-items:center;justify-content:center}.board{width:${boardW}px;height:${boardH}px;background:${pastelPalette(game).boardColor};overflow:hidden}.board>svg{display:block;width:${boardW}px;height:${boardH}px}</style></head><body><div class="wrap"><div class="board">${svg}</div></div></body></html>`;
-    await page.setContent(html,{waitUntil:"load"});
-    return await page.screenshot({type:"png"});
-  }catch(error){
-    const m=error?.message||String(error);
-    if(m.includes("429")||m.toLowerCase().includes("rate limit"))throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another Color Chaos board.");
-    throw error;
-  }finally{if(browser)try{await browser.close();}catch{}}
-}
-
 async function getPastelPublicMessageId(env,game,interaction){
   if(game?.publicMessageId)return game.publicMessageId;
   const token=interaction?.token||game?.interactionToken;
@@ -19202,17 +19131,39 @@ async function handlePastelStart(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   const active=state.pastel;
   if(active&&active.status!=="ended"){
-    return sendText(env,interaction,`🌈 **COLOR CHAOS GAME ALREADY ACTIVE**\n\nA Color Chaos game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Color Palette","pastel:palette:menu",2))]);
+    return sendText(env,interaction,`🌈 **COLOR CHAOS GAME ALREADY ACTIVE**\n\nA Color Chaos game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Color Palette",`pastel:palette:menu:${active.id}`,2))]);
   }
   const selected=state.colorChaosPalette||"pastel_dreams";
   await sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));
 }
-async function handlePastelPalette(env,interaction,palette){
+async function handlePastelPalette(env,interaction,palette,gameId=""){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
   const state=await getGuildState(env,interaction.guild_id);
-  if(palette==="menu"){const selected=state?.colorChaosPalette||"pastel_dreams";return sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\nChoose your palette!`,colorChaosPaletteComponents(selected));}
-  if(palette==="back"){const selected=state?.colorChaosPalette||"pastel_dreams";return sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));}
+  const active=state?.pastel;
+
+  /* Palette controls attached to an existing lobby/game are host-only. */
+  if(gameId){
+    if(!active||active.id!==gameId)return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game no longer exists.");
+    const user=getUserFromInteraction(interaction);
+    if(!user||user.id!==active.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can change the palette.");
+    if(active.status!=="lobby")return sendEphemeralFollowup(env,interaction,"❌ The Color Chaos palette can only be changed before the game starts.");
+  }
+
+  if(palette==="menu"){
+    const selected=gameId?(active?.palette||"pastel_dreams"):(state?.colorChaosPalette||"pastel_dreams");
+    return sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\nChoose your palette!`,colorChaosPaletteComponents(selected,gameId));
+  }
+  if(palette==="back"){
+    const selected=gameId?(active?.palette||"pastel_dreams"):(state?.colorChaosPalette||"pastel_dreams");
+    if(gameId)return sendText(env,interaction,`${pastelLobbyText(active)}`,pastelLobbyComponents(active));
+    return sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));
+  }
   if(!COLOR_CHAOS_PALETTES[palette])return sendEphemeralFollowup(env,interaction,"❌ That palette does not exist.");
+  if(gameId){
+    active.palette=palette;
+    await pastelSave(env,active);
+    return sendText(env,interaction,`${pastelLobbyText(active)}`,pastelLobbyComponents(active));
+  }
   state.colorChaosPalette=palette;
   await saveGuildState(env,interaction.guild_id,state);
   await sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\n${COLOR_CHAOS_PALETTES[palette].icon} **${COLOR_CHAOS_PALETTES[palette].name}** selected!\n\nChoose your game mode!`,pastelModeComponents(palette));
@@ -19237,6 +19188,8 @@ async function handlePastelResume(env,interaction,gameId){
     await acknowledge(env,interaction);
   const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
+  const user=getUserFromInteraction(interaction);
+  if(!user||user.id!==game.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can restore the game.");
   if(game.status==="lobby"){
     if(game.channelId){
       const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:JSON.stringify({content:pastelLobbyText(game),components:pastelLobbyComponents(game)})});
@@ -19271,6 +19224,7 @@ async function pastelStartGame(env,game,interaction){
     await pastelSave(env,game);
     await sendPastelTurnMessage(env,game,game.turnId);
   }catch(error){
+    console.error("Color Chaos start/render failure:",error?.stack||error?.message||error);
     /* Restore the lobby state instead of leaving a phantom PLAYING game. */
     game.status="lobby";game.round=0;game.board=null;game.turnId=game.hostId;game.turnStartedAt=Date.now();game.lastRefresh="";
     await pastelSave(env,game);
