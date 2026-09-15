@@ -1565,8 +1565,15 @@ async function buildTitlesResponseData(env, interaction, section="home", page=0)
     section==="titles"?`title:equip:${id}`:`nameeffect:equip:${id}`,
     player.equippedTitle===id||player.equippedNameEffect===id?3:2
   ))));
-  if(pageCount>1) rows.push(row(button("⬅️ Previous",`${section}:page:${page-1}`,2,page===0),button(`Page ${page+1}/${pageCount}`,`${section}:page:current`,2,true),button("Next ➡️",`${section}:page:${page+1}`,2,page===pageCount-1)));
-  rows.push(row(button("⬅️ Back", "titles:home", 2)));
+  if(pageCount>1) {
+    const pagePrefix = section === "titles" ? "title" : "nameeffect";
+    rows.push(row(
+      button("⬅️ Previous",`${pagePrefix}:page:${page-1}`,2,page===0),
+      button(`Page ${page+1}/${pageCount}`,`${pagePrefix}:page:current`,2,true),
+      button("Next ➡️",`${pagePrefix}:page:${page+1}`,2,page===pageCount-1)
+    ));
+  }
+  rows.push(row(button("⬅️ Back", "title:home", 2)));
   const description=section==="titles"
     ? `🏆 **MY TITLES**\n\n⭐ Equipped: **${equippedTitle}**\n\n${slice.length?slice.map(id=>`${player.equippedTitle===id?"⭐":"🏷️"} **${SOLO_TITLES[id].name}** — ${SOLO_TITLES[id].description}`).join("\n"):"No titles unlocked yet."}`
     : `✨ **NAME EFFECTS**\n\n⭐ Equipped: **${equippedEffect}**\n\n${slice.length?slice.map(id=>`${player.equippedNameEffect===id?"⭐":"✨"} **${NAME_EFFECTS[id].name}** — ${NAME_EFFECTS[id].requirement}`).join("\n"):"No Name Effects unlocked yet."}`;
@@ -17591,7 +17598,7 @@ async function handleCommand(
     return;
   }
 
-  if (name === "title" || name === "titles") {
+  if (name === "titles") {
     await handleTitlesMenu(env, interaction);
     return;
   }
@@ -18477,20 +18484,19 @@ const COLOR_CHAOS_PALETTES = {
   candy_shop: {
     name:"Candy Shop", icon:"🍬", powerCell:"🍬",
     colors:[
-      {id:"cotton_candy",name:"Cotton Candy",hex:"#FFE4F1",label:"🩷"},
+      {id:"sour_apple",name:"Sour Apple",hex:"#7ED957",label:"💚"},
       {id:"lemon_drop",name:"Lemon Drop",hex:"#FFE066",label:"💛"},
       {id:"peach_fizz",name:"Peach Fizz",hex:"#FFB38A",label:"🍑"},
       {id:"bubblegum",name:"Bubblegum",hex:"#FF6FA7",label:"💗"},
       {id:"blue_raspberry",name:"Blue Raspberry",hex:"#4FD1FF",label:"💙"},
-      {id:"grape_pop",name:"Grape Pop",hex:"#B36BFF",label:"💜"},
-      {id:"sour_apple",name:"Sour Apple",hex:"#7ED957",label:"💚"}
+      {id:"grape_pop",name:"Grape Pop",hex:"#B36BFF",label:"💜"}
     ],
     heartColor:"#FFB7D7", wildColor:"#FFFDF7", boardColor:"#FFF0F8"
   },
   strawberry_galaxy: {
     name:"Strawberry Galaxy", icon:"🍓", powerCell:"🍓",
     colors:[
-      {id:"milk_pink",name:"Milk Pink",hex:"#FFE1F0",label:"🥛"},
+      {id:"berry_rose",name:"Berry Rose",hex:"#E08AA8",label:"🌹"},
       {id:"strawberry",name:"Strawberry",hex:"#FF6B8B",label:"🍓"},
       {id:"cosmic_pink",name:"Cosmic Pink",hex:"#D83FA3",label:"💖"},
       {id:"cosmic_purple",name:"Cosmic Purple",hex:"#A05BCB",label:"💜"},
@@ -18498,6 +18504,20 @@ const COLOR_CHAOS_PALETTES = {
       {id:"midnight",name:"Midnight",hex:"#1B1E3F",label:"🌌"}
     ],
     heartColor:"#D83FA3", wildColor:"#FFF7FD", boardColor:"#11152E"
+  },
+  enchanted_garden: {
+    name:"Enchanted Garden", icon:"🌿", powerCell:"🌼",
+    colors:[
+      {id:"spring_leaf",name:"Spring Leaf",hex:"#8BCB70",label:"🍃"},
+      {id:"meadow_green",name:"Meadow Green",hex:"#5FAF70",label:"🌱"},
+      {id:"forest_moss",name:"Forest Moss",hex:"#2E6B3F",label:"🌲"},
+      {id:"buttercup",name:"Buttercup",hex:"#F4D76B",label:"🌼"},
+      {id:"sky_blossom",name:"Sky Blossom",hex:"#7FB8E9",label:"🩵"},
+      {id:"twilight_purple",name:"Twilight Purple",hex:"#5B3FA6",label:"💜"},
+      {id:"sunset_orange",name:"Sunset Orange",hex:"#F4A259",label:"🍊"},
+      {id:"garden_red",name:"Garden Red",hex:"#E04B5A",label:"🌺"}
+    ],
+    heartColor:"#F4D76B", wildColor:"#F3EED5", boardColor:"#163B2A"
   }
 };
 const PASTEL_CLASSIC_COLOR_COUNT=6;
@@ -18725,21 +18745,43 @@ function pastelEndVoteCount(game){
   const votes=Object.keys(game.endVotes||{}).filter(id=>active.some(p=>p.id===id)).length;
   return {votes,total:active.length};
 }
+function pastelColorKeyOrder(game){
+  return pastelColorsForGame(game).map((color,index)=>({color,index,brightness:(()=>{
+    const hex=String(color.hex||"#000000").replace("#","");
+    const r=parseInt(hex.slice(0,2),16)||0, g=parseInt(hex.slice(2,4),16)||0, b=parseInt(hex.slice(4,6),16)||0;
+    // Perceived brightness: weighted to match how bright a color actually looks to the eye.
+    return Math.sqrt(0.299*r*r+0.587*g*g+0.114*b*b);
+  })()})).sort((a,b)=>b.brightness-a.brightness);
+}
+function pastelColorKeyText(game){
+  const ordered=pastelColorKeyOrder(game);
+  const lines=ordered.map((entry,i)=>`${i+1}. ${entry.color.label} **${entry.color.name}** — \`${entry.color.hex.toUpperCase()}\``);
+  return [
+    `🎨 **COLOR KEY — LIGHTEST → DARKEST**`,
+    ``,
+    `${pastelPalette(game).icon} **${pastelPalette(game).name}**`,
+    ``,
+    ...lines,
+    ``,
+    `🌼 **Power Cell:** ${pastelPalette(game).powerCell}`,
+    `⬜ **Wild Block:** special block — it takes the color you capture when connected.`
+  ].join("\n");
+}
 function pastelChoiceComponents(game){
   const p=pastelFindOwned(game,game.turnId);if(!p)return[];
   const colors=pastelAvailableColors(game,p);const rows=[];
   const buttons=colors.map(i=>button(`${pastelColors(game)[i].label} ${pastelColors(game)[i].name}`.slice(0,80),`pastel:choose:${game.id}:${i}`,2));
   for(let i=0;i<buttons.length;i+=2)rows.push(row(...buttons.slice(i,i+2)));
   const vote=pastelEndVoteCount(game);
-  rows.push(row(button("🚪 Quit Game",`pastel:quit:${game.id}`,4),button("📖 Rules",`pastel:rules:${game.id}`,2)));
-  rows.push(row(button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4)));
+  rows.push(row(button("🎨 Color Key",`pastel:colorkey:${game.id}`,2),button("📖 Rules",`pastel:rules:${game.id}`,2)));
+  rows.push(row(button("🚪 Quit Game",`pastel:quit:${game.id}`,4),button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4)));
   return rows;
 }
 function pastelLobbyComponents(game){
   const vote=pastelEndVoteCount(game);
   return [row(button("💗 Join Game",`pastel:join:${game.id}`,1),button("🚪 Cancel",`pastel:cancel:${game.id}`,4)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4))];
 }
-function colorChaosPaletteComponents(selected="pastel_dreams"){const items=[ ["pastel_dreams","🌈 Pastel Dreams",1], ["haunted_harvest","🎃 Haunted Harvest",3], ["teddy_bear","🧸 Teddy Bear",2], ["candy_shop","🍬 Candy Shop",1], ["strawberry_galaxy","🍓 Strawberry Galaxy",2] ]; return [row(...items.map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}`,style))),row(button("⬅️ Back to Create","pastel:palette:back",2))];}
+function colorChaosPaletteComponents(selected="pastel_dreams"){const items=[ ["pastel_dreams","🌈 Pastel Dreams",1], ["haunted_harvest","🎃 Haunted Harvest",3], ["teddy_bear","🧸 Teddy Bear",2], ["candy_shop","🍬 Candy Shop",1], ["strawberry_galaxy","🍓 Strawberry Galaxy",2], ["enchanted_garden","🌿 Enchanted Garden",3] ]; return [row(...items.map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}`,style))),row(button("⬅️ Back to Create","pastel:palette:back",2))];}
 function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
 function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:{mode:"square24",modeLabel:"4 Player",needed:4};}
 function pastelLobbyText(game){return [`🌈 **COLOR CHAOS — ${game.modeLabel}**`,`${pastelPalette(game).icon} **${pastelPalette(game).name}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...",`🛑 **End Game votes:** ${pastelEndVoteCount(game).votes}/${pastelEndVoteCount(game).total} (everyone must agree)`,"",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.`,`${pastelPalette(game).powerCell} Power Cells grant an immediate extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
@@ -19115,10 +19157,6 @@ const COMMANDS = [
     ]
   },
 
-  {
-    name: "title",
-    description: "View and equip your earned titles"
-  },
   {
     name: "titles",
     description: "View owned titles, unlockable titles, and Name Effects"
@@ -19789,7 +19827,7 @@ export default {
     const isProfileCommand =
       interaction.type === 2 && interaction.data?.name === "profile";
     const isTitlesCommand =
-      interaction.type === 2 && (interaction.data?.name === "title" || interaction.data?.name === "titles");
+      interaction.type === 2 && interaction.data?.name === "titles";
     const isPunishmentCommand =
       interaction.type === 2 && (interaction.data?.name === "pickle" || interaction.data?.name === "timeout");
     const customId = String(interaction.data?.custom_id || "");
@@ -19827,19 +19865,19 @@ export default {
     const relevant =
       isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
-    // Title/name-effect pagination is handled as a direct UPDATE_MESSAGE response.
-    // This avoids relying on a deferred edit for ephemeral messages and fixes the
-    // Next/Previous buttons on clients that reject ephemeral flags during PATCH.
-    if (isTitlesComponent && /^(title|nameeffect):page:-?\d+$/.test(customId)) {
+    // Color Key is a private, player-only response. It never edits the public game board.
+    if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
       try {
-        const parts=customId.split(":");
-        const section=parts[0]==="title"?"titles":"effects";
-        const page=Math.max(0,Number(parts[2]||0));
-        const data=titleEditData(await buildTitlesResponseData(env,interaction,section,page));
-        return new Response(JSON.stringify({type:7,data}),{status:200,headers:{"Content-Type":"application/json"}});
+        const gameId=customId.split(":")[2];
+        const state=await getGuildState(env,interaction.guild_id);
+        const game=state.pastel;
+        if (!game || game.id!==gameId || game.status!=="playing") {
+          return new Response(JSON.stringify({type:4,data:{content:"❌ That Color Chaos game is no longer active.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+        }
+        return new Response(JSON.stringify({type:4,data:{content:pastelColorKeyText(game),flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
       } catch(error) {
-        console.error("Title pagination response error:",error);
-        return new Response(JSON.stringify({type:7,data:{content:`❌ Couldn't change pages: ${error?.message||"Unknown error"}`,components:[]}}),{status:200,headers:{"Content-Type":"application/json"}});
+        console.error("Color Key response error:",error);
+        return new Response(JSON.stringify({type:4,data:{content:`❌ Couldn't load the Color Key: ${error?.message||"Unknown error"}`,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
       }
     }
 
