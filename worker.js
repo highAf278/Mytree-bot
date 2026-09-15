@@ -19797,7 +19797,7 @@ async function processPastelTimers(env){
   for(const guildId of guildIds){
     try{
       const state=await getGuildState(env,guildId);
-      const game=state.pastel;
+      let game=state.pastel;
       if(!game||game.status!=="playing")continue;
       if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
       if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
