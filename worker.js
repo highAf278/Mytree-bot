@@ -1015,17 +1015,30 @@ async function handleProfile(env, interaction) {
   const player = await getPlayer(env,targetId);
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
-  try{
-    const gif=await renderAnimatedProfile(env,player);
+
+  /* Use the direct PNG renderer used by /tree instead of Cloudflare Browser Rendering.
+     This prevents /profile from hanging while waiting for a browser/page load. */
+  try {
+    const png = await renderTreeDirect(env, player);
+    const title = player.equippedTitle && SOLO_TITLES[player.equippedTitle]
+      ? SOLO_TITLES[player.equippedTitle].name : "No Title";
+    const effect = player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect]
+      ? NAME_EFFECTS[player.equippedNameEffect].name : "None";
+    const content =
+      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile\n\n` +
+      `🏷️ **Title:** ${escapeHTML(title)}\n` +
+      `✨ **Name Effect:** ${escapeHTML(effect)}\n` +
+      `🌳 **Level:** ${Number(player.level||1)} • 📏 **${Number(getTreeHeight(player)||0)} ft**\n` +
+      `💎 **Sparkles:** ${Number(player.sparkles||0).toLocaleString()} • 🏆 **Solo Wins:** ${Number(player.soloWins||0)}`;
     const response = await editOriginalResponseWithFile(
-      env, interaction,
-      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
-      "werewives-profile.gif", gif
+      env, interaction, content, "werewives-profile.png", png, "image/png"
     );
     if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
-  }catch(error){
+  } catch(error) {
     console.error("Profile render failed",error);
-    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);
+    await editOriginalResponse(env,interaction,{
+      content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`
+    });
   }
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
@@ -2791,21 +2804,27 @@ async function renderTreeDirect(env, player) {
   }
   scene = coverRGBA(scene, width, height);
 
+  /* Effects sit behind the tree so the tree artwork stays crisp and prominent. */
+  if (effectFile) {
+    const effect = await getPngAsset(env, effectFile);
+    const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
+    const effectX = player.equipped?.effect === "purr_princess"
+      ? Math.round(width * 0.08)
+      : -Math.round(width * 0.05);
+    alphaComposite(scene, layer, effectX, -Math.round(height * 0.05), player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
+  }
+
+  /* Tree is composited after the effect so it remains visually dominant. */
   const tree = await getPngAsset(env, treeFile);
-  const treeLayer = containRGBA(tree, Math.round(width * 0.90), Math.round(height * 0.90));
+  const treeLayer = containRGBA(tree, Math.round(width * 0.95), Math.round(height * 0.95));
   alphaComposite(scene, treeLayer, (width - treeLayer.width) / 2, height * 0.63 - treeLayer.height / 2);
 
+  /* Decorations sit on top of the effect and tree for maximum visibility. */
   if (decorationFile) {
     const decoration = await getPngAsset(env, decorationFile);
     const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
     const layer = containRGBA(decoration, size, size);
     alphaComposite(scene, layer, width * 0.22 - layer.width / 2, height * 0.84 - layer.height / 2);
-  }
-
-  if (effectFile) {
-    const effect = await getPngAsset(env, effectFile);
-    const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
-    alphaComposite(scene, layer, -width * 0.05, -height * 0.05, player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
   }
 
   /* Sparkles are kept as visible glowy markers. They are deliberately simple
@@ -18380,13 +18399,24 @@ async function handleBattleShopBuy(env,interaction,itemId){
    400 cells (1+3+5+...+39). 4P = 32x32 square.
 ========================================================= */
 
-function colorCheckerSvg(hex){
+function colorCheckerPng(hex){
   const safe=String(hex||"").toUpperCase();
-  const lum=parseInt(safe.slice(1),16);
-  const r=(lum>>16)&255,g=(lum>>8)&255,b=lum&255;
-  const light=((r*299+g*587+b*114)/1000)>155;
-  const ink=light?"#2a2030":"#FFFFFF";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"><rect width="900" height="520" fill="${safe}"/><rect x="24" y="24" width="852" height="472" rx="26" fill="none" stroke="${ink}" stroke-opacity=".35" stroke-width="4"/><rect x="225" y="165" width="450" height="190" rx="30" fill="#000000" fill-opacity=".18"/><text x="450" y="235" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="${ink}">COLOR CHECKER</text><text x="450" y="305" text-anchor="middle" font-family="monospace" font-size="52" font-weight="900" fill="${ink}">${safe}</text></svg>`;
+  const width=900,height=520;
+  const frame=solidRGBA(width,height,safe);
+  const border=24;
+  for(let y=border;y<height-border;y++){
+    for(const x of [border,width-border-1]){
+      const o=(y*width+x)*4;
+      frame.data[o]=255; frame.data[o+1]=255; frame.data[o+2]=255;
+    }
+  }
+  for(let x=border;x<width-border;x++){
+    for(const y of [border,height-border-1]){
+      const o=(y*width+x)*4;
+      frame.data[o]=255; frame.data[o+1]=255; frame.data[o+2]=255;
+    }
+  }
+  return rgbaToRgbPng(frame);
 }
 const COLOR_CHAOS_PALETTES = {
   pastel_dreams: {
@@ -18975,9 +19005,8 @@ async function handleColorChecker(env,interaction){
     return sendText(env,interaction,"❌ Please enter a valid 6-digit HEX color, like `#7A4FA3`.");
   }
   const hex="#"+cleaned.toUpperCase();
-  const svg=colorCheckerSvg(hex);
-  const bytes=new TextEncoder().encode(svg);
-  const response=await editOriginalResponseWithFile(env,interaction,`🎨 **Color Checker:** \`${hex}\``,"color-checker.svg",bytes,"image/svg+xml");
+  const bytes=colorCheckerPng(hex);
+  const response=await editOriginalResponseWithFile(env,interaction,`🎨 **Color Checker:** \`${hex}\``,"color-checker.png",bytes,"image/png");
   if(!response.ok)console.error("Color Checker response failed:",response.status,await response.text());
 }
 
