@@ -909,6 +909,18 @@ function nameEffectText(effectId, titleText, phase = 0) {
   }).join("");
   return `<span class="effect-${escapeHTML(effectId)}">${chars}</span>`;
 }
+async function withTimeout(promise, ms, label = "Operation") {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function profileCardHTML(player, phase = 0, assetUrls = {}) {
   const bg = /^#[0-9a-fA-F]{6}$/.test(player.profileColor || "") ? player.profileColor : "#ffd9ef";
   const titleId = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? player.equippedTitle : "";
