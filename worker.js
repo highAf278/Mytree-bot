@@ -1022,7 +1022,7 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
   try{
-    const gif=await renderAnimatedProfile(env,player);
+    const gif=await withTimeout(renderAnimatedProfile(env,player),10000,"Profile render");
     const response = await editOriginalResponseWithFile(
       env, interaction,
       `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
@@ -1031,7 +1031,7 @@ async function handleProfile(env, interaction) {
     if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
     console.error("Profile render failed",error);
-    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);
+    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}\n\n⚠️ Profile picture rendering is temporarily unavailable; your profile data is still saved.`);
   }
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
@@ -6350,25 +6350,43 @@ async function handleTree(
   );
 
   try {
-    await sendTree(
-      env,
-      interaction,
-      player
+    // Never leave a Discord interaction stuck on "thinking" if Browser Rendering hangs.
+    await withTimeout(
+      sendTree(env, interaction, player),
+      10000,
+      "Tree render"
     );
   } catch (error) {
-    console.error(
-      "Tree render error:",
-      error
-    );
+    console.error("Tree render error:", error);
+
+    // Browser Rendering can occasionally be unavailable. Fall back to the actual
+    // equipped tree asset so the command still returns a visible picture.
+    try {
+      const treeFile = getTreeImage(player);
+      const treeObject = treeFile ? await env.TREE_DATA.get(treeFile) : null;
+      if (treeObject) {
+        const treeBytes = new Uint8Array(await treeObject.arrayBuffer());
+        const response = await editOriginalResponseWithFile(
+          env,
+          interaction,
+          `${buildTreeStats(player)}\n\n⚠️ The tree scene renderer is temporarily unavailable, so here's your tree asset directly.`,
+          treeFile.split("/").pop() || "tree.png",
+          treeBytes,
+          imageMimeType(treeFile)
+        );
+        if (response.ok) return;
+        console.error("Direct tree fallback upload failed:", response.status, await response.text());
+      }
+    } catch (fallbackError) {
+      console.error("Direct tree fallback failed:", fallbackError);
+    }
 
     await editOriginalResponse(
       env,
       interaction,
       {
-        content:
-          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
-        components:
-          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
+        content: `🌳 Your tree is alive, but the picture renderer is temporarily unavailable.\n\n${error?.message || "Unknown error"}`,
+        components: treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
     );
   }
