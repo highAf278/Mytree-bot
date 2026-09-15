@@ -941,6 +941,25 @@ async function renderAnimatedProfile(env, player) {
   return await renderStaticProfile(env, player);
 }
 
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function profileAssetDataUrl(filename) {
+  if (!filename) return "";
+  const response = await fetch(imageUrl(filename), {
+    cf: { cacheEverything: true, cacheTtl: 86400 }
+  });
+  if (!response.ok) throw new Error(`Profile asset fetch failed: ${filename} (HTTP ${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return `data:image/png;base64,${bytesToBase64(bytes)}`;
+}
+
 async function renderStaticProfile(env, player) {
   let browser;
   const timeout = (promise, ms, label) => Promise.race([
@@ -948,18 +967,26 @@ async function renderStaticProfile(env, player) {
     new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
   ]);
   try {
+    // Embed artwork before opening the page so Browser Rendering never has to
+    // fetch R2 assets itself. This avoids profile hangs caused by remote image loads.
+    const treeFile = getTreeImage(player);
+    const decorFile = getDecorationImage(player);
+    const [treeDataUrl, decorDataUrl] = await Promise.all([
+      profileAssetDataUrl(treeFile),
+      decorFile ? profileAssetDataUrl(decorFile) : Promise.resolve("")
+    ]);
+
+    let html = profileCardHTML(player, 0);
+    html = html.replace(`src="${imageUrl(treeFile)}"`, `src="${treeDataUrl}"`);
+    if (decorFile && decorDataUrl) {
+      html = html.replace(`src="${imageUrl(decorFile)}"`, `src="${decorDataUrl}"`);
+    }
+
     browser = await timeout(puppeteer.launch(env.BROWSER), 12000, "Profile browser launch");
     const page = await timeout(browser.newPage(), 5000, "Profile page creation");
     await timeout(page.setViewport({width:800,height:500,deviceScaleFactor:1}), 5000, "Profile viewport setup");
-    await timeout(page.setContent(profileCardHTML(player,0),{waitUntil:"domcontentloaded"}), 8000, "Profile HTML load");
-    await timeout(page.evaluate(async()=>{
-      await Promise.all(Array.from(document.images).map(img=>
-        img.complete ? Promise.resolve() : new Promise(resolve=>{
-          img.onload=resolve;
-          img.onerror=resolve;
-        })
-      ));
-    }), 8000, "Profile image load");
+    await timeout(page.setContent(html,{waitUntil:"domcontentloaded"}), 8000, "Profile HTML load");
+    await timeout(page.evaluate(() => document.fonts ? document.fonts.ready : Promise.resolve()), 5000, "Profile fonts");
     return await timeout(page.screenshot({type:"png"}), 8000, "Profile screenshot");
   } finally {
     if(browser) await browser.close().catch(()=>{});
