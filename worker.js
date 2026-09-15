@@ -2884,60 +2884,323 @@ function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(
 function profileEffectColor(id){
   const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
 }
-async function renderProfileDirect(env,player){
-  const width=800,height=500;
-  const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
-  const [br,bgG,bb]=hexRgb(bg);
-  const scene=solidRGBA(width,height,bg);
-  /* Soft panel on the right, matching the original profile-card composition. */
-  profileBlendFill(scene,318,18,458,464,255,255,255,205);
-  profileBlendFill(scene,330,30,434,440,br,bgG,bb,55);
-  profileFill(scene,330,30,434,4,255,255,255,150);
-  profileFill(scene,330,466,434,4,255,255,255,150);
-  profileFill(scene,318,18,4,464,255,255,255,180);
-  profileFill(scene,772,18,4,464,255,255,255,180);
 
-  const treeFile=getTreeImage(player);
-  const tree=await getPngAsset(env,treeFile);
-  const treeLayer=containRGBA(tree,350,430);
-  alphaComposite(scene,treeLayer,10,65);
 
-  const decorFile=getDecorationImage(player);
-  if(decorFile){
-    try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
+async function renderTree(
+  env,
+  player
+) {
+  let browser;
+
+  try {
+    browser =
+      await puppeteer.launch(
+        env.BROWSER
+      );
+
+    const page =
+      await browser.newPage();
+
+    await page.setViewport({
+      width: 1024,
+      height: 1024,
+      deviceScaleFactor: 1
+    });
+
+    const background =
+      imageUrl(
+        getBackgroundImage(
+          player
+        )
+      );
+
+    const tree =
+      imageUrl(
+        getTreeImage(player)
+      );
+
+    const decorationFile =
+      getDecorationImage(
+        player
+      );
+
+    const decoration =
+      decorationFile
+        ? imageUrl(
+            decorationFile
+          )
+        : "";
+
+    const effectFile =
+      getEffectImage(
+        player
+      );
+
+    const effect =
+      effectFile
+        ? imageUrl(
+            effectFile
+          )
+        : "";
+
+    const sparkleHTML = (
+      player.sparklesOnTree ||
+      []
+    )
+      .map(sparkle => {
+        const left =
+          Number(sparkle.x) ||
+          50;
+
+        const top =
+          Number(sparkle.y) ||
+          50;
+
+        const kind = escapeHTML(sparkle.kind || "pink");
+        const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
+        const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
+
+        return `
+          <div
+            style="
+              position:absolute;
+              left:${left}%;
+              top:${top}%;
+              transform:translate(-50%,-50%);
+              font-family:Arial, Helvetica, sans-serif;
+              font-size:76px;
+              font-weight:900;
+              line-height:1;
+              color:#ffffff;
+              z-index:20;
+              opacity:1;
+              -webkit-text-stroke:2px ${glow};
+              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
+              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
+              animation:sparklePulse 1.2s ease-in-out infinite;
+              user-select:none;
+            "
+            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
+          >${symbol}</div>
+        `;
+      })
+      .join("");
+
+    let decorationHTML = "";
+
+    if (
+      decoration
+    ) {
+      const isBalloon =
+        player.equipped?.decoration ===
+        "stoned_balloon";
+
+      const decorationSize =
+        isBalloon
+          ? "330px"
+          : "280px";
+
+      decorationHTML = `
+        <img
+          src="${decoration}"
+          style="
+            position:absolute;
+            left:22%;
+            top:84%;
+            transform:translate(-50%,-50%);
+            width:${decorationSize};
+            height:${decorationSize};
+            object-fit:contain;
+            z-index:4;
+          "
+        />
+      `;
+    }
+
+    let effectHTML = "";
+
+    if (effect) {
+      /* Keep the effect atmospheric and behind the tree so the tree stays
+         the clear centerpiece instead of being covered by the overlay. */
+      effectHTML = `
+        <img
+          src="${effect}"
+          style="
+            position:absolute;
+            left:-5%;
+            top:-5%;
+            width:110%;
+            height:110%;
+            object-fit:contain;
+            opacity:0.42;
+            mix-blend-mode:screen;
+            z-index:2;
+            pointer-events:none;
+          "
+        />
+      `;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+
+      <html>
+      <head>
+        <meta charset="UTF-8">
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          .emoji {
+            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
+            font-variant-emoji: emoji;
+          }
+
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            width: 1024px;
+            height: 1024px;
+            overflow: hidden;
+            background: #ffd9ef;
+          }
+
+          #scene {
+            position: relative;
+            width: 1024px;
+            height: 1024px;
+            overflow: hidden;
+          }
+
+          #background {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          @keyframes sparkleFall {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+          }
+
+          @keyframes sparklePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.78; }
+          }
+
+          #tree {
+            position: absolute;
+            left: 50%;
+            top: 63%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            height: 90%;
+            object-fit: contain;
+            z-index: 4;
+          }
+        </style>
+      </head>
+
+      <body>
+        <div id="scene">
+
+          <img
+            id="background"
+            src="${background}"
+          >
+
+          <img
+            id="tree"
+            src="${tree}"
+          >
+
+          ${decorationHTML}
+
+          ${effectHTML}
+
+          ${sparkleHTML}
+
+        </div>
+      </body>
+      </html>
+    `;
+
+    await page.setContent(
+      html,
+      {
+        waitUntil: "load"
+      }
+    );
+
+    await page.evaluate(
+      async () => {
+        const images =
+          Array.from(
+            document.images
+          );
+
+        await Promise.all(
+          images.map(
+            image =>
+              new Promise(
+                resolve => {
+                  if (
+                    image.complete
+                  ) {
+                    resolve();
+                  } else {
+                    image.onload =
+                      resolve;
+
+                    image.onerror =
+                      resolve;
+                  }
+                }
+              )
+          )
+        );
+      }
+    );
+
+    return await page.screenshot(
+      {
+        type: "png"
+      }
+    );
+  } catch (error) {
+    const message =
+      error?.message ||
+      String(error);
+
+    if (
+      message.includes("429") ||
+      message.toLowerCase().includes(
+        "rate limit"
+      )
+    ) {
+      throw new Error(
+        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
+      );
+    }
+
+    throw error;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error(
+          "Browser close error:",
+          closeError
+        );
+      }
+    }
   }
-  const effectId=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?player.equippedNameEffect:"";
-  const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
-  const title=titleId?SOLO_TITLES[titleId].name:"No Title";
-  const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
-  const ink=[42,32,48], accent=profileEffectColor(effectId);
-
-  /* Card labels and values are drawn with a tiny embedded bitmap font so this path
-     needs no browser, websocket, font service, or external renderer. */
-  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),350,48,4,ink,390);
-  drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
-  profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
-  drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
-  drawBitmapText(scene,title,372,158,3,accent,345);
-  drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
-  drawBitmapText(scene,effect,372,212,2,accent,350);
-
-  profileBlendFill(scene,350,250,394,155,255,255,255,100);
-  drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
-  drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
-  drawBitmapText(scene,Number(player.sparkles||0).toLocaleString(),545,290,3,ink,170);
-  drawBitmapText(scene,"TREE HEIGHT",372,335,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
-  drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
-  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,435,2,[100,88,110],390);
-  return rgbaToRgbPng(scene);
-}
-
-async function renderTree(env, player) {
-  // Tree rendering is intentionally independent of Cloudflare Browser Rendering.
-  return await renderTreeDirect(env, player);
 }
 
 function escapeHTML(value) {
