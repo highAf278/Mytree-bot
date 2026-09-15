@@ -1,3 +1,15 @@
 name = "mytree-bot"
 main = "worker.js"
 compatibility_date = "2026-09-07"
+
+[vars]
+CLIENT_ID = "1546919516058034306"
+OWNER_ID = "1424181011243208817"
+PUBLIC_KEY = "034d90a4c0c4f4c2978ecbc70a51422dd9a530c3c00d6a8aedab94d0f99a8c34"
+
+[[kv_namespaces]]
+binding = "TREE_DATA"
+id = "8ac087158b0241ebb776feb6de7206be"
+
+[browser]
+binding = "BROWSER"
