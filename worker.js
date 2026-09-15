@@ -18552,9 +18552,9 @@ function pastelCellCount(mode){return mode==="triangle"?400:1024;}
 function pastelGenerateBoard(mode,players,palette="pastel_dreams"){
   const board=[];
   const rows=mode==="triangle"?20:32;
+  const colorCount=Math.min(players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT,pastelPalette({palette,needed:players.length}).colors.length);
   for(let r=0;r<rows;r++){
     const width=mode==="triangle"?(2*r+1):32;
-    const colorCount=Math.min(players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT,pastelPalette({palette,needed:players.length}).colors.length);
     board.push(Array.from({length:width},()=>({color:randomInt(0,colorCount-1),owner:null,heart:false,wild:Math.random()<0.075})));
   }
   /* Seed fair starting corners and give each player a small safe region. */
