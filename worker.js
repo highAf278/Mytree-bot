@@ -19031,6 +19031,41 @@ async function getPastelPublicMessageId(env,game,interaction){
   return "";
 }
 
+
+async function pastelPublicUpdate(env,interaction,content,components=[],game=null){
+  /* Color Chaos stores its public message as publicMessageId.
+     Do NOT use islandPublicUpdate here; that helper belongs to Chaos Island
+     and looks for game.messageId. */
+  if(game?.channelId){
+    let messageId=game.publicMessageId||"";
+    if(!messageId) messageId=await getPastelPublicMessageId(env,game,interaction);
+    if(messageId){
+      const response=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{
+        method:"PATCH",
+        body:JSON.stringify({content,components})
+      });
+      if(response.ok)return response;
+      console.error("Color Chaos public message update failed:",response.status,await response.text());
+      if(response.status===404){
+        try{
+          const created=await sendChannelMessage(env,game.channelId,content,components);
+          if(created?.id){
+            game.publicMessageId=created.id;
+            await pastelSave(env,game);
+            return new Response(null,{status:200});
+          }
+        }catch(error){console.error("Color Chaos public message recreation failed:",error);}
+      }
+      return response;
+    }
+  }
+  if(interaction?.type===3&&!interaction.__deferred&&!interaction.__acknowledged)
+    await acknowledge(env,interaction);
+  const response=await editOriginalResponse(env,interaction,{content,components});
+  if(!response.ok)console.error("Color Chaos fallback public update failed:",response.status,await response.text());
+  return response;
+}
+
 async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
@@ -19115,14 +19150,17 @@ async function handlePastelRefresh(env,interaction,gameId){
 
 async function handlePastelResume(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
+  /* Acknowledge immediately so Browser Rendering cannot make the button expire. */
+  if(interaction.type===3&&!interaction.__deferred&&!interaction.__acknowledged)
+    await acknowledge(env,interaction);
   const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
   if(game.status==="lobby"){
-    await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
+    await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
     return;
   }
   try{await sendPastelBoard(env,interaction,game);}catch(error){
-    await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});
+    await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n⚠️ The board could not render, but the saved game is still active.`,pastelChoiceComponents(game),game);
   }
 }
 async function handlePastelMode(env,interaction,mode){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Color Chaos game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));await getPastelPublicMessageId(env,game,interaction);await pastelSave(env,game);}
@@ -19161,7 +19199,7 @@ async function handlePastelJoin(env,interaction,gameId){
   if(!game)return sendText(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
   await acknowledge(env,interaction);
   if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}
-  await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
+  await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
 }
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");}
 async function pastelFinish(env,game,winnerId,reason){
@@ -19324,7 +19362,7 @@ async function handlePastelEndVote(env,interaction,gameId){
   game.endVotes[user.id]=true;const vote=pastelEndVoteCount(game);
   if(vote.votes>=vote.total&&vote.total>0){await pastelForceEnd(env,game,interaction,"🛑 **Everyone agreed to end Color Chaos.**");return;}
   await pastelSave(env,game);
-  if(game.status==="lobby")await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
+  if(game.status==="lobby")await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
   else {try{await sendPastelBoard(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n🛑 <@${user.id}> voted to end the game. **${vote.votes}/${vote.total}** players have agreed.\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}}
 }
 async function handlePastelLeaderboard(env,interaction){const keys=await listAllPlayerKeys(env);const players=[];for(const key of keys){const p=await getPlayer(env,key);if(!pastelHasPlayed(p))continue;pastelStats(p);players.push(p);}players.sort((a,b)=>{const r=Number(b.pastelRating||0)-Number(a.pastelRating||0);if(r)return r;const w=Number(b.pastelWins||0)-Number(a.pastelWins||0);if(w)return w;return Number(a.pastelQuits||0)-Number(b.pastelQuits||0);});const top=players.slice(0,10);if(!top.length)return sendText(env,interaction,"🌈 Nobody has played Color Chaos yet!");const lines=top.map((p,i)=>`**${i+1}.** ${getDisplayName(p)} — Level **${pastelStats(p).level}** • 🏆 **${Number(p.pastelWins||0)} Wins** • 💀 **${Number(p.pastelLosses||0)} Losses** • 🚪 **${Number(p.pastelQuits||0)} Quits**`);await sendText(env,interaction,`🌈 **COLOR CHAOS LEADERBOARD**\n\n${lines.join("\n")}`);}
