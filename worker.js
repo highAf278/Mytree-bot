@@ -20353,6 +20353,10 @@ export default {
       interaction.type === 2 && interaction.data?.name === "blame";
     const isProfileCommand =
       interaction.type === 2 && interaction.data?.name === "profile";
+    // /tree performs KV work and Browser Rendering, so it must be acknowledged
+    // immediately just like the other long-running commands.
+    const isTreeCommand =
+      interaction.type === 2 && interaction.data?.name === "tree";
     const isTitlesCommand =
       interaction.type === 2 && interaction.data?.name === "titles";
     const isPunishmentCommand =
@@ -20390,7 +20394,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
