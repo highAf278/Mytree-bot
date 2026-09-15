@@ -936,61 +936,23 @@ function profileCardHTML(player, phase = 0) {
 }
 
 async function renderAnimatedProfile(env, player) {
-  // Kept for compatibility with the existing profile helpers, but profile now
-  // renders a single static card instead of building an 8-frame GIF.
-  return await renderStaticProfile(env, player);
-}
-
-function bytesToBase64(bytes) {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
-  }
-  return btoa(binary);
-}
-
-async function profileAssetDataUrl(filename) {
-  if (!filename) return "";
-  const response = await fetch(imageUrl(filename), {
-    cf: { cacheEverything: true, cacheTtl: 86400 }
-  });
-  if (!response.ok) throw new Error(`Profile asset fetch failed: ${filename} (HTTP ${response.status})`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return `data:image/png;base64,${bytesToBase64(bytes)}`;
-}
-
-async function renderStaticProfile(env, player) {
   let browser;
-  const timeout = (promise, ms, label) => Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
-  ]);
   try {
-    // Embed artwork before opening the page so Browser Rendering never has to
-    // fetch R2 assets itself. This avoids profile hangs caused by remote image loads.
-    const treeFile = getTreeImage(player);
-    const decorFile = getDecorationImage(player);
-    const [treeDataUrl, decorDataUrl] = await Promise.all([
-      profileAssetDataUrl(treeFile),
-      decorFile ? profileAssetDataUrl(decorFile) : Promise.resolve("")
-    ]);
-
-    let html = profileCardHTML(player, 0);
-    html = html.replace(`src="${imageUrl(treeFile)}"`, `src="${treeDataUrl}"`);
-    if (decorFile && decorDataUrl) {
-      html = html.replace(`src="${imageUrl(decorFile)}"`, `src="${decorDataUrl}"`);
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width:800,height:500,deviceScaleFactor:1});
+    await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
+    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+    const frames=[];
+    const frameCount=8;
+    for(let i=0;i<frameCount;i++){
+      const phase=i/frameCount;
+      await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
+      await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+      frames.push(await page.screenshot({type:"png"}));
     }
-
-    browser = await timeout(puppeteer.launch(env.BROWSER), 12000, "Profile browser launch");
-    const page = await timeout(browser.newPage(), 5000, "Profile page creation");
-    await timeout(page.setViewport({width:800,height:500,deviceScaleFactor:1}), 5000, "Profile viewport setup");
-    await timeout(page.setContent(html,{waitUntil:"domcontentloaded"}), 8000, "Profile HTML load");
-    await timeout(page.evaluate(() => document.fonts ? document.fonts.ready : Promise.resolve()), 5000, "Profile fonts");
-    return await timeout(page.screenshot({type:"png"}), 8000, "Profile screenshot");
-  } finally {
-    if(browser) await browser.close().catch(()=>{});
-  }
+    return await encodePNGFramesToGIF(frames,800,500,12);
+  } finally { if(browser) await browser.close().catch(()=>{}); }
 }
 
 async function decodePNG(pngBytes) {
@@ -1048,30 +1010,21 @@ async function editOriginalResponseWithFile(env, interaction, content, filename,
 }
 
 async function handleProfile(env, interaction) {
-  const user = getUserFromInteraction(interaction); if(!user)return;
-  const targetId = getOption(interaction,"user") || user.id;
-  const player = await getPlayer(env,targetId);
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  const targetId=getOption(interaction,"user")||user.id;
+  const player=await getPlayer(env,targetId);
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
-
-  try {
-    // /profile is intentionally a STATIC profile card, matching the original
-    // Werewives card layout.  Do not substitute the tree-only renderer here.
-    const png = await renderStaticProfile(env, player);
-    const response = await editOriginalResponseWithFile(
-      env, interaction,
-      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
-      "werewives-profile.png", png, "image/png"
-    );
-    if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
-  } catch(error) {
-    console.error("Profile render failed",error);
-    await editOriginalResponse(env,interaction,{
-      content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`
-    });
+  try{
+    const png=await renderProfileDirect(env,player);
+    const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
+    const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}`,"werewives-profile.png",png,"image/png");
+    if(!response.ok)throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
+  }catch(error){
+    console.error("Profile direct render failed",error);
+    await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
   }
 }
-
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
 async function handleNameEffectEquip(env,interaction,effectId){
@@ -2890,6 +2843,88 @@ function drawSparkle(frame, cx, cy, kind) {
       const o=(y*frame.width+x)*4; frame.data[o]=colors[0]; frame.data[o+1]=colors[1]; frame.data[o+2]=colors[2]; frame.data[o+3]=255;
     }
   }
+}
+
+const BITMAP_FONT = {"A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"], "B": ["11110", "10001", "10001", "11110", "10001", "10001", "11110"], "C": ["01111", "10000", "10000", "10000", "10000", "10000", "01111"], "D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"], "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"], "F": ["11111", "10000", "10000", "11110", "10000", "10000", "10000"], "G": ["01111", "10000", "10000", "10111", "10001", "10001", "01111"], "H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"], "I": ["11111", "00100", "00100", "00100", "00100", "00100", "11111"], "J": ["00111", "00010", "00010", "00010", "10010", "10010", "01100"], "K": ["10001", "10010", "10100", "11000", "10100", "10010", "10001"], "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"], "M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"], "N": ["10001", "11001", "10101", "10011", "10001", "10001", "10001"], "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"], "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"], "Q": ["01110", "10001", "10001", "10001", "10101", "10010", "01101"], "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"], "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"], "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"], "U": ["10001", "10001", "10001", "10001", "10001", "10001", "01110"], "V": ["10001", "10001", "10001", "10001", "10001", "01010", "00100"], "W": ["10001", "10001", "10001", "10101", "10101", "11011", "10001"], "X": ["10001", "10001", "01010", "00100", "01010", "10001", "10001"], "Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"], "Z": ["11111", "00001", "00010", "00100", "01000", "10000", "11111"], "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"], "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"], "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"], "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"], "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"], "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"], "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"], "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"], "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"], "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"], ":": ["00000", "00100", "00100", "00000", "00100", "00100", "00000"], "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"], ".": ["00000", "00000", "00000", "00000", "00000", "00110", "00110"], "/": ["00001", "00010", "00010", "00100", "01000", "01000", "10000"], "#": ["01010", "11111", "01010", "01010", "11111", "01010", "01010"], "!": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"], "?": ["01110", "10001", "00001", "00010", "00100", "00000", "00100"]};
+
+function profileSafeText(value){
+  const s=String(value??"").normalize("NFKD").replace(/[^A-Za-z0-9 ._!?#:\/-]+/g,"");
+  return s.trim() || "WEREWIFE";
+}
+function hexRgb(hex){
+  const n=parseInt(String(hex||"#ffd9ef").replace(/^#/ , ""),16)>>>0;
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function profileFill(frame,x,y,w,h,r,g,b,a=255){
+  const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
+  for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const o=(yy*frame.width+xx)*4;frame.data[o]=r;frame.data[o+1]=g;frame.data[o+2]=b;frame.data[o+3]=a;}
+}
+function profileBlendFill(frame,x,y,w,h,r,g,b,a=255){
+  const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
+  const sa=a/255;
+  for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const o=(yy*frame.width+xx)*4;frame.data[o]=Math.round(r*sa+frame.data[o]*(1-sa));frame.data[o+1]=Math.round(g*sa+frame.data[o+1]*(1-sa));frame.data[o+2]=Math.round(b*sa+frame.data[o+2]*(1-sa));frame.data[o+3]=255;}
+}
+function drawBitmapText(frame,text,x,y,scale=3,rgb=[42,32,48],maxWidth=null){
+  let str=profileSafeText(text).toUpperCase();
+  const glyphW=5*scale, gap=scale;
+  if(maxWidth){const maxChars=Math.max(1,Math.floor((maxWidth+gap)/(glyphW+gap)));if(str.length>maxChars)str=str.slice(0,maxChars-1)+"?";}
+  let px=Math.round(x);
+  for(const ch of str){if(ch===" "){px+=3*scale;continue;}const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];for(let ry=0;ry<7;ry++){const row=rows[ry];for(let rx=0;rx<5;rx++)if(row[rx]==="1")profileFill(frame,px+rx*scale,y+ry*scale,scale,scale,rgb[0],rgb[1],rgb[2],255);}px+=(5*scale+gap);}
+  return px;
+}
+function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(text).toUpperCase())n+=ch===" "?3*scale:6*scale;return Math.max(0,n-scale);}
+function profileEffectColor(id){
+  const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
+}
+async function renderProfileDirect(env,player){
+  const width=800,height=500;
+  const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
+  const [br,bgG,bb]=hexRgb(bg);
+  const scene=solidRGBA(width,height,bg);
+  /* Soft panel on the right, matching the original profile-card composition. */
+  profileBlendFill(scene,318,18,458,464,255,255,255,205);
+  profileBlendFill(scene,330,30,434,440,br,bgG,bb,55);
+  profileFill(scene,330,30,434,4,255,255,255,150);
+  profileFill(scene,330,466,434,4,255,255,255,150);
+  profileFill(scene,318,18,4,464,255,255,255,180);
+  profileFill(scene,772,18,4,464,255,255,255,180);
+
+  const treeFile=getTreeImage(player);
+  const tree=await getPngAsset(env,treeFile);
+  const treeLayer=containRGBA(tree,350,430);
+  alphaComposite(scene,treeLayer,10,65);
+
+  const decorFile=getDecorationImage(player);
+  if(decorFile){
+    try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
+  }
+  const effectId=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?player.equippedNameEffect:"";
+  const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
+  const title=titleId?SOLO_TITLES[titleId].name:"No Title";
+  const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
+  const ink=[42,32,48], accent=profileEffectColor(effectId);
+
+  /* Card labels and values are drawn with a tiny embedded bitmap font so this path
+     needs no browser, websocket, font service, or external renderer. */
+  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),350,48,4,ink,390);
+  drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
+  profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
+  drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
+  drawBitmapText(scene,title,372,158,3,accent,345);
+  drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
+  drawBitmapText(scene,effect,372,212,2,accent,350);
+
+  profileBlendFill(scene,350,250,394,155,255,255,255,100);
+  drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
+  drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
+  drawBitmapText(scene,Number(player.sparkles||0).toLocaleString(),545,290,3,ink,170);
+  drawBitmapText(scene,"TREE HEIGHT",372,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
+  drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
+  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,435,2,[100,88,110],390);
+  return rgbaToRgbPng(scene);
 }
 
 async function renderTree(env, player) {
@@ -18904,6 +18939,9 @@ async function pastelSave(env,game){
   if(state.pastel?.id!==game.id)return false;
   if(state.pastel.publicMessageId&&!game.publicMessageId)game.publicMessageId=state.pastel.publicMessageId;
   if(state.pastel.turnMessageId&&!game.turnMessageId)game.turnMessageId=state.pastel.turnMessageId;
+  /* Never discard players that appeared in the freshly-read state while this
+     request was working. The join path verifies the saved result afterward. */
+  if(state.pastel.players&&game.status==="lobby")game.players={...state.pastel.players,...(game.players||{})};
   state.pastel=game;
   await saveGuildState(env,game.guildId,state);
   return true;
@@ -19080,7 +19118,7 @@ async function handlePastelResume(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
   if(game.status==="lobby"){
-    await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
+    await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
     return;
   }
   try{await sendPastelBoard(env,interaction,game);}catch(error){
@@ -19093,7 +19131,38 @@ async function pastelStartGame(env,game,interaction){const players=pastelStartin
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
   game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
-async function handlePastelJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Color Chaos lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
+async function handlePastelJoin(env,interaction,gameId){
+  if(await checkGamePunishment(env,interaction))return;
+  if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  const player=await getPlayer(env,user.id);
+  updatePlayerIdentity(player,interaction);
+  await savePlayer(env,player);
+
+  /* KV is eventually consistent, so merge this join against the freshest saved
+     lobby and verify the write. This prevents a near-simultaneous join from
+     replacing another player's entry. */
+  let game=null;
+  for(let attempt=0;attempt<3;attempt++){
+    const state=await getGuildState(env,interaction.guild_id);
+    const current=state.pastel;
+    if(!current||current.id!==gameId||current.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");
+    if(current.players?.[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");
+    const count=Object.keys(current.players||{}).length;
+    if(count>=current.needed)return sendText(env,interaction,"❌ This Color Chaos lobby is full.");
+    const next={...current,players:{...(current.players||{})}};
+    next.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:count,alive:true,choiceLocked:false,pendingPastelTurns:0};
+    next.interactionToken=interaction.token;
+    const saved=await pastelSave(env,next);
+    if(!saved)continue;
+    const verify=(await getGuildState(env,interaction.guild_id)).pastel;
+    if(verify?.id===gameId&&verify.status==="lobby"&&verify.players?.[user.id]){game=verify;break;}
+  }
+  if(!game)return sendText(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
+  await acknowledge(env,interaction);
+  if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}
+  await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
+}
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");}
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
