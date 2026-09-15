@@ -1036,14 +1036,14 @@ async function handleNameEffectEquip(env,interaction,effectId){
   if(effectId==="none"){
     player.equippedNameEffect="";
     await savePlayer(env,player);
-    const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));
+    const response=await editOriginalResponse(env,interaction,titleEditData(await buildTitlesResponseData(env,interaction,"effects",0)));
     if(!response.ok) console.error("Name effect unequip menu refresh failed:",response.status,await response.text());
     return;
   }
   if(!NAME_EFFECTS[effectId]||!player.unlockedNameEffects.includes(effectId))return sendText(env,interaction,"🔒 You haven't unlocked that Name Effect yet.");
   player.equippedNameEffect=effectId;
   await savePlayer(env,player);
-  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"effects",0));
+  const response=await editOriginalResponse(env,interaction,titleEditData(await buildTitlesResponseData(env,interaction,"effects",0)));
   if(!response.ok) console.error("Name effect menu refresh failed:",response.status,await response.text());
 }
 
@@ -6433,7 +6433,7 @@ async function handleComponent(
     const parts=id.split(":");
     if(parts[1]==="list"){await handleNameEffectList(env,interaction); return;}
     if(parts[1]==="equip"){await handleNameEffectEquip(env,interaction,parts[2]);return;}
-    if(parts[1]==="page"){const page=Number(parts[2]||0);const data=await buildTitlesResponseData(env,interaction,"effects",page);await editOriginalResponse(env,interaction,data);return;}
+    if(parts[1]==="page"){const page=Number(parts[2]||0);const data=await buildTitlesResponseData(env,interaction,"effects",page);await editOriginalResponse(env,interaction,titleEditData(data));return;}
   }
 
   if (id.startsWith("regular_set:")) {
@@ -6444,7 +6444,7 @@ async function handleComponent(
     const parts = id.split(":");
     if (parts[1] === "list") { await handleTitleList(env, interaction); return; }
     if (parts[1] === "home") { const data=await buildTitlesResponseData(env,interaction,"home",0); await editOriginalResponse(env,interaction,data); return; }
-    if (parts[1] === "page") { const data=await buildTitlesResponseData(env,interaction,"titles",Number(parts[2]||0)); await editOriginalResponse(env,interaction,data); return; }
+    if (parts[1] === "page") { const data=await buildTitlesResponseData(env,interaction,"titles",Number(parts[2]||0)); await editOriginalResponse(env,interaction,titleEditData(data)); return; }
     if (parts[1] === "equip") { await handleTitleEquip(env, interaction, parts[2]); return; }
     if (parts[1] === "unequip") { await handleTitleUnequip(env, interaction); return; }
     return;
@@ -13134,7 +13134,7 @@ const SOLO_TITLES = {
   ten_level_survivor: { name: "the Story Survivor", description: "Complete all 10 Solo Mission levels." },
   story_master: { name: "the Story Master", description: "Finish a Solo Mission with 8,000+ score." },
   island_champion: { name: "the Island Champion", description: "Win Chaos Island." },
-  pastel_winner: { name: "the Pastel Menace", description: "Win Color Chaos." },
+  pastel_winner: { name: "the Color Chaos Menace", description: "Win Color Chaos." },
   collector: { name: "the Collector", description: "Own 10 shop items." },
   firework_fiend: { name: "the Firework Fiend", description: "Win 10 Chaos Island games." },
   royal_blood: { name: "Royal Blood", description: "Win 25 Chaos Island games." },
@@ -13447,8 +13447,9 @@ async function handleSoloLeaderboard(env, interaction) {
   await sendText(env, interaction, `🏆 **SOLO MISSION LEADERBOARD**\n\n${lines.join("\n")}`);
 }
 
-async function handleTitleList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"titles",0); return interaction.__deferred?editOriginalResponse(env,interaction,data):sendText(env,interaction,"🏆 **MY TITLES**",data.components); }
-async function handleNameEffectList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"effects",0); return interaction.__deferred?editOriginalResponse(env,interaction,data):sendText(env,interaction,"✨ **NAME EFFECTS**",data.components); }
+function titleEditData(data){const {flags,...rest}=data||{};return rest;}
+async function handleTitleList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"titles",0); return interaction.__deferred?editOriginalResponse(env,interaction,titleEditData(data)):sendText(env,interaction,"🏆 **MY TITLES**",data.components); }
+async function handleNameEffectList(env,interaction){ const data=await buildTitlesResponseData(env,interaction,"effects",0); return interaction.__deferred?editOriginalResponse(env,interaction,titleEditData(data)):sendText(env,interaction,"✨ **NAME EFFECTS**",data.components); }
 async function handleTitleEquip(env,interaction,titleId){
   const user=getUserFromInteraction(interaction); if(!user)return;
   const punishmentPlayer=await getPlayer(env,user.id); await refreshPunishmentState(env,punishmentPlayer);
@@ -13458,14 +13459,14 @@ async function handleTitleEquip(env,interaction,titleId){
   const player=punishmentPlayer; updatePlayerIdentity(player,interaction);
   if(!player.titles.includes(titleId)||!SOLO_TITLES[titleId])return sendText(env,interaction,"🔒 You haven't unlocked that title yet.");
   player.equippedTitle=titleId; await savePlayer(env,player);
-  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  const response=await editOriginalResponse(env,interaction,titleEditData(await buildTitlesResponseData(env,interaction,"titles",0)));
   if(!response.ok) console.error("Title menu refresh failed:",response.status,await response.text());
 }
 async function handleTitleUnequip(env,interaction){
   const user=getUserFromInteraction(interaction); if(!user)return; const player=await getPlayer(env,user.id); await refreshPunishmentState(env,player);
   if(Number(player.pickleJailUntil||0)>Date.now()||Number(player.courtCriminalRecordUntil||0)>Date.now()||Number(player.courtRaccoonTitleUntil||0)>Date.now())return sendText(env,interaction,"⚖️ Your current court sentence does not allow you to change your title. 😭");
   player.equippedTitle=""; await savePlayer(env,player);
-  const response=await editOriginalResponse(env,interaction,await buildTitlesResponseData(env,interaction,"titles",0));
+  const response=await editOriginalResponse(env,interaction,titleEditData(await buildTitlesResponseData(env,interaction,"titles",0)));
   if(!response.ok) console.error("Title unequip menu refresh failed:",response.status,await response.text());
 }
 
@@ -18460,12 +18461,49 @@ const COLOR_CHAOS_PALETTES = {
       {id:"bone_beige",name:"Bone Beige",hex:"#75674f",label:"🦴"}
     ],
     heartColor:"#5a3218", wildColor:"#302d2a", boardColor:"#100f12"
+  },
+  teddy_bear: {
+    name:"Teddy Bear", icon:"🧸", powerCell:"🎀",
+    colors:[
+      {id:"vanilla_bean",name:"Vanilla Bean",hex:"#F5E6C8",label:"🤍"},
+      {id:"teddy_blush",name:"Teddy Blush",hex:"#D98F9A",label:"🌸"},
+      {id:"toasty_tan",name:"Toasty Tan",hex:"#B8875A",label:"🥨"},
+      {id:"teddy_fur",name:"Teddy Fur",hex:"#955D35",label:"🧸"},
+      {id:"chestnut_cozy",name:"Chestnut Cozy",hex:"#693C28",label:"🌰"},
+      {id:"cocoa_bear",name:"Cocoa Bear",hex:"#3D251B",label:"🍫"}
+    ],
+    heartColor:"#D98F9A", wildColor:"#FFF7EC", boardColor:"#2A1D19"
+  },
+  candy_shop: {
+    name:"Candy Shop", icon:"🍬", powerCell:"🍬",
+    colors:[
+      {id:"cotton_candy",name:"Cotton Candy",hex:"#FFE4F1",label:"🩷"},
+      {id:"lemon_drop",name:"Lemon Drop",hex:"#FFE066",label:"💛"},
+      {id:"peach_fizz",name:"Peach Fizz",hex:"#FFB38A",label:"🍑"},
+      {id:"bubblegum",name:"Bubblegum",hex:"#FF6FA7",label:"💗"},
+      {id:"blue_raspberry",name:"Blue Raspberry",hex:"#4FD1FF",label:"💙"},
+      {id:"grape_pop",name:"Grape Pop",hex:"#B36BFF",label:"💜"},
+      {id:"sour_apple",name:"Sour Apple",hex:"#7ED957",label:"💚"}
+    ],
+    heartColor:"#FFB7D7", wildColor:"#FFFDF7", boardColor:"#FFF0F8"
+  },
+  strawberry_galaxy: {
+    name:"Strawberry Galaxy", icon:"🍓", powerCell:"🍓",
+    colors:[
+      {id:"milk_pink",name:"Milk Pink",hex:"#FFE1F0",label:"🥛"},
+      {id:"strawberry",name:"Strawberry",hex:"#FF6B8B",label:"🍓"},
+      {id:"cosmic_pink",name:"Cosmic Pink",hex:"#D83FA3",label:"💖"},
+      {id:"cosmic_purple",name:"Cosmic Purple",hex:"#A05BCB",label:"💜"},
+      {id:"galaxy_blue",name:"Galaxy Blue",hex:"#4B7ED9",label:"💙"},
+      {id:"midnight",name:"Midnight",hex:"#1B1E3F",label:"🌌"}
+    ],
+    heartColor:"#D83FA3", wildColor:"#FFF7FD", boardColor:"#11152E"
   }
 };
 const PASTEL_CLASSIC_COLOR_COUNT=6;
 function pastelPalette(game){return COLOR_CHAOS_PALETTES[game?.palette]||COLOR_CHAOS_PALETTES.pastel_dreams;}
 function pastelColors(game){return pastelPalette(game).colors;}
-function pastelColorCount(game){return game?.needed===4?8:PASTEL_CLASSIC_COLOR_COUNT;}
+function pastelColorCount(game){const palette=pastelPalette(game);return Math.min(game?.needed===4?8:PASTEL_CLASSIC_COLOR_COUNT,palette.colors.length);}
 function pastelColorsForGame(game){return pastelColors(game).slice(0,pastelColorCount(game));}
 const PASTEL_HEART_COLOR="#ef9fbd";
 const PASTEL_WILD_COLOR="#fffaf2";
@@ -18516,7 +18554,7 @@ function pastelGenerateBoard(mode,players,palette="pastel_dreams"){
   const rows=mode==="triangle"?20:32;
   for(let r=0;r<rows;r++){
     const width=mode==="triangle"?(2*r+1):32;
-    const colorCount=players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT;
+    const colorCount=Math.min(players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT,pastelPalette({palette,needed:players.length}).colors.length);
     board.push(Array.from({length:width},()=>({color:randomInt(0,colorCount-1),owner:null,heart:false,wild:Math.random()<0.075})));
   }
   /* Seed fair starting corners and give each player a small safe region. */
@@ -18524,7 +18562,7 @@ function pastelGenerateBoard(mode,players,palette="pastel_dreams"){
   /* Fair 3P triangle starts: keep the exact 20-row/400-cell board and all game mechanics,
      but use three equivalent boundary points with the same immediate edge mobility. */
   const starts=mode==="triangle"?[[1,0],[18,0],[18,36]]:(players.length<=2?[[0,0],[maxIndex,maxIndex]]:[[0,0],[0,maxIndex],[maxIndex,0],[maxIndex,maxIndex]]);
-  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % (players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT);board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
+  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % colorCount;board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
   /* Every board gets at least 2 visible Heart Power Cells, with a chance for more. */
   let hearts=2+randomInt(0,4);
   let attempts=0;
@@ -18701,12 +18739,11 @@ function pastelLobbyComponents(game){
   const vote=pastelEndVoteCount(game);
   return [row(button("💗 Join Game",`pastel:join:${game.id}`,1),button("🚪 Cancel",`pastel:cancel:${game.id}`,4)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4))];
 }
-function colorChaosPaletteComponents(selected="pastel_dreams"){const p=COLOR_CHAOS_PALETTES[selected]||COLOR_CHAOS_PALETTES.pastel_dreams;return [row(button(`${selected==="pastel_dreams"?"✅ ":""}🌈 Pastel Dreams`,`pastel:palette:pastel_dreams`,1),button(`${selected==="haunted_harvest"?"✅ ":""}🎃 Haunted Harvest`,`pastel:palette:haunted_harvest`,3)),row(button("⬅️ Back to Create","pastel:palette:back",2))];}
+function colorChaosPaletteComponents(selected="pastel_dreams"){const items=[ ["pastel_dreams","🌈 Pastel Dreams",1], ["haunted_harvest","🎃 Haunted Harvest",3], ["teddy_bear","🧸 Teddy Bear",2], ["candy_shop","🍬 Candy Shop",1], ["strawberry_galaxy","🍓 Strawberry Galaxy",2] ]; return [row(...items.map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}`,style))),row(button("⬅️ Back to Create","pastel:palette:back",2))];}
 function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
 function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:{mode:"square24",modeLabel:"4 Player",needed:4};}
 function pastelLobbyText(game){return [`🌈 **COLOR CHAOS — ${game.modeLabel}**`,`${pastelPalette(game).icon} **${pastelPalette(game).name}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...",`🛑 **End Game votes:** ${pastelEndVoteCount(game).votes}/${pastelEndVoteCount(game).total} (everyone must agree)`,"",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.`,`${pastelPalette(game).powerCell} Power Cells grant an immediate extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
-function pastelRulesText(){return [`🌈 **COLOR CHAOS — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`💗/🎃 Absorb a Power Cell for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,
-    `🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🌈 Pastel Dreams: 🩷 Supr Pink • 💙 Marine Blue • 💛 Yellow Bean • 💚 Sage Sauce • 💜 Purple Stone • 🤎 Savvy Cocoa • ❤️ Coral Coal • 🩵 Devu Dew`,`🎃 Haunted Harvest: 🎃 Pumpkin • 🌑 Midnight • 💜 Haunted Purple • 🧟 Frankengreen • 🩸 Blood Red • 🪦 Graveyard Gray • 🧪 Witchy Teal • 🦴 Bone Beige`].join("\n");}
+function pastelRulesText(){const paletteLines=Object.values(COLOR_CHAOS_PALETTES).map(p=>`${p.icon} **${p.name}:** ${p.colors.map(c=>c.label+" "+c.name).join(" • ")} • ${p.powerCell} Power Cells`).join("\n");return [`🌈 **COLOR CHAOS — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`✨ Absorb a Power Cell for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,``,`🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🎨 **PALETTES**`,paletteLines].join("\n");}
 function pastelGameIsUnbeatable(game){const total=pastelCellCount(game.mode);const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1)return true;const leader=Math.max(...alive.map(p=>pastelClaimedCells(game,p.id)));const others=total-leader;return leader>others;}
 function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive).sort((a,b)=>pastelClaimedCells(game,b.id)-pastelClaimedCells(game,a.id))[0]||null;}
 function pastelRegenerate(game){
@@ -18783,10 +18820,9 @@ async function renderPastelBoard(env,game){
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
         if(cell.heart&&!cell.owner){
           const cx=x+size/2,cy=y+size/2,rr=Math.max(10,Math.round(size*0.46));
-          const isHaunted=game.palette==="haunted_harvest";
-          heartMarks.push(isHaunted
-            ? `<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="#241a14" stroke="#8f3d18" stroke-width="3"/><text x="${cx}" y="${y+size*0.78}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.35)}" font-weight="900">🎃</text>`
-            : `<circle cx="${cx}" cy="${cy}" r="${rr+4}" fill="#fff3a6" stroke="#ffd45c" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="${rr}" fill="#ff3f9f" stroke="#ffffff" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="${Math.max(5,Math.round(rr*0.62))}" fill="#ff74bd" opacity="0.9"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.12)}" font-weight="900" fill="#ffffff">♥</text>`);
+          const symbol=pastelPalette(game).powerCell;
+          const isDark=game.palette==="haunted_harvest"||game.palette==="strawberry_galaxy";
+          heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="${isDark?"#17131a":"#fff3f8"}" stroke="${pastelPalette(game).heartColor}" stroke-width="3"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.22)}" font-weight="900">${symbol}</text>`);
         }
 
         const owner=cell.owner;
@@ -19790,6 +19826,22 @@ export default {
 
     const relevant =
       isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+
+    // Title/name-effect pagination is handled as a direct UPDATE_MESSAGE response.
+    // This avoids relying on a deferred edit for ephemeral messages and fixes the
+    // Next/Previous buttons on clients that reject ephemeral flags during PATCH.
+    if (isTitlesComponent && /^(title|nameeffect):page:-?\d+$/.test(customId)) {
+      try {
+        const parts=customId.split(":");
+        const section=parts[0]==="title"?"titles":"effects";
+        const page=Math.max(0,Number(parts[2]||0));
+        const data=titleEditData(await buildTitlesResponseData(env,interaction,section,page));
+        return new Response(JSON.stringify({type:7,data}),{status:200,headers:{"Content-Type":"application/json"}});
+      } catch(error) {
+        console.error("Title pagination response error:",error);
+        return new Response(JSON.stringify({type:7,data:{content:`❌ Couldn't change pages: ${error?.message||"Unknown error"}`,components:[]}}),{status:200,headers:{"Content-Type":"application/json"}});
+      }
+    }
 
     // Titles must return the actual menu in the initial Discord response.
     // Waiting on waitUntil() after sending a placeholder can leave some Discord
