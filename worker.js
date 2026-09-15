@@ -945,7 +945,7 @@ async function renderAnimatedProfile(env, player) {
       decor: decorFile ? await imageDataUrl(env, decorFile) : ""
     };
 
-    browser = await puppeteer.launch(env.BROWSER);
+    browser = await launchImageBrowser(env);
     const page = await browser.newPage();
     await page.setViewport({width:800,height:500,deviceScaleFactor:1});
     await page.setContent(profileCardHTML(player,0,assetUrls),{waitUntil:"load"});
@@ -2437,6 +2437,30 @@ async function imageDataUrl(env, filename) {
   return `data:${imageMimeType(filename)};base64,${bytesToBase64(bytes)}`;
 }
 
+/*
+  Browser Rendering can occasionally hand Puppeteer a stale/unready session.
+  Tree/Profile are user-facing image renders, so retry the browser launch once
+  instead of immediately failing the command. A longer protocol timeout also
+  gives Browser Rendering enough time to establish a fresh session.
+*/
+async function launchImageBrowser(env) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await puppeteer.launch(env.BROWSER, {
+        protocolTimeout: 60000,
+        keep_alive: false
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 700));
+      }
+    }
+  }
+  throw lastError || new Error("Unable to start Browser Rendering.");
+}
+
 function getBackgroundImage(player) {
   switch (
     player.equipped?.theme
@@ -2647,9 +2671,7 @@ async function renderTree(
 
   try {
     browser =
-      await puppeteer.launch(
-        env.BROWSER
-      );
+      await launchImageBrowser(env);
 
     const page =
       await browser.newPage();
