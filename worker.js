@@ -938,17 +938,17 @@ function profileCardHTML(player, phase = 0) {
 async function renderAnimatedProfile(env, player) {
   let browser;
   try {
-    browser = await puppeteer.launch(env.BROWSER);
+    browser = await launchImageBrowser(env, "Profile");
     const page = await browser.newPage();
     await page.setViewport({width:800,height:500,deviceScaleFactor:1});
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
-    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+    await waitForImageAssets(page, 10000);
     const frames=[];
     const frameCount=8;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
-      await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
+      await waitForImageAssets(page, 10000);
       frames.push(await page.screenshot({type:"png"}));
     }
     return await encodePNGFramesToGIF(frames,800,500,12);
@@ -2394,6 +2394,59 @@ function treeButtonAction(id) {
   return parts[0] === "tree" && parts.length >= 3 ? parts.slice(2).join(":") : null;
 }
 
+
+/* =========================================================
+   IMAGE RENDERING — SHARED STABILITY LAYER
+   All asset-based images use the same bounded Browser Rendering path.
+   Color Chaos board rendering remains Worker-side because it contains
+   no external artwork.
+========================================================= */
+
+const IMAGE_BROWSER_OPTIONS = {
+  timeout: 15000,
+  protocolTimeout: 45000
+};
+
+async function launchImageBrowser(env, label = "Image") {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await puppeteer.launch(env.BROWSER, IMAGE_BROWSER_OPTIONS);
+    } catch (error) {
+      lastError = error;
+      console.error(`${label} browser launch attempt ${attempt}/3 failed:`, error?.message || error);
+
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 750 * attempt));
+      }
+    }
+  }
+
+  throw new Error(
+    `${label} renderer could not start after 3 attempts. ` +
+    `${lastError?.message || "Cloudflare Browser Rendering unavailable."}`
+  );
+}
+
+async function waitForImageAssets(page, timeoutMs = 10000) {
+  await page.evaluate(async (limit) => {
+    const images = Array.from(document.images);
+    const waiters = images.map(image => {
+      if (image.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        image.onload = resolve;
+        image.onerror = resolve;
+      });
+    });
+
+    await Promise.race([
+      Promise.all(waiters),
+      new Promise(resolve => setTimeout(resolve, limit))
+    ]);
+  }, timeoutMs);
+}
+
 /* =========================================================
    IMAGE RENDERING
 ========================================================= */
@@ -2766,7 +2819,8 @@ async function getPngAsset(env, filename) {
   // Fetch the same public R2 asset URL used by the original image pipeline.
   const url = imageUrl(filename);
   const response = await fetch(url, {
-    cf: { cacheEverything: true, cacheTtl: 86400 }
+    cf: { cacheEverything: true, cacheTtl: 86400 },
+    signal: AbortSignal.timeout(12000)
   });
 
   if (!response.ok) {
@@ -2893,10 +2947,7 @@ async function renderTree(
   let browser;
 
   try {
-    browser =
-      await puppeteer.launch(
-        env.BROWSER
-      );
+    browser = await launchImageBrowser(env, "Tree");
 
     const page =
       await browser.newPage();
@@ -3137,35 +3188,7 @@ async function renderTree(
       }
     );
 
-    await page.evaluate(
-      async () => {
-        const images =
-          Array.from(
-            document.images
-          );
-
-        await Promise.all(
-          images.map(
-            image =>
-              new Promise(
-                resolve => {
-                  if (
-                    image.complete
-                  ) {
-                    resolve();
-                  } else {
-                    image.onload =
-                      resolve;
-
-                    image.onerror =
-                      resolve;
-                  }
-                }
-              )
-          )
-        );
-      }
-    );
+    await waitForImageAssets(page, 10000);
 
     return await page.screenshot(
       {
@@ -18483,27 +18506,32 @@ function battleText(game) {
 }
 
 async function renderBattleImage(env, game) {
-  let browser;
+  const width = 1200, height = 700;
+  const ps = Object.values(game.players || {});
+  if (ps.length < 2) throw new Error("Tree Battle image needs two players.");
+
+  const scene = solidRGBA(width, height, [255, 255, 255, 255]);
+
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport({width: 1200, height: 700, deviceScaleFactor: 1});
-    const ps = Object.values(game.players);
-    const left = imageUrl(ps[0].treeImage);
-    const right = imageUrl(ps[1].treeImage);
-    const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
-      *{box-sizing:border-box}body{margin:0;background:#fff;overflow:hidden;font-family:Arial,sans-serif}
-      #battle{width:1200px;height:700px;display:flex;align-items:center;justify-content:space-around;position:relative}
-      .tree{width:42%;height:600px;object-fit:contain}.vs{font-size:90px;font-weight:900;z-index:5}
-    </style></head><body><div id="battle"><img class="tree" src="${left}"><div class="vs">VS</div><img class="tree" src="${right}"></div></body></html>`;
-    await page.setContent(html,{waitUntil:"load"});
-    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
-    return await page.screenshot({type:"png"});
+    const leftAsset = await getPngAsset(env, ps[0].treeImage || getTreeImage(ps[0]));
+    const leftLayer = containRGBA(leftAsset, 500, 600);
+    alphaComposite(scene, leftLayer, 70, (height - leftLayer.height) / 2);
   } catch (error) {
-    const message = error?.message || String(error);
-    if (message.includes("429") || message.toLowerCase().includes("rate limit")) throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another battle.");
-    throw error;
-  } finally { if (browser) try { await browser.close(); } catch {} }
+    console.warn("Battle left tree image skipped:", error?.message || error);
+  }
+
+  try {
+    const rightAsset = await getPngAsset(env, ps[1].treeImage || getTreeImage(ps[1]));
+    const rightLayer = containRGBA(rightAsset, 500, 600);
+    alphaComposite(scene, rightLayer, width - 70 - rightLayer.width, (height - rightLayer.height) / 2);
+  } catch (error) {
+    console.warn("Battle right tree image skipped:", error?.message || error);
+  }
+
+  // Embedded bitmap font keeps this renderer independent of browser/font services.
+  drawBitmapText(scene, "VS", 555, 300, 14, [42, 32, 48], 100);
+
+  return rgbaToRgbPng(scene);
 }
 
 async function sendBattleMessage(env, interaction, game) {
