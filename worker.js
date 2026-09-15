@@ -3122,40 +3122,35 @@ async function renderTree(
       </html>
     `;
 
+    /* Do not let one slow/unreachable R2 image hold the Discord interaction
+       forever. DOMContentLoaded is enough to build the scene; images get a
+       short bounded window to finish loading, and screenshot proceeds even
+       if one layer never responds. */
     await page.setContent(
       html,
       {
-        waitUntil: "load"
+        waitUntil: "domcontentloaded",
+        timeout: 8000
       }
     );
 
     await page.evaluate(
       async () => {
-        const images =
-          Array.from(
-            document.images
-          );
-
-        await Promise.all(
-          images.map(
-            image =>
-              new Promise(
-                resolve => {
-                  if (
-                    image.complete
-                  ) {
-                    resolve();
-                  } else {
-                    image.onload =
-                      resolve;
-
-                    image.onerror =
-                      resolve;
-                  }
-                }
-              )
-          )
-        );
+        const images = Array.from(document.images);
+        await Promise.race([
+          Promise.all(
+            images.map(
+              image =>
+                image.complete
+                  ? Promise.resolve()
+                  : new Promise(resolve => {
+                      image.onload = resolve;
+                      image.onerror = resolve;
+                    })
+            )
+          ),
+          new Promise(resolve => setTimeout(resolve, 5000))
+        ]);
       }
     );
 
