@@ -909,27 +909,15 @@ function nameEffectText(effectId, titleText, phase = 0) {
   }).join("");
   return `<span class="effect-${escapeHTML(effectId)}">${chars}</span>`;
 }
-async function withTimeout(promise, ms, label = "Operation") {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function profileCardHTML(player, phase = 0, assetUrls = {}) {
+function profileCardHTML(player, phase = 0) {
   const bg = /^#[0-9a-fA-F]{6}$/.test(player.profileColor || "") ? player.profileColor : "#ffd9ef";
   const titleId = player.equippedTitle && SOLO_TITLES[player.equippedTitle] ? player.equippedTitle : "";
   const title = titleId ? SOLO_TITLES[titleId].name : "No Title";
   const effectId = player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect] ? player.equippedNameEffect : "";
   const effect = effectId ? NAME_EFFECTS[effectId].name : "No Name Effect";
-  const tree = assetUrls.tree || imageUrl(getTreeImage(player));
+  const tree = imageUrl(getTreeImage(player));
   const decor = getDecorationImage(player);
-  const decorUrl = assetUrls.decor || (decor ? imageUrl(decor) : "");
+  const decorUrl = decor ? imageUrl(decor) : "";
   const titleMarkup = nameEffectText(effectId, title, phase);
   const particleMap = {
     rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✦","·","✧","✦"],
@@ -950,22 +938,16 @@ function profileCardHTML(player, phase = 0, assetUrls = {}) {
 async function renderAnimatedProfile(env, player) {
   let browser;
   try {
-    const treeFile = getTreeImage(player);
-    const decorFile = getDecorationImage(player);
-    const assetUrls = {
-      tree: await imageDataUrl(env, treeFile),
-      decor: decorFile ? await imageDataUrl(env, decorFile) : ""
-    };
-
-    browser = await launchImageBrowser(env);
+    browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
     await page.setViewport({width:800,height:500,deviceScaleFactor:1});
-    await page.setContent(profileCardHTML(player,0,assetUrls),{waitUntil:"load"});
+    await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
+    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
     const frameCount=8;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
-      await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase,assetUrls));
+      await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
       await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
       frames.push(await page.screenshot({type:"png"}));
     }
@@ -1034,7 +1016,7 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
   try{
-    const gif=await withTimeout(renderAnimatedProfile(env,player),10000,"Profile render");
+    const gif=await renderAnimatedProfile(env,player);
     const response = await editOriginalResponseWithFile(
       env, interaction,
       `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
@@ -1043,7 +1025,7 @@ async function handleProfile(env, interaction) {
     if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
     console.error("Profile render failed",error);
-    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}\n\n⚠️ Profile picture rendering is temporarily unavailable; your profile data is still saved.`);
+    await sendText(env,interaction,`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`);
   }
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
@@ -2415,64 +2397,6 @@ function imageUrl(filename) {
   return `${BASE_URL}${filename}`;
 }
 
-/*
-  Browser Rendering can sometimes stall while Chromium tries to fetch the
-  public R2 image URLs.  For tree/profile renders, fetch the asset in the
-  Worker first and hand Chromium a self-contained data URL instead.
-*/
-function imageMimeType(filename) {
-  const ext = String(filename || "").toLowerCase().split(".").pop();
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "webp") return "image/webp";
-  if (ext === "gif") return "image/gif";
-  if (ext === "svg" || ext === "svg+xml") return "image/svg+xml";
-  return "image/png";
-}
-
-function bytesToBase64(bytes) {
-  const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let result = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < input.length; i += chunkSize) {
-    result += String.fromCharCode(...input.subarray(i, Math.min(i + chunkSize, input.length)));
-  }
-  return btoa(result);
-}
-
-async function imageDataUrl(env, filename) {
-  if (!filename) return "";
-  const object = await env.TREE_DATA.get(filename);
-  if (!object) {
-    throw new Error(`R2 asset not found: ${filename}`);
-  }
-  const bytes = new Uint8Array(await object.arrayBuffer());
-  return `data:${imageMimeType(filename)};base64,${bytesToBase64(bytes)}`;
-}
-
-/*
-  Browser Rendering can occasionally hand Puppeteer a stale/unready session.
-  Tree/Profile are user-facing image renders, so retry the browser launch once
-  instead of immediately failing the command. A longer protocol timeout also
-  gives Browser Rendering enough time to establish a fresh session.
-*/
-async function launchImageBrowser(env) {
-  let lastError;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await puppeteer.launch(env.BROWSER, {
-        protocolTimeout: 60000,
-        keep_alive: false
-      });
-    } catch (error) {
-      lastError = error;
-      if (attempt === 0) {
-        await new Promise(resolve => setTimeout(resolve, 700));
-      }
-    }
-  }
-  throw lastError || new Error("Unable to start Browser Rendering.");
-}
-
 function getBackgroundImage(player) {
   switch (
     player.equipped?.theme
@@ -2675,295 +2599,239 @@ function getEffectImage(player) {
   }
 }
 
-async function renderTree(
-  env,
-  player
-) {
-  let browser;
+async function pngChunk(type, data) {
+  const bytes = new Uint8Array(data);
+  const typeBytes = new TextEncoder().encode(type);
+  const out = new Uint8Array(12 + bytes.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, bytes.length);
+  out.set(typeBytes, 4);
+  out.set(bytes, 8);
+  view.setUint32(8 + bytes.length, pngCrc32(new Uint8Array([...typeBytes, ...bytes])));
+  return out;
+}
 
-  try {
-    browser =
-      await launchImageBrowser(env);
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
 
-    const page =
-      await browser.newPage();
+function pngAdler32(bytes) {
+  let a = 1, b = 0;
+  for (const byte of bytes) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
 
-    await page.setViewport({
-      width: 1024,
-      height: 1024,
-      deviceScaleFactor: 1
-    });
 
-    const backgroundFile = getBackgroundImage(player);
-    const treeFile = getTreeImage(player);
-    const decorationFile = getDecorationImage(player);
-    const effectFile = getEffectImage(player);
+function treeFallbackBackground(player) {
+  switch (player.equipped?.theme) {
+    case "halloween": return "#24111f";
+    case "candyland": return "#ffd8f2";
+    case "magic_mushroom": return "#43224f";
+    case "field_day": return "#9fd89b";
+    case "red_forest": return "#3b1218";
+    case "cozy_cat": return "#f3d7c2";
+    case "green_glow": return "#102c18";
+    case "prism_flutter": return "#d9d2ff";
+    case "lavender_twilight": return "#665080";
+    case "world_of_flags": return "#dfe8f5";
+    case "ocean_opal": return "#7fcbd1";
+    case "werewives": return "#f2bfdc";
+    case "golden_pickle": return "#d7bd62";
+    case "midnight_rider": return "#171827";
+    case "stoned_birthday": return "#f7c6dd";
+    default: return "#ffd9ef";
+  }
+}
 
-    const [background, tree, decoration, effect] = await Promise.all([
-      imageDataUrl(env, backgroundFile),
-      imageDataUrl(env, treeFile),
-      decorationFile ? imageDataUrl(env, decorationFile) : "",
-      effectFile ? imageDataUrl(env, effectFile) : ""
-    ]);
+function solidRGBA(width, height, hex) {
+  const value = parseInt(String(hex).replace(/^#/, ""), 16) >>> 0;
+  const r = (value >> 16) & 255, g = (value >> 8) & 255, b = value & 255;
+  const out = new Uint8Array(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    const o = i * 4; out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = 255;
+  }
+  return { width, height, data: out };
+}
 
-    const sparkleHTML = (
-      player.sparklesOnTree ||
-      []
-    )
-      .map(sparkle => {
-        const left =
-          Number(sparkle.x) ||
-          50;
-
-        const top =
-          Number(sparkle.y) ||
-          50;
-
-        const kind = escapeHTML(sparkle.kind || "pink");
-        const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
-        const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
-
-        return `
-          <div
-            style="
-              position:absolute;
-              left:${left}%;
-              top:${top}%;
-              transform:translate(-50%,-50%);
-              font-family:Arial, Helvetica, sans-serif;
-              font-size:76px;
-              font-weight:900;
-              line-height:1;
-              color:#ffffff;
-              z-index:20;
-              opacity:1;
-              -webkit-text-stroke:2px ${glow};
-              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
-              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
-              animation:sparklePulse 1.2s ease-in-out infinite;
-              user-select:none;
-            "
-            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
-          >${symbol}</div>
-        `;
-      })
-      .join("");
-
-    let decorationHTML = "";
-
-    if (
-      decoration
-    ) {
-      const isBalloon =
-        player.equipped?.decoration ===
-        "stoned_balloon";
-
-      const decorationSize =
-        isBalloon
-          ? "330px"
-          : "280px";
-
-      decorationHTML = `
-        <img
-          src="${decoration}"
-          style="
-            position:absolute;
-            left:22%;
-            top:84%;
-            transform:translate(-50%,-50%);
-            width:${decorationSize};
-            height:${decorationSize};
-            object-fit:contain;
-            z-index:4;
-          "
-        />
-      `;
-    }
-
-    let effectHTML = "";
-
-    if (effect) {
-      /* Keep the effect atmospheric and behind the tree so the tree stays
-         the clear centerpiece instead of being covered by the overlay. */
-      effectHTML = `
-        <img
-          src="${effect}"
-          style="
-            position:absolute;
-            left:-5%;
-            top:-5%;
-            width:110%;
-            height:110%;
-            object-fit:contain;
-            opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};
-            mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};
-            z-index:2;
-            pointer-events:none;
-          "
-        />
-      `;
-    }
-
-    const html = `
-      <!DOCTYPE html>
-
-      <html>
-      <head>
-        <meta charset="UTF-8">
-
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-
-          .emoji {
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-            font-variant-emoji: emoji;
-          }
-
-          html,
-          body {
-            margin: 0;
-            padding: 0;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-            background: #ffd9ef;
-          }
-
-          #scene {
-            position: relative;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-          }
-
-          #background {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          @keyframes sparkleFall {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
-          }
-
-          @keyframes sparklePulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.78; }
-          }
-
-          #tree {
-            position: absolute;
-            left: 50%;
-            top: 63%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            height: 90%;
-            object-fit: contain;
-            z-index: 4;
-          }
-        </style>
-      </head>
-
-      <body>
-        <div id="scene">
-
-          <img
-            id="background"
-            src="${background}"
-          >
-
-          <img
-            id="tree"
-            src="${tree}"
-          >
-
-          ${decorationHTML}
-
-          ${effectHTML}
-
-          ${sparkleHTML}
-
-        </div>
-      </body>
-      </html>
-    `;
-
-    await page.setContent(
-      html,
-      {
-        waitUntil: "load"
-      }
-    );
-
-    await page.evaluate(
-      async () => {
-        const images =
-          Array.from(
-            document.images
-          );
-
-        await Promise.all(
-          images.map(
-            image =>
-              new Promise(
-                resolve => {
-                  if (
-                    image.complete
-                  ) {
-                    resolve();
-                  } else {
-                    image.onload =
-                      resolve;
-
-                    image.onerror =
-                      resolve;
-                  }
-                }
-              )
-          )
-        );
-      }
-    );
-
-    return await page.screenshot(
-      {
-        type: "png"
-      }
-    );
-  } catch (error) {
-    const message =
-      error?.message ||
-      String(error);
-
-    if (
-      message.includes("429") ||
-      message.toLowerCase().includes(
-        "rate limit"
-      )
-    ) {
-      throw new Error(
-        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
-      );
-    }
-
-    throw error;
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error(
-          "Browser close error:",
-          closeError
-        );
-      }
+function alphaComposite(dst, src, dx, dy, opacity = 1) {
+  const sw = src.width, sh = src.height, dw = dst.width, dh = dst.height;
+  const x0 = Math.max(0, Math.floor(dx)), y0 = Math.max(0, Math.floor(dy));
+  const x1 = Math.min(dw, Math.ceil(dx + sw)), y1 = Math.min(dh, Math.ceil(dy + sh));
+  for (let y = y0; y < y1; y++) {
+    const sy = y - dy;
+    if (sy < 0 || sy >= sh) continue;
+    for (let x = x0; x < x1; x++) {
+      const sx = x - dx;
+      if (sx < 0 || sx >= sw) continue;
+      const si = (Math.floor(sy) * sw + Math.floor(sx)) * 4;
+      const di = (y * dw + x) * 4;
+      const sa = (src.data[si + 3] / 255) * opacity;
+      if (sa <= 0) continue;
+      const da = dst.data[di + 3] / 255;
+      const oa = sa + da * (1 - sa);
+      if (oa <= 0) continue;
+      dst.data[di] = Math.round((src.data[si] * sa + dst.data[di] * da * (1 - sa)) / oa);
+      dst.data[di + 1] = Math.round((src.data[si + 1] * sa + dst.data[di + 1] * da * (1 - sa)) / oa);
+      dst.data[di + 2] = Math.round((src.data[si + 2] * sa + dst.data[di + 2] * da * (1 - sa)) / oa);
+      dst.data[di + 3] = Math.round(oa * 255);
     }
   }
+}
+
+function resizeRGBA(src, width, height) {
+  const out = new Uint8Array(width * height * 4);
+  const xScale = src.width / width, yScale = src.height / height;
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(src.height - 1, Math.floor(y * yScale));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(src.width - 1, Math.floor(x * xScale));
+      const si = (sy * src.width + sx) * 4, di = (y * width + x) * 4;
+      out[di] = src.data[si]; out[di + 1] = src.data[si + 1]; out[di + 2] = src.data[si + 2]; out[di + 3] = src.data[si + 3];
+    }
+  }
+  return { width, height, data: out };
+}
+
+function containRGBA(src, boxWidth, boxHeight) {
+  const scale = Math.min(boxWidth / src.width, boxHeight / src.height);
+  const w = Math.max(1, Math.round(src.width * scale)), h = Math.max(1, Math.round(src.height * scale));
+  return resizeRGBA(src, w, h);
+}
+
+function coverRGBA(src, width, height) {
+  const scale = Math.max(width / src.width, height / src.height);
+  const w = Math.max(1, Math.ceil(src.width * scale)), h = Math.max(1, Math.ceil(src.height * scale));
+  const resized = resizeRGBA(src, w, h);
+  const out = new Uint8Array(width * height * 4);
+  const ox = Math.max(0, Math.floor((w - width) / 2)), oy = Math.max(0, Math.floor((h - height) / 2));
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(h - 1, y + oy);
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(w - 1, x + ox), si = (sy * w + sx) * 4, di = (y * width + x) * 4;
+      out[di] = resized.data[si]; out[di + 1] = resized.data[si + 1]; out[di + 2] = resized.data[si + 2]; out[di + 3] = resized.data[si + 3];
+    }
+  }
+  return { width, height, data: out };
+}
+
+function rgbaToRgbPng(frame) {
+  const width = frame.width, height = frame.height;
+  const raw = new Uint8Array(height * (1 + width * 3));
+  let p = 0;
+  for (let y = 0; y < height; y++) {
+    raw[p++] = 0;
+    for (let x = 0; x < width; x++) {
+      const o = (y * width + x) * 4;
+      raw[p++] = frame.data[o]; raw[p++] = frame.data[o + 1]; raw[p++] = frame.data[o + 2];
+    }
+  }
+  const blocks = [];
+  for (let offset = 0; offset < raw.length;) {
+    const len = Math.min(65535, raw.length - offset), final = offset + len >= raw.length;
+    const block = new Uint8Array(5 + len);
+    block[0] = final ? 1 : 0; block[1] = len & 255; block[2] = (len >> 8) & 255;
+    const nlen = (~len) & 0xffff; block[3] = nlen & 255; block[4] = (nlen >> 8) & 255;
+    block.set(raw.subarray(offset, offset + len), 5); blocks.push(block); offset += len;
+  }
+  const zlibLength = 2 + blocks.reduce((n, x) => n + x.length, 0) + 4;
+  const zlib = new Uint8Array(zlibLength); zlib[0] = 0x78; zlib[1] = 0x01;
+  let z = 2; for (const block of blocks) { zlib.set(block, z); z += block.length; }
+  const adler = pngAdler32(raw); zlib[z++] = adler >>> 24; zlib[z++] = adler >>> 16; zlib[z++] = adler >>> 8; zlib[z] = adler;
+  const ihdr = new Uint8Array(13), view = new DataView(ihdr.buffer);
+  view.setUint32(0, width); view.setUint32(4, height); ihdr[8] = 8; ihdr[9] = 2;
+  const sig = new Uint8Array([137,80,78,71,13,10,26,10]);
+  const a = pngChunk("IHDR", ihdr), b = pngChunk("IDAT", zlib), c = pngChunk("IEND", new Uint8Array());
+  const out = new Uint8Array(sig.length + a.length + b.length + c.length);
+  out.set(sig,0); out.set(a,sig.length); out.set(b,sig.length+a.length); out.set(c,sig.length+a.length+b.length);
+  return out;
+}
+
+async function getPngAsset(env, filename) {
+  if (!filename) return null;
+  const object = await env.TREE_DATA.get(filename);
+  if (!object) throw new Error(`R2 asset not found: ${filename}`);
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  try { return await decodePNG(bytes); }
+  catch { throw new Error(`Tree image pipeline only supports PNG layers directly: ${filename}`); }
+}
+
+async function renderTreeDirect(env, player) {
+  const width = 1024, height = 1024;
+  const backgroundFile = getBackgroundImage(player);
+  const treeFile = getTreeImage(player);
+  const decorationFile = getDecorationImage(player);
+  const effectFile = getEffectImage(player);
+
+  let scene;
+  try { scene = await getPngAsset(env, backgroundFile); }
+  catch (error) {
+    console.warn(`Tree background ${backgroundFile} could not be decoded directly; using fallback color.`, error?.message || error);
+    scene = solidRGBA(width, height, treeFallbackBackground(player));
+  }
+  scene = coverRGBA(scene, width, height);
+
+  const tree = await getPngAsset(env, treeFile);
+  const treeLayer = containRGBA(tree, Math.round(width * 0.90), Math.round(height * 0.90));
+  alphaComposite(scene, treeLayer, (width - treeLayer.width) / 2, height * 0.63 - treeLayer.height / 2);
+
+  if (decorationFile) {
+    const decoration = await getPngAsset(env, decorationFile);
+    const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
+    const layer = containRGBA(decoration, size, size);
+    alphaComposite(scene, layer, width * 0.22 - layer.width / 2, height * 0.84 - layer.height / 2);
+  }
+
+  if (effectFile) {
+    const effect = await getPngAsset(env, effectFile);
+    const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
+    alphaComposite(scene, layer, -width * 0.05, -height * 0.05, player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
+  }
+
+  /* Sparkles are kept as visible glowy markers. They are deliberately simple
+     here because the direct Worker renderer has no browser font engine. */
+  for (const sparkle of (player.sparklesOnTree || [])) {
+    const x = Math.max(0, Math.min(100, Number(sparkle.x) || 50));
+    const y = Math.max(0, Math.min(100, Number(sparkle.y) || 50));
+    drawSparkle(scene, Math.round(width * x / 100), Math.round(height * y / 100), sparkle.kind);
+  }
+
+  return rgbaToRgbPng(scene);
+}
+
+function drawSparkle(frame, cx, cy, kind) {
+  const colors = kind === "rainbow" ? [255,79,216] : kind === "moon" ? [157,220,255] : kind === "star" ? [255,242,122] : [255,182,232];
+  const radius = 24;
+  for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+    const dist = Math.sqrt(dx*dx + dy*dy); if (dist > radius) continue;
+    const px = cx + dx, py = cy + dy; if (px < 0 || py < 0 || px >= frame.width || py >= frame.height) continue;
+    const cross = Math.max(Math.abs(dx), Math.abs(dy)) < 4 || (Math.abs(dx) < 4 && Math.abs(dy) < 20) || (Math.abs(dy) < 4 && Math.abs(dx) < 20);
+    if (!cross) continue;
+    const alpha = Math.max(0, 1 - dist / radius);
+    const o = (py * frame.width + px) * 4, sa = alpha * 0.95, da = frame.data[o+3] / 255, oa = sa + da*(1-sa);
+    frame.data[o] = Math.round((255*sa + frame.data[o]*da*(1-sa))/oa);
+    frame.data[o+1] = Math.round((255*sa + frame.data[o+1]*da*(1-sa))/oa);
+    frame.data[o+2] = Math.round((255*sa + frame.data[o+2]*da*(1-sa))/oa);
+    frame.data[o+3] = Math.round(oa*255);
+  }
+  for (let d = -10; d <= 10; d++) {
+    for (const [x,y] of [[cx+d,cy],[cx,cy+d]]) {
+      if (x<0||y<0||x>=frame.width||y>=frame.height) continue;
+      const o=(y*frame.width+x)*4; frame.data[o]=colors[0]; frame.data[o+1]=colors[1]; frame.data[o+2]=colors[2]; frame.data[o+3]=255;
+    }
+  }
+}
+
+async function renderTree(env, player) {
+  // Tree rendering is intentionally independent of Cloudflare Browser Rendering.
+  return await renderTreeDirect(env, player);
 }
 
 function escapeHTML(value) {
@@ -6362,43 +6230,25 @@ async function handleTree(
   );
 
   try {
-    // Never leave a Discord interaction stuck on "thinking" if Browser Rendering hangs.
-    await withTimeout(
-      sendTree(env, interaction, player),
-      10000,
-      "Tree render"
+    await sendTree(
+      env,
+      interaction,
+      player
     );
   } catch (error) {
-    console.error("Tree render error:", error);
-
-    // Browser Rendering can occasionally be unavailable. Fall back to the actual
-    // equipped tree asset so the command still returns a visible picture.
-    try {
-      const treeFile = getTreeImage(player);
-      const treeObject = treeFile ? await env.TREE_DATA.get(treeFile) : null;
-      if (treeObject) {
-        const treeBytes = new Uint8Array(await treeObject.arrayBuffer());
-        const response = await editOriginalResponseWithFile(
-          env,
-          interaction,
-          `${buildTreeStats(player)}\n\n⚠️ The tree scene renderer is temporarily unavailable, so here's your tree asset directly.`,
-          treeFile.split("/").pop() || "tree.png",
-          treeBytes,
-          imageMimeType(treeFile)
-        );
-        if (response.ok) return;
-        console.error("Direct tree fallback upload failed:", response.status, await response.text());
-      }
-    } catch (fallbackError) {
-      console.error("Direct tree fallback failed:", fallbackError);
-    }
+    console.error(
+      "Tree render error:",
+      error
+    );
 
     await editOriginalResponse(
       env,
       interaction,
       {
-        content: `🌳 Your tree is alive, but the picture renderer is temporarily unavailable.\n\n${error?.message || "Unknown error"}`,
-        components: treeButtons(getUserFromInteraction(interaction)?.id || "", player)
+        content:
+          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
+        components:
+          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
     );
   }
@@ -6548,7 +6398,7 @@ async function handleComponent(
     const user = getUserFromInteraction(interaction);
 
     if (!ownerId || !user || ownerId !== user.id) {
-      await sendEphemeralFollowup(env, interaction, "❌ Those tree buttons belong to someone else. Use `/tree` to open your own tree.");
+      await sendText(env, interaction, "❌ Those tree buttons belong to someone else. Use `/tree` to open your own tree.");
       return;
     }
 
@@ -18525,76 +18375,6 @@ function colorCheckerSvg(hex){
   const ink=light?"#2a2030":"#FFFFFF";
   return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"><rect width="900" height="520" fill="${safe}"/><rect x="24" y="24" width="852" height="472" rx="26" fill="none" stroke="${ink}" stroke-opacity=".35" stroke-width="4"/><rect x="225" y="165" width="450" height="190" rx="30" fill="#000000" fill-opacity=".18"/><text x="450" y="235" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="${ink}">COLOR CHECKER</text><text x="450" y="305" text-anchor="middle" font-family="monospace" font-size="52" font-weight="900" fill="${ink}">${safe}</text></svg>`;
 }
-function pngChunk(type, data) {
-  const bytes = new Uint8Array(data);
-  const typeBytes = new TextEncoder().encode(type);
-  const out = new Uint8Array(12 + bytes.length);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, bytes.length);
-  out.set(typeBytes, 4);
-  out.set(bytes, 8);
-  view.setUint32(8 + bytes.length, pngCrc32(new Uint8Array([...typeBytes, ...bytes])));
-  return out;
-}
-
-function pngCrc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function pngAdler32(bytes) {
-  let a = 1, b = 0;
-  for (const byte of bytes) {
-    a = (a + byte) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) >>> 0;
-}
-
-function solidColorPng(hex, width = 720, height = 420) {
-  const value = parseInt(String(hex).replace(/^#/, ""), 16);
-  const r = (value >> 16) & 255, g = (value >> 8) & 255, b = value & 255;
-  const raw = new Uint8Array(height * (1 + width * 3));
-  let p = 0;
-  for (let y = 0; y < height; y++) {
-    raw[p++] = 0;
-    for (let x = 0; x < width; x++) { raw[p++] = r; raw[p++] = g; raw[p++] = b; }
-  }
-  const blocks = [];
-  for (let offset = 0; offset < raw.length;) {
-    const len = Math.min(65535, raw.length - offset);
-    const final = offset + len >= raw.length;
-    const block = new Uint8Array(5 + len);
-    block[0] = final ? 1 : 0;
-    block[1] = len & 255; block[2] = (len >> 8) & 255;
-    const nlen = (~len) & 0xffff;
-    block[3] = nlen & 255; block[4] = (nlen >> 8) & 255;
-    block.set(raw.subarray(offset, offset + len), 5);
-    blocks.push(block); offset += len;
-  }
-  const zlibLength = 2 + blocks.reduce((n, x) => n + x.length, 0) + 4;
-  const zlib = new Uint8Array(zlibLength);
-  zlib[0] = 0x78; zlib[1] = 0x01;
-  let z = 2;
-  for (const block of blocks) { zlib.set(block, z); z += block.length; }
-  const adler = pngAdler32(raw);
-  zlib[z++] = (adler >>> 24) & 255; zlib[z++] = (adler >>> 16) & 255; zlib[z++] = (adler >>> 8) & 255; zlib[z] = adler & 255;
-  const ihdr = new Uint8Array(13);
-  const view = new DataView(ihdr.buffer);
-  view.setUint32(0, width); view.setUint32(4, height); ihdr[8] = 8; ihdr[9] = 2;
-  const signature = new Uint8Array([137,80,78,71,13,10,26,10]);
-  const idat = pngChunk("IDAT", zlib);
-  const end = pngChunk("IEND", new Uint8Array());
-  const ihdrChunk = pngChunk("IHDR", ihdr);
-  const out = new Uint8Array(signature.length + ihdrChunk.length + idat.length + end.length);
-  out.set(signature, 0); out.set(ihdrChunk, signature.length); out.set(idat, signature.length + ihdrChunk.length); out.set(end, signature.length + ihdrChunk.length + idat.length);
-  return out;
-}
-
 const COLOR_CHAOS_PALETTES = {
   pastel_dreams: {
     name:"Pastel Dreams", icon:"🌈", powerCell:"💗",
@@ -19182,8 +18962,9 @@ async function handleColorChecker(env,interaction){
     return sendText(env,interaction,"❌ Please enter a valid 6-digit HEX color, like `#7A4FA3`.");
   }
   const hex="#"+cleaned.toUpperCase();
-  const bytes=solidColorPng(hex);
-  const response=await editOriginalResponseWithFile(env,interaction,`🎨 **Color Checker:** \`${hex}\``,"color-checker.png",bytes,"image/png");
+  const svg=colorCheckerSvg(hex);
+  const bytes=new TextEncoder().encode(svg);
+  const response=await editOriginalResponseWithFile(env,interaction,`🎨 **Color Checker:** \`${hex}\``,"color-checker.svg",bytes,"image/svg+xml");
   if(!response.ok)console.error("Color Checker response failed:",response.status,await response.text());
 }
 
@@ -19238,65 +19019,8 @@ async function pastelStartGame(env,game,interaction){const players=pastelStartin
   /* Defensive guarantee: every fresh board has at least 2 visible Power Cells. */
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
-  game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}
-  /* GUARANTEE: every starting player has at least one legal first move. */
-  const occupiedOpeningColors=new Set(players.map(p=>Number(p.selectedColor)));
-  for(const p of players){
-    const start=pastelFindOwned(game,p.id);
-    if(!start)continue;
-    let hasMove=pastelPlayerHasLegalMove(game,p);
-    if(hasMove)continue;
-    const cells=[];
-    for(let r=0;r<game.board.length;r++)for(let c=0;c<game.board[r].length;c++)if(game.board[r][c].owner===p.id)cells.push([r,c]);
-    for(const [r,c] of cells){
-      for(const [rr,cc] of pastelNeighbors(game.board,r,c,game.mode)){
-        const cell=game.board[rr]?.[cc];
-        if(!cell||cell.blocked||cell.owner||cell.heart)continue;
-        let safeColor=-1;
-        for(let ci=0;ci<pastelColorCount(game);ci++){if(ci!==Number(p.selectedColor)&&!occupiedOpeningColors.has(ci)){safeColor=ci;break;}}
-        if(safeColor<0) safeColor=(Number(p.selectedColor)+1)%pastelColorCount(game);
-        cell.color=safeColor; cell.wild=false; hasMove=true; break;
-      }
-      if(hasMove)break;
-    }
-  }
-  game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
-async function handlePastelJoin(env,interaction,gameId){
-  if(await checkGamePunishment(env,interaction))return;
-  const user=getUserFromInteraction(interaction);
-  let state=await getGuildState(env,interaction.guild_id);
-  let game=state.pastel;
-  /* KV can be briefly stale between the lobby creation request and a button
-     click. Retry the read before declaring the lobby dead. */
-  for(let attempt=0;(!game||game.id!==gameId||game.status!=="lobby")&&attempt<4;attempt++){
-    await new Promise(resolve=>setTimeout(resolve,150));
-    state=await getGuildState(env,interaction.guild_id);
-    game=state.pastel;
-  }
-  if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");
-  if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");
-  if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Color Chaos lobby is full.");
-  const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
-  const slot=Object.keys(game.players).length;
-  game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};
-  game.interactionToken=interaction.token;
-  const saved=await pastelSave(env,game);
-  if(!saved){
-    /* A concurrent join won the state write. Re-read and preserve that join
-       instead of letting a stale snapshot make the lobby appear to vanish. */
-    state=await getGuildState(env,interaction.guild_id);
-    game=state.pastel;
-    if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");
-    if(game.players[user.id]){await acknowledge(env,interaction);return;}
-    const retrySlot=Object.keys(game.players).length;
-    game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:retrySlot,alive:true,choiceLocked:false,pendingPastelTurns:0};
-    game.interactionToken=interaction.token;
-    if(!await pastelSave(env,game))return sendText(env,interaction,"❌ Someone else joined at the same time. Please press **Join Game** once more.");
-  }
-  await acknowledge(env,interaction);
-  if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}
-  await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
-}
+  game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
+async function handlePastelJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");if(game.players[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");if(Object.keys(game.players).length>=game.needed)return sendText(env,interaction,"❌ This Color Chaos lobby is full.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const slot=Object.keys(game.players).length;game.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot,alive:true,choiceLocked:false,pendingPastelTurns:0};game.interactionToken=interaction.token;await pastelSave(env,game);await acknowledge(env,interaction);if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}await islandPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));}
 async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");}
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
