@@ -2599,7 +2599,7 @@ function getEffectImage(player) {
   }
 }
 
-async function pngChunk(type, data) {
+function pngChunk(type, data) {
   const bytes = new Uint8Array(data);
   const typeBytes = new TextEncoder().encode(type);
   const out = new Uint8Array(12 + bytes.length);
