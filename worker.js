@@ -936,23 +936,34 @@ function profileCardHTML(player, phase = 0) {
 }
 
 async function renderAnimatedProfile(env, player) {
+  // Kept for compatibility with the existing profile helpers, but profile now
+  // renders a single static card instead of building an 8-frame GIF.
+  return await renderStaticProfile(env, player);
+}
+
+async function renderStaticProfile(env, player) {
   let browser;
+  const timeout = (promise, ms, label) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+  ]);
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport({width:800,height:500,deviceScaleFactor:1});
-    await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
-    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
-    const frames=[];
-    const frameCount=8;
-    for(let i=0;i<frameCount;i++){
-      const phase=i/frameCount;
-      await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
-      await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
-      frames.push(await page.screenshot({type:"png"}));
-    }
-    return await encodePNGFramesToGIF(frames,800,500,12);
-  } finally { if(browser) await browser.close().catch(()=>{}); }
+    browser = await timeout(puppeteer.launch(env.BROWSER), 12000, "Profile browser launch");
+    const page = await timeout(browser.newPage(), 5000, "Profile page creation");
+    await timeout(page.setViewport({width:800,height:500,deviceScaleFactor:1}), 5000, "Profile viewport setup");
+    await timeout(page.setContent(profileCardHTML(player,0),{waitUntil:"domcontentloaded"}), 8000, "Profile HTML load");
+    await timeout(page.evaluate(async()=>{
+      await Promise.all(Array.from(document.images).map(img=>
+        img.complete ? Promise.resolve() : new Promise(resolve=>{
+          img.onload=resolve;
+          img.onerror=resolve;
+        })
+      ));
+    }), 8000, "Profile image load");
+    return await timeout(page.screenshot({type:"png"}), 8000, "Profile screenshot");
+  } finally {
+    if(browser) await browser.close().catch(()=>{});
+  }
 }
 
 async function decodePNG(pngBytes) {
@@ -1016,22 +1027,14 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
 
-  /* Use the direct PNG renderer used by /tree instead of Cloudflare Browser Rendering.
-     This prevents /profile from hanging while waiting for a browser/page load. */
   try {
-    const png = await renderTreeDirect(env, player);
-    const title = player.equippedTitle && SOLO_TITLES[player.equippedTitle]
-      ? SOLO_TITLES[player.equippedTitle].name : "No Title";
-    const effect = player.equippedNameEffect && NAME_EFFECTS[player.equippedNameEffect]
-      ? NAME_EFFECTS[player.equippedNameEffect].name : "None";
-    const content =
-      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile\n\n` +
-      `🏷️ **Title:** ${escapeHTML(title)}\n` +
-      `✨ **Name Effect:** ${escapeHTML(effect)}\n` +
-      `🌳 **Level:** ${Number(player.level||1)} • 📏 **${Number(getTreeHeight(player)||0)} ft**\n` +
-      `💎 **Sparkles:** ${Number(player.sparkles||0).toLocaleString()} • 🏆 **Solo Wins:** ${Number(player.soloWins||0)}`;
+    // /profile is intentionally a STATIC profile card, matching the original
+    // Werewives card layout.  Do not substitute the tree-only renderer here.
+    const png = await renderStaticProfile(env, player);
     const response = await editOriginalResponseWithFile(
-      env, interaction, content, "werewives-profile.png", png, "image/png"
+      env, interaction,
+      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
+      "werewives-profile.png", png, "image/png"
     );
     if(!response.ok) throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   } catch(error) {
@@ -1041,6 +1044,7 @@ async function handleProfile(env, interaction) {
     });
   }
 }
+
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
 async function handleNameEffectEquip(env,interaction,effectId){
