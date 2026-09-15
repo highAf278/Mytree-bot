@@ -920,18 +920,18 @@ function profileCardHTML(player, phase = 0) {
   const decorUrl = decor ? imageUrl(decor) : "";
   const titleMarkup = nameEffectText(effectId, title, phase);
   const particleMap = {
-    rainbow: ["🌈","✨","💫","🌈"], starlight:["✦","✧","★","✦"], petals:["🌸","🌷","🌺","🌸"],
-    inferno:["🔥","🔥","✦","🔥"], green_glow:["✦","💚","✦","💚"], candy_rush:["🍬","🍭","✨","🍬"], cosmic:["✦","✧","☄️","★"],
-    firework:["🎆","✦","✨","💥"], royal_blood:["🩸","👑","✦","🩸"], enchanted:["🪄","✨","💜","✦"],
-    royal_purple:["👑","✦","💜","✨"], butterflies:["🦋","🦋","✨","🦋"], shadow:["🖤","🌑","✦","🖤"],
-    frostbite:["❄️","✧","❄️","💎"], golden:["✨","💛","💎","✨"], spooky:["👻","🦇","🕸️","🖤"]
+    rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✦","·","✧","✦"],
+    inferno:["✦","·","✦","·"], green_glow:["✦","·","✦","·"], candy_rush:["✦","·","✧","✦"], cosmic:["✦","✧","·","★"],
+    firework:["✦","·","✧","★"], royal_blood:["✦","·","★","✦"], enchanted:["✧","✦","·","★"],
+    royal_purple:["✦","·","✧","★"], butterflies:["✧","·","✦","✧"], shadow:["·","✦","·","★"],
+    frostbite:["✧","·","✦","✧"], golden:["✦","·","★","✦"], spooky:["✦","·","✧","★"]
   };
   const particleSet=particleMap[effectId]||[];
   const particles=particleSet.length?particleSet.map((symbol,i)=>`<span class="particle p${i}" style="left:${18+i*24}%;top:${18+(i%2)*58}%">${symbol}</span>`).join(""):"";
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
     .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:color-mix(in srgb, ${bg} 86%, white 14%);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:color-mix(in srgb, ${bg} 72%, white 28%);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
-    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:27px;z-index:3;filter:drop-shadow(0 0 8px rgba(255,255,255,.9));pointer-events:none}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:15px;font-family:Arial,sans-serif;font-weight:700;z-index:3;filter:drop-shadow(0 0 3px rgba(255,255,255,.65));pointer-events:none;opacity:.9}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -6378,6 +6378,7 @@ async function handleComponent(
     if(action==="palette") { await handlePastelPalette(env,interaction,parts[2]||"menu"); return; }
     if(action==="mode") { await handlePastelMode(env,interaction,parts[2]); return; }
     if(action==="resume") { await handlePastelResume(env,interaction,parts[2]); return; }
+    if(action==="refresh") { await handlePastelRefresh(env,interaction,parts[2]); return; }
     if(action==="join") { await handlePastelJoin(env,interaction,parts[2]); return; }
     if(action==="cancel") { await handlePastelCancel(env,interaction,parts[2]); return; }
     if(action==="choose") { await handlePastelChoose(env,interaction,parts[2],parts[3]); return; }
@@ -17672,6 +17673,12 @@ async function handleCommand(
     return;
   }
 
+  if (name === "color") {
+    const sub = interaction.data?.options?.find(o => o.type === 1)?.name;
+    if (sub === "checker") { await handleColorChecker(env, interaction); return; }
+    return;
+  }
+
   if (name === "colorchaos") {
     const sub = interaction.data?.options?.find(o => o.type === 1)?.name || "create";
     if (sub === "create") { await handlePastelStart(env, interaction); return; }
@@ -18435,12 +18442,21 @@ async function handleBattleShopBuy(env,interaction,itemId){
   player.sparkles-=def.price; const inv=battleShopItems(player); inv[itemId]=Number(inv[itemId]||0)+1; await savePlayer(env,player); await sendText(env,interaction,`🛍️ Bought **${def.name}** for **${def.price.toLocaleString()} ✨**! You now own **${inv[itemId]}**.`);
 }
 
+/* COLOR CHAOS UPDATE 2026-09: Refresh, HEX checker, 5P Star, palette expansion, stability hardening, Name Effect cleanup */
 /* =========================================================
    COLOR CHAOS
    1v1 = 32x32 square. 3P = 20-row triangular board with exactly
    400 cells (1+3+5+...+39). 4P = 32x32 square.
 ========================================================= */
 
+function colorCheckerSvg(hex){
+  const safe=String(hex||"").toUpperCase();
+  const lum=parseInt(safe.slice(1),16);
+  const r=(lum>>16)&255,g=(lum>>8)&255,b=lum&255;
+  const light=((r*299+g*587+b*114)/1000)>155;
+  const ink=light?"#2a2030":"#FFFFFF";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520"><rect width="900" height="520" fill="${safe}"/><rect x="24" y="24" width="852" height="472" rx="26" fill="none" stroke="${ink}" stroke-opacity=".35" stroke-width="4"/><rect x="225" y="165" width="450" height="190" rx="30" fill="#000000" fill-opacity=".18"/><text x="450" y="235" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="${ink}">COLOR CHECKER</text><text x="450" y="305" text-anchor="middle" font-family="monospace" font-size="52" font-weight="900" fill="${ink}">${safe}</text></svg>`;
+}
 const COLOR_CHAOS_PALETTES = {
   pastel_dreams: {
     name:"Pastel Dreams", icon:"🌈", powerCell:"💗",
@@ -18454,7 +18470,7 @@ const COLOR_CHAOS_PALETTES = {
       {id:"coral_crush",name:"Coral Coal",hex:"#f2a9a9",label:"❤️"},
       {id:"devu_dew",name:"Devu Dew",hex:"#86b3a5",label:"🩵"}
     ],
-    heartColor:"#ef9fbd", wildColor:"#fffaf2", boardColor:"#3b1834"
+    heartColor:"#ef9fbd", wildColor:"#FFFFFF", boardColor:"#3b1834"
   },
   haunted_harvest: {
     name:"Haunted Harvest", icon:"🎃", powerCell:"🎃",
@@ -18468,7 +18484,7 @@ const COLOR_CHAOS_PALETTES = {
       {id:"witchy_teal",name:"Witchy Teal",hex:"#17454a",label:"🧪"},
       {id:"bone_beige",name:"Bone Beige",hex:"#75674f",label:"🦴"}
     ],
-    heartColor:"#5a3218", wildColor:"#302d2a", boardColor:"#100f12"
+    heartColor:"#5a3218", wildColor:"#FFFFFF", boardColor:"#100f12"
   },
   teddy_bear: {
     name:"Teddy Bear", icon:"🧸", powerCell:"🎀",
@@ -18478,9 +18494,11 @@ const COLOR_CHAOS_PALETTES = {
       {id:"toasty_tan",name:"Toasty Tan",hex:"#B8875A",label:"🥨"},
       {id:"teddy_fur",name:"Teddy Fur",hex:"#955D35",label:"🧸"},
       {id:"chestnut_cozy",name:"Chestnut Cozy",hex:"#693C28",label:"🌰"},
-      {id:"cocoa_bear",name:"Cocoa Bear",hex:"#3D251B",label:"🍫"}
+      {id:"cocoa_bear",name:"Cocoa Bear",hex:"#3D251B",label:"🍫"},
+      {id:"berry_blush",name:"Berry Blush",hex:"#B85C78",label:"🌸"},
+      {id:"honey_gold",name:"Honey Gold",hex:"#D9B44A",label:"🌼"}
     ],
-    heartColor:"#D98F9A", wildColor:"#FFF7EC", boardColor:"#2A1D19"
+    heartColor:"#D98F9A", wildColor:"#FFFFFF", boardColor:"#2A1D19"
   },
   candy_shop: {
     name:"Candy Shop", icon:"🍬", powerCell:"🍬",
@@ -18489,10 +18507,12 @@ const COLOR_CHAOS_PALETTES = {
       {id:"lemon_drop",name:"Lemon Drop",hex:"#FFE066",label:"💛"},
       {id:"peach_fizz",name:"Peach Fizz",hex:"#FFB38A",label:"🍑"},
       {id:"bubblegum",name:"Bubblegum",hex:"#FF6FA7",label:"💗"},
-      {id:"blue_raspberry",name:"Blue Raspberry",hex:"#4FD1FF",label:"💙"},
-      {id:"grape_pop",name:"Grape Pop",hex:"#B36BFF",label:"💜"}
+      {id:"blue_raspberry",name:"Blue Raspberry",hex:"#4FD1FF",label:"🩵"},
+      {id:"grape_pop",name:"Grape Pop",hex:"#B36BFF",label:"💜"},
+      {id:"blueberry_blast",name:"Blueberry Blast",hex:"#3157B7",label:"🫐"},
+      {id:"cherry_twist",name:"Cherry Twist",hex:"#E83E52",label:"🍒"}
     ],
-    heartColor:"#FFB7D7", wildColor:"#FFFDF7", boardColor:"#FFF0F8"
+    heartColor:"#FFB7D7", wildColor:"#FFFFFF", boardColor:"#FFF0F8"
   },
   strawberry_galaxy: {
     name:"Strawberry Galaxy", icon:"🍓", powerCell:"🍓",
@@ -18502,9 +18522,11 @@ const COLOR_CHAOS_PALETTES = {
       {id:"cosmic_pink",name:"Cosmic Pink",hex:"#D83FA3",label:"💖"},
       {id:"cosmic_purple",name:"Cosmic Purple",hex:"#A05BCB",label:"💜"},
       {id:"galaxy_blue",name:"Galaxy Blue",hex:"#4B7ED9",label:"💙"},
-      {id:"midnight",name:"Midnight",hex:"#1B1E3F",label:"🌌"}
+      {id:"midnight",name:"Midnight",hex:"#1B1E3F",label:"🌌"},
+      {id:"solar_orange",name:"Solar Orange",hex:"#F28C28",label:"🟠"},
+      {id:"starlight_mint",name:"Starlight Mint",hex:"#63C9B8",label:"🟢"}
     ],
-    heartColor:"#D83FA3", wildColor:"#FFF7FD", boardColor:"#11152E"
+    heartColor:"#D83FA3", wildColor:"#FFFFFF", boardColor:"#11152E"
   },
   enchanted_garden: {
     name:"Enchanted Garden", icon:"🌿", powerCell:"🌼",
@@ -18518,17 +18540,17 @@ const COLOR_CHAOS_PALETTES = {
       {id:"sunset_orange",name:"Sunset Orange",hex:"#F4A259",label:"🍊"},
       {id:"garden_red",name:"Garden Red",hex:"#E04B5A",label:"🌺"}
     ],
-    heartColor:"#F4D76B", wildColor:"#F3EED5", boardColor:"#163B2A"
+    heartColor:"#F4D76B", wildColor:"#FFFFFF", boardColor:"#163B2A"
   }
 };
 const PASTEL_CLASSIC_COLOR_COUNT=6;
 function pastelPalette(game){return COLOR_CHAOS_PALETTES[game?.palette]||COLOR_CHAOS_PALETTES.pastel_dreams;}
 function pastelColors(game){return pastelPalette(game).colors;}
-function pastelColorCount(game){const palette=pastelPalette(game);return Math.min(game?.needed===4?8:PASTEL_CLASSIC_COLOR_COUNT,palette.colors.length);}
+function pastelColorCount(game){const palette=pastelPalette(game);return Math.min(game?.needed>=4?8:PASTEL_CLASSIC_COLOR_COUNT,palette.colors.length);}
 function pastelColorsForGame(game){return pastelColors(game).slice(0,pastelColorCount(game));}
 const PASTEL_HEART_COLOR="#ef9fbd";
 const PASTEL_WILD_COLOR="#fffaf2";
-const PASTEL_REGEN={1:5,3:7,4:10};
+const PASTEL_REGEN={1:5,3:7,4:10,5:12};
 
 function pastelRatingLevel(rating){return Math.max(0,Math.floor(Math.max(0,Number(rating||0))/100));}
 function pastelStats(player){
@@ -18541,6 +18563,7 @@ function pastelHasPlayed(player){
 }
 function pastelCornerName(game,p){
   if(game.mode==='triangle') return Number(p.slot)===0?'Top Point':Number(p.slot)===1?'Bottom Left':'Bottom Right';
+  if(game.mode==='star') return ['Top Point','Upper Right Point','Lower Right Point','Lower Left Point','Upper Left Point'][Number(p.slot)]||'Star Point';
   if(game.needed===2) return Number(p.slot)===0?'Top Left':'Bottom Right';
   return Number(p.slot)===0?'Top Left':Number(p.slot)===1?'Top Right':Number(p.slot)===2?'Bottom Left':'Bottom Right';
 }
@@ -18569,28 +18592,61 @@ function pastelNeighbors(board,r,c,mode){
   const seen=new Set();
   return out.filter(([rr,cc])=>board[rr]&&board[rr][cc]&&(!seen.has(`${rr},${cc}`)&&(seen.add(`${rr},${cc}`),true)));
 }
-function pastelCellCount(mode){return mode==="triangle"?400:1024;}
+function pastelCellCount(mode){return mode==="triangle"?400:mode==="star"?476:1024;}
+function pastelPointInPolygon(x,y,points){
+  let inside=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const xi=points[i][0],yi=points[i][1],xj=points[j][0],yj=points[j][1];
+    if(((yi>y)!=(yj>y))&&x<((xj-xi)*(y-yi))/(yj-yi)+xi)inside=!inside;
+  }
+  return inside;
+}
+function pastelStarMask(r,c){
+  const center=20.5,outer=20,inner=8,points=[];
+  for(let i=0;i<10;i++){
+    const angle=-Math.PI/2+i*Math.PI/5;
+    const radius=i%2===0?outer:inner;
+    points.push([center+radius*Math.cos(angle),center+radius*Math.sin(angle)]);
+  }
+  return pastelPointInPolygon(c+0.5,r+0.5,points);
+}
 function pastelGenerateBoard(mode,players,palette="pastel_dreams"){
   const board=[];
-  const rows=mode==="triangle"?20:32;
-  const colorCount=Math.min(players.length===4?8:PASTEL_CLASSIC_COLOR_COUNT,pastelPalette({palette,needed:players.length}).colors.length);
+  const rows=mode==="triangle"?20:mode==="star"?41:32;
+  const width=mode==="triangle"?null:mode==="star"?41:32;
+  const colorCount=Math.min(players.length>=4?8:PASTEL_CLASSIC_COLOR_COUNT,pastelPalette({palette,needed:players.length}).colors.length);
   for(let r=0;r<rows;r++){
-    const width=mode==="triangle"?(2*r+1):32;
-    board.push(Array.from({length:width},()=>({color:randomInt(0,colorCount-1),owner:null,heart:false,wild:Math.random()<0.075})));
+    const rowWidth=width||2*r+1;
+    board.push(Array.from({length:rowWidth},(_,c)=>{
+      const blocked=mode==="star"&&!pastelStarMask(r,c);
+      return {color:randomInt(0,colorCount-1),owner:blocked?"blackout":null,heart:false,wild:false,blocked};
+    }));
   }
-  /* Seed fair starting corners and give each player a small safe region. */
-  const maxIndex=31;
-  /* Fair 3P triangle starts: keep the exact 20-row/400-cell board and all game mechanics,
-     but use three equivalent boundary points with the same immediate edge mobility. */
-  const starts=mode==="triangle"?[[1,0],[18,0],[18,36]]:(players.length<=2?[[0,0],[maxIndex,maxIndex]]:[[0,0],[0,maxIndex],[maxIndex,0],[maxIndex,maxIndex]]);
-  players.forEach((p,i)=>{const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;const [r,c]=starts[slot]||starts[i]||starts[0]; if(board[r]?.[c]){board[r][c].owner=p.id;board[r][c].color=slot % colorCount;board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;}});
-  /* Every board gets at least 2 visible Heart Power Cells, with a chance for more. */
-  let hearts=2+randomInt(0,4);
-  let attempts=0;
-  while(hearts>0&&attempts<10000){attempts++;const r=randomInt(0,board.length-1);const c=randomInt(0,board[r].length-1);const cell=board[r][c];if(cell.owner||cell.heart||cell.wild)continue;cell.heart=true;cell.wild=false;hearts--;}
-  /* Safety pass: never allow a board to start with fewer than 2 Heart Power Cells. */
-  let visibleHearts=0;for(const row of board)for(const cell of row)if(cell.heart&&!cell.owner)visibleHearts++;
-  if(visibleHearts<2){for(let r=0;r<board.length&&visibleHearts<2;r++)for(let c=0;c<board[r].length&&visibleHearts<2;c++){const cell=board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;visibleHearts++;}}
+  /* Seed fair starting points and give each player one safe starting cell. */
+  const starts=mode==="triangle"
+    ? [[1,0],[18,0],[18,36]]
+    : mode==="star"
+      ? [[1,20],[14,38],[35,31],[35,9],[14,2]]
+      : players.length<=2
+        ? [[0,0],[31,31]]
+        : [[0,0],[0,31],[31,0],[31,31]];
+  players.forEach((p,i)=>{
+    const slot=Number.isInteger(Number(p.slot))?Number(p.slot):i;
+    const [r,c]=starts[slot]||starts[i]||starts[0];
+    if(board[r]?.[c]&&!board[r][c].blocked){
+      board[r][c].owner=p.id;board[r][c].color=slot%colorCount;board[r][c].start=true;board[r][c].heart=false;board[r][c].wild=false;
+    }
+  });
+  /* Every board gets at least 2 visible Power Cells, with a chance for more. */
+  let hearts=2+randomInt(0,4),attempts=0;
+  while(hearts>0&&attempts<20000){
+    attempts++;const r=randomInt(0,board.length-1),c=randomInt(0,board[r].length-1),cell=board[r][c];
+    if(cell.blocked||cell.owner||cell.heart)continue;
+    cell.heart=true;cell.wild=false;hearts--;
+  }
+  let visibleHearts=0;
+  for(const row of board)for(const cell of row)if(cell.heart&&!cell.owner)visibleHearts++;
+  if(visibleHearts<2){for(let r=0;r<board.length&&visibleHearts<2;r++)for(let c=0;c<board[r].length&&visibleHearts<2;c++){const cell=board[r][c];if(cell.blocked||cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;visibleHearts++;}}
   return board;
 }
 function pastelStartingPlayers(game){return Object.values(game.players||{}).sort((a,b)=>a.slot-b.slot);}
@@ -18774,7 +18830,7 @@ function pastelChoiceComponents(game){
   const buttons=colors.map(i=>button(`${pastelColors(game)[i].label} ${pastelColors(game)[i].name}`.slice(0,80),`pastel:choose:${game.id}:${i}`,2));
   for(let i=0;i<buttons.length;i+=2)rows.push(row(...buttons.slice(i,i+2)));
   const vote=pastelEndVoteCount(game);
-  rows.push(row(button("🎨 Color Key",`pastel:colorkey:${game.id}`,2),button("📖 Rules",`pastel:rules:${game.id}`,2)));
+  rows.push(row(button("🎨 Color Key",`pastel:colorkey:${game.id}`,2),button("📖 Rules",`pastel:rules:${game.id}`,2),button("🔄 Refresh",`pastel:refresh:${game.id}`,2)));
   rows.push(row(button("🚪 Quit Game",`pastel:quit:${game.id}`,4),button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4)));
   return rows;
 }
@@ -18798,10 +18854,11 @@ function colorChaosPaletteComponents(selected="pastel_dreams"){
   rows.push(row(button("⬅️ Back to Create","pastel:palette:back",2)));
   return rows;
 }
-function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
-function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:{mode:"square24",modeLabel:"4 Player",needed:4};}
-function pastelLobbyText(game){return [`🌈 **COLOR CHAOS — ${game.modeLabel}**`,`${pastelPalette(game).icon} **${pastelPalette(game).name}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...",`🛑 **End Game votes:** ${pastelEndVoteCount(game).votes}/${pastelEndVoteCount(game).total} (everyone must agree)`,"",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.`,`${pastelPalette(game).powerCell} Power Cells grant an immediate extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
-function pastelRulesText(){const paletteLines=Object.values(COLOR_CHAOS_PALETTES).map(p=>`${p.icon} **${p.name}:** ${p.colors.map(c=>c.label+" "+c.name).join(" • ")} • ${p.powerCell} Power Cells`).join("\n");return [`🌈 **COLOR CHAOS — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`✨ Absorb a Power Cell for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,``,`🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🎨 **PALETTES**`,paletteLines].join("\n");}
+function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3),button("⭐ 5 Player",`pastel:mode:5`,2)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
+function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:mode===4?{mode:"square24",modeLabel:"4 Player",needed:4}:{mode:"star",modeLabel:"5 Player Star",needed:5};}
+function pastelLobbyText(game){return [`🌈 **COLOR CHAOS — ${game.modeLabel}**`,`${pastelPalette(game).icon} **${pastelPalette(game).name}**`,``,`👑 Host: <@${game.hostId}>`,`👥 Players: **${Object.keys(game.players).length}/${game.needed}**`,``,Object.values(game.players).map(p=>`• <@${p.id}>`).join("\n"),"",Object.keys(game.players).length>=game.needed?"✨ Everyone is here! The game will start now.":"⏳ Waiting for players to join...",`🛑 **End Game votes:** ${pastelEndVoteCount(game).votes}/${pastelEndVoteCount(game).total} (everyone must agree)`,"",`🔺 3 Player mode uses a **large 20-row triangular board with 400 cells**.
+⭐ 5 Player mode uses a **large star-shaped board with 476 playable cells**.`,`${pastelPalette(game).powerCell} Power Cells grant an immediate extra turn • ⬜ Wild Blocks expand with your color.`].join("\n");}
+function pastelRulesText(){const paletteLines=Object.values(COLOR_CHAOS_PALETTES).map(p=>`${p.icon} **${p.name}:** ${p.colors.map(c=>c.label+" "+c.name).join(" • ")} • ${p.powerCell} Power Cells`).join("\n");return [`🌈 **COLOR CHAOS — HOW TO PLAY**`,``,`🎨 Choose a color touching your current territory. Your connected territory expands into that color.`,`✨ Absorb a Power Cell for an **immediate extra turn**.`,`⬜ Wild Blocks automatically become the color you just captured when connected.`,`🔄 Board regeneration: **1v1 every 5 turns • 3P every 7 • 4P every 10 • 5P every 12**.`,`🏆 Biggest territory wins, unless someone reaches a mathematically unbeatable lead.`,`🚪 Quitting counts as a **loss** and increments your **Rage Quit** count.`,``,`🛑 **End Game:** every active player must agree. The bot owner can force-end immediately.`,``,`🎨 **PALETTES**`,paletteLines].join("\n");}
 function pastelGameIsUnbeatable(game){const total=pastelCellCount(game.mode);const alive=Object.values(game.players).filter(p=>p.alive);if(alive.length<=1)return true;const leader=Math.max(...alive.map(p=>pastelClaimedCells(game,p.id)));const others=total-leader;return leader>others;}
 function pastelWinner(game){return pastelStartingPlayers(game).filter(p=>p.alive).sort((a,b)=>pastelClaimedCells(game,b.id)-pastelClaimedCells(game,a.id))[0]||null;}
 function pastelRegenerate(game){
@@ -18850,14 +18907,22 @@ function pastelRegenerate(game){
   game.lastRefresh=`🔄 **THE PASTEL BOARD REFRESHED!** Territories, colors, and blacked-out areas were preserved. ${pastelPalette(game).powerCell} **${visibleHearts} Power Cells spawned!**`;
 }
 
-async function pastelSave(env,game){const state=await getGuildState(env,game.guildId);if(state.pastel?.id!==game.id)return false;state.pastel=game;await saveGuildState(env,game.guildId,state);return true;}
+async function pastelSave(env,game){
+  const state=await getGuildState(env,game.guildId);
+  if(state.pastel?.id!==game.id)return false;
+  if(state.pastel.publicMessageId&&!game.publicMessageId)game.publicMessageId=state.pastel.publicMessageId;
+  if(state.pastel.turnMessageId&&!game.turnMessageId)game.turnMessageId=state.pastel.turnMessageId;
+  state.pastel=game;
+  await saveGuildState(env,game.guildId,state);
+  return true;
+}
 async function renderPastelBoard(env,game){
   let browser;
   try{
     browser=await puppeteer.launch(env.BROWSER);
     const page=await browser.newPage();
     await page.setViewport({width:1040,height:1040,deviceScaleFactor:1});
-    const size=game.mode==="triangle"?20:30;
+    const size=game.mode==="triangle"?20:game.mode==="star"?22:30;
     const squareCells=32;
     const boardW=game.mode==="triangle"?39*size:squareCells*size;
     const boardH=game.mode==="triangle"?20*size:squareCells*size;
@@ -18872,7 +18937,8 @@ async function renderPastelBoard(env,game){
         const cell=game.board[r][c];
         const x=cellX(r,c),y=r*size;
         let fill=pastelColors(game)[cell.color]?.hex||"#ffffff";
-        if(cell.owner==="blackout")fill="#202020";
+        if(cell.blocked)fill=pastelPalette(game).boardColor;
+        else if(cell.owner==="blackout")fill="#202020";
         else if(cell.wild)fill=pastelPalette(game).wildColor;
         else if(cell.heart)fill=pastelPalette(game).heartColor;
         rects.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}"/>`);
@@ -18883,6 +18949,7 @@ async function renderPastelBoard(env,game){
           heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="${isDark?"#17131a":"#fff3f8"}" stroke="${pastelPalette(game).heartColor}" stroke-width="3"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.22)}" font-weight="900">${symbol}</text>`);
         }
 
+        if(cell.blocked)continue;
         const owner=cell.owner;
         if(!owner)continue;
         const border=owner==="blackout"?"#fff":"#000";
@@ -18970,6 +19037,19 @@ async function handlePastelEndCommand(env,interaction){
   const vote=pastelEndVoteCount(game);
   await sendText(env,interaction,`🛑 **End Color Chaos?**\n\nEveryone currently playing must agree before the game is ended.\n\nCurrent agreement: **${vote.votes}/${vote.total}**`,[row(button("🛑 I Agree — End Game",`pastel:endvote:${game.id}`,4))]);
 }
+async function handleColorChecker(env,interaction){
+  const raw=String(getOption(interaction,"hex")||"").trim();
+  const cleaned=raw.replace(/^#/,'');
+  if(!/^[0-9A-Fa-f]{6}$/.test(cleaned)){
+    return sendText(env,interaction,"❌ Please enter a valid 6-digit HEX color, like `#7A4FA3`.");
+  }
+  const hex="#"+cleaned.toUpperCase();
+  const svg=colorCheckerSvg(hex);
+  const bytes=new TextEncoder().encode(svg);
+  const response=await editOriginalResponseWithFile(env,interaction,`🎨 **Color Checker:** \`${hex}\``,"color-checker.svg",bytes,"image/svg+xml");
+  if(!response.ok)console.error("Color Checker response failed:",response.status,await response.text());
+}
+
 async function handlePastelStart(env,interaction){
   if (await checkGamePunishment(env, interaction)) return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
@@ -18991,6 +19071,19 @@ async function handlePastelPalette(env,interaction,palette){
   await saveGuildState(env,interaction.guild_id,state);
   await sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\n${COLOR_CHAOS_PALETTES[palette].icon} **${COLOR_CHAOS_PALETTES[palette].name}** selected!\n\nChoose your game mode!`,pastelModeComponents(palette));
 }
+async function handlePastelRefresh(env,interaction,gameId){
+  if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
+  const state=await getGuildState(env,interaction.guild_id);
+  const game=state.pastel;
+  const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is no longer active.");
+  if(!user||!game.players?.[user.id]||game.players[user.id].alive===false)return sendEphemeralFollowup(env,interaction,"❌ Only an active Color Chaos player can refresh the game.");
+  /* READ-ONLY: this never changes the turn, board, timers, or game state. */
+  try{await sendPastelBoard(env,interaction,game);}catch(error){
+    await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ The board could not refresh, but the saved game is still active.`,components:pastelChoiceComponents(game)});
+  }
+}
+
 async function handlePastelResume(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
   const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
@@ -19370,6 +19463,21 @@ const COMMANDS = [
   },
 
   {
+    name: "color",
+    description: "Color utilities",
+    options: [
+      {
+        type: 1,
+        name: "checker",
+        description: "Generate an image swatch for a HEX color",
+        options: [
+          { type: 3, name: "hex", description: "HEX color like #FFB6E6", required: true, max_length: 7 }
+        ]
+      }
+    ]
+  },
+
+  {
     name: "roles",
     description: "View all Raccoon Heist roles and what they do"
   },
@@ -19693,8 +19801,17 @@ async function processPastelTimers(env){
       if(!game||game.status!=="playing")continue;
       if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
       if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
-      const current=pastelFindOwned(game,game.turnId);
+      const snapshotTurnId=game.turnId;
+      const snapshotTurnStartedAt=Number(game.turnStartedAt);
+      /* A scheduled timer can overlap a player's button click. Re-read KV immediately
+         before applying an AFK loss so an older timer can never overwrite a newer move. */
+      const latestState=await getGuildState(env,guildId);
+      const latestGame=latestState.pastel;
+      if(!latestGame||latestGame.id!==game.id||latestGame.status!=="playing")continue;
+      if(latestGame.turnId!==snapshotTurnId||Number(latestGame.turnStartedAt)!==snapshotTurnStartedAt)continue;
+      const current=pastelFindOwned(latestGame,latestGame.turnId);
       if(!current?.alive)continue;
+      game=latestGame;
       current.alive=false;
       current.lossRecorded=true;
       current.afkForfeited=true;
@@ -19861,6 +19978,8 @@ export default {
       interaction.type === 2 && interaction.data?.name === "solo";
     const isPastelCommand =
       interaction.type === 2 && interaction.data?.name === "colorchaos";
+    const isColorCommand =
+      interaction.type === 2 && interaction.data?.name === "color";
     const isFreeCommand =
       interaction.type === 2 && interaction.data?.name === "free";
     const isBlameCommand =
@@ -19904,7 +20023,7 @@ export default {
       );
 
     const relevant =
-      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
@@ -19957,6 +20076,8 @@ export default {
       } else if (isSoloCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
+      } else if (isColorCommand) {
+        ephemeral = true;
       } else if (isPastelCommand) {
         // Color Chaos lobbies must be public so other players can actually see
         // and join them. Only the end-game command remains private.
