@@ -2878,54 +2878,321 @@ async function renderProfileDirect(env,player){
   return rgbaToRgbPng(scene);
 }
 
-async function renderTree(env, player) {
-  const width = 1024, height = 1024;
-  const backgroundFile = getBackgroundImage(player);
-  const treeFile = getTreeImage(player);
-  const decorationFile = getDecorationImage(player);
-  const effectFile = getEffectImage(player);
+async function renderTree(
+  env,
+  player
+) {
+  let browser;
 
-  let scene;
   try {
-    scene = await getPngAsset(env, backgroundFile);
+    browser =
+      await puppeteer.launch(
+        env.BROWSER
+      );
+
+    const page =
+      await browser.newPage();
+
+    await page.setViewport({
+      width: 1024,
+      height: 1024,
+      deviceScaleFactor: 1
+    });
+
+    const background =
+      imageUrl(
+        getBackgroundImage(
+          player
+        )
+      );
+
+    const tree =
+      imageUrl(
+        getTreeImage(player)
+      );
+
+    const decorationFile =
+      getDecorationImage(
+        player
+      );
+
+    const decoration =
+      decorationFile
+        ? imageUrl(
+            decorationFile
+          )
+        : "";
+
+    const effectFile =
+      getEffectImage(
+        player
+      );
+
+    const effect =
+      effectFile
+        ? imageUrl(
+            effectFile
+          )
+        : "";
+
+    const sparkleHTML = (
+      player.sparklesOnTree ||
+      []
+    )
+      .map(sparkle => {
+        const left =
+          Number(sparkle.x) ||
+          50;
+
+        const top =
+          Number(sparkle.y) ||
+          50;
+
+        const kind = escapeHTML(sparkle.kind || "pink");
+        const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
+        const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
+
+        return `
+          <div
+            style="
+              position:absolute;
+              left:${left}%;
+              top:${top}%;
+              transform:translate(-50%,-50%);
+              font-family:Arial, Helvetica, sans-serif;
+              font-size:76px;
+              font-weight:900;
+              line-height:1;
+              color:#ffffff;
+              z-index:20;
+              opacity:1;
+              -webkit-text-stroke:2px ${glow};
+              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
+              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
+              animation:sparklePulse 1.2s ease-in-out infinite;
+              user-select:none;
+            "
+            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
+          >${symbol}</div>
+        `;
+      })
+      .join("");
+
+    let decorationHTML = "";
+
+    if (
+      decoration
+    ) {
+      const isBalloon =
+        player.equipped?.decoration ===
+        "stoned_balloon";
+
+      const decorationSize =
+        isBalloon
+          ? "330px"
+          : "280px";
+
+      decorationHTML = `
+        <img
+          src="${decoration}"
+          style="
+            position:absolute;
+            left:22%;
+            top:84%;
+            transform:translate(-50%,-50%);
+            width:${decorationSize};
+            height:${decorationSize};
+            object-fit:contain;
+            z-index:4;
+          "
+        />
+      `;
+    }
+
+    let effectHTML = "";
+
+    if (effect) {
+      /* Keep the effect atmospheric and behind the tree so the tree stays
+         the clear centerpiece instead of being covered by the overlay. */
+      effectHTML = `
+        <img
+          src="${effect}"
+          style="
+            position:absolute;
+            left:-5%;
+            top:-5%;
+            width:110%;
+            height:110%;
+            object-fit:contain;
+            opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};
+            mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};
+            z-index:2;
+            pointer-events:none;
+          "
+        />
+      `;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+
+      <html>
+      <head>
+        <meta charset="UTF-8">
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          .emoji {
+            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
+            font-variant-emoji: emoji;
+          }
+
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            width: 1024px;
+            height: 1024px;
+            overflow: hidden;
+            background: #ffd9ef;
+          }
+
+          #scene {
+            position: relative;
+            width: 1024px;
+            height: 1024px;
+            overflow: hidden;
+          }
+
+          #background {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          @keyframes sparkleFall {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+          }
+
+          @keyframes sparklePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.78; }
+          }
+
+          #tree {
+            position: absolute;
+            left: 50%;
+            top: 63%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            height: 90%;
+            object-fit: contain;
+            z-index: 4;
+          }
+        </style>
+      </head>
+
+      <body>
+        <div id="scene">
+
+          <img
+            id="background"
+            src="${background}"
+          >
+
+          <img
+            id="tree"
+            src="${tree}"
+          >
+
+          ${decorationHTML}
+
+          ${effectHTML}
+
+          ${sparkleHTML}
+
+        </div>
+      </body>
+      </html>
+    `;
+
+    await page.setContent(
+      html,
+      {
+        waitUntil: "load"
+      }
+    );
+
+    await page.evaluate(
+      async () => {
+        const images =
+          Array.from(
+            document.images
+          );
+
+        await Promise.all(
+          images.map(
+            image =>
+              new Promise(
+                resolve => {
+                  if (
+                    image.complete
+                  ) {
+                    resolve();
+                  } else {
+                    image.onload =
+                      resolve;
+
+                    image.onerror =
+                      resolve;
+                  }
+                }
+              )
+          )
+        );
+      }
+    );
+
+    return await page.screenshot(
+      {
+        type: "png"
+      }
+    );
   } catch (error) {
-    console.warn(`Tree background ${backgroundFile} could not be decoded directly; using fallback color.`, error?.message || error);
-    scene = solidRGBA(width, height, treeFallbackBackground(player));
-  }
-  scene = coverRGBA(scene, width, height);
+    const message =
+      error?.message ||
+      String(error);
 
-  if (effectFile) {
-    try {
-      const effect = await getPngAsset(env, effectFile);
-      const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
-      const effectX = player.equipped?.effect === "purr_princess" ? Math.round(width * 0.08) : -Math.round(width * 0.05);
-      alphaComposite(scene, layer, effectX, -Math.round(height * 0.05), player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
-    } catch (error) {
-      console.warn(`Tree effect ${effectFile} could not be decoded; continuing without it.`, error?.message || error);
+    if (
+      message.includes("429") ||
+      message.toLowerCase().includes(
+        "rate limit"
+      )
+    ) {
+      throw new Error(
+        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
+      );
+    }
+
+    throw error;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error(
+          "Browser close error:",
+          closeError
+        );
+      }
     }
   }
-
-  const tree = await getPngAsset(env, treeFile);
-  const treeLayer = containRGBA(tree, Math.round(width * 0.95), Math.round(height * 0.95));
-  alphaComposite(scene, treeLayer, (width - treeLayer.width) / 2, height * 0.63 - treeLayer.height / 2);
-
-  if (decorationFile) {
-    try {
-      const decoration = await getPngAsset(env, decorationFile);
-      const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
-      const layer = containRGBA(decoration, size, size);
-      alphaComposite(scene, layer, width * 0.22 - layer.width / 2, height * 0.84 - layer.height / 2);
-    } catch (error) {
-      console.warn(`Tree decoration ${decorationFile} could not be decoded; continuing without it.`, error?.message || error);
-    }
-  }
-
-  for (const sparkle of (player.sparklesOnTree || [])) {
-    const x = Math.max(0, Math.min(100, Number(sparkle.x) || 50));
-    const y = Math.max(0, Math.min(100, Number(sparkle.y) || 50));
-    drawSparkle(scene, Math.round(width * x / 100), Math.round(height * y / 100), sparkle.kind);
-  }
-  return rgbaToRgbPng(scene);
 }
 
 function escapeHTML(value) {function escapeHTML(value) {
