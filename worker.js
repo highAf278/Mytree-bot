@@ -18862,8 +18862,16 @@ function pastelChoiceComponents(game){
   return rows;
 }
 function pastelLobbyComponents(game){
-  const vote=pastelEndVoteCount(game);
-  return [row(button("💗 Join Game",`pastel:join:${game.id}`,1),button("🚪 Cancel",`pastel:cancel:${game.id}`,4)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4))];
+  /* Lobby controls: everyone may Join or open How to Play. Cancel is host-only
+     and is also enforced in handlePastelCancel so the restriction cannot be
+     bypassed by manually invoking the component custom ID. */
+  return [
+    row(
+      button("💗 Join Game",`pastel:join:${game.id}`,1),
+      button("🚪 Cancel",`pastel:cancel:${game.id}`,4)
+    ),
+    row(button("📖 How to Play","pastel:rules:menu",2))
+  ];
 }
 function colorChaosPaletteComponents(selected="pastel_dreams"){
   const items=[
@@ -19240,7 +19248,19 @@ async function handlePastelJoin(env,interaction,gameId){
     if(!current||current.id!==gameId||current.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");
     if(current.players?.[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");
     const count=Object.keys(current.players||{}).length;
-    if(count>=current.needed)return sendText(env,interaction,"❌ This Color Chaos lobby is full.");
+    /* If the lobby has already reached its required player count, another
+       delivery of the Join interaction must NOT strand the game behind a
+       misleading "full" message. This can happen because Discord/KV can
+       deliver a near-simultaneous button interaction after the previous join
+       was saved but before that request finished starting the game. If the
+       lobby is exactly full, let this request finish the pending start. */
+    if(count>=current.needed){
+      if(count===current.needed){
+        game=current;
+        break;
+      }
+      return sendText(env,interaction,"❌ This Color Chaos lobby is full.");
+    }
     const next={...current,players:{...(current.players||{})}};
     next.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:count,alive:true,choiceLocked:false,pendingPastelTurns:0};
     next.interactionToken=interaction.token;
@@ -19251,10 +19271,23 @@ async function handlePastelJoin(env,interaction,gameId){
   }
   if(!game)return sendText(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
   await acknowledge(env,interaction);
-  if(Object.keys(game.players).length>=game.needed){await pastelStartGame(env,game,interaction);return;}
+  if(Object.keys(game.players||{}).length>=game.needed){
+    await pastelStartGame(env,game,interaction);
+    return;
+  }
   await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
 }
-async function handlePastelCancel(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");if(user.id!==game.hostId)return sendText(env,interaction,"❌ Only the host can cancel the lobby.");state.pastel=null;await saveGuildState(env,interaction.guild_id,state);await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");}
+async function handlePastelCancel(env,interaction,gameId){
+  const state=await getGuildState(env,interaction.guild_id);
+  const game=state.pastel;
+  const user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");
+  if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");
+  if(!user||user.id!==game.hostId)return sendText(env,interaction,"❌ Only the Color Chaos host can use this lobby button.");
+  state.pastel=null;
+  await saveGuildState(env,interaction.guild_id,state);
+  await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");
+}
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
   const winner=pastelFindOwned(game,winnerId);
