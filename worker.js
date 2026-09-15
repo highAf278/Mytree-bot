@@ -938,17 +938,17 @@ function profileCardHTML(player, phase = 0) {
 async function renderAnimatedProfile(env, player) {
   let browser;
   try {
-    browser = await launchImageBrowser(env, "Profile");
+    browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
     await page.setViewport({width:800,height:500,deviceScaleFactor:1});
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
-    await waitForImageAssets(page, 10000);
+    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
     const frameCount=8;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
-      await waitForImageAssets(page, 10000);
+      await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
       frames.push(await page.screenshot({type:"png"}));
     }
     return await encodePNGFramesToGIF(frames,800,500,12);
@@ -1009,28 +1009,20 @@ async function editOriginalResponseWithFile(env, interaction, content, filename,
   );
 }
 
-async function handleProfile(env,interaction){
-  const user=getUserFromInteraction(interaction);if(!user)return;
+async function handleProfile(env, interaction) {
+  const user=getUserFromInteraction(interaction); if(!user)return;
   const targetId=getOption(interaction,"user")||user.id;
   const player=await getPlayer(env,targetId);
-  if(targetId===user.id)updatePlayerIdentity(player,interaction);
+  if(targetId===user.id) updatePlayerIdentity(player,interaction);
   await savePlayer(env,player);
   try{
-    /* RESTORED: the normal profile path uses the existing animated HTML/GIF
-       renderer. That renderer consumes nameEffectText(), so equipped effects
-       retain their actual visual treatment instead of becoming one flat color. */
-    const gif=await renderAnimatedProfile(env,player);
-    const response=await editOriginalResponseWithFile(
-      env,interaction,
-      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Werewives Profile`,
-      "werewives-profile.gif",gif
-    );
+    const png=await renderProfileDirect(env,player);
+    const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
+    const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}`,"werewives-profile.png",png,"image/png");
     if(!response.ok)throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
-    console.error("Profile animated render failed",error);
-    await sendText(env,interaction,
-      `🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`
-    );
+    console.error("Profile direct render failed",error);
+    await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
   }
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
@@ -2394,59 +2386,6 @@ function treeButtonAction(id) {
   return parts[0] === "tree" && parts.length >= 3 ? parts.slice(2).join(":") : null;
 }
 
-
-/* =========================================================
-   IMAGE RENDERING — SHARED STABILITY LAYER
-   All asset-based images use the same bounded Browser Rendering path.
-   Color Chaos board rendering remains Worker-side because it contains
-   no external artwork.
-========================================================= */
-
-const IMAGE_BROWSER_OPTIONS = {
-  timeout: 15000,
-  protocolTimeout: 45000
-};
-
-async function launchImageBrowser(env, label = "Image") {
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      return await puppeteer.launch(env.BROWSER, IMAGE_BROWSER_OPTIONS);
-    } catch (error) {
-      lastError = error;
-      console.error(`${label} browser launch attempt ${attempt}/3 failed:`, error?.message || error);
-
-      if (attempt < 3) {
-        await new Promise(resolve => setTimeout(resolve, 750 * attempt));
-      }
-    }
-  }
-
-  throw new Error(
-    `${label} renderer could not start after 3 attempts. ` +
-    `${lastError?.message || "Cloudflare Browser Rendering unavailable."}`
-  );
-}
-
-async function waitForImageAssets(page, timeoutMs = 10000) {
-  await page.evaluate(async (limit) => {
-    const images = Array.from(document.images);
-    const waiters = images.map(image => {
-      if (image.complete) return Promise.resolve();
-      return new Promise(resolve => {
-        image.onload = resolve;
-        image.onerror = resolve;
-      });
-    });
-
-    await Promise.race([
-      Promise.all(waiters),
-      new Promise(resolve => setTimeout(resolve, limit))
-    ]);
-  }, timeoutMs);
-}
-
 /* =========================================================
    IMAGE RENDERING
 ========================================================= */
@@ -2819,8 +2758,7 @@ async function getPngAsset(env, filename) {
   // Fetch the same public R2 asset URL used by the original image pipeline.
   const url = imageUrl(filename);
   const response = await fetch(url, {
-    cf: { cacheEverything: true, cacheTtl: 86400 },
-    signal: AbortSignal.timeout(12000)
+    cf: { cacheEverything: true, cacheTtl: 86400 }
   });
 
   if (!response.ok) {
@@ -2833,55 +2771,6 @@ async function getPngAsset(env, filename) {
   } catch {
     throw new Error(`Tree image pipeline only supports PNG layers directly: ${filename}`);
   }
-}
-
-async function renderTreeDirect(env, player) {
-  const width = 1024, height = 1024;
-  const backgroundFile = getBackgroundImage(player);
-  const treeFile = getTreeImage(player);
-  const decorationFile = getDecorationImage(player);
-  const effectFile = getEffectImage(player);
-
-  let scene;
-  try { scene = await getPngAsset(env, backgroundFile); }
-  catch (error) {
-    console.warn(`Tree background ${backgroundFile} could not be decoded directly; using fallback color.`, error?.message || error);
-    scene = solidRGBA(width, height, treeFallbackBackground(player));
-  }
-  scene = coverRGBA(scene, width, height);
-
-  /* Effects sit behind the tree so the tree artwork stays crisp and prominent. */
-  if (effectFile) {
-    const effect = await getPngAsset(env, effectFile);
-    const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
-    const effectX = player.equipped?.effect === "purr_princess"
-      ? Math.round(width * 0.08)
-      : -Math.round(width * 0.05);
-    alphaComposite(scene, layer, effectX, -Math.round(height * 0.05), player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
-  }
-
-  /* Tree is composited after the effect so it remains visually dominant. */
-  const tree = await getPngAsset(env, treeFile);
-  const treeLayer = containRGBA(tree, Math.round(width * 0.95), Math.round(height * 0.95));
-  alphaComposite(scene, treeLayer, (width - treeLayer.width) / 2, height * 0.63 - treeLayer.height / 2);
-
-  /* Decorations sit on top of the effect and tree for maximum visibility. */
-  if (decorationFile) {
-    const decoration = await getPngAsset(env, decorationFile);
-    const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
-    const layer = containRGBA(decoration, size, size);
-    alphaComposite(scene, layer, width * 0.22 - layer.width / 2, height * 0.84 - layer.height / 2);
-  }
-
-  /* Sparkles are kept as visible glowy markers. They are deliberately simple
-     here because the direct Worker renderer has no browser font engine. */
-  for (const sparkle of (player.sparklesOnTree || [])) {
-    const x = Math.max(0, Math.min(100, Number(sparkle.x) || 50));
-    const y = Math.max(0, Math.min(100, Number(sparkle.y) || 50));
-    drawSparkle(scene, Math.round(width * x / 100), Math.round(height * y / 100), sparkle.kind);
-  }
-
-  return rgbaToRgbPng(scene);
 }
 
 function drawSparkle(frame, cx, cy, kind) {
@@ -2938,295 +2827,108 @@ function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(
 function profileEffectColor(id){
   const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
 }
+async function renderProfileDirect(env,player){
+  const width=800,height=500;
+  const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
+  const [br,bgG,bb]=hexRgb(bg);
+  const scene=solidRGBA(width,height,bg);
+  /* Soft panel on the right, matching the original profile-card composition. */
+  profileBlendFill(scene,318,18,458,464,255,255,255,205);
+  profileBlendFill(scene,330,30,434,440,br,bgG,bb,55);
+  profileFill(scene,330,30,434,4,255,255,255,150);
+  profileFill(scene,330,466,434,4,255,255,255,150);
+  profileFill(scene,318,18,4,464,255,255,255,180);
+  profileFill(scene,772,18,4,464,255,255,255,180);
 
+  const treeFile=getTreeImage(player);
+  const tree=await getPngAsset(env,treeFile);
+  const treeLayer=containRGBA(tree,350,430);
+  alphaComposite(scene,treeLayer,10,65);
 
-async function renderTree(
-  env,
-  player
-) {
-  let browser;
-
-  try {
-    browser = await launchImageBrowser(env, "Tree");
-
-    const page =
-      await browser.newPage();
-
-    await page.setViewport({
-      width: 1024,
-      height: 1024,
-      deviceScaleFactor: 1
-    });
-
-    const background =
-      imageUrl(
-        getBackgroundImage(
-          player
-        )
-      );
-
-    const tree =
-      imageUrl(
-        getTreeImage(player)
-      );
-
-    const decorationFile =
-      getDecorationImage(
-        player
-      );
-
-    const decoration =
-      decorationFile
-        ? imageUrl(
-            decorationFile
-          )
-        : "";
-
-    const effectFile =
-      getEffectImage(
-        player
-      );
-
-    const effect =
-      effectFile
-        ? imageUrl(
-            effectFile
-          )
-        : "";
-
-    const sparkleHTML = (
-      player.sparklesOnTree ||
-      []
-    )
-      .map(sparkle => {
-        const left =
-          Number(sparkle.x) ||
-          50;
-
-        const top =
-          Number(sparkle.y) ||
-          50;
-
-        const kind = escapeHTML(sparkle.kind || "pink");
-        const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
-        const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
-
-        return `
-          <div
-            style="
-              position:absolute;
-              left:${left}%;
-              top:${top}%;
-              transform:translate(-50%,-50%);
-              font-family:Arial, Helvetica, sans-serif;
-              font-size:76px;
-              font-weight:900;
-              line-height:1;
-              color:#ffffff;
-              z-index:20;
-              opacity:1;
-              -webkit-text-stroke:2px ${glow};
-              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
-              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
-              animation:sparklePulse 1.2s ease-in-out infinite;
-              user-select:none;
-            "
-            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
-          >${symbol}</div>
-        `;
-      })
-      .join("");
-
-    let decorationHTML = "";
-
-    if (
-      decoration
-    ) {
-      const isBalloon =
-        player.equipped?.decoration ===
-        "stoned_balloon";
-
-      const decorationSize =
-        isBalloon
-          ? "330px"
-          : "280px";
-
-      decorationHTML = `
-        <img
-          src="${decoration}"
-          style="
-            position:absolute;
-            left:22%;
-            top:84%;
-            transform:translate(-50%,-50%);
-            width:${decorationSize};
-            height:${decorationSize};
-            object-fit:contain;
-            z-index:4;
-          "
-        />
-      `;
-    }
-
-    let effectHTML = "";
-
-    if (effect) {
-      /* Keep the effect atmospheric and behind the tree so the tree stays
-         the clear centerpiece instead of being covered by the overlay. */
-      effectHTML = `
-        <img
-          src="${effect}"
-          style="
-            position:absolute;
-            left:-5%;
-            top:-5%;
-            width:110%;
-            height:110%;
-            object-fit:contain;
-            opacity:0.42;
-            mix-blend-mode:screen;
-            z-index:2;
-            pointer-events:none;
-          "
-        />
-      `;
-    }
-
-    const html = `
-      <!DOCTYPE html>
-
-      <html>
-      <head>
-        <meta charset="UTF-8">
-
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-
-          .emoji {
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-            font-variant-emoji: emoji;
-          }
-
-          html,
-          body {
-            margin: 0;
-            padding: 0;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-            background: #ffd9ef;
-          }
-
-          #scene {
-            position: relative;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-          }
-
-          #background {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          @keyframes sparkleFall {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
-          }
-
-          @keyframes sparklePulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.78; }
-          }
-
-          #tree {
-            position: absolute;
-            left: 50%;
-            top: 63%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            height: 90%;
-            object-fit: contain;
-            z-index: 4;
-          }
-        </style>
-      </head>
-
-      <body>
-        <div id="scene">
-
-          <img
-            id="background"
-            src="${background}"
-          >
-
-          <img
-            id="tree"
-            src="${tree}"
-          >
-
-          ${decorationHTML}
-
-          ${effectHTML}
-
-          ${sparkleHTML}
-
-        </div>
-      </body>
-      </html>
-    `;
-
-    await page.setContent(
-      html,
-      {
-        waitUntil: "load"
-      }
-    );
-
-    await waitForImageAssets(page, 10000);
-
-    return await page.screenshot(
-      {
-        type: "png"
-      }
-    );
-  } catch (error) {
-    const message =
-      error?.message ||
-      String(error);
-
-    if (
-      message.includes("429") ||
-      message.toLowerCase().includes(
-        "rate limit"
-      )
-    ) {
-      throw new Error(
-        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
-      );
-    }
-
-    throw error;
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error(
-          "Browser close error:",
-          closeError
-        );
-      }
-    }
+  const decorFile=getDecorationImage(player);
+  if(decorFile){
+    try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
+  const effectId=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?player.equippedNameEffect:"";
+  const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
+  const title=titleId?SOLO_TITLES[titleId].name:"No Title";
+  const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
+  const ink=[42,32,48], accent=profileEffectColor(effectId);
+
+  /* Card labels and values are drawn with a tiny embedded bitmap font so this path
+     needs no browser, websocket, font service, or external renderer. */
+  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),350,48,4,ink,390);
+  drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
+  profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
+  drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
+  drawBitmapText(scene,title,372,158,3,accent,345);
+  drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
+  drawBitmapText(scene,effect,372,212,2,accent,350);
+
+  profileBlendFill(scene,350,250,394,155,255,255,255,100);
+  drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
+  drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
+  drawBitmapText(scene,Number(player.sparkles||0).toLocaleString(),545,290,3,ink,170);
+  drawBitmapText(scene,"TREE HEIGHT",372,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
+  drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
+  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,435,2,[100,88,110],390);
+  return rgbaToRgbPng(scene);
 }
 
-function escapeHTML(value) {
+async function renderTree(env, player) {
+  const width = 1024, height = 1024;
+  const backgroundFile = getBackgroundImage(player);
+  const treeFile = getTreeImage(player);
+  const decorationFile = getDecorationImage(player);
+  const effectFile = getEffectImage(player);
+
+  let scene;
+  try {
+    scene = await getPngAsset(env, backgroundFile);
+  } catch (error) {
+    console.warn(`Tree background ${backgroundFile} could not be decoded directly; using fallback color.`, error?.message || error);
+    scene = solidRGBA(width, height, treeFallbackBackground(player));
+  }
+  scene = coverRGBA(scene, width, height);
+
+  if (effectFile) {
+    try {
+      const effect = await getPngAsset(env, effectFile);
+      const layer = containRGBA(effect, Math.round(width * 1.10), Math.round(height * 1.10));
+      const effectX = player.equipped?.effect === "purr_princess" ? Math.round(width * 0.08) : -Math.round(width * 0.05);
+      alphaComposite(scene, layer, effectX, -Math.round(height * 0.05), player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
+    } catch (error) {
+      console.warn(`Tree effect ${effectFile} could not be decoded; continuing without it.`, error?.message || error);
+    }
+  }
+
+  const tree = await getPngAsset(env, treeFile);
+  const treeLayer = containRGBA(tree, Math.round(width * 0.95), Math.round(height * 0.95));
+  alphaComposite(scene, treeLayer, (width - treeLayer.width) / 2, height * 0.63 - treeLayer.height / 2);
+
+  if (decorationFile) {
+    try {
+      const decoration = await getPngAsset(env, decorationFile);
+      const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
+      const layer = containRGBA(decoration, size, size);
+      alphaComposite(scene, layer, width * 0.22 - layer.width / 2, height * 0.84 - layer.height / 2);
+    } catch (error) {
+      console.warn(`Tree decoration ${decorationFile} could not be decoded; continuing without it.`, error?.message || error);
+    }
+  }
+
+  for (const sparkle of (player.sparklesOnTree || [])) {
+    const x = Math.max(0, Math.min(100, Number(sparkle.x) || 50));
+    const y = Math.max(0, Math.min(100, Number(sparkle.y) || 50));
+    drawSparkle(scene, Math.round(width * x / 100), Math.round(height * y / 100), sparkle.kind);
+  }
+  return rgbaToRgbPng(scene);
+}
+
+function escapeHTML(value) {function escapeHTML(value) {
   return String(value)
     .replaceAll(
       "&",
@@ -18506,32 +18208,27 @@ function battleText(game) {
 }
 
 async function renderBattleImage(env, game) {
-  const width = 1200, height = 700;
-  const ps = Object.values(game.players || {});
-  if (ps.length < 2) throw new Error("Tree Battle image needs two players.");
-
-  const scene = solidRGBA(width, height, [255, 255, 255, 255]);
-
+  let browser;
   try {
-    const leftAsset = await getPngAsset(env, ps[0].treeImage || getTreeImage(ps[0]));
-    const leftLayer = containRGBA(leftAsset, 500, 600);
-    alphaComposite(scene, leftLayer, 70, (height - leftLayer.height) / 2);
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width: 1200, height: 700, deviceScaleFactor: 1});
+    const ps = Object.values(game.players);
+    const left = imageUrl(ps[0].treeImage);
+    const right = imageUrl(ps[1].treeImage);
+    const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
+      *{box-sizing:border-box}body{margin:0;background:#fff;overflow:hidden;font-family:Arial,sans-serif}
+      #battle{width:1200px;height:700px;display:flex;align-items:center;justify-content:space-around;position:relative}
+      .tree{width:42%;height:600px;object-fit:contain}.vs{font-size:90px;font-weight:900;z-index:5}
+    </style></head><body><div id="battle"><img class="tree" src="${left}"><div class="vs">VS</div><img class="tree" src="${right}"></div></body></html>`;
+    await page.setContent(html,{waitUntil:"load"});
+    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
+    return await page.screenshot({type:"png"});
   } catch (error) {
-    console.warn("Battle left tree image skipped:", error?.message || error);
-  }
-
-  try {
-    const rightAsset = await getPngAsset(env, ps[1].treeImage || getTreeImage(ps[1]));
-    const rightLayer = containRGBA(rightAsset, 500, 600);
-    alphaComposite(scene, rightLayer, width - 70 - rightLayer.width, (height - rightLayer.height) / 2);
-  } catch (error) {
-    console.warn("Battle right tree image skipped:", error?.message || error);
-  }
-
-  // Embedded bitmap font keeps this renderer independent of browser/font services.
-  drawBitmapText(scene, "VS", 555, 300, 14, [42, 32, 48], 100);
-
-  return rgbaToRgbPng(scene);
+    const message = error?.message || String(error);
+    if (message.includes("429") || message.toLowerCase().includes("rate limit")) throw new Error("Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another battle.");
+    throw error;
+  } finally { if (browser) try { await browser.close(); } catch {} }
 }
 
 async function sendBattleMessage(env, interaction, game) {
@@ -19161,33 +18858,15 @@ function pastelChoiceComponents(game){
   return rows;
 }
 function pastelLobbyComponents(game){
-  /* Join + How to Play are public. Palette + Cancel are host-only.
-     The game ID is included with the palette controls so the handler can
-     enforce the host check on every palette click, not just on the first menu. */
-  return [
-    row(
-      button("💗 Join Game",`pastel:join:${game.id}`,1),
-      button("🎨 Palette",`pastel:palette:menu:${game.id}`,2),
-      button("🚪 Cancel",`pastel:cancel:${game.id}`,4)
-    ),
-    row(button("📖 How to Play","pastel:rules:menu",2))
-  ];
+  const vote=pastelEndVoteCount(game);
+  /* Discord component rows are shared by everyone viewing the public message,
+     so Palette cannot literally be hidden per-user. The component is host-only
+     by enforcement in handlePastelPalette; non-host clicks are rejected. */
+  return [row(button("💗 Join Game",`pastel:join:${game.id}`,1)),row(button("🎨 Palette",`pastel:palette:menu:${game.id}`,2),button("📖 How to Play","pastel:rules:menu",2)),row(button("🚪 Cancel",`pastel:cancel:${game.id}`,4)),row(button(`🛑 End Game (${vote.votes}/${vote.total})`,`pastel:endvote:${game.id}`,4))];
 }
 function colorChaosPaletteComponents(selected="pastel_dreams",gameId=""){
-  const items=[
-    ["pastel_dreams","🌈 Pastel Dreams",1],
-    ["haunted_harvest","🎃 Haunted Harvest",3],
-    ["teddy_bear","🧸 Teddy Bear",2],
-    ["candy_shop","🍬 Candy Shop",1],
-    ["strawberry_galaxy","🍓 Strawberry Galaxy",2],
-    ["enchanted_garden","🌿 Enchanted Garden",3]
-  ];
-  const rows=[];
-  for(let i=0;i<items.length;i+=3){
-    rows.push(row(...items.slice(i,i+3).map(([id,label,style])=>button(`${selected===id?"✅ ":""}${label}`,`pastel:palette:${id}${gameId?`:${gameId}`:""}`,style))));
-  }
-  rows.push(row(button("⬅️ Back to Create",`pastel:palette:back${gameId?`:${gameId}`:""}`,2)));
-  return rows;
+  const suffix=gameId?`:${gameId}`:"";
+  return [row(button(`${selected==="pastel_dreams"?"✅ ":""}🌈 Pastel Dreams`,`pastel:palette:pastel_dreams${suffix}`,1),button(`${selected==="haunted_harvest"?"✅ ":""}🎃 Haunted Harvest`,`pastel:palette:haunted_harvest${suffix}`,3)),row(button("⬅️ Back to Lobby",`pastel:palette:back${suffix}`,2))];
 }
 function pastelModeComponents(selectedPalette="pastel_dreams"){return [row(button("💗 1v1",`pastel:mode:1`,1),button("🌸 3 Player",`pastel:mode:3`,2),button("🌈 4 Player",`pastel:mode:4`,3),button("⭐ 5 Player",`pastel:mode:5`,2)),row(button("📖 How to Play","pastel:rules:menu",2),button(`🎨 ${COLOR_CHAOS_PALETTES[selectedPalette]?.name||"Pastel Dreams"}`,"pastel:palette:menu",2))];}
 function pastelModeInfo(mode){return mode===1?{mode:"square",modeLabel:"1v1",needed:2}:mode===3?{mode:"triangle",modeLabel:"3 Player Triangle",needed:3}:mode===4?{mode:"square24",modeLabel:"4 Player",needed:4}:{mode:"star",modeLabel:"5 Player Star",needed:5};}
@@ -19254,99 +18933,56 @@ async function pastelSave(env,game){
   await saveGuildState(env,game.guildId,state);
   return true;
 }
-function pastelHexRGB(hex){
-  const h=String(hex||"#ffffff").replace("#","");
-  const n=parseInt(h.length===3?h.split("").map(x=>x+x).join(""):h,16);
-  return [(n>>16)&255,(n>>8)&255,n&255];
+function boardFill(frame,x,y,w,h,r,g,b,a=255){
+  const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
+  const sa=a/255;
+  for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const o=(yy*frame.width+xx)*4;frame.data[o]=Math.round(r*sa+frame.data[o]*(1-sa));frame.data[o+1]=Math.round(g*sa+frame.data[o+1]*(1-sa));frame.data[o+2]=Math.round(b*sa+frame.data[o+2]*(1-sa));frame.data[o+3]=255;}
 }
-function pastelCRC32(bytes){
-  let c=0xffffffff;
-  for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xedb88320:0);}
-  return (c^0xffffffff)>>>0;
+function boardLine(frame,x1,y1,x2,y2,r,g,b,a=255,width=3){
+  const dx=x2-x1,dy=y2-y1,steps=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dy)))),rad=Math.max(1,Math.ceil(width/2));
+  for(let i=0;i<=steps;i++){const x=x1+dx*i/steps,y=y1+dy*i/steps;boardFill(frame,x-rad,y-rad,rad*2+1,rad*2+1,r,g,b,a);}
 }
-function pastelPNGChunk(type,data){
-  const t=new TextEncoder().encode(type),all=new Uint8Array(t.length+data.length);all.set(t);all.set(data,t.length);
-  const out=new Uint8Array(12+data.length);const dv=new DataView(out.buffer);dv.setUint32(0,data.length);out.set(all,4);dv.setUint32(8+data.length,pastelCRC32(all));return out;
+function boardCircle(frame,cx,cy,r,rgb,fill=true){
+  const [rr,gg,bb]=rgb;
+  for(let y=Math.floor(cy-r-1);y<=Math.ceil(cy+r+1);y++)for(let x=Math.floor(cx-r-1);x<=Math.ceil(cx+r+1);x++){const d=Math.hypot(x-cx,y-cy);if((fill&&d<=r)||(!fill&&d>=r-2&&d<=r+2))boardFill(frame,x,y,1,1,rr,gg,bb,255);}
 }
 async function renderPastelBoard(env,game){
-  /* Pure Worker PNG renderer. Color Chaos boards are flat cells, so there is no
-     reason to spend Browser Rendering time just to rasterize an SVG. This also
-     keeps board generation working when Browser Rendering is busy/rate-limited. */
-  const cell=game.mode==="triangle"?20:game.mode==="star"?22:32;
-  const rows=game.board?.length||1;
-  const cols=Math.max(1,...(game.board||[]).map(r=>r?.length||0));
-  const width=Math.max(1,game.mode==="triangle"?39*cell:cols*cell);
-  const height=Math.max(1,rows*cell);
-  const bg=pastelHexRGB(pastelPalette(game).boardColor);
-  const pixels=new Uint8Array(width*height*4);
-  for(let i=0;i<width*height;i++){pixels[i*4]=bg[0];pixels[i*4+1]=bg[1];pixels[i*4+2]=bg[2];pixels[i*4+3]=255;}
-  const put=(x,y,r,g,b)=>{if(x<0||y<0||x>=width||y>=height)return;const i=(y*width+x)*4;pixels[i]=r;pixels[i+1]=g;pixels[i+2]=b;pixels[i+3]=255;};
-  const rect=(x,y,w,h,r,g,b)=>{const x0=Math.max(0,x),y0=Math.max(0,y),x1=Math.min(width,x+w),y1=Math.min(height,y+h);for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++)put(xx,yy,r,g,b);};
-  const circle=(cx,cy,rad,r,g,b)=>{const rr=rad*rad;for(let y=Math.floor(cy-rad);y<=Math.ceil(cy+rad);y++)for(let x=Math.floor(cx-rad);x<=Math.ceil(cx+rad);x++)if((x-cx)*(x-cx)+(y-cy)*(y-cy)<=rr)put(x,y,r,g,b);};
-  const colors=pastelColors(game), palette=pastelPalette(game);
-  const same=(r,c,o)=>!!game.board?.[r]?.[c]&&game.board[r][c].owner===o;
+  const width=1040,height=1040;
+  const bg=hexRgb(pastelPalette(game).boardColor||"#fff4fb");
+  const frame=solidRGBA(width,height,bg);
+  const rows=game.board?.length||0;
+  const mode=game.mode;
+  const maxCols=Math.max(1,...(game.board||[]).map(r=>r.length));
+  const cell=Math.max(1,Math.floor(Math.min(30,Math.min((width-80)/maxCols,(height-80)/Math.max(1,rows)))));
+  const boardW=maxCols*cell,boardH=rows*cell,ox=Math.round((width-boardW)/2),oy=Math.round((height-boardH)/2);
+  const colors=pastelColors(game),edgeSeen=new Set();
+  const sameOwner=(r,c,owner)=>!!(game.board?.[r]?.[c]&&game.board[r][c].owner===owner);
   for(let r=0;r<rows;r++)for(let c=0;c<(game.board[r]?.length||0);c++){
-    const q=game.board[r][c]; if(!q)continue;
-    const x=game.mode==="triangle"?(19-r+c)*cell:c*cell,y=r*cell;
-    const base=q.blocked?palette.boardColor:q.owner==="blackout"?"#202020":q.wild?palette.wildColor:q.heart?palette.heartColor:(colors[q.color]?.hex||"#ffffff");
-    const rgb=pastelHexRGB(base);rect(x,y,cell,cell,...rgb);
-    if(q.heart&&!q.owner){const dark=game.palette==="haunted_harvest"||game.palette==="strawberry_galaxy";const hr=pastelHexRGB(palette.heartColor);circle(x+cell*.38,y+cell*.42,Math.max(5,cell*.18),255,255,255);circle(x+cell*.62,y+cell*.42,Math.max(5,cell*.18),255,255,255);for(let yy=Math.floor(y+cell*.42);yy<y+cell*.82;yy++)for(let xx=Math.floor(x+cell*.25);xx<x+cell*.75;xx++){const dx=Math.abs(xx-(x+cell/2))/(cell*.25),dy=(yy-(y+cell*.48))/(cell*.34);if(dx+Math.max(0,dy)>1.05)continue;put(xx,yy,hr[0],hr[1],hr[2]);}if(dark)circle(x+cell*.5,y+cell*.5,Math.max(2,cell*.06),255,255,255);}
-    if(q.owner){const border=q.owner==="blackout"?[255,255,255]:[0,0,0];const edges=game.mode==="triangle"?[[r-1,c-1,"t"],[r,c+1,"r"],[r+1,c+1,"b"],[r,c-1,"l"]]:[[r-1,c,"t"],[r,c+1,"r"],[r+1,c,"b"],[r,c-1,"l"]];for(const [rr,cc,side] of edges){if(same(rr,cc,q.owner))continue;if(side==="t")rect(x,y,cell,2,...border);else if(side==="b")rect(x,y+cell-2,cell,2,...border);else if(side==="l")rect(x,y,2,cell,...border);else rect(x+cell-2,y,2,cell,...border);}}
-  }
-  const raw=new Uint8Array(height*(1+width*4));let o=0;for(let y=0;y<height;y++){raw[o++]=0;raw.set(pixels.subarray(y*width*4,(y+1)*width*4),o);o+=width*4;}
-  const compressed= new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer());
-  const ihdr=new Uint8Array(13),dv=new DataView(ihdr.buffer);dv.setUint32(0,width);dv.setUint32(4,height);ihdr[8]=8;ihdr[9]=6;ihdr[10]=0;ihdr[11]=0;ihdr[12]=0;
-  const sig=new Uint8Array([137,80,78,71,13,10,26,10]);const chunks=[pastelPNGChunk("IHDR",ihdr),pastelPNGChunk("IDAT",compressed),pastelPNGChunk("IEND",new Uint8Array())];let total=sig.length+chunks.reduce((n,a)=>n+a.length,0),out=new Uint8Array(total);out.set(sig);let pos=sig.length;for(const ch of chunks){out.set(ch,pos);pos+=ch.length;}return out;
-}
-async function getPastelPublicMessageId(env,game,interaction){
-  if(game?.publicMessageId)return game.publicMessageId;
-  const token=interaction?.token||game?.interactionToken;
-  if(!token)return "";
-  try{
-    const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`);
-    if(!response.ok)return "";
-    const data=await response.json();
-    if(data?.id){game.publicMessageId=data.id;return data.id;}
-  }catch(error){console.error("Pastel public message lookup failed:",error);}
-  return "";
-}
-
-
-async function pastelPublicUpdate(env,interaction,content,components=[],game=null){
-  /* Color Chaos stores its public message as publicMessageId.
-     Do NOT use islandPublicUpdate here; that helper belongs to Chaos Island
-     and looks for game.messageId. */
-  if(game?.channelId){
-    let messageId=game.publicMessageId||"";
-    if(!messageId) messageId=await getPastelPublicMessageId(env,game,interaction);
-    if(messageId){
-      const response=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{
-        method:"PATCH",
-        body:JSON.stringify({content,components})
-      });
-      if(response.ok)return response;
-      console.error("Color Chaos public message update failed:",response.status,await response.text());
-      if(response.status===404){
-        try{
-          const created=await sendChannelMessage(env,game.channelId,content,components);
-          if(created?.id){
-            game.publicMessageId=created.id;
-            await pastelSave(env,game);
-            return new Response(null,{status:200});
-          }
-        }catch(error){console.error("Color Chaos public message recreation failed:",error);}
-      }
-      return response;
+    const cellData=game.board[r][c];
+    const rowOffset=mode==="triangle"?Math.floor((maxCols-(game.board[r]?.length||0))/2):0;
+    const x=ox+(c+rowOffset)*cell,y=oy+r*cell;
+    let fill=hexRgb(colors[cellData.color]?.hex||"#ffffff");
+    if(cellData.owner==="blackout")fill=[32,32,32];else if(cellData.wild)fill=hexRgb(pastelPalette(game).wildColor);else if(cellData.heart)fill=hexRgb(pastelPalette(game).heartColor);
+    boardFill(frame,x,y,cell,cell,fill[0],fill[1],fill[2],255);
+    if(cellData.heart&&!cellData.owner){
+      const isHaunted=game.palette==="haunted_harvest";
+      boardCircle(frame,x+cell/2,y+cell/2,Math.max(7,cell*0.38),isHaunted?[143,61,24]:[255,63,159],true);
+      boardCircle(frame,x+cell/2,y+cell/2,Math.max(9,cell*0.45),[255,243,166],false);
+    }
+    const owner=cellData.owner;if(!owner)continue;
+    const border=owner==="blackout"?[255,255,255]:[0,0,0];
+    const neighbors=mode==="triangle"?[[r-1,c-1,"top"],[r,c+1,"right"],[r+1,c+1,"bottom"],[r,c-1,"left"]]:[[r-1,c,"top"],[r,c+1,"right"],[r+1,c,"bottom"],[r,c-1,"left"]];
+    for(const [rr,cc,side] of neighbors){
+      if(sameOwner(rr,cc,owner))continue;
+      let x1=x,y1=y,x2=x+cell,y2=y+cell;
+      if(side==="top"){x2=x+cell;y2=y;}else if(side==="right"){x1=x+cell;y1=y;x2=x+cell;y2=y+cell;}else if(side==="bottom"){x1=x;y1=y+cell;x2=x+cell;y2=y+cell;}else{x1=x;y1=y;x2=x;y2=y+cell;}
+      const key=[Math.min(x1,x2),Math.min(y1,y2),Math.max(x1,x2),Math.max(y1,y2),border.join(",")].join(":");if(edgeSeen.has(key))continue;edgeSeen.add(key);boardLine(frame,x1,y1,x2,y2,border[0],border[1],border[2],255,3);
     }
   }
-  if(interaction?.type===3&&!interaction.__deferred&&!interaction.__acknowledged)
-    await acknowledge(env,interaction);
-  const response=await editOriginalResponse(env,interaction,{content,components});
-  if(!response.ok)console.error("Color Chaos fallback public update failed:",response.status,await response.text());
-  return response;
+  return rgbaToRgbPng(frame);
 }
 
-async function sendPastelBoard(env,interaction,game,forceNew=false){
+async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
@@ -19359,6 +18995,7 @@ async function sendPastelBoard(env,interaction,game,forceNew=false){
      channel-message edits/uploads. The old raw fetch had no Bot Authorization,
      so the 4th-player transition could fail exactly when the lobby became a game.
   */
+  const forceNew=interaction?.__pastelForceNew===true;
   const messageId=forceNew?"":await getPastelPublicMessageId(env,game,interaction);
   if(messageId&&game.channelId){
     const direct=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
@@ -19430,41 +19067,32 @@ async function handlePastelStart(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   const active=state.pastel;
   if(active&&active.status!=="ended"){
-    return sendText(env,interaction,`🌈 **COLOR CHAOS GAME ALREADY ACTIVE**\n\nA Color Chaos game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Color Palette",`pastel:palette:menu:${active.id}`,2))]);
+    return sendText(env,interaction,`🌈 **COLOR CHAOS GAME ALREADY ACTIVE**\n\nA Color Chaos game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Palette",`pastel:palette:menu:${active.id}`,2))]);
   }
   const selected=state.colorChaosPalette||"pastel_dreams";
   await sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));
 }
 async function handlePastelPalette(env,interaction,palette,gameId=""){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);
-  const active=state?.pastel;
-
-  /* Palette controls attached to an existing lobby/game are host-only. */
+  const state=await getGuildState(env,interaction.guild_id),active=state?.pastel;
   if(gameId){
     if(!active||active.id!==gameId)return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game no longer exists.");
     const user=getUserFromInteraction(interaction);
     if(!user||user.id!==active.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can change the palette.");
     if(active.status!=="lobby")return sendEphemeralFollowup(env,interaction,"❌ The Color Chaos palette can only be changed before the game starts.");
   }
-
   if(palette==="menu"){
     const selected=gameId?(active?.palette||"pastel_dreams"):(state?.colorChaosPalette||"pastel_dreams");
     return sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\nChoose your palette!`,colorChaosPaletteComponents(selected,gameId));
   }
   if(palette==="back"){
     const selected=gameId?(active?.palette||"pastel_dreams"):(state?.colorChaosPalette||"pastel_dreams");
-    if(gameId)return sendText(env,interaction,`${pastelLobbyText(active)}`,pastelLobbyComponents(active));
+    if(gameId)return sendText(env,interaction,pastelLobbyText(active),pastelLobbyComponents(active));
     return sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));
   }
   if(!COLOR_CHAOS_PALETTES[palette])return sendEphemeralFollowup(env,interaction,"❌ That palette does not exist.");
-  if(gameId){
-    active.palette=palette;
-    await pastelSave(env,active);
-    return sendText(env,interaction,`${pastelLobbyText(active)}`,pastelLobbyComponents(active));
-  }
-  state.colorChaosPalette=palette;
-  await saveGuildState(env,interaction.guild_id,state);
+  if(gameId){active.palette=palette;await pastelSave(env,active);return sendText(env,interaction,pastelLobbyText(active),pastelLobbyComponents(active));}
+  state.colorChaosPalette=palette;await saveGuildState(env,interaction.guild_id,state);
   await sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\n${COLOR_CHAOS_PALETTES[palette].icon} **${COLOR_CHAOS_PALETTES[palette].name}** selected!\n\nChoose your game mode!`,pastelModeComponents(palette));
 }
 async function handlePastelRefresh(env,interaction,gameId){
@@ -19482,29 +19110,21 @@ async function handlePastelRefresh(env,interaction,gameId){
 
 async function handlePastelResume(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  /* Acknowledge immediately so Browser Rendering cannot make the button expire. */
-  if(interaction.type===3&&!interaction.__deferred&&!interaction.__acknowledged)
-    await acknowledge(env,interaction);
-  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
+  if(interaction.type===3&&!interaction.__deferred&&!interaction.__acknowledged)await acknowledge(env,interaction);
+  const state=await getGuildState(env,interaction.guild_id),game=state.pastel,user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
-  const user=getUserFromInteraction(interaction);
   if(!user||user.id!==game.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can restore the game.");
   if(game.status==="lobby"){
-    if(game.channelId){
-      const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:JSON.stringify({content:pastelLobbyText(game),components:pastelLobbyComponents(game)})});
-      if(created.ok){const data=await created.json();if(data?.id){game.publicMessageId=data.id;await pastelSave(env,game);return;}}
-      console.error("Color Chaos lobby restore message failed:",created.status,await created.text());
-    }
-    await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
-    return;
+    const created=await sendChannelMessage(env,game.channelId,pastelLobbyText(game),pastelLobbyComponents(game));
+    if(created?.ok){try{const data=await created.clone().json();if(data?.id){game.publicMessageId=data.id;await pastelSave(env,game);}}catch{}return;}
+    return sendEphemeralFollowup(env,interaction,"⚠️ I couldn't create the restored Color Chaos lobby message yet. Please try Restore again.");
   }
-  try{await sendPastelBoard(env,interaction,game);}catch(error){
-    await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n⚠️ The board could not render, but the saved game is still active.`,pastelChoiceComponents(game),game);
-  }
+  try{game.publicMessageId="";await sendPastelBoard(env,{...interaction,__pastelForceNew:true},game);await pastelSave(env,game);}catch(error){await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n⚠️ The board could not render, but the saved game is still active.`,pastelChoiceComponents(game),game);}
 }
 async function handlePastelMode(env,interaction,mode){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Color Chaos game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));await getPastelPublicMessageId(env,game,interaction);await pastelSave(env,game);}
 async function pastelStartGame(env,game,interaction){
   const players=pastelStartingPlayers(game);
+  game.publicMessageId="";
   /* Build the new game in memory first. Do not persist PLAYING until the public
      board has successfully been posted/updated. This prevents a failed 4th-player
      transition from leaving a hidden active game behind the vanished lobby. */
@@ -19518,12 +19138,11 @@ async function pastelStartGame(env,game,interaction){
   }
   game.statsRecorded=true;
   try{
-    const boardResponse=await sendPastelBoard(env,interaction,game,true);
+    const boardResponse=await sendPastelBoard(env,{...interaction,__pastelForceNew:true},game);
     if(!boardResponse?.ok)throw new Error(`Public Color Chaos board update failed: ${boardResponse?.status||"unknown"}`);
     await pastelSave(env,game);
     await sendPastelTurnMessage(env,game,game.turnId);
   }catch(error){
-    console.error("Color Chaos start/render failure:",error?.stack||error?.message||error);
     /* Restore the lobby state instead of leaving a phantom PLAYING game. */
     game.status="lobby";game.round=0;game.board=null;game.turnId=game.hostId;game.turnStartedAt=Date.now();game.lastRefresh="";
     await pastelSave(env,game);
