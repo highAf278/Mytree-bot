@@ -18862,12 +18862,12 @@ function pastelChoiceComponents(game){
   return rows;
 }
 function pastelLobbyComponents(game){
-  /* Lobby controls: everyone may Join or open How to Play. Cancel is host-only
-     and is also enforced in handlePastelCancel so the restriction cannot be
-     bypassed by manually invoking the component custom ID. */
+  /* Join + How to Play are public. Palette + Cancel are host-only and are
+     enforced again in their handlers so the component IDs cannot be abused. */
   return [
     row(
       button("💗 Join Game",`pastel:join:${game.id}`,1),
+      button("🎨 Palette",`pastel:palette:menu:${game.id}`,2),
       button("🚪 Cancel",`pastel:cancel:${game.id}`,4)
     ),
     row(button("📖 How to Play","pastel:rules:menu",2))
@@ -18953,6 +18953,50 @@ async function pastelSave(env,game){
   state.pastel=game;
   await saveGuildState(env,game.guildId,state);
   return true;
+}
+function pastelHexRGB(hex){
+  const h=String(hex||"#ffffff").replace("#","");
+  const n=parseInt(h.length===3?h.split("").map(x=>x+x).join(""):h,16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function pastelCRC32(bytes){
+  let c=0xffffffff;
+  for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xedb88320:0);}
+  return (c^0xffffffff)>>>0;
+}
+function pastelPNGChunk(type,data){
+  const t=new TextEncoder().encode(type),all=new Uint8Array(t.length+data.length);all.set(t);all.set(data,t.length);
+  const out=new Uint8Array(12+data.length);const dv=new DataView(out.buffer);dv.setUint32(0,data.length);out.set(all,4);dv.setUint32(8+data.length,pastelCRC32(all));return out;
+}
+async function renderPastelBoard(env,game){
+  /* Pure Worker PNG renderer. Color Chaos boards are flat cells, so there is no
+     reason to spend Browser Rendering time just to rasterize an SVG. This also
+     keeps board generation working when Browser Rendering is busy/rate-limited. */
+  const cell=game.mode==="triangle"?20:game.mode==="star"?22:32;
+  const rows=game.board?.length||1;
+  const cols=Math.max(1,...(game.board||[]).map(r=>r?.length||0));
+  const width=Math.max(1,game.mode==="triangle"?39*cell:cols*cell);
+  const height=Math.max(1,rows*cell);
+  const bg=pastelHexRGB(pastelPalette(game).boardColor);
+  const pixels=new Uint8Array(width*height*4);
+  for(let i=0;i<width*height;i++){pixels[i*4]=bg[0];pixels[i*4+1]=bg[1];pixels[i*4+2]=bg[2];pixels[i*4+3]=255;}
+  const put=(x,y,r,g,b)=>{if(x<0||y<0||x>=width||y>=height)return;const i=(y*width+x)*4;pixels[i]=r;pixels[i+1]=g;pixels[i+2]=b;pixels[i+3]=255;};
+  const rect=(x,y,w,h,r,g,b)=>{const x0=Math.max(0,x),y0=Math.max(0,y),x1=Math.min(width,x+w),y1=Math.min(height,y+h);for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++)put(xx,yy,r,g,b);};
+  const circle=(cx,cy,rad,r,g,b)=>{const rr=rad*rad;for(let y=Math.floor(cy-rad);y<=Math.ceil(cy+rad);y++)for(let x=Math.floor(cx-rad);x<=Math.ceil(cx+rad);x++)if((x-cx)*(x-cx)+(y-cy)*(y-cy)<=rr)put(x,y,r,g,b);};
+  const colors=pastelColors(game), palette=pastelPalette(game);
+  const same=(r,c,o)=>!!game.board?.[r]?.[c]&&game.board[r][c].owner===o;
+  for(let r=0;r<rows;r++)for(let c=0;c<(game.board[r]?.length||0);c++){
+    const q=game.board[r][c]; if(!q)continue;
+    const x=game.mode==="triangle"?(19-r+c)*cell:c*cell,y=r*cell;
+    const base=q.blocked?palette.boardColor:q.owner==="blackout"?"#202020":q.wild?palette.wildColor:q.heart?palette.heartColor:(colors[q.color]?.hex||"#ffffff");
+    const rgb=pastelHexRGB(base);rect(x,y,cell,cell,...rgb);
+    if(q.heart&&!q.owner){const dark=game.palette==="haunted_harvest"||game.palette==="strawberry_galaxy";const hr=pastelHexRGB(palette.heartColor);circle(x+cell*.38,y+cell*.42,Math.max(5,cell*.18),255,255,255);circle(x+cell*.62,y+cell*.42,Math.max(5,cell*.18),255,255,255);for(let yy=Math.floor(y+cell*.42);yy<y+cell*.82;yy++)for(let xx=Math.floor(x+cell*.25);xx<x+cell*.75;xx++){const dx=Math.abs(xx-(x+cell/2))/(cell*.25),dy=(yy-(y+cell*.48))/(cell*.34);if(dx+Math.max(0,dy)>1.05)continue;put(xx,yy,hr[0],hr[1],hr[2]);}if(dark)circle(x+cell*.5,y+cell*.5,Math.max(2,cell*.06),255,255,255);}
+    if(q.owner){const border=q.owner==="blackout"?[255,255,255]:[0,0,0];const edges=game.mode==="triangle"?[[r-1,c-1,"t"],[r,c+1,"r"],[r+1,c+1,"b"],[r,c-1,"l"]]:[[r-1,c,"t"],[r,c+1,"r"],[r+1,c,"b"],[r,c-1,"l"]];for(const [rr,cc,side] of edges){if(same(rr,cc,q.owner))continue;if(side==="t")rect(x,y,cell,2,...border);else if(side==="b")rect(x,y+cell-2,cell,2,...border);else if(side==="l")rect(x,y,2,cell,...border);else rect(x+cell-2,y,2,cell,...border);}}
+  }
+  const raw=new Uint8Array(height*(1+width*4));let o=0;for(let y=0;y<height;y++){raw[o++]=0;raw.set(pixels.subarray(y*width*4,(y+1)*width*4),o);o+=width*4;}
+  const compressed= new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer());
+  const ihdr=new Uint8Array(13),dv=new DataView(ihdr.buffer);dv.setUint32(0,width);dv.setUint32(4,height);ihdr[8]=8;ihdr[9]=6;ihdr[10]=0;ihdr[11]=0;ihdr[12]=0;
+  const sig=new Uint8Array([137,80,78,71,13,10,26,10]);const chunks=[pastelPNGChunk("IHDR",ihdr),pastelPNGChunk("IDAT",compressed),pastelPNGChunk("IEND",new Uint8Array())];let total=sig.length+chunks.reduce((n,a)=>n+a.length,0),out=new Uint8Array(total);out.set(sig);let pos=sig.length;for(const ch of chunks){out.set(ch,pos);pos+=ch.length;}return out;
 }
 async function renderPastelBoard(env,game){
   let browser;
@@ -19074,7 +19118,7 @@ async function pastelPublicUpdate(env,interaction,content,components=[],game=nul
   return response;
 }
 
-async function sendPastelBoard(env,interaction,game){
+async function sendPastelBoard(env,interaction,game,forceNew=false){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
@@ -19087,7 +19131,7 @@ async function sendPastelBoard(env,interaction,game){
      channel-message edits/uploads. The old raw fetch had no Bot Authorization,
      so the 4th-player transition could fail exactly when the lobby became a game.
   */
-  const messageId=await getPastelPublicMessageId(env,game,interaction);
+  const messageId=forceNew?"":await getPastelPublicMessageId(env,game,interaction);
   if(messageId&&game.channelId){
     const direct=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
     if(direct.ok)return direct;
@@ -19194,6 +19238,11 @@ async function handlePastelResume(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
   if(game.status==="lobby"){
+    if(game.channelId){
+      const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:JSON.stringify({content:pastelLobbyText(game),components:pastelLobbyComponents(game)})});
+      if(created.ok){const data=await created.json();if(data?.id){game.publicMessageId=data.id;await pastelSave(env,game);return;}}
+      console.error("Color Chaos lobby restore message failed:",created.status,await created.text());
+    }
     await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
     return;
   }
@@ -19217,7 +19266,7 @@ async function pastelStartGame(env,game,interaction){
   }
   game.statsRecorded=true;
   try{
-    const boardResponse=await sendPastelBoard(env,interaction,game);
+    const boardResponse=await sendPastelBoard(env,interaction,game,true);
     if(!boardResponse?.ok)throw new Error(`Public Color Chaos board update failed: ${boardResponse?.status||"unknown"}`);
     await pastelSave(env,game);
     await sendPastelTurnMessage(env,game,game.turnId);
