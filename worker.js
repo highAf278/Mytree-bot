@@ -19073,21 +19073,51 @@ async function sendPastelBoard(env,interaction,game){
   const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
   const makeForm=()=>{const form=new FormData();form.append("payload_json",JSON.stringify(payload));form.append("files[0]",new Blob([image],{type:"image/png"}),"color-chaos.png");return form;};
 
-  // Once we know the actual public message ID, update that message directly.
-  // This avoids relying on an interaction webhook token that can expire and
-  // prevents the Color Chaos board from temporarily disappearing after longer games.
+  /*
+     IMPORTANT: Color Chaos public messages belong to the bot, not to the
+     interaction webhook. Always use the authenticated bot request helper for
+     channel-message edits/uploads. The old raw fetch had no Bot Authorization,
+     so the 4th-player transition could fail exactly when the lobby became a game.
+  */
   const messageId=await getPastelPublicMessageId(env,game,interaction);
   if(messageId&&game.channelId){
-    const direct=await fetch(`https://discord.com/api/v10/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
+    const direct=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
     if(direct.ok)return direct;
-    console.error("Pastel direct board update failed:",direct.status,await direct.text());
+    const status=direct.status;const detail=await direct.text();
+    console.error("Pastel authenticated board update failed:",status,detail);
+
+    /* If the old public message is gone, create a fresh bot-owned board message. */
+    if(status===404){
+      const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:makeForm()});
+      if(created.ok){
+        const data=await created.json();
+        if(data?.id){
+          game.publicMessageId=data.id;
+          return created;
+        }
+      }else{
+        console.error("Pastel board recreation failed:",created.status,await created.text());
+      }
+    }
   }
 
+  /* No known channel message: create one directly with the bot token. */
+  if(game.channelId){
+    const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:makeForm()});
+    if(created.ok){
+      const data=await created.json();
+      if(data?.id){game.publicMessageId=data.id;return created;}
+    }else{
+      console.error("Pastel new board message failed:",created.status,await created.text());
+    }
+  }
+
+  /* Last-resort interaction webhook fallback for unusual Discord/API failures. */
   const token=interaction?.token||game.interactionToken;
   if(!token)throw new Error("Color Chaos public message could not be located.");
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",body:makeForm()});
   if(!response.ok){
-    console.error("Pastel board update failed:",response.status,await response.text());
+    console.error("Pastel interaction board update failed:",response.status,await response.text());
     const fallback=await editOriginalResponse(env,{...interaction,token},{content:`${pastelGameText(game)}\n\n⚠️ The board image could not refresh, but the game controls are still active below.`,components});
     if(!fallback.ok)console.error("Pastel board fallback failed:",fallback.status,await fallback.text());
   }
@@ -19164,11 +19194,34 @@ async function handlePastelResume(env,interaction,gameId){
   }
 }
 async function handlePastelMode(env,interaction,mode){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Color Chaos game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));await getPastelPublicMessageId(env,game,interaction);await pastelSave(env,game);}
-async function pastelStartGame(env,game,interaction){const players=pastelStartingPlayers(game);game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players,game.palette);
-  /* Defensive guarantee: every fresh board has at least 2 visible Power Cells. */
+async function pastelStartGame(env,game,interaction){
+  const players=pastelStartingPlayers(game);
+  /* Build the new game in memory first. Do not persist PLAYING until the public
+     board has successfully been posted/updated. This prevents a failed 4th-player
+     transition from leaving a hidden active game behind the vanished lobby. */
+  game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players,game.palette);
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
-  game.turnsSinceRefresh=0;game.lastRefresh="";for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}game.statsRecorded=true;await pastelSave(env,game);try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ Board image couldn't render: ${error?.message||"Unknown error"}`,components:pastelChoiceComponents(game)});}}
+  game.turnsSinceRefresh=0;game.lastRefresh="";
+  for(const p of players){
+    p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);
+    if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}
+  }
+  game.statsRecorded=true;
+  try{
+    const boardResponse=await sendPastelBoard(env,interaction,game);
+    if(!boardResponse?.ok)throw new Error(`Public Color Chaos board update failed: ${boardResponse?.status||"unknown"}`);
+    await pastelSave(env,game);
+    await sendPastelTurnMessage(env,game,game.turnId);
+  }catch(error){
+    /* Restore the lobby state instead of leaving a phantom PLAYING game. */
+    game.status="lobby";game.round=0;game.board=null;game.turnId=game.hostId;game.turnStartedAt=Date.now();game.lastRefresh="";
+    await pastelSave(env,game);
+    const msg=`${pastelLobbyText(game)}\n\n⚠️ **The game board could not start yet.** The lobby is still safe — press Join Game again after the bot finishes recovering.`;
+    const response=await pastelPublicUpdate(env,interaction,msg,pastelLobbyComponents(game),game);
+    if(!response?.ok)console.error("Color Chaos lobby recovery failed:",response?.status);
+  }
+}
 async function handlePastelJoin(env,interaction,gameId){
   if(await checkGamePunishment(env,interaction))return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
