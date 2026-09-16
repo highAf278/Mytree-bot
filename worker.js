@@ -6859,90 +6859,109 @@ async function renderBirthdayCake(env,name,choices){
       "Pumpkin Spice Cake":"#d97732","Cherry Night Cake":"#54213e"
     }[flavor]||"#33213b";
 
-    const shapeClass={
-      Round:"round",Heart:"heart",Pumpkin:"pumpkin",Moon:"moon",Bat:"bat"
-    }[shape]||"round";
+    const shapeData={
+      Round:{
+        path:"M60 70 Q60 35 95 35 H425 Q460 35 460 70 V255 Q460 295 420 295 H100 Q60 295 60 255 Z",
+        label:"🎂"
+      },
+      Heart:{
+        path:"M260 305 C235 280 70 190 70 100 C70 30 155 15 205 65 L260 120 L315 65 C365 15 450 30 450 100 C450 190 285 280 260 305 Z",
+        label:"🖤"
+      },
+      Pumpkin:{
+        path:"M70 95 C70 50 150 25 260 30 C370 25 450 50 450 95 V240 C450 285 370 305 260 300 C150 305 70 285 70 240 Z",
+        label:"🎃"
+      },
+      Moon:{
+        path:"M330 30 C205 28 100 105 100 190 C100 275 190 320 275 300 C215 270 185 220 198 165 C213 100 270 55 330 30 Z",
+        label:"🌙"
+      },
+      Bat:{
+        path:"M45 105 L120 58 L175 92 L260 45 L345 92 L400 58 L475 105 L430 175 L365 148 L320 238 L260 190 L200 238 L155 148 L90 175 Z",
+        label:"🦇"
+      }
+    }[shape]||{
+      path:"M60 70 Q60 35 95 35 H425 Q460 35 460 70 V255 Q460 295 420 295 H100 Q60 295 60 255 Z",
+      label:"🎂"
+    };
 
     const toppingHTML =
-      topping==="Bat Topper" ? `<div class="bat">🦇</div>` :
-      topping==="Ghost Marshmallow" ? `<div class="ghost">👻</div>` :
-      topping==="Mini Pumpkin" ? `<div class="pumpkin">🎃</div>` :
-      topping==="Pink Bow" ? `<div class="bow">🎀</div>` :
-      `<div class="candle">🕯️</div>`;
+      topping==="Bat Topper" ? `<text class="emoji" x="260" y="70" transform="scale(1.2)">🦇</text>` :
+      topping==="Ghost Marshmallow" ? `<text class="emoji" x="260" y="70" transform="scale(1.2)">👻</text>` :
+      topping==="Mini Pumpkin" ? `<text class="emoji" x="260" y="70" transform="scale(1.15)">🎃</text>` :
+      topping==="Pink Bow" ? `<text class="emoji" x="260" y="70" transform="scale(1.15)">🎀</text>` :
+      `<text class="emoji" x="260" y="70" transform="scale(1.15)">🕯️</text>`;
 
     const decorHTML =
-      decor==="Black Sprinkles" ? `<div class="sprinkles dark"></div>` :
-      decor==="Pumpkin Decorations" ? `<div class="decor">🎃　🎃　🎃</div>` :
-      decor==="Spiderweb Caramel" ? `<div class="decor">🕸️　🕸️　🕸️</div>` :
-      decor==="Midnight Roses" ? `<div class="decor">🌹　🌹　🌹</div>` :
-      `<div class="glitter">✦　✧　✦　✧　✦</div>`;
+      decor==="Black Sprinkles" ? `<g fill="#17121d">${Array.from({length:18},(_,i)=>`<rect x="${105+(i%6)*58}" y="${145+Math.floor(i/6)*38}" width="7" height="22" rx="3" transform="rotate(${(i%2?25:-25)} ${105+(i%6)*58} ${145+Math.floor(i/6)*38})"/>`).join("")}</g>` :
+      decor==="Pumpkin Decorations" ? `<g class="emoji small"><text x="115" y="225">🎃</text><text x="240" y="255">🎃</text><text x="365" y="225">🎃</text></g>` :
+      decor==="Spiderweb Caramel" ? `<g fill="none" stroke="#e8b27a" stroke-width="5" opacity=".95"><path d="M105 110 Q260 185 415 110"/><path d="M120 145 Q260 205 400 145"/><path d="M145 175 Q260 220 375 175"/></g>` :
+      decor==="Midnight Roses" ? `<g class="emoji small"><text x="115" y="215">🌹</text><text x="240" y="245">🌹</text><text x="365" y="215">🌹</text></g>` :
+      `<g fill="#fff4a8"><circle cx="120" cy="205" r="5"/><circle cx="155" cy="235" r="4"/><circle cx="205" cy="210" r="5"/><circle cx="315" cy="220" r="5"/><circle cx="365" cy="205" r="4"/><circle cx="405" cy="235" r="5"/></g>`;
 
     const specialHTML =
-      special==="Moonlight Glow" ? `<div class="aura moonAura">☾ ✦ ☾</div>` :
-      special==="Bat Swirl" ? `<div class="aura">🦇　🦇　🦇</div>` :
-      special==="Ghost Mist" ? `<div class="aura mist">◌　◌　◌</div>` :
-      special==="Pumpkin Smoke" ? `<div class="aura">〰️　🎃　〰️</div>` :
-      `<div class="aura">✦　✨　✦</div>`;
+      special==="Moonlight Glow" ? `<g class="effect moon"><circle cx="430" cy="75" r="42" fill="#cbd8ff" opacity=".16"/><text x="410" y="92">🌙</text></g>` :
+      special==="Bat Swirl" ? `<g class="effect"><text x="75" y="105">🦇</text><text x="410" y="125">🦇</text><text x="90" y="290">🦇</text><text x="390" y="290">🦇</text></g>` :
+      special==="Ghost Mist" ? `<g fill="#f4eefb" opacity=".25"><circle cx="90" cy="180" r="35"/><circle cx="410" cy="190" r="42"/><circle cx="125" cy="300" r="28"/><circle cx="375" cy="300" r="30"/></g>` :
+      special==="Pumpkin Smoke" ? `<g class="effect"><text x="60" y="75">〰️</text><text x="415" y="75">〰️</text><text x="70" y="315">🎃</text><text x="405" y="315">🎃</text></g>` :
+      `<g fill="#fff6b8"><circle cx="70" cy="75" r="5"/><circle cx="440" cy="90" r="6"/><circle cx="80" cy="300" r="5"/><circle cx="430" cy="300" r="5"/><path d="M260 10 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z"/></g>`;
 
-    const shapeDecoration = shapeClass==="moon" ? "☾" : shapeClass==="bat" ? "🦇" : "";
+    const pumpkinGrooves = shape==="Pumpkin" ? `<g fill="none" stroke="rgba(70,30,15,.28)" stroke-width="9" clip-path="url(#cakeClip)"><path d="M130 35 Q105 160 145 300"/><path d="M200 30 Q175 160 205 300"/><path d="M320 30 Q345 160 315 300"/><path d="M390 35 Q415 160 375 300"/></g>` : "";
 
     const html=`<!doctype html><html><head><meta charset="UTF-8"><style>
       *{box-sizing:border-box}
-      body{margin:0;width:1000px;height:760px;background:radial-gradient(circle at 50% 28%,#4b2858,#170d21 72%);font-family:Arial,Helvetica,sans-serif;color:#fff;overflow:hidden}
-      .title{text-align:center;font-size:38px;font-weight:900;padding-top:25px;text-shadow:0 3px 10px #000}
-      .sub{text-align:center;font-size:23px;margin-top:5px;color:#f9d9f0}
-      .stage{position:relative;width:760px;height:560px;margin:15px auto 0}
-      .plate{position:absolute;left:90px;right:90px;bottom:25px;height:55px;background:#4b294d;border-radius:50%;box-shadow:0 12px 25px #000}
-      .cake{position:absolute;left:190px;top:150px;width:380px;height:245px}
-      .layer{position:absolute;left:0;right:0;height:105px;border-radius:22px;background:${cakeColor};border:6px solid rgba(255,255,255,.15);box-shadow:0 15px 20px rgba(0,0,0,.35)}
-      .topLayer{top:55px}.bottomLayer{top:140px}
-      .filling{position:absolute;left:12px;right:12px;top:143px;height:28px;background:${fillingColor};border-radius:12px;box-shadow:inset 0 4px 7px rgba(0,0,0,.25)}
-      .frost{position:absolute;left:-12px;right:-12px;top:38px;height:75px;background:${frostingColor};border-radius:28px 28px 18px 18px;box-shadow:0 7px 12px rgba(0,0,0,.25)}
-      .drip{position:absolute;top:87px;width:35px;height:45px;background:${frostingColor};border-radius:0 0 20px 20px}
-      .d1{left:35px}.d2{left:145px;height:58px}.d3{right:60px;height:38px}
-      .heart{border-radius:0;transform:rotate(-45deg);background:${cakeColor}}
-      .heart:before,.heart:after{content:"";position:absolute;width:190px;height:190px;background:${cakeColor};border-radius:50%}.heart:before{top:-95px;left:0}.heart:after{left:95px;top:0}
-      .pumpkin{font-size:70px;text-align:center;position:absolute;top:-55px;left:150px;z-index:8;transform:none}
-      .moon{background:transparent!important;border:none!important;box-shadow:none!important}
-      .bat{position:absolute;top:-78px;left:140px;font-size:75px;z-index:8}
-      .candle{position:absolute;top:-110px;left:165px;font-size:72px;z-index:8}
-      .ghost{position:absolute;top:-78px;left:155px;font-size:70px;z-index:8}
-      .bow{position:absolute;top:-75px;left:155px;font-size:70px;z-index:8}
-      .decor{position:absolute;top:160px;left:0;right:0;text-align:center;font-size:28px;z-index:9}
-      .glitter{position:absolute;top:160px;left:0;right:0;text-align:center;font-size:30px;color:#fff3a8;z-index:9}
-      .sprinkles{position:absolute;top:62px;left:15px;right:15px;height:85px;background:repeating-linear-gradient(115deg,transparent 0 16px,#fff 17px 20px,transparent 21px 34px);z-index:10;opacity:.8}
-      .aura{position:absolute;top:95px;left:0;right:0;text-align:center;font-size:27px;color:#ffd6ff;z-index:11;text-shadow:0 0 14px #ff9eea}
-      .moonAura{color:#c9d8ff}
-      .mist{opacity:.55}
-      .plaque{position:absolute;left:155px;right:155px;bottom:-5px;background:#25152d;border:2px solid #8f5b83;border-radius:18px;text-align:center;padding:10px;font-size:17px}
-      .design{position:absolute;left:40px;right:40px;bottom:45px;text-align:center;font-size:16px;color:#f6dff1}
-      .shapeMark{position:absolute;top:77px;left:0;right:0;text-align:center;font-size:36px;z-index:12}
-      .${shapeClass}{}
+      html,body{margin:0;width:1000px;height:760px;overflow:hidden}
+      body{background:radial-gradient(circle at 50% 28%,#552d64 0,#24122f 48%,#100a17 100%);font-family:Arial,Helvetica,sans-serif;color:#fff}
+      .title{text-align:center;font-size:38px;font-weight:900;padding-top:24px;text-shadow:0 4px 14px #000}
+      .sub{text-align:center;font-size:22px;margin-top:6px;color:#f9d9f0}
+      .stage{position:relative;width:820px;height:610px;margin:8px auto 0}
+      .halo{position:absolute;left:170px;top:45px;width:480px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(255,135,215,.18),transparent 68%);filter:blur(4px)}
+      .plate{position:absolute;left:110px;right:110px;bottom:102px;height:60px;border-radius:50%;background:linear-gradient(#704b72,#321e3c);box-shadow:0 18px 30px rgba(0,0,0,.6),inset 0 3px 7px rgba(255,255,255,.18)}
+      .cakeSvg{position:absolute;left:150px;top:55px;width:520px;height:330px;filter:drop-shadow(0 18px 18px rgba(0,0,0,.55))}
+      .emoji{font-size:54px;text-anchor:middle}
+      .small{font-size:32px;text-anchor:middle}
+      .effect{font-size:34px}
+      .label{position:absolute;left:70px;right:70px;bottom:45px;text-align:center;background:rgba(25,12,32,.88);border:2px solid #9c6697;border-radius:18px;padding:11px 16px;font-size:16px;color:#f7e3f4}
+      .name{font-weight:800;color:#fff}
+      .design{position:absolute;left:30px;right:30px;bottom:4px;text-align:center;font-size:14px;color:#e8cfe5;white-space:nowrap}
     </style></head><body>
       <div class="title">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div>
       <div class="sub">A custom birthday cake for <b>${escapeHTML(name)}</b></div>
       <div class="stage">
+        <div class="halo"></div>
         <div class="plate"></div>
-        <div class="cake ${shapeClass}">
-          <div class="layer bottomLayer"></div>
-          <div class="filling"></div>
-          <div class="layer topLayer"></div>
-          <div class="frost"></div><div class="drip d1"></div><div class="drip d2"></div><div class="drip d3"></div>
-          ${toppingHTML}${decorHTML}${specialHTML}
-          ${shapeDecoration?`<div class="shapeMark">${shapeDecoration}</div>`:""}
-        </div>
-        <div class="plaque">🎂 Made for ${escapeHTML(name)} • ${escapeHTML(shape)} Cake</div>
+        <svg class="cakeSvg" viewBox="0 0 520 330" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <clipPath id="cakeClip"><path d="${shapeData.path}"/></clipPath>
+            <linearGradient id="cakeShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset=".45" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".20"/></linearGradient>
+            <linearGradient id="frostShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".28"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".12"/></linearGradient>
+          </defs>
+          ${specialHTML}
+          <g clip-path="url(#cakeClip)">
+            <rect x="40" y="20" width="440" height="300" rx="25" fill="${cakeColor}"/>
+            <rect x="40" y="155" width="440" height="42" fill="${fillingColor}"/>
+            <rect x="40" y="50" width="440" height="120" fill="${frostingColor}"/>
+            <rect x="40" y="20" width="440" height="300" fill="url(#cakeShade)"/>
+            <rect x="40" y="50" width="440" height="120" fill="url(#frostShade)"/>
+            <path d="M90 165 C110 205 130 185 150 165 S190 125 210 165 S250 205 270 165 S310 125 330 165 S370 205 390 165 S430 125 450 165" fill="none" stroke="${frostingColor}" stroke-width="20" stroke-linecap="round" opacity=".95"/>
+            ${pumpkinGrooves}
+          </g>
+          <path d="${shapeData.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="7"/>
+          ${decorHTML}
+          ${toppingHTML}
+        </svg>
+        <div class="label">🎂 <span class="name">Made for ${escapeHTML(name)}</span> • ${escapeHTML(shape)} Cake</div>
         <div class="design">${[flavor,frosting,filling,topping,decor,special].map(escapeHTML).join(" • ")}</div>
       </div>
     </body></html>`;
 
-    await page.setContent(html,{waitUntil:"domcontentloaded"});
+    await page.setContent(html,{waitUntil:"domcontentloaded",timeout:10000});
+    await page.evaluate(()=>document.fonts?.ready);
     return await page.screenshot({type:"png"});
   }finally{
     if(browser)await browser.close().catch(()=>{});
   }
 }
-
 const BIRTHDAY_BAKERY_MENUS=[
   {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
   {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
@@ -6986,6 +7005,16 @@ async function birthdayCakeChoice(env,interaction,value){
   }
 
   g.status="finalizing";
+  // A cake render uses the browser and can take longer than Discord's initial
+  // 3-second interaction window. Persist finalizing first, acknowledge the
+  // button immediately, then finish rendering and PATCH the original message.
+  await saveGuildState(env,interaction.guild_id,state);
+  const deferred=await deferInteraction(env,interaction,{update:true});
+  if(!deferred){
+    g.status="choosing";
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,"🦇🎂 The bakery could not start the cake oven. Please press the special-effect button again.",birthdayBakeryChoiceButtons(BIRTHDAY_BAKERY_MENUS[BIRTHDAY_BAKERY_MENUS.length-1]));
+  }
   const p=await getPlayer(env,uid);
   const bakeryReward=randomInt(100,250);
   p.birthdayCandies=(Number(p.birthdayCandies)||0)+bakeryReward;
@@ -6999,8 +7028,19 @@ async function birthdayCakeChoice(env,interaction,value){
   try{bytes=await renderBirthdayCake(env,birthdayName(state),g.choices);}
   catch(error){
     console.error("Birthday cake render failed:",error);
-    g.active=false;g.status="completed";await saveGuildState(env,interaction.guild_id,state);
-    return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n⚠️ The cake image renderer failed, but your cake design and reward were saved.`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
+    g.active=true;
+    g.status="choosing";
+    g.step=BIRTHDAY_BAKERY_MENUS.length-1;
+    g.choices=g.choices.slice(0,BIRTHDAY_BAKERY_MENUS.length-1);
+    await saveGuildState(env,interaction.guild_id,state);
+    const retryContent=`🦇🎂 **The cake oven glitched!**\n\nYour first six design choices are saved. Choose the **special effect** again and we'll retry the cake image.`;
+    const retryResponse=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content:retryContent,components:birthdayBakeryChoiceButtons(BIRTHDAY_BAKERY_MENUS[BIRTHDAY_BAKERY_MENUS.length-1])})
+    });
+    if(!retryResponse.ok)console.error("Birthday cake retry message failed:",retryResponse.status,await retryResponse.text());
+    return retryResponse;
   }
 
   const responseContent=`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake is attached below!**`;
