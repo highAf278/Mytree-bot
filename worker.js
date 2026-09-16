@@ -1017,9 +1017,9 @@ function gifLZW(indices){
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
 
-async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif") {
+async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif", components = []) {
   const form = new FormData();
-  form.append("payload_json", JSON.stringify({ content, attachments: [{ id: 0, filename }] }));
+  form.append("payload_json", JSON.stringify({ content, components, attachments: [{ id: 0, filename }] }));
   form.append("files[0]", new Blob([bytes], { type: contentType }), filename);
   return fetch(
     `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
@@ -5834,7 +5834,7 @@ function birthdayMainText(state, people) {
 function birthdayMenuComponents(active) {
   if (!active) return [];
   return [
-    row(button("🛍️ Midnight Shop", "birthday:shop", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
+    row(button("🛍️ Midnight Shop", "birthday:shop:0", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
     row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1)),
@@ -5911,13 +5911,20 @@ async function showBirthdayShop(env, interaction, page=0) {
 }
 
 async function buyBirthdayItem(env,interaction,itemId){
-  const {people}=await ensureBirthdayEvent(env,interaction.guild_id); if(!people.length)return sendText(env,interaction,"🔒 The Midnight Birthday Shop is closed.");
-  const item=BIRTHDAY_SHOP_ITEMS[itemId]; if(!item)return sendText(env,interaction,"❌ That birthday item does not exist.");
-  const user=getUserFromInteraction(interaction); const p=await getPlayer(env,user.id); if((p.inventory||[]).includes(itemId))return sendText(env,interaction,"🎀 You already own that birthday item!");
-  if(Number(p.birthdayCandies||0)<item.price)return sendText(env,interaction,`❌ You need **${item.price.toLocaleString()} Birthday Candies**.`);
+  const {people}=await ensureBirthdayEvent(env,interaction.guild_id);
+  if(!people.length)return sendText(env,interaction,"🔒 The Midnight Birthday Shop is closed.");
+  const item=BIRTHDAY_SHOP_ITEMS[itemId];
+  if(!item)return sendText(env,interaction,"❌ That birthday item does not exist.");
+  const user=getUserFromInteraction(interaction);
+  const p=await getPlayer(env,user.id);
+  if((p.inventory||[]).includes(itemId))return sendText(env,interaction,`🎀 You already own **${item.name}**!`,birthdayShopComponents(0));
+  if(Number(p.birthdayCandies||0)<item.price)return sendText(env,interaction,`❌ You need **${item.price.toLocaleString()} Birthday Candies**.\n\n🎟️ Current balance: **${Number(p.birthdayCandies||0).toLocaleString()}**`,birthdayShopComponents(0));
   p.birthdayCandies-=item.price;
-  if(item.type==="sparkles") p.sparkles+=item.value; else { p.inventory=p.inventory||[]; p.inventory.push(itemId); }
-  await savePlayer(env,p); await sendText(env,interaction,`🎉 **PURCHASED!**\n\n${item.name}\n🎟️ Spent **${item.price.toLocaleString()} Birthday Candies**.\n🎟️ Remaining: **${p.birthdayCandies.toLocaleString()}**`);
+  if(item.type==="sparkles")p.sparkles+=item.value;
+  else{p.inventory=p.inventory||[];p.inventory.push(itemId);}
+  await savePlayer(env,p);
+  await markBingoAction(env,interaction.guild_id,user.id,"birthday_cosmetic");
+  return sendText(env,interaction,`🎉 **PURCHASED!**\n\n${item.name}\n🎟️ Spent **${item.price.toLocaleString()} Birthday Candies**.\n🎟️ Remaining: **${p.birthdayCandies.toLocaleString()}**`,birthdayShopComponents(0));
 }
 
 function birthdayGiftCostOK(p,id){ const g=BIRTHDAY_GIFTS[id]; if(!g)return false; if(id==="creepy_present"||id==="pumpkin_treasure") return Number(p.sparkles||0)>=Number(g.reward.sparkles||0); if(id==="ghost_box") return Number(p.birthdayCandies||0)>=150; return true; }
@@ -5961,16 +5968,45 @@ async function spawnBirthdayHunt(env,guildId){
   state.birthday.huntItems=[...(state.birthday.huntItems||[]),...items]; state.birthday.nextFrightHuntAt=Date.now()+30*60*1000; await saveGuildState(env,guildId,state);
   const channel=state.announcementChannelId || (await getGuildTextChannels(env,guildId))[0]?.id; if(channel) await sendChannelMessage(env,channel,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items)); return true;
 }
-async function handleBirthdayHunt(env,interaction){const state=await getGuildState(env,interaction.guild_id); if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed."); const items=(state.birthday.huntItems||[]).filter(x=>!x.claimed); if(!items.length)return sendText(env,interaction,"🎃 The hunt is active, but no unclaimed spooky birthday emojis are out right now. The next wave appears every 30 minutes."); return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**\n\n${items.map(x=>`${x.emoji} **${x.name}** — ${x.reward} Birthday Candies`).join("\n")}`,birthdayHuntComponents(items));}
+async function handleBirthdayHunt(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed.");
+  let items=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
+  if(!items.length){
+    // Always give the Hunt button something to do. The scheduled processor can
+    // still create later waves, but the first/manual opening should never be empty.
+    await spawnBirthdayHunt(env,interaction.guild_id);
+    const refreshed=await getGuildState(env,interaction.guild_id);
+    items=(refreshed.birthday?.huntItems||[]).filter(x=>!x.claimed);
+  }
+  if(!items.length)return sendText(env,interaction,"🎃 The hunt is active, but the spooky treasures couldn't spawn yet. Try the Hunt button again!");
+  return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**\n\n${items.map(x=>`${x.emoji} **${x.name}** — ${x.reward} Birthday Candies`).join("\n")}`,birthdayHuntComponents(items));
+}
 async function claimBirthdayHunt(env,interaction,id){const state=await getGuildState(env,interaction.guild_id); if(!birthdayEventActive(state))return sendText(env,interaction,"🎃 The Birthday Fright Hunt is over."); const item=(state.birthday.huntItems||[]).find(x=>x.id===id); if(!item||item.claimed)return sendText(env,interaction,"👻 Too late! Someone already claimed that spooky find."); item.claimed=true; const p=await getPlayer(env,getUserFromInteraction(interaction).id); p.birthdayCandies+=item.reward; await savePlayer(env,p); await saveGuildState(env,interaction.guild_id,state); if(p.birthdayCandies>=100) await markBingoAction(env,interaction.guild_id,p.userId,"hundred_candy"); return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);}
 
 function bingoBoard(){const pool=[...BIRTHDAY_BINGO_PERSONAL.map(x=>({id:x[0],label:x[1],server:false})),...BIRTHDAY_SERVER_SQUARES.map(id=>({id,label:{pumpkin_appears:"🎃 A Pumpkin Appears",ghost_appears:"👻 A Ghost Appears",bat_swarm:"🦇 A Bat Swarm Appears",boo_cannon:"💥🎃 The Birthday Boo Cannon Is Fired"}[id],server:true}))]; const shuffled=pool.sort(()=>Math.random()-.5); const cells=shuffled.slice(0,24); cells.splice(12,0,{id:"free",label:"🕯️ Birthday Candle",server:false,marked:true}); return cells;}
 function bingoText(b){const lines=[]; for(let r=0;r<5;r++){lines.push(b.cells.slice(r*5,r*5+5).map(c=>c.marked?`🟩 ${c.label}`:`⬜ ${c.label}`).join("\n"));} return `🎂🎃 **HALLOWEEN BIRTHDAY BINGO**\n\n${lines.join("\n────────────\n")}\n\n🏆 1 line: 50 🍬 | 2: 100 🍬 | 3: 150 🍬 | 4: 200 🍬 | Full board: +500 🍬`}
 function bingoButtons(b){return [row(button("🔄 Refresh Board","birthday:bingo:refresh",2),button("🎂 Birthday Menu","birthday:home",2))];}
 function bingoWinLines(cells){const lines=[]; for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(i=>r*5+i));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(i=>i*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines.filter(ix=>ix.every(i=>cells[i].marked)).length;}
-async function startBirthdayBingo(env,interaction){const state=await getGuildState(env,interaction.guild_id); if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Bingo is closed."); const uid=getUserFromInteraction(interaction).id; if(state.birthday.bingoBoards?.[uid])return sendText(env,interaction,bingoText(state.birthday.bingoBoards[uid]),bingoButtons(state.birthday.bingoBoards[uid])); const b={cells:bingoBoard(),linesPaid:0,fullPaid:false}; state.birthday.bingoBoards=state.birthday.bingoBoards||{};state.birthday.bingoBoards[uid]=b;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,bingoText(b),bingoButtons(b));}
-
-async function applyBirthdayBingoReward(env,userId,b){const lines=bingoWinLines(b.cells);if(lines<=b.linesPaid)return;const p=await getPlayer(env,userId);p.birthdayCandies+=(Math.min(lines,4)-b.linesPaid)*50;b.linesPaid=lines;if(lines===5&&!b.fullPaid){p.birthdayCandies+=500;b.fullPaid=true;}await savePlayer(env,p);}
+async function startBirthdayBingo(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Bingo is closed.");
+  const uid=getUserFromInteraction(interaction).id;
+  state.birthday.bingoBoards=state.birthday.bingoBoards||{};
+  if(state.birthday.bingoBoards[uid]){
+    const p=await getPlayer(env,uid);
+    if(Number(p.birthdayCandies||0)>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");
+    const refreshed=await getGuildState(env,interaction.guild_id);
+    return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
+  }
+  const b={cells:bingoBoard(),linesPaid:0,fullPaid:false};
+  state.birthday.bingoBoards[uid]=b;
+  await saveGuildState(env,interaction.guild_id,state);
+  const p=await getPlayer(env,uid);
+  if(Number(p.birthdayCandies||0)>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");
+  const refreshed=await getGuildState(env,interaction.guild_id);
+  return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
+}
 async function markBirthdayServerSquare(env,guildId,action){const state=await getGuildState(env,guildId);if(!birthdayEventActive(state))return;for(const [uid,b] of Object.entries(state.birthday.bingoBoards||{})){const cell=b.cells.find(c=>c.server&&c.id===action&&!c.marked);if(cell){cell.marked=true;await applyBirthdayBingoReward(env,uid,b);}}await saveGuildState(env,guildId,state);}
 async function markBingoAction(env,guildId,userId,action){const state=await getGuildState(env,guildId);const b=state.birthday?.bingoBoards?.[userId];if(!b)return;const cell=b.cells.find(c=>c.id===action&&!c.marked);if(cell){cell.marked=true;await applyBirthdayBingoReward(env,userId,b);await saveGuildState(env,guildId,state);}}
 async function maybeBirthdayBingoReward(env,guildId,userId,b){const state=await getGuildState(env,guildId);if(!state.birthday?.bingoBoards?.[userId])return;state.birthday.bingoBoards[userId]=b;await applyBirthdayBingoReward(env,userId,b);await saveGuildState(env,guildId,state);}
@@ -5987,9 +6023,54 @@ async function birthdayRoulettePick(env,interaction,index){const state=await get
 
 function randomWordPrompt(prompt){const pools={"adjective":["sparkly","creepy","pink","mysterious","ridiculous"],"spooky noun":["ghost","bat","tombstone","cauldron","candle"],"food":["pizza","cupcake","cake","spaghetti","donut"],"verb":["dance","sprint","hide","wiggle","scream"],"place":["castle","graveyard","kitchen","forest","attic"],"cake topping":["sprinkles","strawberry","bat candy","bow"],"animal":["raccoon","cat","bat","frog","owl"],"sound":["BOOM","squeak","whooo","BANG"],"dessert":["cupcakes","candy","cake","cookies"],"color":["pink","purple","orange","black"],"object":["key","mirror","candle","present"],"monster":["vampire","zombie","witch","cake monster"]};return pools[prompt]||["spooky","birthday","cake"]}
 function birthdayCurseInputButton(){return [row(button("✏️ Enter Answer","birthday:curseinput",1))];}
-async function startBirthdayCurse(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Curse is closed.");if(state.birthday.games?.curse?.active)return sendText(env,interaction,`👻 **The Birthday Curse is already running!**\n\nGive me a **${state.birthday.games.curse.prompts[state.birthday.games.curse.index]}**.`,birthdayCurseInputButton());const story=BIRTHDAY_STORIES[randomInt(0,BIRTHDAY_STORIES.length-1)];state.birthday.games=state.birthday.games||{};state.birthday.games.curse={active:true,story,answers:[],index:0};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`📖👻 **THE BIRTHDAY CURSE**\n\nThe birthday person is **${birthdayName(state)}**.\n\n🏃 First appropriate answer wins each slot!\n\nType your answer using the button below for **${story.prompts[0]}**.`,birthdayCurseInputButton());}
-function getModalTextInput(interaction,customId){for(const row of interaction.data?.components||[]){for(const c of row.components||[]){if(c.custom_id===customId)return c.value||"";}}return "";}
-async function birthdayCurseAnswer(env,interaction,answer){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.curse;if(!g?.active)return sendText(env,interaction,"📖 The Birthday Curse isn't active.");if(!answer)return sendText(env,interaction,"❌ Give me a word.");const prompt=g.story.prompts[g.index];const cleaned=String(answer).trim().slice(0,60);g.answers.push({prompt,word:cleaned,userId:getUserFromInteraction(interaction).id});g.index++;if(g.index<g.story.prompts.length){await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`👻 **SLOT FILLED!**\n\nNext: give me a **${g.story.prompts[g.index]}**.`,birthdayCurseInputButton());}let text=g.story.text;for(const a of g.answers)text=text.replace(`[${a.prompt}]`,a.word);const contributors=new Set(g.answers.map(a=>a.userId));for(const uid of contributors){const p=await getPlayer(env,uid);p.birthdayCandies+=25;await savePlayer(env,p);}const birthdayUser=getUserFromInteraction(interaction).id;const p=await getPlayer(env,birthdayUser);p.birthdayCandies+=g.story.reward;await savePlayer(env,p);g.active=false;await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,getUserFromInteraction(interaction).id,"curse");return sendText(env,interaction,`👻🎂 **THE BIRTHDAY CURSE IS COMPLETE!**\n\n${text}\n\n🎟️ Birthday person reward: **${g.story.reward} Birthday Candies**\n🎟️ Every player whose word was used also receives **+25 Birthday Candies**.`);}
+async function startBirthdayCurse(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Curse is closed.");
+  state.birthday.games=state.birthday.games||{};
+  const existing=state.birthday.games.curse;
+  if(existing?.active&&existing.story?.prompts?.length){
+    const index=Math.min(Number(existing.index||0),existing.story.prompts.length-1);
+    return sendText(env,interaction,`👻 **The Birthday Curse is already running!**\n\nGive me a **${existing.story.prompts[index]}**.`,birthdayCurseInputButton());
+  }
+  const story=BIRTHDAY_STORIES[randomInt(0,BIRTHDAY_STORIES.length-1)];
+  state.birthday.games.curse={active:true,story,answers:[],index:0};
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendText(env,interaction,`📖👻 **THE BIRTHDAY CURSE**\n\nThe birthday person is **${birthdayName(state)}**.\n\n🏃 First appropriate answer wins each slot!\n\nType your answer using the button below for **${story.prompts[0]}**.`,birthdayCurseInputButton());
+}
+function getModalTextInput(interaction,customId){for(const r of interaction.data?.components||[]){for(const c of r.components||[]){if(c.custom_id===customId)return c.value||"";}}return "";}
+async function birthdayCurseAnswer(env,interaction,answer){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.curse;
+  if(!g?.active)return sendText(env,interaction,"📖 The Birthday Curse isn't active.");
+  if(!g.story?.prompts?.length){
+    state.birthday.games.curse=null;await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,"👻 The Birthday Curse got tangled in its spell. Start it again from the Birthday menu!");
+  }
+  if(!answer)return sendText(env,interaction,"❌ Give me a word.");
+  const index=Number(g.index||0);
+  if(index<0||index>=g.story.prompts.length){
+    g.active=false;await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,"👻 The Birthday Curse reached an invalid story step. Start it again from the Birthday menu!");
+  }
+  const prompt=g.story.prompts[index];
+  const cleaned=String(answer).trim().slice(0,60);
+  g.answers=Array.isArray(g.answers)?g.answers:[];
+  g.answers.push({prompt,word:cleaned,userId:getUserFromInteraction(interaction).id});
+  g.index=index+1;
+  if(g.index<g.story.prompts.length){
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,`👻 **SLOT FILLED!**\n\nNext: give me a **${g.story.prompts[g.index]}**.`,birthdayCurseInputButton());
+  }
+  let text=g.story.text;
+  for(const a of g.answers)text=text.replace(`[${a.prompt}]`,a.word);
+  const contributors=new Set(g.answers.map(a=>a.userId));
+  for(const uid of contributors){const p=await getPlayer(env,uid);p.birthdayCandies+=25;await savePlayer(env,p);}
+  const birthdayUser=getUserFromInteraction(interaction).id;
+  const p=await getPlayer(env,birthdayUser);p.birthdayCandies+=g.story.reward;await savePlayer(env,p);
+  g.active=false;await saveGuildState(env,interaction.guild_id,state);
+  await markBingoAction(env,interaction.guild_id,birthdayUser,"curse");
+  return sendText(env,interaction,`👻🎂 **THE BIRTHDAY CURSE IS COMPLETE!**\n\n${text}\n\n🎟️ Birthday person reward: **${g.story.reward} Birthday Candies**\n🎟️ Every player whose word was used also receives **+25 Birthday Candies**.`);
+}
 
 const BIRTHDAY_CUPCAKE_INGREDIENTS = [
   ["🍫 Black Velvet","cake"],["🍰 Vanilla Mooncake","cake"],["🧁 Strawberry Cake","cake"],["🎃 Pumpkin Spice Cake","cake"],["🍒 Cherry Night Cake","cake"],["💗 Pink Velvet","cake"],
@@ -6024,7 +6105,65 @@ const BIRTHDAY_BAKERY_MENUS=[
   {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
 ];
 async function startBirthdayBakery(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");const people=state.birthday.birthdayIds;const uid=getUserFromInteraction(interaction).id;state.birthday.games=state.birthday.games||{};state.birthday.games.bakery={active:true,userId:uid,recipient:people[0],step:0,choices:[]};await saveGuildState(env,interaction.guild_id,state);const menu=BIRTHDAY_BAKERY_MENUS[0];return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY**\n\nYou're designing a birthday cake for **${birthdayName(state)}**!\n\nChoose a **${menu.name}**:`,[row(...menu.options.map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1)))]);}
-async function birthdayCakeChoice(env,interaction,value){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.bakery;if(!g?.active)return sendText(env,interaction,"🦇 The bakery session is closed.");g.choices.push(decodeURIComponent(value));g.step++;if(g.step<BIRTHDAY_BAKERY_MENUS.length){await saveGuildState(env,interaction.guild_id,state);const menu=BIRTHDAY_BAKERY_MENUS[g.step];return sendText(env,interaction,`🎂 **Cake design step ${g.step+1}/${BIRTHDAY_BAKERY_MENUS.length}**\n\nChoose a **${menu.name}**:`,[row(...menu.options.map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1)))]);}g.active=false;const p=await getPlayer(env,uid);const bakeryReward=randomInt(100,250);p.birthdayCandies+=bakeryReward;await savePlayer(env,p);const imageUrl=await birthdayCakeImageUrl(env,interaction,g);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"bakery");return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake:**\n${imageUrl}`,[row(button("🎂 Birthday Menu","birthday:home",2))]);}
+async function birthdayCakeChoice(env,interaction,value){
+  const state=await getGuildState(env,interaction.guild_id);
+  const uid=getUserFromInteraction(interaction).id;
+  const g=state.birthday?.games?.bakery;
+  if(!g?.active)return sendText(env,interaction,"🦇 The bakery session is closed.");
+  g.choices.push(decodeURIComponent(value));g.step++;
+  if(g.step<BIRTHDAY_BAKERY_MENUS.length){
+    await saveGuildState(env,interaction.guild_id,state);
+    const menu=BIRTHDAY_BAKERY_MENUS[g.step];
+    return sendText(env,interaction,`🎂 **Cake design step ${g.step+1}/${BIRTHDAY_BAKERY_MENUS.length}**\n\nChoose a **${menu.name}**:`,[row(...menu.options.map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1)))]);
+  }
+  g.active=false;
+  const p=await getPlayer(env,uid);
+  const bakeryReward=randomInt(100,250);p.birthdayCandies+=bakeryReward;await savePlayer(env,p);
+  await saveGuildState(env,interaction.guild_id,state);
+  await markBingoAction(env,interaction.guild_id,uid,"bakery");
+  const svg=birthdayCakeImageSvg(g);
+  const bytes=new TextEncoder().encode(svg);
+  const responseContent=`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake is attached below!**`;
+  const response=await editOriginalResponseWithFile(env,interaction,responseContent,"birthday-cake.svg",bytes,"image/svg+xml",[row(button("🎂 Birthday Menu","birthday:home",2))]);
+  if(!response.ok){
+    console.error("Birthday cake attachment failed:",response.status,await response.text());
+    return sendText(env,interaction,responseContent+"\n\n⚠️ The cake image could not be attached, but your design and reward were saved.",[row(button("🎂 Birthday Menu","birthday:home",2))]);
+  }
+  return response;
+}
+
+
+async function birthdayWish(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Wish Ritual is closed.");
+  const uid=getUserFromInteraction(interaction).id;
+  if(!birthdayPersonId(state,uid))return sendText(env,interaction,"🕯️ Only the birthday person can perform the Birthday Wish Ritual.");
+  const p=await getPlayer(env,uid);
+  if(p.birthdayWishUsedDate===state.birthday.activeDate)return sendText(env,interaction,"🕯️ You've already performed your Birthday Wish Ritual today. The candle has already granted its wish! ✨");
+  const roll=Math.random();let msg;
+  if(roll<0.05){p.sparkles+=10000;p.birthdayCandies+=500;msg="🌙✨ **JACKPOT!** 10,000 Sparkles + 500 Birthday Candies!";}
+  else{const r=Math.floor(Math.random()*3);if(r===0){p.sparkles+=3000;msg="💰 **3,000 Sparkles!**";}else if(r===1){p.birthdayCandies+=300;msg="🎟️ **300 Birthday Candies!**";}else{p.sparkles+=3000;p.birthdayCandies+=300;msg="💰🎟️ **3,000 Sparkles + 300 Birthday Candies!**";}}
+  p.birthdayWishUsedDate=state.birthday.activeDate;await savePlayer(env,p);await markBingoAction(env,interaction.guild_id,uid,"wish");
+  return sendText(env,interaction,`🕯️🌙 **BIRTHDAY WISH RITUAL**\n\nThe candle flickers... moonlight gathers... ✨\n\n${msg}`);
+}
+async function birthdayCannon(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boo Cannon is closed.");
+  const uid=getUserFromInteraction(interaction).id;
+  if(!birthdayPersonId(state,uid))return sendText(env,interaction,"💥 Only the birthday person can fire the Birthday Boo Cannon.");
+  if(state.birthday.cannonUsedDate===state.birthday.activeDate||state.birthday.cannon?.usedDate===state.birthday.activeDate)return sendText(env,interaction,"💥🎃 You've already fired the Birthday Boo Cannon during this birthday event! The cannon is all poofed out. 💨");
+  if(state.birthday.cannon?.active)return sendText(env,interaction,"💥 Your Birthday Boo Cannon is already firing! Keep blasting! 🎃💨");
+  state.birthday.cannon={active:true,userId:uid,endAt:Date.now()+60000,total:0,shots:0,usedDate:state.birthday.activeDate};state.birthday.cannonUsedDate=state.birthday.activeDate;
+  await saveGuildState(env,interaction.guild_id,state);await markBirthdayServerSquare(env,interaction.guild_id,"boo_cannon");
+  return sendText(env,interaction,`💥🎃 **BIRTHDAY BOO CANNON!**\n\nYou have **60 seconds**! Press the button as many times as possible.\n\nEvery successful shot awards **1–10 Birthday Candies**.`,[row(button("💥 FIRE!","birthday:firecannon",1),button("🎂 Birthday Menu","birthday:home",2))]);
+}
+async function fireBirthdayCannon(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const c=state.birthday?.cannon;const uid=getUserFromInteraction(interaction).id;
+  if(!c?.active||c.userId!==uid)return sendText(env,interaction,"💥 The cannon isn't active for you.");
+  if(Date.now()>=c.endAt){c.active=false;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`💥🎃 **TIME'S UP!**\n\nYou fired **${c.shots} shots** and earned **${c.total} Birthday Candies!**`);}
+  const amount=randomInt(1,10);c.shots++;c.total+=amount;const p=await getPlayer(env,uid);p.birthdayCandies+=amount;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);
+  return sendText(env,interaction,`💥🎃 **BOOM! +${amount} Birthday Candies!**\n\n🎟️ Session total: **${c.total}**\n⏱️ Keep firing!`,[row(button("💥 FIRE AGAIN!","birthday:firecannon",1))]);
+}
 
 async function birthdayTrickster(env,interaction,targetOverride=null){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Trickster is closed.");const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const now=Date.now();if(p.birthdayTricksterLast&&now-p.birthdayTricksterLast<3*60*60*1000)return sendText(env,interaction,`🦝 Trickster cooldown: **${Math.ceil((3*60*60*1000-(now-p.birthdayTricksterLast))/60000)} minutes** remaining.`);const target=targetOverride||getOption(interaction,"user");if(!target||target===uid){const members=await getGuildMembers(env,interaction.guild_id);return sendText(env,interaction,"🦝 **BIRTHDAY TRICKSTER**\n\nChoose another player to target:",birthdayTricksterTargetButtons(members,uid));}const members=await getGuildMembers(env,interaction.guild_id);if(!members.some(m=>m.id===target))return sendText(env,interaction,"❌ That player is not in this server.");const tp=await getPlayer(env,target);p.birthdayTricksterLast=now;const outcomes=["candy","tax","bonk","bat","present","sparkle","web"];const out=outcomes[randomInt(0,outcomes.length-1)];const protectedSteal=["candy","tax","sparkle"].includes(out)&&birthdayPersonId(state,target);if(protectedSteal){p.birthdayCandies=Math.max(0,Number(p.birthdayCandies||0)-100);await savePlayer(env,p);return sendText(env,interaction,"🚨🎂 **BIRTHDAY PROTECTION ACTIVATED!**\n\nYou targeted the birthday person with a stealing effect. Your attempt is wasted and you lose **100 Birthday Candies**. Their birthday rewards remain untouched.");}let msg="";if(out==="candy"){const a=randomInt(50,150);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`🎟️ Candy Heist! You stole **${a2} Birthday Candies**.`;}else if(out==="tax"){const a=randomInt(25,75);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`👻 Ghostly Tax! **${a2} Candies** transferred.`;}else if(out==="sparkle"){const a=randomInt(100,500);const a2=Math.min(a,Number(tp.sparkles||0));tp.sparkles-=a2;p.sparkles+=a2;msg=`✨ Sparkle Snatch! You stole **${a2} Sparkles**.`;}else if(out==="bat"){p.birthdayCandies+=50;msg="🦇 Bat Ambush! The target gets bats and you gain **50 Birthday Candies**.";}else if(out==="present"){p.birthdayCandies+=randomInt(10,30);msg="🎁 Present Swipe! A tiny gift mysteriously ended up in your pockets.";}else if(out==="web"){msg="🕸️ Webbed! The target has been covered in a temporary silly status.";}else{msg="🎃 Pumpkin Bonk! Harmless spooky birthday mischief!";}await savePlayer(env,p);await savePlayer(env,tp);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,`🦝🎂 **BIRTHDAY TRICKSTER!**\n\n${msg}`);}
 
@@ -6275,7 +6414,7 @@ async function handleComponent(
     if(action==="home") return handleBirthdayCommand(env,interaction);
     if(action==="set") return handleBirthdaySet(env,interaction);
     if(interaction.guild_id) await ensureBirthdayEvent(env,interaction.guild_id);
-    if(action==="shop") return showBirthdayShop(env,interaction,Number(parts[2]||0));
+    if(action==="shop"||action==="shopopen") return showBirthdayShop(env,interaction,Number(parts[2]||0));
     if(action==="buy") return buyBirthdayItem(env,interaction,parts[2]);
     if(action==="hunt") return handleBirthdayHunt(env,interaction);
     if(action==="claim") return claimBirthdayHunt(env,interaction,parts[2]);
