@@ -5929,10 +5929,25 @@ async function handleBirthdaySet(env, interaction) {
 }
 
 function birthdayShopComponents(page=0) {
-  const ids=Object.keys(BIRTHDAY_SHOP_ITEMS); const pageSize=4; const slice=ids.slice(page*pageSize,page*pageSize+pageSize);
-  const rows=slice.map(id=>row(button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1)));
-  if(ids.length>pageSize) rows.push(row(button("⬅️","birthday:shop:"+Math.max(0,page-1),2,page===0),button(`Page ${page+1}/${Math.ceil(ids.length/pageSize)}`,"birthday:noop",2,true),button("➡️","birthday:shop:"+(page+1),2,(page+1)*pageSize>=ids.length)));
-  rows.push(row(button("🎂 Birthday Menu","birthday:home",2))); return rows;
+  const ids=Object.keys(BIRTHDAY_SHOP_ITEMS);
+  const pageSize=4;
+  const slice=ids.slice(page*pageSize,page*pageSize+pageSize);
+  // Discord allows a maximum of 5 action rows. Keep the 4 shop items to
+  // two rows (2 buttons each), then use one row for pagination and one for
+  // the Birthday Menu button.
+  const rows=[];
+  for(let i=0;i<slice.length;i+=2){
+    rows.push(row(...slice.slice(i,i+2).map(id=>
+      button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1)
+    )));
+  }
+  if(ids.length>pageSize) rows.push(row(
+    button("⬅️","birthday:shop:"+Math.max(0,page-1),2,page===0),
+    button(`Page ${page+1}/${Math.ceil(ids.length/pageSize)}`,"birthday:noop",2,true),
+    button("➡️","birthday:shop:"+(page+1),2,(page+1)*pageSize>=ids.length)
+  ));
+  rows.push(row(button("🎂 Birthday Menu","birthday:home",2)));
+  return rows;
 }
 
 async function showBirthdayShop(env, interaction, page=0) {
