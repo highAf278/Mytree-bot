@@ -2210,11 +2210,14 @@ async function sendTree(
   interaction,
   player
 ) {
-  const image =
+  const rendered =
     await renderTree(
       env,
       player
     );
+  const image = rendered.bytes;
+  const imageFilename = rendered.animated ? "tree.gif" : "tree.png";
+  const imageType = rendered.animated ? "image/gif" : "image/png";
 
   const stats =
     buildTreeStats(player);
@@ -2234,7 +2237,7 @@ async function sendTree(
       attachments: [
         {
           id: 0,
-          filename: "tree.png"
+          filename: imageFilename
         }
       ],
       components: treeButtons(getUserFromInteraction(interaction)?.id || "", player)
@@ -2246,10 +2249,10 @@ async function sendTree(
     new Blob(
       [image],
       {
-        type: "image/png"
+        type: imageType
       }
     ),
-    "tree.png"
+    imageFilename
   );
 
   const response =
@@ -2945,16 +2948,6 @@ async function renderTreeDirectFallback(env, player) {
   try {
     const tree = await getPngAsset(env, getTreeImage(player));
     const layer = containRGBA(tree, 922, 922);
-    // Keep every tree visually strong in the no-browser fallback too.
-    // Slightly boost brightness/contrast/saturation without changing alpha.
-    for (let i = 0; i < layer.data.length; i += 4) {
-      if (layer.data[i + 3] === 0) continue;
-      for (const c of [0, 1, 2]) {
-        const v = layer.data[i + c] / 255;
-        const boosted = Math.min(1, Math.max(0, ((v - 0.5) * 1.12 + 0.5) * 1.10));
-        layer.data[i + c] = Math.round(boosted * 255);
-      }
-    }
     alphaComposite(scene, layer, Math.round((width - layer.width) / 2), 184);
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
@@ -2999,13 +2992,12 @@ async function renderTreeDirectFallback(env, player) {
 }
 
 async function renderTree(env, player) {
-  // Browser Rendering is the preferred path because it preserves the real
-  // background artwork and CSS effects. The ENTIRE browser operation is
-  // bounded, including launch: page.setContent() timeouts alone cannot stop a
-  // Browser Rendering launch from hanging.
+  // Birthday Confetti is rendered as a real animated GIF so Discord can display
+  // the motion. CSS animation alone cannot survive a PNG screenshot.
+  const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
-    return renderTreeDirectFallback(env, player);
+    return { bytes: await renderTreeDirectFallback(env, player), animated: false };
   };
 
   try {
@@ -3031,7 +3023,7 @@ async function renderTree(env, player) {
         const kind = escapeHTML(sparkle.kind || "pink");
         const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
         const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
-        return `<div style="position:absolute;left:${left}%;top:${top}%;transform:translate(-50%,-50%);font-family:Arial,Helvetica,sans-serif;font-size:76px;font-weight:900;line-height:1;color:#ffffff;z-index:20;opacity:1;-webkit-text-stroke:2px ${glow};filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});text-shadow:0 0 8px #ffffff,0 0 20px ${glow},0 0 40px ${glow};animation:sparklePulse 1.2s ease-in-out infinite;user-select:none" title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles">${symbol}</div>`;
+        return `<div style="position:absolute;left:${left}%;top:${top}%;transform:translate(-50%,-50%);font-family:Arial,Helvetica,sans-serif;font-size:76px;font-weight:900;line-height:1;color:#ffffff;z-index:20;opacity:1;-webkit-text-stroke:2px ${glow};filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});text-shadow:0 0 8px #ffffff,0 0 20px ${glow},0 0 40px ${glow};user-select:none" title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles">${symbol}</div>`;
       }).join("");
 
       let decorationHTML = "";
@@ -3045,14 +3037,24 @@ async function renderTree(env, player) {
       if (effect) {
         effectHTML = `<img src="${effect}" style="position:absolute;left:-5%;top:-5%;width:110%;height:110%;object-fit:contain;opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};z-index:2;pointer-events:none">`;
       }
-      const confettiColors=["#ff73bd","#ffd166","#9d8cff","#ff9a3c","#ffffff"];
-      const confettiHTML = player.equipped?.effect === "birthday_confetti"
-        ? Array.from({length:60},(_,i)=>`<span style="position:absolute;left:${(i*47+7)%96}%;top:${(i*31+11)%88}%;width:${7+(i%4)*2}px;height:${14+(i%5)*3}px;background:${confettiColors[i%confettiColors.length]};border-radius:2px;z-index:12;transform:rotate(${(i*29)%360}deg);animation:confettiFloat ${1.1+(i%5)*0.25}s ease-in-out infinite ${-(i%7)*0.18}s;box-shadow:0 0 7px rgba(255,255,255,.65)"></span>`).join("")
+
+      const confettiHTML = (phase = 0) => wantsAnimatedConfetti
+        ? Array.from({length:72},(_,i)=>{
+            const x = (i * 47 + 7) % 96;
+            const y = ((i * 31 + 3 + phase * 38) % 112) - 12;
+            const sway = Math.sin((phase * Math.PI * 2) + i * 0.73) * 2.2;
+            const rotate = (i * 29 + phase * 180) % 360;
+            const width = 8 + (i % 4) * 2;
+            const height = 15 + (i % 5) * 3;
+            const colors = ["#ff73bd","#ffd166","#9d8cff","#ff9a3c","#ffffff"];
+            const c = colors[i % colors.length];
+            return `<span style="position:absolute;left:${x+sway}%;top:${y}%;width:${width}px;height:${height}px;background:${c};border-radius:3px;z-index:12;transform:rotate(${rotate}deg);box-shadow:0 0 8px rgba(255,255,255,.75),0 0 12px ${c};pointer-events:none"></span>`;
+          }).join("")
         : "";
 
-      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}@keyframes confettiFloat{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(16px) rotate(90deg)}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4;filter:brightness(1.16) contrast(1.12) saturate(1.18) drop-shadow(0 10px 12px rgba(0,0,0,.30)) drop-shadow(0 0 10px rgba(255,255,255,.18))}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML}${sparkleHTML}</div></body></html>`;
+      const makeHTML = (phase = 0) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML(phase)}${sparkleHTML}</div></body></html>`;
 
-      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.setContent(makeHTML(0), { waitUntil: "domcontentloaded", timeout: 8000 });
       await page.evaluate(async () => {
         const images = Array.from(document.images);
         await Promise.race([
@@ -3060,7 +3062,25 @@ async function renderTree(env, player) {
           new Promise(resolve => setTimeout(resolve, 5000))
         ]);
       });
-      return await page.screenshot({ type: "png" });
+
+      if (wantsAnimatedConfetti) {
+        const frames = [];
+        const frameCount = 8;
+        for (let i = 0; i < frameCount; i++) {
+          await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, makeHTML(i / frameCount));
+          await page.evaluate(async () => {
+            const images = Array.from(document.images);
+            await Promise.race([
+              Promise.all(images.map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.onload = resolve; image.onerror = resolve; }))),
+              new Promise(resolve => setTimeout(resolve, 1500))
+            ]);
+          });
+          frames.push(await page.screenshot({ type: "png" }));
+        }
+        return { bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12), animated: true };
+      }
+
+      return { bytes: await page.screenshot({ type: "png" }), animated: false };
     } finally {
       try { await browser.close(); } catch (error) { console.error("Tree browser close error:", error); }
     }
@@ -4697,23 +4717,6 @@ async function showCustomBackgrounds(
     );
   }
 
-  if (
-    player.inventory.includes(
-      "birthday_background"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🌌 Spooky Birthday",
-        "equip_theme_birthday",
-        player.equipped.theme ===
-          "birthday"
-          ? 3
-          : 2
-      )
-    );
-  }
-
   const extraBackgrounds = [
     ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
     ["field_day_background", "🌾 Field Day", "field_day"],
@@ -5177,11 +5180,6 @@ async function equipTheme(
         "red_forest_background"
       ),
 
-    birthday:
-      player.inventory.includes(
-        "birthday_background"
-      ),
-
     stoned_birthday:
       player.inventory.includes(
         "stoned_birthday_background"
@@ -5506,10 +5504,7 @@ async function equipDecoration(
         "duck_hat_boots_decoration",
 
       cheddar_falls:
-        "cheddar_falls_decoration",
-
-      birthday:
-        "birthday_decoration"
+        "cheddar_falls_decoration"
     }[decoration];
 
     if (
