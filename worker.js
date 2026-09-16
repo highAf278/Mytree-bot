@@ -5991,12 +5991,39 @@ async function birthdayHuntMessageExists(env,channelId,messageId){
 
 async function getBirthdayHuntCandidates(env,guildId,lastChannelId=null){
   const channels=await getGuildTextChannels(env,guildId);
+  const state=await getGuildState(env,guildId);
+  const announcementId=state?.announcementChannelId||null;
+  const history=Array.isArray(state?.birthday?.huntChannelHistory)
+    ? state.birthday.huntChannelHistory.filter(Boolean)
+    : [];
+
   const ids=[...new Set(channels.map(c=>c?.id).filter(Boolean))];
-  // Rotate away from the previous hunt channel whenever there is another
-  // eligible text channel. Only fall back to the previous channel if it is
-  // literally the only channel the bot can post in.
-  const fresh=ids.filter(id=>id!==lastChannelId);
-  return birthdayHuntShuffle(fresh.length?fresh:ids);
+
+  // Fright Hunt should NOT use the normal announcement channel when another
+  // channel is available. That was the reason hunts kept landing in #general.
+  let eligible=ids.filter(id=>id!==announcementId);
+
+  // Prefer channels that have not hosted a recent hunt.
+  const unseen=eligible.filter(id=>!history.includes(id));
+  if(unseen.length) eligible=unseen;
+
+  // Never immediately reuse the previous Hunt channel when another option exists.
+  const fresh=eligible.filter(id=>id!==lastChannelId);
+  if(fresh.length) eligible=fresh;
+
+  // If every non-announcement channel has recently been used, reset the
+  // rotation pool but still avoid the immediately previous channel.
+  if(!eligible.length){
+    const fallback=ids.filter(id=>id!==announcementId&&id!==lastChannelId);
+    if(fallback.length) eligible=fallback;
+    else {
+      // Only use the announcement channel if it is literally the only
+      // channel available to the bot.
+      eligible=ids.filter(id=>id===announcementId);
+    }
+  }
+
+  return birthdayHuntShuffle(eligible);
 }
 
 async function spawnBirthdayHunt(env,guildId,preferredChannelId=null){
@@ -6042,6 +6069,15 @@ async function spawnBirthdayHunt(env,guildId,preferredChannelId=null){
   state.birthday.nextFrightHuntAt=Date.now()+30*60*1000;
   state.birthday.lastHuntChannelId=posted.channelId;
   state.birthday.lastHuntMessageId=posted.messageId;
+  state.birthday.huntChannelHistory=Array.isArray(state.birthday.huntChannelHistory)
+    ? state.birthday.huntChannelHistory
+    : [];
+  state.birthday.huntChannelHistory=state.birthday.huntChannelHistory.filter(id=>id!==posted.channelId);
+  state.birthday.huntChannelHistory.push(posted.channelId);
+  // Keep a short rotation history so the Hunt does not repeatedly return
+  // to the same channel.
+  if(state.birthday.huntChannelHistory.length>20)
+    state.birthday.huntChannelHistory=state.birthday.huntChannelHistory.slice(-20);
   await saveGuildState(env,guildId,state);
   return true;
 }
