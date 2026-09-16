@@ -5821,6 +5821,11 @@ async function ensureBirthdayEvent(env, guildId) {
     state.birthday.birthdayIds = people.map(p => p.userId);
     state.birthday.birthdayNames = people.map(p => p.displayName || p.username || "Werewife");
   }
+
+  // IMPORTANT: persist the birthday activation/registry before returning.
+  // Without this save, /birthday can see the birthday in memory once, but
+  // every button press reloads the old state and says there is no birthday.
+  await saveGuildState(env, guildId, state);
   return { state, people };
 }
 
