@@ -21047,6 +21047,43 @@ export default {
       }
     }
 
+    // Birthday Shop buttons need a direct Discord type-7 update response.
+    // This bypasses the generic deferred component path so the shop opens
+    // reliably even when the button came from an older Birthday Menu message.
+    if (interaction.type === 3 && /^birthday:shop(?::\d+)?$/.test(customId)) {
+      try {
+        const page = Number(customId.split(":")[2] || 0);
+        const {people} = await ensureBirthdayEvent(env, interaction.guild_id);
+        if (!people.length) {
+          return new Response(JSON.stringify({
+            type: 7,
+            data: { content: "🔒 The Midnight Birthday Shop is closed. No birthday is active today.", components: [] }
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        const user = getUserFromInteraction(interaction);
+        const p = await getPlayer(env, user.id);
+        const owned = p.inventory || [];
+        const ids = Object.keys(BIRTHDAY_SHOP_ITEMS);
+        const lines = ids.map(id => {
+          const x = BIRTHDAY_SHOP_ITEMS[id];
+          return `• ${x.name} — **${x.price.toLocaleString()} Birthday Candies**${owned.includes(id) ? " — ✅ Owned" : ""}`;
+        });
+        return new Response(JSON.stringify({
+          type: 7,
+          data: {
+            content: `🦇🛍️ **MIDNIGHT BIRTHDAY SHOP**\n\n🎟️ Your Birthday Candies: **${Number(p.birthdayCandies || 0).toLocaleString()}**\n\n${lines.join("\n")}\n\nBirthday Shop items are exclusive to the birthday event and do not appear in the normal shop.`,
+            components: birthdayShopComponents(page)
+          }
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      } catch (error) {
+        console.error("Birthday Shop direct button error:", error);
+        return new Response(JSON.stringify({
+          type: 7,
+          data: { content: `❌ Couldn't open the Birthday Shop: ${error?.message || "Unknown error"}`, components: [] }
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+    }
+
     // Birthday Curse's Enter Answer button must open a Discord modal (type 9)
     // directly. Do NOT send the normal deferred type-5 acknowledgement first,
     // because Discord only allows the modal callback as the initial response.
