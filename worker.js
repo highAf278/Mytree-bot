@@ -5805,8 +5805,23 @@ function birthdayName(state) { return state?.birthday?.birthdayNames?.length ? s
 
 async function ensureBirthdayEvent(env, guildId) {
   const state = await getGuildState(env, guildId);
-  const people = await getBirthdayPeopleForGuild(env, guildId);
+  let people = await getBirthdayPeopleForGuild(env, guildId);
   const key = birthdayTodayKey();
+
+  // TEST/RECOVERY SAFETY: /birthday-set for today's date records the user
+  // directly in guild state. This prevents the birthday party from vanishing
+  // when Discord member lookup or an older player record cannot be re-read.
+  const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
+    ? state.birthday.manualTestBirthdayIds
+    : [];
+  if (!people.length && state.birthday?.activeDate === key && state.birthday?.active && manualIds.length) {
+    people = [];
+    for (const id of manualIds) {
+      const p = await getPlayer(env, id);
+      if (p?.userId) people.push(p);
+    }
+  }
+
   if (!people.length) {
     if (state.birthday?.activeDate === key) { state.birthday.active = false; await saveGuildState(env, guildId, state); }
     return { state, people: [] };
@@ -5877,6 +5892,24 @@ async function handleBirthdaySet(env, interaction) {
   if (!Number.isInteger(month)||month<1||month>12||!Number.isInteger(day)||day<1||day>31) return sendText(env,interaction,"❌ Use a valid month (1–12) and day (1–31).");
   const maxDays = new Date(Date.UTC(2028, month, 0)).getUTCDate(); if(day>maxDays) return sendText(env,interaction,"❌ That date does not exist.");
   player.birthdayMonth=month; player.birthdayDay=day; player.birthdayUnlocked=true; await savePlayer(env,player);
+
+  // If the saved date is TODAY, immediately seed the guild birthday registry.
+  // This makes the party activation survive the next /birthday/button request.
+  if (interaction.guild_id && isBirthdayDate(new Date(), month, day)) {
+    const guildId=interaction.guild_id;
+    const state=await getGuildState(env,guildId);
+    const key=birthdayTodayKey();
+    if(!state.birthday || state.birthday.activeDate!==key){
+      state.birthday={active:true,activeDate:key,birthdayIds:[user.id],birthdayNames:[player.displayName||player.username||"Werewife"],announced:false,nextFrightHuntAt:Date.now(),huntItems:[],serverEvents:{},bingoBoards:{},games:{},lastTheme:"spooky",manualTestBirthdayIds:[user.id]};
+    }else{
+      state.birthday.active=true;
+      state.birthday.birthdayIds=Array.from(new Set([...(state.birthday.birthdayIds||[]),user.id]));
+      state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),player.displayName||player.username||"Werewife"]));
+      state.birthday.manualTestBirthdayIds=Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]),user.id]));
+    }
+    await saveGuildState(env,guildId,state);
+  }
+
   await sendText(env,interaction,`🎂 **Birthday saved!**\n\nYour birthday is set to **${month}/${day}**. 💗🎃\n\nOn that calendar date, your Birthday Party will automatically unlock for the whole day.\n\n🧪 **Testing note:** while we're building/testing, you can temporarily set it to the current date and then change it back to your real birthday afterward.`);
 }
 
