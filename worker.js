@@ -5816,24 +5816,30 @@ async function handleBirthdayCommand(env, interaction) {
   const guildId = interaction.guild_id;
   const user = getUserFromInteraction(interaction);
   if (!guildId || !user) return sendText(env, interaction, "❌ Birthday features can only be used inside a server.");
-  const sub = interaction.data?.options?.find(o=>o.type===1)?.name || "home";
-  if (sub === "set") return handleBirthdaySet(env, interaction);
   const { state, people } = await ensureBirthdayEvent(env, guildId);
-  if (sub === "shop") return showBirthdayShop(env, interaction);
-  if (sub === "gift") return handleBirthdayGift(env, interaction);
-  if (sub === "gifts") return showBirthdayGifts(env, interaction);
-  if (sub === "collection") return showBirthdayCollection(env, interaction);
-  if (sub === "hunt") return handleBirthdayHunt(env, interaction);
-  if (sub === "bingo") return startBirthdayBingo(env, interaction);
-  if (sub === "roulette") return startBirthdayRoulette(env, interaction);
-  if (sub === "curse") { const ans=getOption(interaction,"answer"); return ans ? birthdayCurseAnswer(env,interaction,ans) : startBirthdayCurse(env, interaction); }
-  if (sub === "bakery") return startBirthdayBakery(env, interaction);
-  if (sub === "wish") return birthdayWish(env, interaction);
-  if (sub === "cannon") return birthdayCannon(env, interaction);
-  if (sub === "trickster") return birthdayTrickster(env, interaction);
-  if (sub === "boss") return startBirthdayBoss(env, interaction);
   if (!people.length) return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(false));
   return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(true));
+}
+
+async function handleBirthdayShortcut(env, interaction, action) {
+  const guildId = interaction.guild_id;
+  const user = getUserFromInteraction(interaction);
+  if (!guildId || !user) return sendText(env, interaction, "❌ Birthday features can only be used inside a server.");
+  if (action === "set") return handleBirthdaySet(env, interaction);
+  if (action === "shop") return showBirthdayShop(env, interaction);
+  if (action === "gift") return handleBirthdayGift(env, interaction);
+  if (action === "gifts") return showBirthdayGifts(env, interaction);
+  if (action === "collection") return showBirthdayCollection(env, interaction);
+  if (action === "hunt") return handleBirthdayHunt(env, interaction);
+  if (action === "bingo") return startBirthdayBingo(env, interaction);
+  if (action === "roulette") return startBirthdayRoulette(env, interaction);
+  if (action === "curse") { const ans=getOption(interaction,"answer"); return ans ? birthdayCurseAnswer(env,interaction,ans) : startBirthdayCurse(env, interaction); }
+  if (action === "cupcake") return startBirthdayCupcake(env, interaction);
+  if (action === "bakery") return startBirthdayBakery(env, interaction);
+  if (action === "wish") return birthdayWish(env, interaction);
+  if (action === "cannon") return birthdayCannon(env, interaction);
+  if (action === "trickster") return birthdayTrickster(env, interaction);
+  if (action === "boss") return startBirthdayBoss(env, interaction);
 }
 
 async function handleBirthdaySet(env, interaction) {
@@ -17069,7 +17075,7 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party","`/birthday set` — Set your birthday month/day","`/birthday shop` — Open the Midnight Birthday Shop","`/birthday gift` — Send a birthday gift","`/birthday gifts` — Open your birthday gifts","`/birthday collection` — View your Birthday Collection","`/birthday bingo` — Play Halloween Birthday Bingo","`/birthday roulette` — Play Pumpkin Roulette","`/birthday curse` — Play The Birthday Curse","`/birthday bakery` — Play Batty Cake Bakery","`/birthday wish` — Perform the Birthday Wish Ritual","`/birthday cannon` — Fire the Birthday Boo Cannon","`/birthday trickster` — Use Birthday Trickster","`/birthday boss` — Fight the Cursed Birthday Cake","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open the Birthday Games menu","`/birthday-set` — Set your birthday month/day","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-games bingo` — Play Halloween Birthday Bingo","`/birthday-games roulette` — Play Pumpkin Roulette","`/birthday-games curse` — Play The Birthday Curse","`/birthday-games bakery` — Play Batty Cake Bakery","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-games boss` — Fight the Cursed Birthday Cake","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -17454,6 +17460,15 @@ async function handleCommand(
     interaction.data?.name;
 
   if (name === "birthday") { await handleBirthdayCommand(env, interaction); return; }
+  if (name === "birthday-games") { const sub = interaction.data?.options?.find(o=>o.type===1)?.name || "hunt"; await handleBirthdayShortcut(env, interaction, sub); return; }
+  if (name === "birthday-shop") { await handleBirthdayShortcut(env, interaction, "shop"); return; }
+  if (name === "birthday-gift") { await handleBirthdayShortcut(env, interaction, "gift"); return; }
+  if (name === "birthday-gifts") { await handleBirthdayShortcut(env, interaction, "gifts"); return; }
+  if (name === "birthday-collection") { await handleBirthdayShortcut(env, interaction, "collection"); return; }
+  if (name === "birthday-wish") { await handleBirthdayShortcut(env, interaction, "wish"); return; }
+  if (name === "birthday-cannon") { await handleBirthdayShortcut(env, interaction, "cannon"); return; }
+  if (name === "birthday-trickster") { await handleBirthdayShortcut(env, interaction, "trickster"); return; }
+  if (name === "birthday-set") { await handleBirthdayShortcut(env, interaction, "set"); return; }
 
   if (name === "games") {
     await handleGamesMenu(env, interaction);
@@ -19395,36 +19410,32 @@ async function handlePastelRules(env,interaction){await sendEphemeralFollowup(en
 ========================================================= */
 
 const COMMANDS = [
-  {
-    name: "birthday",
-    description: "Open the birthday party and birthday games",
-    options: [
-      { type: 1, name: "set", description: "Set your birthday month and day", options: [
-        { type: 4, name: "month", description: "Birthday month (1–12)", required: true, min_value: 1, max_value: 12 },
-        { type: 4, name: "day", description: "Birthday day (1–31)", required: true, min_value: 1, max_value: 31 }
-      ] },
-      { type: 1, name: "shop", description: "Open the Midnight Birthday Shop" },
-      { type: 1, name: "gift", description: "Send a birthday gift", options: [
-        { type: 6, name: "user", description: "Today's birthday person", required: true },
-        { type: 3, name: "gift_type", description: "Gift type: creepy_present, ghost_box, pumpkin_treasure, midnight_keepsake, moonlit_relic", required: true, choices: [
-          { name: "🎀 Creepy Little Present", value: "creepy_present" }, { name: "👻 Ghostly Gift Box", value: "ghost_box" }, { name: "🎃 Pumpkin Treasure", value: "pumpkin_treasure" }, { name: "🦇 Midnight Keepsake", value: "midnight_keepsake" }, { name: "🌙 Moonlit Birthday Relic", value: "moonlit_relic" }
-        ] }
-      ] },
-      { type: 1, name: "gifts", description: "Open your unopened birthday gifts" },
-      { type: 1, name: "collection", description: "View your permanent Birthday Collection" },
-      { type: 1, name: "hunt", description: "Open the Birthday Fright Hunt" },
-      { type: 1, name: "bingo", description: "Play Halloween Birthday Bingo" },
-      { type: 1, name: "roulette", description: "Play Pumpkin Roulette" },
-      { type: 1, name: "curse", description: "Play The Birthday Curse", options: [{ type: 3, name: "answer", description: "Answer the current Birthday Curse word prompt", required: false, max_length: 60 }] },
-      { type: 1, name: "cupcake", description: "Play Wicked Cupcake Tower" },
-      { type: 1, name: "bakery", description: "Play Batty Cake Bakery" },
-      { type: 1, name: "wish", description: "Perform the Birthday Wish Ritual" },
-      { type: 1, name: "cannon", description: "Fire the Birthday Boo Cannon" },
-      { type: 1, name: "trickster", description: "Use Birthday Trickster", options: [{ type: 6, name: "user", description: "Player to target", required: true }] },
-      { type: 1, name: "boss", description: "Fight the Cursed Birthday Cake" }
-    ]
-  },
-
+  { name: "birthday", description: "Open the Birthday Party hub" },
+  { name: "birthday-games", description: "Open the Birthday Games menu", options: [
+    { type: 1, name: "hunt", description: "Open the Birthday Fright Hunt" },
+    { type: 1, name: "bingo", description: "Play Halloween Birthday Bingo" },
+    { type: 1, name: "roulette", description: "Play Pumpkin Roulette" },
+    { type: 1, name: "curse", description: "Play The Birthday Curse", options: [{ type: 3, name: "answer", description: "Answer the current Birthday Curse word prompt", required: false, max_length: 60 }] },
+    { type: 1, name: "cupcake", description: "Play Wicked Cupcake Tower" },
+    { type: 1, name: "bakery", description: "Play Batty Cake Bakery" },
+    { type: 1, name: "boss", description: "Fight the Cursed Birthday Cake" }
+  ] },
+  { name: "birthday-shop", description: "Open the Midnight Birthday Shop" },
+  { name: "birthday-gift", description: "Send a birthday gift", options: [
+    { type: 6, name: "user", description: "Today's birthday person", required: true },
+    { type: 3, name: "gift_type", description: "Gift type", required: true, choices: [
+      { name: "🎀 Creepy Little Present", value: "creepy_present" }, { name: "👻 Ghostly Gift Box", value: "ghost_box" }, { name: "🎃 Pumpkin Treasure", value: "pumpkin_treasure" }, { name: "🦇 Midnight Keepsake", value: "midnight_keepsake" }, { name: "🌙 Moonlit Birthday Relic", value: "moonlit_relic" }
+    ] }
+  ] },
+  { name: "birthday-gifts", description: "Open your unopened birthday gifts" },
+  { name: "birthday-collection", description: "View your permanent Birthday Collection" },
+  { name: "birthday-wish", description: "Perform the Birthday Wish Ritual" },
+  { name: "birthday-cannon", description: "Fire the Birthday Boo Cannon" },
+  { name: "birthday-trickster", description: "Use Birthday Trickster", options: [{ type: 6, name: "user", description: "Player to target", required: true }] },
+  { name: "birthday-set", description: "Set your birthday month and day", options: [
+    { type: 4, name: "month", description: "Birthday month (1–12)", required: true, min_value: 1, max_value: 12 },
+    { type: 4, name: "day", description: "Birthday day (1–31)", required: true, min_value: 1, max_value: 31 }
+  ] },
   {
     name: "games",
     description: "Open the Werewives games menu"
@@ -20142,7 +20153,7 @@ export default {
       interaction.type === 2 && interaction.data?.name === "tree";
     const isTitlesCommand =
       interaction.type === 2 && interaction.data?.name === "titles";
-    const isBirthdayCommand = interaction.type === 2 && interaction.data?.name === "birthday";
+    const isBirthdayCommand = interaction.type === 2 && ["birthday","birthday-games","birthday-shop","birthday-gift","birthday-gifts","birthday-collection","birthday-wish","birthday-cannon","birthday-trickster","birthday-set"].includes(interaction.data?.name);
     const isPunishmentCommand =
       interaction.type === 2 && (interaction.data?.name === "pickle" || interaction.data?.name === "timeout");
     const customId = String(interaction.data?.custom_id || "");
