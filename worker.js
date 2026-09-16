@@ -1021,7 +1021,43 @@ function gifLZW(indices){
   return bytes;
 }
 function u16(n){return [n&255,(n>>8)&255];}
-async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);push(...new TextEncoder().encode("GIF89a"));push(...u16(width),...u16(height),0xF7,0,0);for(const c of palette)push(...c);push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);for(const png of pngFrames){const f=await decodePNG(png);const idx=new Uint8Array(width*height);for(let i=0;i<idx.length;i++)idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);push(0x21,0xF9,0x04,0x00,...u16(delayCs),0x00,0x00,0x2C,...u16(0),...u16(0),...u16(width),...u16(height),0x00,0x08);const lzw=gifLZW(idx);for(let i=0;i<lzw.length;i+=255){const chunk=lzw.slice(i,i+255);push(chunk.length,...chunk);}push(0);}push(0x3B);return new Uint8Array(out);}
+function gifSubBlocks(bytes){const out=[];for(let i=0;i<bytes.length;i+=255){const chunk=bytes.slice(i,i+255);out.push(chunk.length,...chunk);}out.push(0);return out;}
+function gifGraphicControl(out,delayCs,disposal=0,transparent=false,transparentIndex=255){
+  out.push(0x21,0xF9,0x04,(disposal<<2)|(transparent?1:0),...u16(delayCs),transparent?transparentIndex:0,0);
+}
+function gifImage(out,x,y,width,height,indices){
+  out.push(0x2C,...u16(x),...u16(y),...u16(width),...u16(height),0x00,0x08,...gifSubBlocks(gifLZW(indices)));
+}
+async function encodeStaticPlusTransparentGIF(staticPng,overlayPngs,width,height,delayCs=12){
+  const palette=gifPalette(),out=[];const push=(...xs)=>out.push(...xs);
+  push(...new TextEncoder().encode("GIF89a"));
+  push(...u16(width),...u16(height),0xF7,0,0);
+  for(const c of palette)push(...c);
+  push(0x21,0xFF,0x0B,...new TextEncoder().encode("NETSCAPE2.0"),0x03,0x01,0x00,0x00,0x00);
+
+  const base=await decodePNG(staticPng);
+  const baseIdx=new Uint8Array(width*height);
+  for(let i=0;i<baseIdx.length;i++)baseIdx[i]=nearestPaletteIndex(base.data[i*4],base.data[i*4+1],base.data[i*4+2],palette);
+  gifGraphicControl(out,delayCs,0,false);
+  gifImage(out,0,0,width,height,baseIdx);
+
+  for(const png of overlayPngs){
+    const f=await decodePNG(png);
+    const idx=new Uint8Array(width*height);
+    idx.fill(255);
+    for(let i=0;i<idx.length;i++){
+      const a=f.data[i*4+3];
+      if(a>20) idx[i]=nearestPaletteIndex(f.data[i*4],f.data[i*4+1],f.data[i*4+2],palette);
+    }
+    // Disposal 3 restores the static frame after each confetti overlay, so
+    // confetti from the previous frame never gets left behind. Transparent
+    // pixels expose the static tree underneath.
+    gifGraphicControl(out,delayCs,3,true,255);
+    gifImage(out,0,0,width,height,idx);
+  }
+  push(0x3B);
+  return new Uint8Array(out);
+}
 
 async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif") {
   const form = new FormData();
@@ -2998,10 +3034,9 @@ async function renderTreeDirectFallback(env, player) {
 }
 
 async function renderTree(env, player) {
-  // Birthday Confetti is rendered as a compact, real animated GIF.
-  // CSS animation alone cannot survive a PNG screenshot. Four full-resolution
-  // frames keep the attachment small enough for Discord while preserving the
-  // full-quality tree/background artwork.
+  // Birthday Confetti is rendered as a real animated GIF: one static full-quality
+  // tree frame plus transparent confetti-only overlay frames. This avoids
+  // re-encoding the entire tree artwork for every animation frame.
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
@@ -3060,9 +3095,10 @@ async function renderTree(env, player) {
           }).join("")
         : "";
 
-      const makeHTML = (phase = 0) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML(phase)}${sparkleHTML}</div></body></html>`;
+      const staticHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${sparkleHTML}</div></body></html>`;
+      const overlayHTML = (phase = 0) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:transparent}#scene{position:relative;width:1024px;height:1024px;overflow:hidden;background:transparent}</style></head><body><div id="scene">${confettiHTML(phase)}</div></body></html>`;
 
-      await page.setContent(makeHTML(0), { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.setContent(staticHTML, { waitUntil: "domcontentloaded", timeout: 8000 });
       await page.evaluate(async () => {
         const images = Array.from(document.images);
         await Promise.race([
@@ -3071,21 +3107,30 @@ async function renderTree(env, player) {
         ]);
       });
 
+      const waitForImages = async () => {
+        await page.evaluate(async () => {
+          const images = Array.from(document.images);
+          await Promise.race([
+            Promise.all(images.map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.onload = resolve; image.onerror = resolve; }))),
+            new Promise(resolve => setTimeout(resolve, 5000))
+          ]);
+        });
+      };
+      await waitForImages();
+
       if (wantsAnimatedConfetti) {
-        const frames = [];
-        const frameCount = 4;
+        // Build one full-quality static frame, then use transparent GIF overlay
+        // frames containing ONLY the moving confetti. GIF disposal=3 restores
+        // the static frame after each overlay, so the animation genuinely moves
+        // without re-encoding the enormous tree artwork on every frame.
+        const staticFrame = await page.screenshot({ type: "png" });
+        const overlayFrames = [];
+        const frameCount = 8;
         for (let i = 0; i < frameCount; i++) {
-          await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, makeHTML(i / frameCount));
-          await page.evaluate(async () => {
-            const images = Array.from(document.images);
-            await Promise.race([
-              Promise.all(images.map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.onload = resolve; image.onerror = resolve; }))),
-              new Promise(resolve => setTimeout(resolve, 1500))
-            ]);
-          });
-          frames.push(await page.screenshot({ type: "png" }));
+          await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, overlayHTML(i / frameCount));
+          overlayFrames.push(await page.screenshot({ type: "png" }));
         }
-        return { bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 18), animated: true };
+        return { bytes: await encodeStaticPlusTransparentGIF(staticFrame, overlayFrames, 1024, 1024, 10), animated: true };
       }
 
       return { bytes: await page.screenshot({ type: "png" }), animated: false };
