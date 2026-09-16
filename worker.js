@@ -2945,6 +2945,16 @@ async function renderTreeDirectFallback(env, player) {
   try {
     const tree = await getPngAsset(env, getTreeImage(player));
     const layer = containRGBA(tree, 922, 922);
+    // Keep every tree visually strong in the no-browser fallback too.
+    // Slightly boost brightness/contrast/saturation without changing alpha.
+    for (let i = 0; i < layer.data.length; i += 4) {
+      if (layer.data[i + 3] === 0) continue;
+      for (const c of [0, 1, 2]) {
+        const v = layer.data[i + c] / 255;
+        const boosted = Math.min(1, Math.max(0, ((v - 0.5) * 1.12 + 0.5) * 1.10));
+        layer.data[i + c] = Math.round(boosted * 255);
+      }
+    }
     alphaComposite(scene, layer, Math.round((width - layer.width) / 2), 184);
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
@@ -3040,7 +3050,7 @@ async function renderTree(env, player) {
         ? Array.from({length:60},(_,i)=>`<span style="position:absolute;left:${(i*47+7)%96}%;top:${(i*31+11)%88}%;width:${7+(i%4)*2}px;height:${14+(i%5)*3}px;background:${confettiColors[i%confettiColors.length]};border-radius:2px;z-index:12;transform:rotate(${(i*29)%360}deg);animation:confettiFloat ${1.1+(i%5)*0.25}s ease-in-out infinite ${-(i%7)*0.18}s;box-shadow:0 0 7px rgba(255,255,255,.65)"></span>`).join("")
         : "";
 
-      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}@keyframes confettiFloat{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(16px) rotate(90deg)}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML}${sparkleHTML}</div></body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}@keyframes confettiFloat{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(16px) rotate(90deg)}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4;filter:brightness(1.16) contrast(1.12) saturate(1.18) drop-shadow(0 10px 12px rgba(0,0,0,.30)) drop-shadow(0 0 10px rgba(255,255,255,.18))}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML}${sparkleHTML}</div></body></html>`;
 
       await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 8000 });
       await page.evaluate(async () => {
@@ -5150,6 +5160,11 @@ async function equipTheme(
         "red_forest_background"
       ),
 
+    birthday:
+      player.inventory.includes(
+        "birthday_background"
+      ),
+
     stoned_birthday:
       player.inventory.includes(
         "stoned_birthday_background"
@@ -5474,7 +5489,10 @@ async function equipDecoration(
         "duck_hat_boots_decoration",
 
       cheddar_falls:
-        "cheddar_falls_decoration"
+        "cheddar_falls_decoration",
+
+      birthday:
+        "birthday_decoration"
     }[decoration];
 
     if (
@@ -5929,23 +5947,16 @@ async function handleBirthdaySet(env, interaction) {
 }
 
 function birthdayShopComponents(page=0) {
+  // The Midnight Birthday Shop has only six items. Keep every item visible
+  // at once so none of the shop purchases are hidden behind pagination.
+  // Six items fit safely into three rows of two, plus the Birthday Menu row.
   const ids=Object.keys(BIRTHDAY_SHOP_ITEMS);
-  const pageSize=4;
-  const slice=ids.slice(page*pageSize,page*pageSize+pageSize);
-  // Discord allows a maximum of 5 action rows. Keep the 4 shop items to
-  // two rows (2 buttons each), then use one row for pagination and one for
-  // the Birthday Menu button.
   const rows=[];
-  for(let i=0;i<slice.length;i+=2){
-    rows.push(row(...slice.slice(i,i+2).map(id=>
+  for(let i=0;i<ids.length;i+=2){
+    rows.push(row(...ids.slice(i,i+2).map(id=>
       button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1)
     )));
   }
-  if(ids.length>pageSize) rows.push(row(
-    button("⬅️","birthday:shop:"+Math.max(0,page-1),2,page===0),
-    button(`Page ${page+1}/${Math.ceil(ids.length/pageSize)}`,"birthday:noop",2,true),
-    button("➡️","birthday:shop:"+(page+1),2,(page+1)*pageSize>=ids.length)
-  ));
   rows.push(row(button("🎂 Birthday Menu","birthday:home",2)));
   return rows;
 }
