@@ -2258,7 +2258,7 @@ async function sendTree(
       player
     );
   const image = rendered.bytes;
-  const imageFilename = rendered.animated ? "tree.gif" : "tree.png";
+  const imageFilename = rendered.animated ? `tree-${Date.now()}.gif` : "tree.png";
   const imageType = rendered.animated ? "image/gif" : "image/png";
 
   const stats =
@@ -3119,18 +3119,34 @@ async function renderTree(env, player) {
       await waitForImages();
 
       if (wantsAnimatedConfetti) {
-        // Build one full-quality static frame, then use transparent GIF overlay
-        // frames containing ONLY the moving confetti. GIF disposal=3 restores
-        // the static frame after each overlay, so the animation genuinely moves
-        // without re-encoding the enormous tree artwork on every frame.
-        const staticFrame = await page.screenshot({ type: "png" });
-        const overlayFrames = [];
-        const frameCount = 8;
+        // CONFETTI ANIMATION V3:
+        // Do not use transparent overlay frames. Render the COMPLETE scene for
+        // every frame and encode those complete PNG frames into a conventional
+        // animated GIF. This removes the transparency/disposal layer entirely
+        // and matches the GIF pipeline already used by the working profile GIF.
+        const frames = [];
+        const frameCount = 6;
+
         for (let i = 0; i < frameCount; i++) {
-          await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, overlayHTML(i / frameCount));
-          overlayFrames.push(await page.screenshot({ type: "png", omitBackground: true }));
+          const phase = i / frameCount;
+          const frameHTML = staticHTML.replace(
+            "</div></body></html>",
+            `${confettiHTML(phase)}</div></body></html>`
+          );
+
+          await page.setContent(frameHTML, {
+            waitUntil: "domcontentloaded",
+            timeout: 8000
+          });
+          await waitForImages();
+
+          frames.push(await page.screenshot({ type: "png" }));
         }
-        return { bytes: await encodeStaticPlusTransparentGIF(staticFrame, overlayFrames, 1024, 1024, 10), animated: true };
+
+        return {
+          bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12),
+          animated: true
+        };
       }
 
       return { bytes: await page.screenshot({ type: "png" }), animated: false };
