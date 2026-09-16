@@ -5936,7 +5936,21 @@ function birthdayShopComponents(page=0) {
 }
 
 async function showBirthdayShop(env, interaction, page=0) {
-  const {people}=await ensureBirthdayEvent(env,interaction.guild_id); if(!people.length) return sendText(env,interaction,"🔒 The Midnight Birthday Shop is closed. No birthday is active today.");
+  // The shop button has already acknowledged the interaction. Do NOT run the
+  // full birthday-member scan here unless the saved birthday state is missing.
+  // ensureBirthdayEvent() scans every guild member and can take long enough to
+  // leave the loading message stuck. The active birthday state already contains
+  // the verified birthday IDs for this event.
+  const state=await getGuildState(env,interaction.guild_id);
+  let people=[];
+  const today=birthdayTodayKey();
+  if(state?.birthday?.active && state.birthday.activeDate===today && Array.isArray(state.birthday.birthdayIds) && state.birthday.birthdayIds.length){
+    people=state.birthday.birthdayIds.map(id=>({userId:id}));
+  }else{
+    const ensured=await ensureBirthdayEvent(env,interaction.guild_id);
+    people=ensured.people||[];
+  }
+  if(!people.length) return sendText(env,interaction,"🔒 The Midnight Birthday Shop is closed. No birthday is active today.");
   const user=getUserFromInteraction(interaction); const p=await getPlayer(env,user.id); const owned=p.inventory||[];
   const ids=Object.keys(BIRTHDAY_SHOP_ITEMS); const lines=ids.map(id=>{const x=BIRTHDAY_SHOP_ITEMS[id];return `• ${x.name} — **${x.price.toLocaleString()} Birthday Candies**${owned.includes(id)?" — ✅ Owned":""}`;});
   return sendText(env,interaction,`🦇🛍️ **MIDNIGHT BIRTHDAY SHOP**\n\n🎟️ Your Birthday Candies: **${Number(p.birthdayCandies||0).toLocaleString()}**\n\n${lines.join("\n")}\n\nBirthday Shop items are exclusive to the birthday event and do not appear in the normal shop.`,birthdayShopComponents(page));
