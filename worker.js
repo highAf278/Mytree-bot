@@ -6521,9 +6521,7 @@ Choose a **${nextMenu.name}**:`,
     return sendText(
       env,
       interaction,
-      responseContent+"
-
-⚠️ The cake image could not be attached, but your design and reward were saved.",
+      responseContent+"\n\n⚠️ The cake image could not be attached, but your design and reward were saved.",
       [row(button("🎂 Birthday Menu","birthday:home",2))]
     );
   }
