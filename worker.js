@@ -7042,6 +7042,15 @@ const BIRTHDAY_BAKERY_MENUS=[
   {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
 ];
 
+function birthdayBakeryChoiceButtons(menu){
+  const options=Array.isArray(menu?.options)?menu.options:[];
+  const rows=[];
+  for(let i=0;i<options.length;i+=5){
+    rows.push(row(...options.slice(i,i+5).map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1))));
+  }
+  return rows.length?rows:[row(button("🎂 Birthday Menu","birthday:home",2))];
+}
+
 async function startBirthdayBakery(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");
