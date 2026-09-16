@@ -2906,6 +2906,36 @@ async function renderProfileDirect(env,player){
   return rgbaToRgbPng(scene);
 }
 
+function drawBirthdayConfetti(frame){
+  const pieces=[[255,127,189],[255,244,255],[199,132,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255]];
+  for(let i=0;i<pieces.length;i++){
+    const x=25+((i*137)%880),y=35+((i*83)%900),w=8+(i%4)*3,h=16+(i%3)*7,c=pieces[i];
+    if(i%3===0)circleFrame(frame,x,y,Math.max(5,w/2),[c[0],c[1],c[2],235]);
+    else rectFrame(frame,x,y,x+w,y+h,[c[0],c[1],c[2],235]);
+  }
+}
+function circleFrame(frame,cx,cy,r,col){
+  const r2=r*r;
+  for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(frame.height-1,Math.ceil(cy+r));y++)
+    for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(frame.width-1,Math.ceil(cx+r));x++){
+      const dx=x-cx,dy=y-cy;
+      if(dx*dx+dy*dy<=r2){
+        const i=(y*frame.width+x)*4,sa=(col[3]??255)/255;
+        frame.data[i]=Math.round(frame.data[i]*(1-sa)+col[0]*sa);
+        frame.data[i+1]=Math.round(frame.data[i+1]*(1-sa)+col[1]*sa);
+        frame.data[i+2]=Math.round(frame.data[i+2]*(1-sa)+col[2]*sa);
+      }
+    }
+}
+function rectFrame(frame,x0,y0,x1,y1,col){
+  for(let y=Math.max(0,Math.floor(y0));y<Math.min(frame.height,Math.ceil(y1));y++)
+    for(let x=Math.max(0,Math.floor(x0));x<Math.min(frame.width,Math.ceil(x1));x++){
+      const i=(y*frame.width+x)*4,sa=(col[3]??255)/255;
+      frame.data[i]=Math.round(frame.data[i]*(1-sa)+col[0]*sa);
+      frame.data[i+1]=Math.round(frame.data[i+1]*(1-sa)+col[1]*sa);
+      frame.data[i+2]=Math.round(frame.data[i+2]*(1-sa)+col[2]*sa);
+    }
+}
 async function renderTreeDirectFallback(env, player) {
   const width = 1024, height = 1024;
   // Start with a safe color, then replace it with the player's ACTUAL
@@ -2955,7 +2985,7 @@ async function renderTreeDirectFallback(env, player) {
     }
   }
 
-  // Draw the active sparkles directly so they still appear when Browser
+  // Browser Rendering can animate confetti; the direct PNG fallback cannot.\n  // Draw a visible confetti frame so the effect is never silently dropped.\n  if(player.equipped?.effect === "birthday_confetti")drawBirthdayConfetti(scene);\n\n  // Draw the active sparkles directly so they still appear when Browser
   // Rendering is unavailable.
   for (const sparkle of (player.sparklesOnTree || [])) {
     const x = Math.round((Number(sparkle.x) || 50) / 100 * width);
@@ -6295,34 +6325,59 @@ function birthdayCakeChunk(type,data){
 }
 function birthdayCakePng(g){
   const W=900,H=650,rgba=new Uint8Array(W*H*4);
-  const c=g.choices||[],shape=String(c[0]||"Round"),frosting=String(c[2]||"Pink Frosting"),decor=String(c[5]||"Glitter"),effect=String(c[6]||"Sparkle Aura");
-  const fc=frosting.toLowerCase().includes("purple")?[181,140,255]:frosting.toLowerCase().includes("orange")?[255,154,61]:frosting.toLowerCase().includes("black")?[45,38,55]:frosting.toLowerCase().includes("ghost")?[248,243,255]:[255,127,189];
-  const ac=effect.toLowerCase().includes("moon")?[155,140,255]:decor.toLowerCase().includes("pumpkin")?[255,154,61]:[255,210,110];
+  const c=g.choices||[],shape=String(c[0]||"Round"),flavor=String(c[1]||"Vanilla Mooncake");
+  const frosting=String(c[2]||"Pink Frosting"),filling=String(c[3]||"Strawberry Jam"),topping=String(c[4]||"Pink Bow");
+  const decor=String(c[5]||"Glitter"),effect=String(c[6]||"Sparkle Aura");
   const set=(x,y,r,g,b,a=255)=>{if(x<0||y<0||x>=W||y>=H)return;const i=(y*W+x)*4;rgba[i]=r;rgba[i+1]=g;rgba[i+2]=b;rgba[i+3]=a;};
-  const rect=(x0,y0,x1,y1,col)=>{for(let y=Math.max(0,y0);y<Math.min(H,y1);y++)for(let x=Math.max(0,x0);x<Math.min(W,x1);x++)set(x,y,...col);};
-  const circle=(cx,cy,rr,col)=>{const r2=rr*rr;for(let y=Math.max(0,cy-rr);y<=Math.min(H-1,cy+rr);y++)for(let x=Math.max(0,cx-rr);x<=Math.min(W-1,cx+rr);x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2)set(x,y,...col);}};
-  rect(0,0,W,H,[23,18,34]);
-  circle(120,105,62,[255,210,110]);circle(780,110,82,[255,127,189,55]);circle(110,545,90,[155,140,255,45]);circle(800,535,95,[255,154,61,35]);
-  const cakeX=220,cakeY=245,cakeW=460,cakeH=210;
-  if(shape.toLowerCase().includes("heart")){for(let y=0;y<cakeH;y++)for(let x=0;x<cakeW;x++){const nx=(x-cakeW/2)/(cakeW/2),ny=(y-cakeH*.48)/(cakeH*.48);const f=Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny;if(f<=0)set(cakeX+x,cakeY+y,...fc);}}
-  else if(shape.toLowerCase().includes("pumpkin")){rect(cakeX+35,cakeY+35,cakeX+cakeW-35,cakeY+cakeH-10,fc);for(let x=cakeX+70;x<cakeX+cakeW-60;x+=70)circle(x,cakeY+cakeH/2,72,[Math.max(0,fc[0]-20),Math.max(0,fc[1]-15),Math.max(0,fc[2]-5)]);}
-  else if(shape.toLowerCase().includes("moon")){circle(450,350,125,fc);circle(500,315,110,[23,18,34]);}
-  else if(shape.toLowerCase().includes("bat")){const pts=[[250,315],[320,270],[385,315],[450,255],[515,315],[580,270],[650,315],[585,390],[515,375],[450,430],[385,375],[315,390]];for(let y=250;y<440;y++)for(let x=230;x<670;x++){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];if(((yi>y)!=(yj>y))&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside;}if(inside)set(x,y,...fc);}}
-  else rect(cakeX,cakeY,cakeX+cakeW,cakeY+cakeH,fc);
-  rect(250,415,650,455,[107,49,79]);
-  for(let x=285;x<=615;x+=55)circle(x,405,8,ac);
-  for(let x=330;x<=570;x+=80){rect(x,195,x+8,250,[245,245,245]);rect(x-5,188,x+13,198,ac);}
-  for(let i=0;i<18;i++){const x=280+((i*83)%330),y=275+((i*47)%115);circle(x,y,5,i%2?[255,255,255]:ac);}
-  // Tiny decorative bow at the bottom to make the selected topping visible.
-  circle(435,485,22,[255,127,189]);circle(465,485,22,[255,127,189]);circle(450,485,10,[255,210,110]);
+  const rect=(x0,y0,x1,y1,col)=>{for(let y=Math.max(0,Math.floor(y0));y<Math.min(H,Math.ceil(y1));y++)for(let x=Math.max(0,Math.floor(x0));x<Math.min(W,Math.ceil(x1));x++)set(x,y,...col);};
+  const circle=(cx,cy,rr,col)=>{const r2=rr*rr;for(let y=Math.max(0,Math.floor(cy-rr));y<=Math.min(H-1,Math.ceil(cy+rr));y++)for(let x=Math.max(0,Math.floor(cx-rr));x<=Math.min(W-1,Math.ceil(cx+rr));x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2)set(x,y,...col);}};
+  const ellipse=(cx,cy,rx,ry,col)=>{for(let y=Math.max(0,Math.floor(cy-ry));y<=Math.min(H-1,Math.ceil(cy+ry));y++)for(let x=Math.max(0,Math.floor(cx-rx));x<=Math.min(W-1,Math.ceil(cx+rx));x++){const dx=(x-cx)/rx,dy=(y-cy)/ry;if(dx*dx+dy*dy<=1)set(x,y,...col);}};
+  const line=(x0,y0,x1,y1,w,col)=>{const n=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)));for(let i=0;i<=n;i++){const t=i/n;circle(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w/2,col);}};
+  const heart=(cx,cy,s,col)=>{circle(cx-s*.34,cy-s*.18,s*.34,col);circle(cx+s*.34,cy-s*.18,s*.34,col);for(let y=-s*.05;y<s*.78;y++){const half=Math.max(0,s*.68*(1-y/(s*1.55)));for(let x=-half;x<=half;x++)set(Math.round(cx+x),Math.round(cy+y),...col);}};
+  const flavorColor=flavor.toLowerCase().includes("black")?[54,43,61]:flavor.toLowerCase().includes("strawberry")?[244,156,191]:flavor.toLowerCase().includes("pumpkin")?[217,128,53]:flavor.toLowerCase().includes("cherry")?[126,49,78]:[247,222,196];
+  const frostingColor=frosting.toLowerCase().includes("purple")?[181,140,255]:frosting.toLowerCase().includes("orange")?[255,154,61]:frosting.toLowerCase().includes("black")?[55,43,61]:frosting.toLowerCase().includes("ghost")?[248,243,255]:[255,127,189];
+  const fillingColor=filling.toLowerCase().includes("chocolate")?[91,54,65]:filling.toLowerCase().includes("blackberry")?[87,51,112]:filling.toLowerCase().includes("cherry")?[163,63,91]:filling.toLowerCase().includes("cotton")?[230,178,244]:[224,83,133];
+  const accent=decor.toLowerCase().includes("pumpkin")?[255,154,61]:effect.toLowerCase().includes("moon")?[155,140,255]:[255,210,110];
+
+  rect(0,0,W,H,[23,18,34]);circle(110,95,60,[255,210,110]);circle(790,100,78,[255,127,189]);circle(110,540,82,[155,140,255]);circle(795,530,88,[255,154,61]);
+  for(let i=0;i<18;i++)circle(35+((i*149)%830),35+((i*97)%185),2+(i%3),[255,255,255]);
+  ellipse(450,548,275,28,[10,8,16]);ellipse(450,525,270,30,[123,73,101]);
+
+  const roundCake=()=>{rect(245,365,655,505,flavorColor);ellipse(450,365,205,58,frostingColor);rect(245,285,655,425,flavorColor);ellipse(450,285,205,58,frostingColor);rect(260,405,640,425,fillingColor);ellipse(450,405,190,24,fillingColor);for(let x=275,i=0;x<=625;x+=50,i++)ellipse(x,318+(i%2)*5,25,28,frostingColor);ellipse(450,505,205,28,frostingColor);};
+  const heartCake=()=>{heart(450,395,190,flavorColor);heart(450,365,165,frostingColor);heart(450,402,125,fillingColor);heart(450,380,98,frostingColor);};
+  const pumpkinCake=()=>{const base=[Math.max(0,flavorColor[0]-12),Math.max(0,flavorColor[1]-8),Math.max(0,flavorColor[2]-3)];ellipse(450,405,205,120,base);for(let x=290;x<=610;x+=55)ellipse(x,405,62,112,flavorColor);ellipse(450,340,205,62,frostingColor);rect(438,270,462,315,[74,112,52]);ellipse(450,270,24,12,[94,145,63]);ellipse(450,505,205,24,frostingColor);};
+  const moonCake=()=>{circle(450,395,145,flavorColor);circle(505,350,128,[23,18,34]);ellipse(450,510,175,22,frostingColor);for(let i=0;i<7;i++)circle(375+i*25,400+(i%2)*24,6,frostingColor);};
+  const batCake=()=>{const pts=[[250,360],[315,315],[365,350],[450,300],[535,350],[585,315],[650,360],[590,430],[530,415],[450,475],[370,415],[310,430]];for(let y=300;y<=480;y++){const xs=[];for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if((yi>y)!=(yj>y))xs.push((xj-xi)*(y-yi)/(yj-yi)+xi);}xs.sort((a,b)=>a-b);for(let i=0;i+1<xs.length;i+=2)rect(xs[i],y,xs[i+1]+1,y+1,flavorColor);}line(315,370,585,370,22,frostingColor);circle(420,365,10,[255,255,255]);circle(480,365,10,[255,255,255]);circle(420,365,4,[35,25,45]);circle(480,365,4,[35,25,45]);ellipse(450,490,170,20,frostingColor);};
+  const sl=shape.toLowerCase();if(sl.includes("heart"))heartCake();else if(sl.includes("pumpkin"))pumpkinCake();else if(sl.includes("moon"))moonCake();else if(sl.includes("bat"))batCake();else roundCake();
+
+  const tl=topping.toLowerCase();
+  if(tl.includes("bow")){circle(395,250,34,[255,127,189]);circle(505,250,34,[255,127,189]);circle(450,250,20,accent);}
+  else if(tl.includes("bat")){circle(450,252,13,[45,32,55]);line(437,252,415,240,7,[45,32,55]);line(463,252,485,240,7,[45,32,55]);line(440,258,425,273,6,[45,32,55]);line(460,258,475,273,6,[45,32,55]);}
+  else if(tl.includes("ghost")){circle(450,250,38,[248,243,255]);rect(412,250,488,280,[248,243,255]);circle(435,245,5,[50,40,65]);circle(465,245,5,[50,40,65]);}
+  else if(tl.includes("pumpkin")){circle(450,255,34,[255,154,61]);rect(444,218,456,228,[75,120,55]);for(let x=425;x<=475;x+=25)line(x,230,x,280,3,[225,116,45]);}
+  else{rect(445,210,455,270,[245,245,245]);rect(439,204,461,214,accent);circle(450,194,10,[255,173,60]);}
+
+  const dl=decor.toLowerCase();
+  if(dl.includes("glitter"))for(let i=0;i<20;i++){const x=285+((i*67)%330),y=330+((i*41)%145);line(x-5,y,x+5,y,2,[255,255,255]);line(x,y-5,x,y+5,2,accent);}
+  else if(dl.includes("sprinkles"))for(let i=0;i<30;i++){const x=275+((i*53)%350),y=330+((i*29)%150);line(x,y,x+8,y+5,3,i%2?[255,127,189]:accent);}
+  else if(dl.includes("pumpkin"))for(let i=0;i<7;i++)circle(310+i*45,430-(i%2)*12,12,[255,154,61]);
+  else if(dl.includes("spiderweb"))for(let r=18;r<=70;r+=18)for(let a=0;a<6;a++){const ang=a*Math.PI/3;line(450+Math.cos(ang)*(r-18),395+Math.sin(ang)*(r-18),450+Math.cos(ang)*r,395+Math.sin(ang)*r,2,[225,225,235]);}
+  else for(const [x,y] of [[350,430],[450,455],[550,430]]){circle(x-9,y,10,[126,49,78]);circle(x+9,y,10,[126,49,78]);circle(x,y-9,10,[163,63,91]);circle(x,y+8,8,[126,49,78]);circle(x,y,5,[255,210,110]);}
+
+  const el=effect.toLowerCase();
+  if(el.includes("sparkle"))for(let i=0;i<16;i++){const x=300+((i*71)%300),y=300+((i*37)%160);line(x-6,y,x+6,y,2,[255,255,255]);line(x,y-6,x,y+6,2,[255,210,110]);}
+  else if(el.includes("moon")){for(let i=0;i<5;i++)circle(300+i*75,190+(i%2)*22,9,[155,140,255]);circle(650,190,25,[255,255,255]);circle(660,182,21,[23,18,34]);}
+  else if(el.includes("bat"))for(let i=0;i<4;i++){const x=285+i*105,y=170+(i%2)*28;line(x-24,y,x,y-15,5,[55,43,61]);line(x,y-15,x+24,y,5,[55,43,61]);circle(x,y,8,[55,43,61]);}
+  else if(el.includes("ghost"))for(let i=0;i<4;i++)circle(300+i*100,180+(i%2)*25,18,[248,243,255,150]);
+  else for(let i=0;i<5;i++)circle(320+i*70,185+(i%3)*18,12,[255,154,61,170]);
+
+  rect(300,565,600,610,[48,31,58]);ellipse(450,565,150,18,[84,45,75]);
   const raw=new Uint8Array((W*4+1)*H);let o=0;for(let y=0;y<H;y++){raw[o++]=0;raw.set(rgba.subarray(y*W*4,(y+1)*W*4),o);o+=W*4;}
-  // PNG zlib stream using stored DEFLATE blocks; no external library or browser required.
   const def=[];def.push(0x78,0x01);for(let pos=0;pos<raw.length;){const n=Math.min(65535,raw.length-pos),last=pos+n>=raw.length;def.push(last?1:0,n&255,(n>>>8)&255,(~n)&255,((~n)>>>8)&255,...raw.subarray(pos,pos+n));pos+=n;}
-  let a=1,b=0;for(const v of raw){a=(a+v)%65521;b=(b+a)%65521;}const ad=((b<<16)|a)>>>0;def.push(...birthdayCakeU32(ad));
+  let a=1,b=0;for(const v of raw){a=(a+v)%65521;b=(b+a)%65521;}def.push(...birthdayCakeU32(((b<<16)|a)>>>0));
   const ihdr=new Uint8Array([...birthdayCakeU32(W),...birthdayCakeU32(H),8,6,0,0,0]);
   return new Uint8Array([137,80,78,71,13,10,26,10,...birthdayCakeChunk("IHDR",ihdr),...birthdayCakeChunk("IDAT",new Uint8Array(def)),...birthdayCakeChunk("IEND",new Uint8Array())]);
 }
-
 async function renderBirthdayCake(env,name,choices){let browser;try{browser=await puppeteer.launch(env.BROWSER);const page=await browser.newPage();await page.setViewport({width:900,height:700,deviceScaleFactor:1});const colors={"Pink Frosting":"#ff9ed8","Purple Frosting":"#a87be8","Orange Frosting":"#ff9b45"};const frosting=colors[choices.find(x=>colors[x])]||"#ff9ed8";const shape=choices[0]==="Heart"?"♥":choices[0]==="Pumpkin"?"🎃":choices[0]==="Moon"?"🌙":choices[0]==="Bat"?"🦇":"🎂";const html=`<!doctype html><html><body style="margin:0;width:900px;height:700px;background:#24162d;display:flex;align-items:center;justify-content:center;font-family:Arial"><div style="width:760px;height:560px;border-radius:40px;background:linear-gradient(145deg,#2d1b39,#120c18);text-align:center;color:white;padding:30px;box-sizing:border-box"><div style="font-size:42px;font-weight:900">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div><div style="font-size:28px;margin-top:8px">A birthday cake for <b>${escapeHTML(name)}</b></div><div style="margin:35px auto 20px;width:470px;height:230px;background:${frosting};border-radius:${choices[0]==="Heart"?"45% 45% 25% 25%":"28px"};box-shadow:0 20px 35px rgba(0,0,0,.45);position:relative"><div style="font-size:100px;position:absolute;inset:45px 0 auto">${shape}</div><div style="position:absolute;bottom:18px;left:0;right:0;font-size:28px">🎀 ✨ 🕯️ 🎃 🦇 ✨ 🎀</div></div><div style="font-size:22px">${choices.map(escapeHTML).join(" • ")}</div></div></body></html>`;await page.setContent(html,{waitUntil:"domcontentloaded"});return await page.screenshot({type:"png"});}finally{if(browser)await browser.close().catch(()=>{});}}
 
 function birthdayCakeEscape(value){return String(value||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
@@ -17699,7 +17754,7 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-name` — Mention today's birthday person for Bingo",`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -18076,6 +18131,22 @@ async function handleIslandCommand(env, interaction) {
   await handleIslandRules(env, interaction);
 }
 
+async function birthdayNameMention(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Name Shoutout is closed.");
+  const uid=getUserFromInteraction(interaction).id;
+  const target=getOption(interaction,"user");
+  const birthdayIds=(state.birthday?.birthdayIds||[]).map(String);
+  if(!target)return sendText(env,interaction,"🎂 Choose today's birthday person.");
+  if(!birthdayIds.includes(String(target)))return sendText(env,interaction,"🎂 That player isn't today's birthday person. Pick the birthday person from the command's user selector.");
+  await markBingoAction(env,interaction.guild_id,uid,"say_name");
+  return sendText(env,interaction,`🎂🎉 **BIRTHDAY SHOUTOUT!**
+
+<@${uid}> wished <@${target}> a happy birthday! 🎀🦇
+
+🟩 Your **Mention the birthday person's name** Bingo square has been checked!`);
+}
+
 async function handleCommand(
   env,
   interaction
@@ -18093,6 +18164,7 @@ async function handleCommand(
   if (name === "birthday-wish") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayWish(env, interaction); return; }
   if (name === "birthday-cannon") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayCannon(env, interaction); return; }
   if (name === "birthday-trickster") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayTrickster(env, interaction); return; }
+  if (name === "birthday-name") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayNameMention(env, interaction); return; }
 
   if (name === "games") {
     await handleGamesMenu(env, interaction);
@@ -20077,6 +20149,11 @@ const COMMANDS = [
     name: "birthday-trickster",
     description: "Use Birthday Trickster",
     options: [{ type: 6, name: "user", description: "Player to target", required: true }]
+  },
+  {
+    name: "birthday-name",
+    description: "Mention today's birthday person for Birthday Bingo",
+    options: [{ type: 6, name: "user", description: "Today's birthday person", required: true }]
   },
   {
     name: "birthday-set",
