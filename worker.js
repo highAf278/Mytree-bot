@@ -2308,10 +2308,11 @@ async function sendTree(
   const stats =
     buildTreeStats(player);
 
+  const diagnosticLine = rendered.diagnostic ? `\n\n🛠️ ${rendered.diagnostic}` : "";
   const content =
     player.sceneMessage
-      ? `${stats}\n\n${player.sceneMessage}`
-      : stats;
+      ? `${stats}\n\n${player.sceneMessage}${diagnosticLine}`
+      : `${stats}${diagnosticLine}`;
 
   const form =
     new FormData();
@@ -3084,7 +3085,7 @@ async function renderTree(env, player) {
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
-    return { bytes: await renderTreeDirectFallback(env, player), animated: false };
+    return { bytes: await renderTreeDirectFallback(env, player), animated: false, diagnostic: `STATIC FALLBACK: ${reason?.message || reason || "unknown"}` };
   };
 
   try {
@@ -3187,9 +3188,12 @@ async function renderTree(env, player) {
           frames.push(await page.screenshot({ type: "png" }));
         }
 
+        const gifBytes = await encodePNGFramesToGIF(frames, 1024, 1024, 12);
+        console.log(`Birthday Confetti GIF diagnostic: frames=${frames.length}, bytes=${gifBytes.length}`);
         return {
-          bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12),
-          animated: true
+          bytes: gifBytes,
+          animated: true,
+          diagnostic: `GIF frames=${frames.length}, bytes=${gifBytes.length}`
         };
       }
 
