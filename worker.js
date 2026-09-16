@@ -20916,6 +20916,7 @@ export default {
     const isSurpriseAlertComponent = interaction.type === 3 && customId.startsWith("surprise_alert:");
     const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     const isBirthdayComponent = interaction.type === 3 && customId.startsWith("birthday:");
+    const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
     // Tree buttons can involve KV reads and optional Browser Rendering.
     // Acknowledge them immediately so Discord never leaves the button
     // spinning on "Bot is thinking..." while the tree action finishes.
@@ -20942,7 +20943,7 @@ export default {
       );
 
     const relevant =
-      isBirthdayCommand || isBirthdayComponent || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
