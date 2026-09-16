@@ -6891,20 +6891,12 @@ function birthdayCakeShape(frame,shape,x,y,w,h,rr,gg,bb){
 }
 async function renderBirthdayCake(env,name,choices){
   /*
-    Direct raster renderer.
-    This intentionally does NOT launch Cloudflare Browser Rendering. Step 7
-    must be able to finish even when the BROWSER binding is slow/rate-limited.
+    Direct raster renderer: fast, deterministic, and does not require the
+    Cloudflare Browser Rendering binding. The cake is drawn as layered vector-
+    style raster shapes so Step 7 can finish without the old browser timeout.
   */
   const width=900,height=650;
-  const frame=solidRGBA(width,height,[25,10,35,255]);
-
-  // Soft spooky-purple background made from horizontal bands.
-  for(let y=0;y<height;y++){
-    const t=y/(height-1);
-    const r=Math.round(55-32*t),g=Math.round(25-17*t),b=Math.round(70-30*t);
-    profileFill(frame,0,y,width,1,r,g,b,255);
-  }
-
+  const frame=solidRGBA(width,height,"#1d0d2a");
   const shape=choices?.[0]||"Round";
   const flavor=choices?.[1]||"Black Velvet Cake";
   const frosting=choices?.[2]||"Pink Frosting";
@@ -6914,7 +6906,7 @@ async function renderBirthdayCake(env,name,choices){
   const special=choices?.[6]||"Sparkle Aura";
 
   const cakeColors={
-    "Black Velvet Cake":[48,31,58],"Vanilla Mooncake":[244,223,191],
+    "Black Velvet Cake":[55,34,67],"Vanilla Mooncake":[244,223,191],
     "Strawberry Cake":[244,161,189],"Pumpkin Spice Cake":[217,119,50],
     "Cherry Night Cake":[84,33,62]
   };
@@ -6932,106 +6924,159 @@ async function renderBirthdayCake(env,name,choices){
   const fc=frostColors[frosting]||frostColors["Pink Frosting"];
   const ic=fillColors[filling]||fillColors["Strawberry Jam"];
 
-  // Title and recipient.
-  drawBitmapText(frame,"BATTY CAKE BAKERY",235,28,5,[255,240,252],430);
-  drawBitmapText(frame,profileSafeText(name),335,75,3,[245,215,240],230);
+  // Background gradient + subtle moon glow.
+  for(let y=0;y<height;y++){
+    const t=y/(height-1);
+    const r=Math.round(61-39*t),g=Math.round(27-18*t),b=Math.round(78-28*t);
+    profileFill(frame,0,y,width,1,r,g,b,255);
+  }
+  for(let r=175;r>20;r-=15){
+    const a=Math.max(8,Math.round(55*(1-r/175)));
+    profileBlendFill(frame,450,330-r*.55,r*2,r*1.35,255,105,220,a);
+  }
 
-  // Plate and glow.
-  birthdayCakeFillCircle(frame,450,545,185,60,38,75,190);
-  birthdayCakeFillCircle(frame,450,470,220,90,45,105,45);
-  birthdayCakeFillCircle(frame,450,385,245,255,120,215,20);
+  drawBitmapText(frame,"BATTY CAKE BAKERY",235,25,5,[255,240,252],430);
+  drawBitmapText(frame,profileSafeText(name),335,72,3,[245,215,240],230);
 
-  // Cake body.
-  const bx=220,by=190,bw=460,bh=270;
-  birthdayCakeShape(frame,shape,bx,by,bw,bh,cc[0],cc[1],cc[2]);
+  // Local ellipse helper (solid raster, intentionally simple and reliable).
+  const ellipse=(cx,cy,rx,ry,r,g,b,a=255)=>{
+    const x0=Math.max(0,Math.floor(cx-rx)),x1=Math.min(frame.width,Math.ceil(cx+rx));
+    const y0=Math.max(0,Math.floor(cy-ry)),y1=Math.min(frame.height,Math.ceil(cy+ry));
+    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+      const dx=(x-cx)/rx,dy=(y-cy)/ry;
+      if(dx*dx+dy*dy>1)continue;
+      const o=(y*frame.width+x)*4;
+      if(a>=255){frame.data[o]=r;frame.data[o+1]=g;frame.data[o+2]=b;frame.data[o+3]=255;}
+      else{
+        const sa=a/255;
+        frame.data[o]=Math.round(r*sa+frame.data[o]*(1-sa));
+        frame.data[o+1]=Math.round(g*sa+frame.data[o+1]*(1-sa));
+        frame.data[o+2]=Math.round(b*sa+frame.data[o+2]*(1-sa));
+        frame.data[o+3]=255;
+      }
+    }
+  };
 
-  // Filling stripe.
-  if(shape==="Round"||shape==="Pumpkin"){
-    profileFill(frame,bx+25,by+bh*.50,bw-50,bh*.14,ic[0],ic[1],ic[2],255);
-  }else if(shape==="Heart"){
-    birthdayCakeFillCircle(frame,450,320,45,ic[0],ic[1],ic[2]);
+  // Plate / ground shadow.
+  ellipse(450,545,255,42,20,10,27,170);
+  ellipse(450,530,225,34,91,54,104,255);
+  ellipse(450,520,205,27,125,79,132,255);
+
+  const bx=235,by=205,bw=430,bh=275;
+  const bottom=by+bh;
+
+  // Cake body. Round/Pumpkin use a soft tier; Heart/Moon/Bat get distinct silhouettes.
+  if(shape==="Heart"){
+    birthdayCakePolygon(frame,[[450,bottom],[255,355],[270,265],[335,220],[450,285],[565,220],[630,265],[645,355]],cc[0],cc[1],cc[2],255);
+  }else if(shape==="Bat"){
+    birthdayCakePolygon(frame,[[225,280],[300,230],[355,260],[450,215],[545,260],[600,230],[675,280],[620,345],[585,330],[555,470],[450,420],[345,470],[315,330],[280,345]],cc[0],cc[1],cc[2],255);
+  }else if(shape==="Moon"){
+    ellipse(455,340,205,145,cc[0],cc[1],cc[2],255);
+    ellipse(520,300,175,135,61,27,78,255);
   }else{
-    profileFill(frame,bx+35,by+bh*.47,bw-70,bh*.12,ic[0],ic[1],ic[2],255);
+    // Rounded rectangular cake tier.
+    profileFill(frame,bx+42,by,bw-84,bh,cc[0],cc[1],cc[2],255);
+    profileFill(frame,bx,by+42,bw,bh-84,cc[0],cc[1],cc[2],255);
+    ellipse(bx+42,by+42,42,42,cc[0],cc[1],cc[2],255);
+    ellipse(bx+bw-42,by+42,42,42,cc[0],cc[1],cc[2],255);
+    ellipse(bx+42,bottom-42,42,42,cc[0],cc[1],cc[2],255);
+    ellipse(bx+bw-42,bottom-42,42,42,cc[0],cc[1],cc[2],255);
   }
 
-  // Frosting layer.
-  const fx=bx+12,fy=by+22,fw=bw-24,fh=82;
-  profileFill(frame,fx,fy,fw,fh,fc[0],fc[1],fc[2],255);
-  for(let x=fx+15;x<fx+fw-10;x+=55){
-    birthdayCakeFillCircle(frame,x,fy+fh,31,fc[0],fc[1],fc[2]);
-  }
+  // Cake side shading and filling band.
+  const bandY=350;
+  profileBlendFill(frame,bx+25,bandY,bw-50,48,0,0,0,22);
+  profileFill(frame,bx+35,bandY+5,bw-70,30,ic[0],ic[1],ic[2],255);
+  profileBlendFill(frame,bx+35,bandY+5,bw-70,7,255,255,255,55);
 
-  // Cake highlights / outline.
-  for(let d=0;d<5;d++){
-    birthdayCakeLine(frame,bx+20,by+8+d,bx+bw-20,by+8+d,1,255,255,255,Math.max(35,100-d*12));
+  // Frosting top: wide cap + rounded drips, never a giant un-clipped rectangle.
+  ellipse(450,by+18,225,72,fc[0],fc[1],fc[2],255);
+  profileFill(frame,275,by+10,350,58,fc[0],fc[1],fc[2],255);
+  for(let x=290;x<=610;x+=48){
+    const drip=18+((x/48)%3)*7;
+    ellipse(x,by+65+drip,22,drip,fc[0],fc[1],fc[2],255);
   }
+  ellipse(450,by+7,195,48,Math.min(255,fc[0]+12),Math.min(255,fc[1]+12),Math.min(255,fc[2]+12),255);
 
-  // Decorations.
+  // Cake highlight / outline.
+  birthdayCakeLine(frame,285,by+3,615,by+3,3,255,255,255,75);
+  birthdayCakeLine(frame,250,bottom-4,650,bottom-4,3,0,0,0,45);
+
+  // Decoration details.
   if(decor==="Black Sprinkles"){
-    for(let i=0;i<24;i++){
-      const dx=bx+35+(i*73)%390,dy=by+120+(i*41)%105;
-      birthdayCakeLine(frame,dx,dy,dx+7,dy+13,5,23,18,29,255);
+    for(let i=0;i<28;i++){
+      const dx=285+(i*61)%330,dy=305+(i*37)%110;
+      birthdayCakeLine(frame,dx,dy,dx+8,dy+14,4,25,18,31,255);
     }
   }else if(decor==="Pumpkin Decorations"){
-    for(const [dx,dy] of [[315,405],[450,430],[585,405]]){
-      birthdayCakeFillCircle(frame,dx,dy,25,242,135,45,255);
-      birthdayCakeFillCircle(frame,dx+15,dy-22,7,72,130,55,255);
+    for(const [dx,dy] of [[320,420],[450,438],[580,420]]){
+      ellipse(dx,dy,22,19,242,135,45,255);
+      birthdayCakeLine(frame,dx-9,dy-17,dx+9,dy-17,3,255,172,65,255);
+      profileFill(frame,dx-3,dy-29,6,10,70,130,55,255);
     }
   }else if(decor==="Spiderweb Caramel"){
-    birthdayCakeLine(frame,280,365,620,365,4,232,178,122,255);
-    birthdayCakeLine(frame,300,395,600,395,4,232,178,122,255);
-    birthdayCakeLine(frame,330,425,570,425,4,232,178,122,255);
+    birthdayCakeLine(frame,315,390,585,390,3,232,178,122,255);
+    birthdayCakeLine(frame,335,415,565,415,3,232,178,122,255);
+    birthdayCakeLine(frame,360,440,540,440,3,232,178,122,255);
+    birthdayCakeLine(frame,450,370,450,455,3,232,178,122,255);
   }else if(decor==="Midnight Roses"){
-    for(const [dx,dy] of [[315,405],[450,430],[585,405]]){
-      birthdayCakeFillCircle(frame,dx,dy,17,170,45,75,255);
-      birthdayCakeFillCircle(frame,dx+13,dy-5,13,205,75,105,255);
+    for(const [dx,dy] of [[320,420],[450,438],[580,420]]){
+      ellipse(dx-8,dy,12,10,175,45,82,255);
+      ellipse(dx+8,dy,12,10,210,70,110,255);
+      ellipse(dx,dy-7,10,12,145,35,70,255);
+      birthdayCakeLine(frame,dx,dy+8,dx,dy+19,3,55,110,58,255);
     }
   }else{
-    for(const [dx,dy] of [[300,410],[355,435],[540,420],[600,400]]){
-      birthdayCakeFillCircle(frame,dx,dy,5,255,245,168,255);
-    }
+    for(const [dx,dy] of [[305,410],[360,435],[540,430],[595,405],[405,420]]) drawSparkle(frame,dx,dy,"star");
   }
 
   // Topping.
   if(topping==="Pink Bow"){
-    profileFill(frame,435,155,30,18,255,115,182,255);
-    birthdayCakeFillCircle(frame,425,165,22,255,115,182,255);
-    birthdayCakeFillCircle(frame,475,165,22,255,115,182,255);
+    ellipse(415,180,35,25,255,115,182,255); ellipse(485,180,35,25,255,115,182,255);
+    ellipse(450,182,14,14,235,70,145,255);
   }else if(topping==="Mini Pumpkin"){
-    birthdayCakeFillCircle(frame,450,155,25,242,135,45,255);
-    profileFill(frame,446,128,8,12,70,130,55,255);
+    ellipse(450,175,27,22,242,135,45,255);
+    birthdayCakeLine(frame,450,151,450,141,5,70,130,55,255);
   }else if(topping==="Ghost Marshmallow"){
-    birthdayCakeFillCircle(frame,450,155,27,244,238,251,255);
-    profileFill(frame,432,165,36,22,244,238,251,255);
+    ellipse(450,172,30,27,244,238,251,255);
+    profileFill(frame,425,176,50,22,244,238,251,255);
+    birthdayCakeFillCircle(frame,440,172,3,55,40,65,255); birthdayCakeFillCircle(frame,460,172,3,55,40,65,255);
   }else if(topping==="Bat Topper"){
-    birthdayCakePolygon(frame,[[410,160],[430,145],[442,157],[450,140],[458,157],[470,145],[490,160],[472,180],[450,170],[428,180]],28,22,36,255);
+    birthdayCakePolygon(frame,[[395,180],[425,158],[442,173],[450,150],[458,173],[475,158],[505,180],[478,198],[450,188],[422,198]],28,22,36,255);
   }else{
-    profileFill(frame,448,130,4,38,255,245,210,255);
-    birthdayCakeFillCircle(frame,450,127,8,255,180,75,255);
+    profileFill(frame,447,142,6,45,255,245,210,255);
+    ellipse(450,138,10,8,255,180,75,255);
+    profileFill(frame,446,186,8,5,255,180,75,255);
   }
 
   // Special effect around the cake.
   if(special==="Moonlight Glow"){
-    birthdayCakeFillCircle(frame,690,150,42,190,210,255,90);
-    birthdayCakeFillCircle(frame,705,140,32,55,25,70,255);
+    ellipse(145,165,55,55,190,210,255,55); ellipse(755,175,48,48,190,210,255,45);
+    drawSparkle(frame,140,165,"moon"); drawSparkle(frame,760,175,"moon");
   }else if(special==="Bat Swirl"){
-    for(const [x,y] of [[155,230],[730,250],[170,500],[720,500]]) birthdayCakeFillCircle(frame,x,y,14,35,25,45,255);
+    for(const [x,y] of [[145,220],[755,235],[150,500],[750,500]]){
+      birthdayCakePolygon(frame,[[x-24,y],[x-8,y-12],[x,y-3],[x+8,y-12],[x+24,y],[x+10,y+13],[x,y+8],[x-10,y+13]],35,25,45,255);
+    }
   }else if(special==="Ghost Mist"){
-    for(const [x,y,r] of [[150,300,40],[750,330,48],[170,500,32],[730,500,35]]) birthdayCakeFillCircle(frame,x,y,r,244,238,251,45);
+    ellipse(145,285,48,55,244,238,251,42); ellipse(755,300,52,62,244,238,251,42);
+    ellipse(165,505,38,42,244,238,251,35); ellipse(735,505,42,45,244,238,251,35);
   }else if(special==="Pumpkin Smoke"){
-    for(const [x,y] of [[150,160],[750,170],[130,470],[770,460]]) birthdayCakeFillCircle(frame,x,y,15,242,135,45,170);
+    ellipse(145,155,28,32,242,135,45,85); ellipse(755,170,30,35,242,135,45,75);
+    ellipse(150,500,25,30,242,135,45,70); ellipse(750,490,28,34,242,135,45,70);
+    drawSparkle(frame,150,145,"star"); drawSparkle(frame,750,160,"star");
   }else{
-    for(const [x,y] of [[130,150],[770,145],[135,510],[765,510],[450,105]]) drawSparkle(frame,x,y,"star");
+    for(const [x,y] of [[130,145],[770,145],[135,510],[765,510],[450,105],[190,290],[710,300]]) drawSparkle(frame,x,y,"star");
   }
 
-  // Design labels using the embedded font so no external renderer is required.
-  drawBitmapText(frame,"DESIGN",95,575,2,[210,185,215],90);
-  drawBitmapText(frame,profileSafeText(flavor),95,600,2,[255,230,245],180);
-  drawBitmapText(frame,profileSafeText(special),530,600,2,[255,230,245],260);
+  // Bottom design panel.
+  profileBlendFill(frame,70,565,760,68,20,10,30,220);
+  birthdayCakeLine(frame,90,565,810,565,2,156,102,151,230);
+  drawBitmapText(frame,"DESIGN",95,578,2,[225,195,220],95);
+  drawBitmapText(frame,profileSafeText(flavor),95,602,2,[255,230,245],210);
+  drawBitmapText(frame,profileSafeText(special),525,602,2,[255,230,245],270);
 
   return rgbaToRgbPng(frame);
 }
-
 const BIRTHDAY_BAKERY_MENUS=[
   {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
   {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
