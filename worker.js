@@ -1,4 +1,4 @@
-import puppeteer from "@cloudflare/puppeteer";
+mimport puppeteer from "@cloudflare/puppeteer";
 
 /* =========================================================
    WEREWIVES TREE BOT
@@ -6221,6 +6221,9 @@ async function claimBirthdayHunt(env,interaction,id){
     if(!huntResponse.ok)console.error("Birthday Fright Hunt live update failed:",huntResponse.status,await huntResponse.text());
   }
   await saveGuildState(env,interaction.guild_id,state);
+  const huntMarks={"🎂":"birthday_cake","🎀":"birthday_bow","🕯️":"candle_lit","🖤":"black_heart"};
+  const huntAction=huntMarks[item.emoji];
+  if(huntAction)await markBingoAction(env,interaction.guild_id,p.userId,huntAction);
   if(p.birthdayCandies>=100) await markBingoAction(env,interaction.guild_id,p.userId,"hundred_candy");
   return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);
 }
@@ -6239,7 +6242,41 @@ function bingoBoard(){
   cells.splice(12,0,{id:"free",label:"🕯️ Birthday Candle",server:false,marked:true});
   return cells;
 }
+function birthdayBingoCanonicalLabels(){
+  const labels={};
+  for(const [id,label] of BIRTHDAY_BINGO_PERSONAL)labels[id]=label;
+  labels.pumpkin_appears="🎃 A Pumpkin Appears";
+  labels.ghost_appears="👻 A Ghost Appears";
+  labels.bat_swarm="🦇 A Bat Swarm Appears";
+  labels.boo_cannon="💥🎃 The Birthday Boo Cannon Is Fired";
+  labels.free="🕯️ Birthday Candle";
+  return labels;
+}
+function migrateBirthdayBingoBoard(b){
+  if(!b||!Array.isArray(b.cells))return false;
+  const labels=birthdayBingoCanonicalLabels();
+  const legacy={bat_item:"birthday_shop",game_win:"boss_win"};
+  const valid=new Set([...Object.keys(labels)].filter(id=>id!=="free"));
+  const used=new Set();
+  let changed=false;
+  for(const cell of b.cells){
+    if(cell.id==="free"){
+      if(cell.label!==labels.free){cell.label=labels.free;changed=true;}
+      cell.marked=true;
+      continue;
+    }
+    let nextId=legacy[cell.id]||cell.id;
+    if(!valid.has(nextId)||used.has(nextId)){
+      nextId=[...valid].find(id=>!used.has(id));
+    }
+    if(nextId&&cell.id!==nextId){cell.id=nextId;changed=true;}
+    if(nextId&&cell.label!==labels[nextId]){cell.label=labels[nextId];changed=true;}
+    if(nextId)used.add(nextId);
+  }
+  return changed;
+}
 function bingoText(b){
+  migrateBirthdayBingoBoard(b);
   const lines=[];
   for(let r=0;r<5;r++)lines.push(b.cells.slice(r*5,r*5+5).map(c=>c.marked?`🟩 ${c.label}`:`⬜ ${c.label}`).join("\n"));
   return `🎂🎃 **HALLOWEEN BIRTHDAY BINGO**\n\n${lines.join("\n────────────\n")}\n\n🏆 1 line: 50 🍬 | 2: 100 🍬 | 3: 150 🍬 | 4: 200 🍬 | Full board: +500 🍬`;
@@ -6368,6 +6405,8 @@ async function startBirthdayBingo(env,interaction){
   state.birthday.bingoBoards=state.birthday.bingoBoards||{};
   if(!state.birthday.bingoBoards[uid]){
     state.birthday.bingoBoards[uid]={cells:bingoBoard(),linesPaid:0,fullPaid:false};
+    await saveGuildState(env,interaction.guild_id,state);
+  }else if(migrateBirthdayBingoBoard(state.birthday.bingoBoards[uid])){
     await saveGuildState(env,interaction.guild_id,state);
   }
   await syncBirthdayBingoProgress(env,interaction.guild_id,uid);
