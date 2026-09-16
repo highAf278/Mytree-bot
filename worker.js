@@ -993,25 +993,31 @@ function nearestPaletteIndex(r,g,b,p){
   return rr*36+gg*6+bb;
 }
 function gifLZW(indices){
-  // Conservative GIF LZW encoder: emit literal palette indices in small blocks.
-  // Keeping the code size at 9 bits and clearing frequently avoids decoder/dictionary
-  // edge cases that can produce a corrupted GIF in Discord.
-  const clear=256,end=257,codeSize=9,blockSize=240;
-  const codes=[];
-  for(let start=0;start<indices.length;start+=blockSize){
-    codes.push(clear);
-    const endAt=Math.min(indices.length,start+blockSize);
-    for(let i=start;i<endAt;i++) codes.push(indices[i]);
+  const clear=256,end=257;
+  const bytes=[]; let cur=0,bits=0;
+  const emit=(code,size)=>{cur|=(code<<bits);bits+=size;while(bits>=8){bytes.push(cur&255);cur>>=8;bits-=8;}};
+  const maxCodes=4096;
+  let dict=new Map(); let next=258;
+  let codeSize=9; let codeLimit=1<<codeSize;
+  emit(clear,codeSize);
+  if(!indices.length){emit(end,codeSize);if(bits)bytes.push(cur&255);return bytes;}
+  let prefix=indices[0];
+  for(let i=1;i<indices.length;i++){
+    const k=indices[i];
+    const key=(prefix<<8)|k;
+    if(dict.has(key)){ prefix=dict.get(key); continue; }
+    emit(prefix,codeSize);
+    if(next<maxCodes){
+      dict.set(key,next++);
+      if(next===codeLimit && codeSize<12){codeSize++;codeLimit=1<<codeSize;}
+    }else{
+      emit(clear,codeSize);
+      dict=new Map(); next=258; codeSize=9; codeLimit=512;
+    }
+    prefix=k;
   }
-  codes.push(end);
-  const bytes=[];
-  let cur=0,bits=0;
-  for(const code of codes){
-    cur|=(code<<bits);
-    bits+=codeSize;
-    while(bits>=8){bytes.push(cur&255);cur>>=8;bits-=8;}
-  }
-  if(bits>0) bytes.push(cur&255);
+  emit(prefix,codeSize); emit(end,codeSize);
+  if(bits)bytes.push(cur&255);
   return bytes;
 }
 function u16(n){return [n&255,(n>>8)&255];}
@@ -2992,8 +2998,10 @@ async function renderTreeDirectFallback(env, player) {
 }
 
 async function renderTree(env, player) {
-  // Birthday Confetti is rendered as a real animated GIF so Discord can display
-  // the motion. CSS animation alone cannot survive a PNG screenshot.
+  // Birthday Confetti is rendered as a compact, real animated GIF.
+  // CSS animation alone cannot survive a PNG screenshot. Four full-resolution
+  // frames keep the attachment small enough for Discord while preserving the
+  // full-quality tree/background artwork.
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
@@ -3065,7 +3073,7 @@ async function renderTree(env, player) {
 
       if (wantsAnimatedConfetti) {
         const frames = [];
-        const frameCount = 8;
+        const frameCount = 4;
         for (let i = 0; i < frameCount; i++) {
           await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, makeHTML(i / frameCount));
           await page.evaluate(async () => {
@@ -3077,7 +3085,7 @@ async function renderTree(env, player) {
           });
           frames.push(await page.screenshot({ type: "png" }));
         }
-        return { bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12), animated: true };
+        return { bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 18), animated: true };
       }
 
       return { bytes: await page.screenshot({ type: "png" }), animated: false };
