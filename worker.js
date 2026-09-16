@@ -19042,9 +19042,21 @@ async function renderPastelBoard(env,game){
     if(cellData.owner==="blackout")fill=[32,32,32];else if(cellData.wild)fill=hexRgb(pastelPalette(game).wildColor);else if(cellData.heart)fill=hexRgb(pastelPalette(game).heartColor);
     boardFill(frame,x,y,cell,cell,fill[0],fill[1],fill[2],255);
     if(cellData.heart&&!cellData.owner){
+      /* Power Cells use the palette's bow symbol in the normal browser renderer.
+         The Worker-only fallback cannot draw emoji glyphs reliably, so draw a
+         crisp pixel-art bow instead of the old plain pink dot. */
       const isHaunted=game.palette==="haunted_harvest";
-      boardCircle(frame,x+cell/2,y+cell/2,Math.max(7,cell*0.38),isHaunted?[143,61,24]:[255,63,159],true);
-      boardCircle(frame,x+cell/2,y+cell/2,Math.max(9,cell*0.45),[255,243,166],false);
+      const bow=isHaunted?[143,61,24]:[255,63,159];
+      const light=[255,243,166];
+      const cx=x+cell/2,cy=y+cell/2;
+      const s=Math.max(2,Math.floor(cell*0.12));
+      boardFill(frame,cx-s,cy-s*2,s*2,s*2,bow[0],bow[1],bow[2],255);
+      boardFill(frame,cx-s*4,cy-s*3,s*3,s*4,bow[0],bow[1],bow[2],255);
+      boardFill(frame,cx+s,cy-s*3,s*3,s*4,bow[0],bow[1],bow[2],255);
+      boardFill(frame,cx-s*5,cy-s*4,s*2,s*2,light[0],light[1],light[2],255);
+      boardFill(frame,cx+s*3,cy-s*4,s*2,s*2,light[0],light[1],light[2],255);
+      boardFill(frame,cx-s,cy-s,s*2,s*2,light[0],light[1],light[2],255);
+      boardFill(frame,cx-s*3,cy+s,s*6,s*2,bow[0],bow[1],bow[2],255);
     }
     const owner=cellData.owner;if(!owner)continue;
     const border=owner==="blackout"?[255,255,255]:[0,0,0];
@@ -19057,6 +19069,19 @@ async function renderPastelBoard(env,game){
     }
   }
   return rgbaToRgbPng(frame);
+}
+
+async function getPastelPublicMessageId(env,game,interaction){
+  if(game?.publicMessageId)return game.publicMessageId;
+  const token=interaction?.token||game?.interactionToken;
+  if(!token)return "";
+  try{
+    const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`);
+    if(!response.ok)return "";
+    const data=await response.json();
+    if(data?.id){game.publicMessageId=data.id;return data.id;}
+  }catch(error){console.error("Pastel public message lookup failed:",error);}
+  return "";
 }
 
 async function sendPastelBoard(env,interaction,game){
