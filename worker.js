@@ -5834,7 +5834,7 @@ function birthdayMainText(state, people) {
 function birthdayMenuComponents(active) {
   if (!active) return [];
   return [
-    row(button("🛍️ Midnight Shop", "birthday:shop:0", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
+    row(button("🛍️ Midnight Shop", "birthday:shop", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
     row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1)),
@@ -5995,7 +5995,7 @@ async function startBirthdayBingo(env,interaction){
   state.birthday.bingoBoards=state.birthday.bingoBoards||{};
   if(state.birthday.bingoBoards[uid]){
     const p=await getPlayer(env,uid);
-    if(Number(p.birthdayCandies||0)>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");
+    if(Number(p.birthdayCandies||0)>=100){try{await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");}catch(error){console.error("Birthday Bingo balance mark failed:",error);}}
     const refreshed=await getGuildState(env,interaction.guild_id);
     return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
   }
@@ -6003,10 +6003,11 @@ async function startBirthdayBingo(env,interaction){
   state.birthday.bingoBoards[uid]=b;
   await saveGuildState(env,interaction.guild_id,state);
   const p=await getPlayer(env,uid);
-  if(Number(p.birthdayCandies||0)>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");
+  if(Number(p.birthdayCandies||0)>=100){try{await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");}catch(error){console.error("Birthday Bingo balance mark failed:",error);}}
   const refreshed=await getGuildState(env,interaction.guild_id);
   return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
 }
+async function applyBirthdayBingoReward(env,userId,b){const lines=bingoWinLines(b.cells);const paid=Number(b.linesPaid||0);if(lines<=paid)return;const newlyPaid=Math.min(lines,4)-paid;if(newlyPaid>0){const p=await getPlayer(env,userId);p.birthdayCandies=(Number(p.birthdayCandies)||0)+newlyPaid*50;await savePlayer(env,p);}b.linesPaid=lines;if(lines===5&&!b.fullPaid){const p=await getPlayer(env,userId);p.birthdayCandies=(Number(p.birthdayCandies)||0)+500;b.fullPaid=true;await savePlayer(env,p);}}
 async function markBirthdayServerSquare(env,guildId,action){const state=await getGuildState(env,guildId);if(!birthdayEventActive(state))return;for(const [uid,b] of Object.entries(state.birthday.bingoBoards||{})){const cell=b.cells.find(c=>c.server&&c.id===action&&!c.marked);if(cell){cell.marked=true;await applyBirthdayBingoReward(env,uid,b);}}await saveGuildState(env,guildId,state);}
 async function markBingoAction(env,guildId,userId,action){const state=await getGuildState(env,guildId);const b=state.birthday?.bingoBoards?.[userId];if(!b)return;const cell=b.cells.find(c=>c.id===action&&!c.marked);if(cell){cell.marked=true;await applyBirthdayBingoReward(env,userId,b);await saveGuildState(env,guildId,state);}}
 async function maybeBirthdayBingoReward(env,guildId,userId,b){const state=await getGuildState(env,guildId);if(!state.birthday?.bingoBoards?.[userId])return;state.birthday.bingoBoards[userId]=b;await applyBirthdayBingoReward(env,userId,b);await saveGuildState(env,guildId,state);}
@@ -6121,10 +6122,19 @@ async function birthdayCakeChoice(env,interaction,value){
   const bakeryReward=randomInt(100,250);p.birthdayCandies+=bakeryReward;await savePlayer(env,p);
   await saveGuildState(env,interaction.guild_id,state);
   await markBingoAction(env,interaction.guild_id,uid,"bakery");
-  const svg=birthdayCakeImageSvg(g);
-  const bytes=new TextEncoder().encode(svg);
+  let bytes;
+  let filename="birthday-cake.png";
+  let contentType="image/png";
+  try {
+    bytes=await renderBirthdayCake(env,birthdayName(state),g.choices);
+  } catch(error) {
+    console.error("Birthday cake PNG render failed:",error);
+    bytes=new TextEncoder().encode(birthdayCakeImageSvg(g));
+    filename="birthday-cake.svg";
+    contentType="image/svg+xml";
+  }
   const responseContent=`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake is attached below!**`;
-  const response=await editOriginalResponseWithFile(env,interaction,responseContent,"birthday-cake.svg",bytes,"image/svg+xml",[row(button("🎂 Birthday Menu","birthday:home",2))]);
+  const response=await editOriginalResponseWithFile(env,interaction,responseContent,filename,bytes,contentType,[row(button("🎂 Birthday Menu","birthday:home",2))]);
   if(!response.ok){
     console.error("Birthday cake attachment failed:",response.status,await response.text());
     return sendText(env,interaction,responseContent+"\n\n⚠️ The cake image could not be attached, but your design and reward were saved.",[row(button("🎂 Birthday Menu","birthday:home",2))]);
@@ -6414,7 +6424,7 @@ async function handleComponent(
     if(action==="home") return handleBirthdayCommand(env,interaction);
     if(action==="set") return handleBirthdaySet(env,interaction);
     if(interaction.guild_id) await ensureBirthdayEvent(env,interaction.guild_id);
-    if(action==="shop"||action==="shopopen") return showBirthdayShop(env,interaction,Number(parts[2]||0));
+    if(action==="shop"||action==="shopopen") return showBirthdayShop(env,interaction,Math.max(0,Number(parts[2]||0)));
     if(action==="buy") return buyBirthdayItem(env,interaction,parts[2]);
     if(action==="hunt") return handleBirthdayHunt(env,interaction);
     if(action==="claim") return claimBirthdayHunt(env,interaction,parts[2]);
