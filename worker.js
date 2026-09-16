@@ -2880,7 +2880,19 @@ async function renderProfileDirect(env,player){
 
 async function renderTreeDirectFallback(env, player) {
   const width = 1024, height = 1024;
+  // Start with a safe color, then replace it with the player's ACTUAL
+  // equipped background asset whenever the Worker can decode that image.
+  // The previous fallback used only a flat color, which is why /tree showed
+  // a plain pink screen instead of the equipped Werewives background.
   const scene = solidRGBA(width, height, treeFallbackBackground(player));
+
+  try {
+    const background = await getPngAsset(env, getBackgroundImage(player));
+    const layer = coverRGBA(background, width, height);
+    alphaComposite(scene, layer, 0, 0);
+  } catch (error) {
+    console.warn("Direct tree fallback background skipped; using fallback color:", error?.message || error);
+  }
 
   // This fallback deliberately uses only PNG layers that the Worker can decode
   // itself. It exists so /tree can NEVER be held hostage by Browser Rendering.
