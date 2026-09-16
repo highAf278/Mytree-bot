@@ -2308,11 +2308,10 @@ async function sendTree(
   const stats =
     buildTreeStats(player);
 
-  const diagnosticLine = rendered.diagnostic ? `\n\n🛠️ ${rendered.diagnostic}` : "";
   const content =
     player.sceneMessage
-      ? `${stats}\n\n${player.sceneMessage}${diagnosticLine}`
-      : `${stats}${diagnosticLine}`;
+      ? `${stats}\n\n${player.sceneMessage}`
+      : stats;
 
   const form =
     new FormData();
@@ -3085,14 +3084,16 @@ async function renderTree(env, player) {
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
-    return { bytes: await renderTreeDirectFallback(env, player), animated: false, diagnostic: `STATIC FALLBACK: ${reason?.message || reason || "unknown"}` };
+    return { bytes: await renderTreeDirectFallback(env, player), animated: false };
   };
 
   try {
+    console.log("🎊 Birthday Confetti: launching Browser Rendering...");
     const browser = await Promise.race([
       puppeteer.launch(env.BROWSER),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Browser Rendering launch timed out after 12000ms")), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Browser Rendering launch timed out after 30000ms")), 30000))
     ]);
+    console.log("🎊 Birthday Confetti: Browser Rendering launched successfully");
 
     try {
       const page = await browser.newPage();
@@ -3188,12 +3189,9 @@ async function renderTree(env, player) {
           frames.push(await page.screenshot({ type: "png" }));
         }
 
-        const gifBytes = await encodePNGFramesToGIF(frames, 1024, 1024, 12);
-        console.log(`Birthday Confetti GIF diagnostic: frames=${frames.length}, bytes=${gifBytes.length}`);
         return {
-          bytes: gifBytes,
-          animated: true,
-          diagnostic: `GIF frames=${frames.length}, bytes=${gifBytes.length}`
+          bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12),
+          animated: true
         };
       }
 
