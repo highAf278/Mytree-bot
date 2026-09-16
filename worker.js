@@ -1643,7 +1643,8 @@ async function getGuildState(env, guildId) {
       hunt: null,
       island: null,
       nextChaosAt: 0,
-      birthday: null
+      birthday: null,
+      birthdayRegistry: {}
     };
   }
 
@@ -1658,7 +1659,8 @@ async function getGuildState(env, guildId) {
       hunt: null,
       island: null,
       nextChaosAt: 0,
-      birthday: null
+      birthday: null,
+      birthdayRegistry: {}
     };
   }
 
@@ -1670,6 +1672,7 @@ async function getGuildState(env, guildId) {
       island: null,
       nextChaosAt: 0,
       birthday: null,
+      birthdayRegistry: {},
       ...JSON.parse(raw)
     };
   } catch {
@@ -1678,7 +1681,9 @@ async function getGuildState(env, guildId) {
       announcementChannelName: "",
       hunt: null,
       island: null,
-      nextChaosAt: 0
+      nextChaosAt: 0,
+      birthday: null,
+      birthdayRegistry: {}
     };
   }
 }
@@ -5763,12 +5768,38 @@ function birthdayEventActive(state, date = new Date()) { return Boolean(state?.b
 function birthdayMentionList(ids) { return ids.map(id => `<@${id}>`).join(", "); }
 
 async function getBirthdayPeopleForGuild(env, guildId) {
+  const today = new Date();
+  const key = birthdayTodayKey(today);
+  const state = await getGuildState(env, guildId);
+  const registry = state?.birthdayRegistry && typeof state.birthdayRegistry === "object"
+    ? state.birthdayRegistry
+    : {};
+
+  // New birthday registrations are stored directly in guild state. This avoids
+  // relying on a full guild-member scan every time /birthday is opened.
+  const registeredIds = Object.entries(registry)
+    .filter(([, info]) => info && isBirthdayDate(today, info.month, info.day))
+    .map(([userId]) => userId);
+
+  if (registeredIds.length) {
+    const people = [];
+    for (const userId of registeredIds) {
+      const p = await getPlayer(env, userId);
+      if (p.birthdayMonth && p.birthdayDay && isBirthdayDate(today, p.birthdayMonth, p.birthdayDay)) {
+        people.push(p);
+      }
+    }
+    return people;
+  }
+
+  // Backwards compatibility: birthdays saved before the registry existed can
+  // still be discovered from the guild member list and then become registered.
   const members = await getGuildMembers(env, guildId);
   const people = [];
   for (const member of members) {
     const p = await getPlayer(env, member.id);
     updatePlayerIdentity(p, { member: { user: { id: member.id, username: member.username, global_name: member.displayName } } });
-    if (p.birthdayMonth && p.birthdayDay && isBirthdayDate(new Date(), p.birthdayMonth, p.birthdayDay)) people.push(p);
+    if (p.birthdayMonth && p.birthdayDay && isBirthdayDate(today, p.birthdayMonth, p.birthdayDay)) people.push(p);
   }
   return people;
 }
@@ -5845,6 +5876,23 @@ async function handleBirthdaySet(env, interaction) {
   if (!Number.isInteger(month)||month<1||month>12||!Number.isInteger(day)||day<1||day>31) return sendText(env,interaction,"❌ Use a valid month (1–12) and day (1–31).");
   const maxDays = new Date(Date.UTC(2028, month, 0)).getUTCDate(); if(day>maxDays) return sendText(env,interaction,"❌ That date does not exist.");
   player.birthdayMonth=month; player.birthdayDay=day; player.birthdayUnlocked=true; await savePlayer(env,player);
+
+  // Register the birthday directly in guild state so the Birthday Party can
+  // activate reliably without depending on a guild-member scan.
+  if (interaction.guild_id) {
+    const state = await getGuildState(env, interaction.guild_id);
+    state.birthdayRegistry = state.birthdayRegistry && typeof state.birthdayRegistry === "object"
+      ? state.birthdayRegistry
+      : {};
+    state.birthdayRegistry[user.id] = {
+      month,
+      day,
+      name: player.displayName || player.username || "Werewife",
+      updatedAt: Date.now()
+    };
+    await saveGuildState(env, interaction.guild_id, state);
+  }
+
   await sendText(env,interaction,`🎂 **Birthday saved!**\n\nYour birthday is set to **${month}/${day}**. 💗🎃\n\nOn that calendar date, your Birthday Party will automatically unlock for the whole day.\n\n🧪 **Testing note:** while we're building/testing, you can temporarily set it to the current date and then change it back to your real birthday afterward.`);
 }
 
