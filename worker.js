@@ -5897,10 +5897,15 @@ async function handleBirthdaySet(env, interaction) {
 }
 
 function birthdayShopComponents(page=0) {
-  const ids=Object.keys(BIRTHDAY_SHOP_ITEMS); const pageSize=3; const slice=ids.slice(page*pageSize,page*pageSize+pageSize);
-  const rows=slice.map(id=>row(button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1)));
-  if(ids.length>pageSize) rows.push(row(button("⬅️","birthday:shop:"+Math.max(0,page-1),2,page===0),button(`Page ${page+1}/${Math.ceil(ids.length/pageSize)}`,"birthday:noop",2,true),button("➡️","birthday:shop:"+(page+1),2,(page+1)*pageSize>=ids.length)));
-  rows.push(row(button("🎂 Birthday Menu","birthday:home",2))); return rows;
+  // Keep all six birthday shop items visible. Six rows would exceed Discord's
+  // five-action-row limit, so use two rows of three buttons plus the menu row.
+  const ids=Object.keys(BIRTHDAY_SHOP_ITEMS);
+  const rows=[];
+  for(let i=0;i<ids.length;i+=3){
+    rows.push(row(...ids.slice(i,i+3).map(id=>button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1))));
+  }
+  rows.push(row(button("🎂 Birthday Menu","birthday:home",2)));
+  return rows;
 }
 
 async function showBirthdayShop(env, interaction, page=0) {
@@ -5965,29 +5970,67 @@ function birthdayGiftMenuText(){return `🎁 **CURSED BIRTHDAY GIFTS**\n\n1. �
 
 function birthdayHuntComponents(items){return items.map(x=>row(button(`${x.emoji} +${x.reward} 🍬`,`birthday:claim:${x.id}`,1)));}
 async function spawnBirthdayHunt(env,guildId){
-  const state=await getGuildState(env,guildId); if(!birthdayEventActive(state)||state.birthday.huntItems?.length>=6)return false;
-  const count=randomInt(2,4); const items=[]; for(let i=0;i<count;i++){const e=BIRTHDAY_HUNT_EMOJIS[randomInt(0,BIRTHDAY_HUNT_EMOJIS.length-1)];items.push({id:crypto.randomUUID(),emoji:e[0],name:e[1],reward:e[2],claimed:false});}
-  state.birthday.huntItems=[...(state.birthday.huntItems||[]),...items]; state.birthday.nextFrightHuntAt=Date.now()+30*60*1000; await saveGuildState(env,guildId,state);
-  const channel=state.announcementChannelId || (await getGuildTextChannels(env,guildId))[0]?.id; if(channel) await sendChannelMessage(env,channel,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items)); return true;
+  const state=await getGuildState(env,guildId);
+  if(!birthdayEventActive(state)||state.birthday.huntItems?.length>=6)return false;
+  const count=randomInt(2,4); const items=[];
+  for(let i=0;i<count;i++){const e=BIRTHDAY_HUNT_EMOJIS[randomInt(0,BIRTHDAY_HUNT_EMOJIS.length-1)];items.push({id:crypto.randomUUID(),emoji:e[0],name:e[1],reward:e[2],claimed:false});}
+
+  const channels=await getGuildTextChannels(env,guildId);
+  const eligible=channels.filter(c=>c?.id);
+  const previous=state.birthday.lastHuntChannelId||null;
+  const choices=eligible.filter(c=>c.id!==previous);
+  const pool=choices.length?choices:eligible;
+  const channel=pool.length?pool[randomInt(0,pool.length-1)].id:(state.announcementChannelId||null);
+
+  state.birthday.huntItems=[...(state.birthday.huntItems||[]),...items];
+  state.birthday.nextFrightHuntAt=Date.now()+30*60*1000;
+  state.birthday.lastHuntChannelId=channel||previous||null;
+  await saveGuildState(env,guildId,state);
+  if(channel) await sendChannelMessage(env,channel,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items));
+  return true;
 }
 async function handleBirthdayHunt(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed.");
   let items=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
   if(!items.length){
-    // Always give the Hunt button something to do. The scheduled processor can
-    // still create later waves, but the first/manual opening should never be empty.
     await spawnBirthdayHunt(env,interaction.guild_id);
     const refreshed=await getGuildState(env,interaction.guild_id);
     items=(refreshed.birthday?.huntItems||[]).filter(x=>!x.claimed);
+    const channelId=refreshed.birthday?.lastHuntChannelId;
+    if(channelId) return sendText(env,interaction,`🎃🦇 **A NEW FRIGHT HUNT HAS APPEARED!**\n\nThe spooky treasures are hiding in <#${channelId}>!\n\n🏃 Go hunt them before another Werewife gets there first! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
   }
   if(!items.length)return sendText(env,interaction,"🎃 The hunt is active, but the spooky treasures couldn't spawn yet. Try the Hunt button again!");
-  return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**\n\n${items.map(x=>`${x.emoji} **${x.name}** — ${x.reward} Birthday Candies`).join("\n")}`,birthdayHuntComponents(items));
+  const channelId=state.birthday?.lastHuntChannelId;
+  return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**\n\nThe current hunt is happening in ${channelId?`<#${channelId}>`:`another spooky channel`}!\n\n🏃 Go there and claim the treasures before another Werewife does! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
 }
 async function claimBirthdayHunt(env,interaction,id){const state=await getGuildState(env,interaction.guild_id); if(!birthdayEventActive(state))return sendText(env,interaction,"🎃 The Birthday Fright Hunt is over."); const item=(state.birthday.huntItems||[]).find(x=>x.id===id); if(!item||item.claimed)return sendText(env,interaction,"👻 Too late! Someone already claimed that spooky find."); item.claimed=true; const p=await getPlayer(env,getUserFromInteraction(interaction).id); p.birthdayCandies+=item.reward; await savePlayer(env,p); await saveGuildState(env,interaction.guild_id,state); await markBingoAction(env,interaction.guild_id,p.userId,"earn_candy"); if(p.birthdayCandies>=100) await markBingoAction(env,interaction.guild_id,p.userId,"hundred_candy"); const huntMarks={"🎂":"birthday_cake","🎀":"birthday_bow","🕯️":"candle_lit","🖤":"black_heart"}; if(huntMarks[item.emoji])await markBingoAction(env,interaction.guild_id,p.userId,huntMarks[item.emoji]); return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);}
 
 function bingoBoard(){const pool=[...BIRTHDAY_BINGO_PERSONAL.map(x=>({id:x[0],label:x[1],server:false})),...BIRTHDAY_SERVER_SQUARES.map(id=>({id,label:{pumpkin_appears:"🎃 A Pumpkin Appears",ghost_appears:"👻 A Ghost Appears",bat_swarm:"🦇 A Bat Swarm Appears",boo_cannon:"💥🎃 The Birthday Boo Cannon Is Fired"}[id],server:true}))]; const shuffled=pool.sort(()=>Math.random()-.5); const cells=shuffled.slice(0,24); cells.splice(12,0,{id:"free",label:"🕯️ Birthday Candle",server:false,marked:true}); return cells;}
 function bingoText(b){const lines=[]; for(let r=0;r<5;r++){lines.push(b.cells.slice(r*5,r*5+5).map(c=>c.marked?`🟩 ${c.label}`:`⬜ ${c.label}`).join("\n"));} return `🎂🎃 **HALLOWEEN BIRTHDAY BINGO**\n\n${lines.join("\n────────────\n")}\n\n🏆 1 line: 50 🍬 | 2: 100 🍬 | 3: 150 🍬 | 4: 200 🍬 | Full board: +500 🍬`}
+async function syncBirthdayBingoProgress(env,guildId,userId){
+  const state=await getGuildState(env,guildId);
+  const b=state.birthday?.bingoBoards?.[userId];
+  if(!b)return;
+  const p=await getPlayer(env,userId);
+  const actions=new Set();
+  if(Number(p.birthdayCandies||0)>0)actions.add("earn_candy");
+  if(Number(p.birthdayCandies||0)>=100)actions.add("hundred_candy");
+  if(Number(p.birthdayGiftSends||0)>0)actions.add("send_gift");
+  if(p.birthdayWishUsedDate===state.birthday?.activeDate)actions.add("wish");
+  if(p.birthdayTricksterLast)actions.add("trickster");
+  const collection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];
+  if(collection.includes("midnight_heart_cupcake"))actions.add("secret_recipe");
+  const inv=Array.isArray(p.inventory)?p.inventory:[];
+  for(const id of inv){
+    const item=BIRTHDAY_SHOP_ITEMS[id];
+    if(item){actions.add("birthday_cosmetic");if(item.type==="decoration")actions.add("decoration");if(String(item.name||"").toLowerCase().includes("bat"))actions.add("bat_item");}
+  }
+  if(collection.length)actions.add("birthday_cosmetic");
+  for(const action of actions){const cell=b.cells.find(c=>c.id===action&&!c.marked);if(cell)cell.marked=true;}
+  await applyBirthdayBingoReward(env,userId,b);
+  await saveGuildState(env,guildId,state);
+}
 function bingoButtons(b){return [row(button("🔄 Refresh Board","birthday:bingo:refresh",2),button("🎂 Birthday Menu","birthday:home",2))];}
 function bingoWinLines(cells){const lines=[]; for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(i=>r*5+i));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(i=>i*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines.filter(ix=>ix.every(i=>cells[i].marked)).length;}
 async function startBirthdayBingo(env,interaction){
@@ -5996,16 +6039,14 @@ async function startBirthdayBingo(env,interaction){
   const uid=getUserFromInteraction(interaction).id;
   state.birthday.bingoBoards=state.birthday.bingoBoards||{};
   if(state.birthday.bingoBoards[uid]){
-    const p=await getPlayer(env,uid);
-    if(Number(p.birthdayCandies||0)>=100){try{await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");}catch(error){console.error("Birthday Bingo balance mark failed:",error);}}
+    try{await syncBirthdayBingoProgress(env,interaction.guild_id,uid);}catch(error){console.error("Birthday Bingo progress sync failed:",error);}
     const refreshed=await getGuildState(env,interaction.guild_id);
     return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
   }
   const b={cells:bingoBoard(),linesPaid:0,fullPaid:false};
   state.birthday.bingoBoards[uid]=b;
   await saveGuildState(env,interaction.guild_id,state);
-  const p=await getPlayer(env,uid);
-  if(Number(p.birthdayCandies||0)>=100){try{await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");}catch(error){console.error("Birthday Bingo balance mark failed:",error);}}
+  try{await syncBirthdayBingoProgress(env,interaction.guild_id,uid);}catch(error){console.error("Birthday Bingo progress sync failed:",error);}
   const refreshed=await getGuildState(env,interaction.guild_id);
   return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
 }
@@ -6093,11 +6134,59 @@ function cupcakeButtons(used=[]){const available=BIRTHDAY_CUPCAKE_INGREDIENTS.fi
 async function birthdayCupcakeView(env,interaction){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");return sendText(env,interaction,`🧁 **WICKED CUPCAKE TOWER**\n\n🎂 Layers: **${g.choices.length}**\n💗 Stability: **${g.stability}%**\n\nPick an ingredient. Its outcome is hidden until you choose it. The available choices reshuffle every turn, and used ingredients stay out of the choices.\n\n🎲 Secret recipes exist.\n\nChoose your next ingredient:`,cupcakeButtons(g.choices));}
 async function birthdayCupcakePick(env,interaction,encoded){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");const ingredient=decodeURIComponent(encoded);const info=BIRTHDAY_CUPCAKE_INGREDIENTS.find(x=>x[0]===ingredient);if(!info)return sendText(env,interaction,"❌ That ingredient disappeared into the pantry.");if(g.choices.includes(ingredient))return sendText(env,interaction,"🧁 You already used that ingredient in this tower.");g.choices.push(ingredient);g.steps++;const outcomes=["🎟️ Candy Bonus","💰 Sparkle Bonus","✨ Perfect Layer","🎂 Birthday Boost","🖤 Dark Magic","👻 Ghostly Surprise","🦇 Batty Bonus","🎀 Cute Combo","🌟 Rare Recipe","💥 Tower Wobble","🕸️ Sticky Mess","🎃 Pumpkin Luck","🧁 Perfect Cupcake","👻 Ghost Took It!","🖤 Cursed Layer","🌙 Midnight Magic"];const outcome=outcomes[randomInt(0,outcomes.length-1)];g.outcomes.push(outcome);if(["💥 Tower Wobble","🕸️ Sticky Mess","🖤 Cursed Layer","👻 Ghost Took It!"].includes(outcome))g.stability-=randomInt(10,28);else g.stability=Math.min(100,g.stability+randomInt(0,8));const matched=BIRTHDAY_SECRET_RECIPES.find(r=>r.need.every(n=>g.choices.some(c=>c.includes(n)))&&r.need.length===g.choices.length);if(matched){g.active=false;const p=await getPlayer(env,uid);p.birthdayCandies+=matched.reward;p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes("midnight_heart_cupcake"))p.birthdayCollection.push("midnight_heart_cupcake");await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"secret_recipe"); return sendText(env,interaction,`🌟🧁 **SECRET RECIPE DISCOVERED!**\n\n🖤 **${matched.name}**\n🎟️ **+${matched.reward} Birthday Candies!**\n✨ A permanent birthday collectible was added to your Birthday Collection.`);}if(g.stability<=0||g.steps>=8){g.active=false;const reward=randomInt(100,250);const p=await getPlayer(env,uid);p.birthdayCandies+=reward;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");await markBingoAction(env,interaction.guild_id,uid,"earn_candy");if(p.birthdayCandies>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");return sendText(env,interaction,`🧁💥 **THE TOWER ${g.stability<=0?"WOBBLED INTO OBLIVION":"IS COMPLETE"}!**\n\nLast outcome: ${outcome}\n🎟️ You earned **${reward} Birthday Candies**.`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${outcome}!\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nThe tower continues...`,cupcakeButtons(g.choices));}
 
+function birthdayCakeCrc32(bytes){
+  let c=0xffffffff;
+  for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^(0xedb88320&-(c&1));}
+  return (c^0xffffffff)>>>0;
+}
+function birthdayCakeU32(n){return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255];}
+function birthdayCakeChunk(type,data){
+  const t=[...new TextEncoder().encode(type)];
+  const body=new Uint8Array(t.length+data.length);body.set(t);body.set(data,t.length);
+  return new Uint8Array([...birthdayCakeU32(data.length),...body,...birthdayCakeU32(birthdayCakeCrc32(body))]);
+}
+function birthdayCakePng(g){
+  const W=900,H=650,rgba=new Uint8Array(W*H*4);
+  const c=g.choices||[],shape=String(c[0]||"Round"),frosting=String(c[2]||"Pink Frosting"),decor=String(c[5]||"Glitter"),effect=String(c[6]||"Sparkle Aura");
+  const fc=frosting.toLowerCase().includes("purple")?[181,140,255]:frosting.toLowerCase().includes("orange")?[255,154,61]:frosting.toLowerCase().includes("black")?[45,38,55]:frosting.toLowerCase().includes("ghost")?[248,243,255]:[255,127,189];
+  const ac=effect.toLowerCase().includes("moon")?[155,140,255]:decor.toLowerCase().includes("pumpkin")?[255,154,61]:[255,210,110];
+  const set=(x,y,r,g,b,a=255)=>{if(x<0||y<0||x>=W||y>=H)return;const i=(y*W+x)*4;rgba[i]=r;rgba[i+1]=g;rgba[i+2]=b;rgba[i+3]=a;};
+  const rect=(x0,y0,x1,y1,col)=>{for(let y=Math.max(0,y0);y<Math.min(H,y1);y++)for(let x=Math.max(0,x0);x<Math.min(W,x1);x++)set(x,y,...col);};
+  const circle=(cx,cy,rr,col)=>{const r2=rr*rr;for(let y=Math.max(0,cy-rr);y<=Math.min(H-1,cy+rr);y++)for(let x=Math.max(0,cx-rr);x<=Math.min(W-1,cx+rr);x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2)set(x,y,...col);}};
+  rect(0,0,W,H,[23,18,34]);
+  circle(120,105,62,[255,210,110]);circle(780,110,82,[255,127,189,55]);circle(110,545,90,[155,140,255,45]);circle(800,535,95,[255,154,61,35]);
+  const cakeX=220,cakeY=245,cakeW=460,cakeH=210;
+  if(shape.toLowerCase().includes("heart")){for(let y=0;y<cakeH;y++)for(let x=0;x<cakeW;x++){const nx=(x-cakeW/2)/(cakeW/2),ny=(y-cakeH*.48)/(cakeH*.48);const f=Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny;if(f<=0)set(cakeX+x,cakeY+y,...fc);}}
+  else if(shape.toLowerCase().includes("pumpkin")){rect(cakeX+35,cakeY+35,cakeX+cakeW-35,cakeY+cakeH-10,fc);for(let x=cakeX+70;x<cakeX+cakeW-60;x+=70)circle(x,cakeY+cakeH/2,72,[Math.max(0,fc[0]-20),Math.max(0,fc[1]-15),Math.max(0,fc[2]-5)]);}
+  else if(shape.toLowerCase().includes("moon")){circle(450,350,125,fc);circle(500,315,110,[23,18,34]);}
+  else if(shape.toLowerCase().includes("bat")){const pts=[[250,315],[320,270],[385,315],[450,255],[515,315],[580,270],[650,315],[585,390],[515,375],[450,430],[385,375],[315,390]];for(let y=250;y<440;y++)for(let x=230;x<670;x++){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];if(((yi>y)!=(yj>y))&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside;}if(inside)set(x,y,...fc);}}
+  else rect(cakeX,cakeY,cakeX+cakeW,cakeY+cakeH,fc);
+  rect(250,415,650,455,[107,49,79]);
+  for(let x=285;x<=615;x+=55)circle(x,405,8,ac);
+  for(let x=330;x<=570;x+=80){rect(x,195,x+8,250,[245,245,245]);rect(x-5,188,x+13,198,ac);}
+  for(let i=0;i<18;i++){const x=280+((i*83)%330),y=275+((i*47)%115);circle(x,y,5,i%2?[255,255,255]:ac);}
+  // Tiny decorative bow at the bottom to make the selected topping visible.
+  circle(435,485,22,[255,127,189]);circle(465,485,22,[255,127,189]);circle(450,485,10,[255,210,110]);
+  const raw=new Uint8Array((W*4+1)*H);let o=0;for(let y=0;y<H;y++){raw[o++]=0;raw.set(rgba.subarray(y*W*4,(y+1)*W*4),o);o+=W*4;}
+  // PNG zlib stream using stored DEFLATE blocks; no external library or browser required.
+  const def=[];def.push(0x78,0x01);for(let pos=0;pos<raw.length;){const n=Math.min(65535,raw.length-pos),last=pos+n>=raw.length;def.push(last?1:0,n&255,(n>>>8)&255,(~n)&255,((~n)>>>8)&255,...raw.subarray(pos,pos+n));pos+=n;}
+  let a=1,b=0;for(const v of raw){a=(a+v)%65521;b=(b+a)%65521;}const ad=((b<<16)|a)>>>0;def.push(...birthdayCakeU32(ad));
+  const ihdr=new Uint8Array([...birthdayCakeU32(W),...birthdayCakeU32(H),8,6,0,0,0]);
+  return new Uint8Array([137,80,78,71,13,10,26,10,...birthdayCakeChunk("IHDR",ihdr),...birthdayCakeChunk("IDAT",new Uint8Array(def)),...birthdayCakeChunk("IEND",new Uint8Array())]);
+}
+
 async function renderBirthdayCake(env,name,choices){let browser;try{browser=await puppeteer.launch(env.BROWSER);const page=await browser.newPage();await page.setViewport({width:900,height:700,deviceScaleFactor:1});const colors={"Pink Frosting":"#ff9ed8","Purple Frosting":"#a87be8","Orange Frosting":"#ff9b45"};const frosting=colors[choices.find(x=>colors[x])]||"#ff9ed8";const shape=choices[0]==="Heart"?"♥":choices[0]==="Pumpkin"?"🎃":choices[0]==="Moon"?"🌙":choices[0]==="Bat"?"🦇":"🎂";const html=`<!doctype html><html><body style="margin:0;width:900px;height:700px;background:#24162d;display:flex;align-items:center;justify-content:center;font-family:Arial"><div style="width:760px;height:560px;border-radius:40px;background:linear-gradient(145deg,#2d1b39,#120c18);text-align:center;color:white;padding:30px;box-sizing:border-box"><div style="font-size:42px;font-weight:900">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div><div style="font-size:28px;margin-top:8px">A birthday cake for <b>${escapeHTML(name)}</b></div><div style="margin:35px auto 20px;width:470px;height:230px;background:${frosting};border-radius:${choices[0]==="Heart"?"45% 45% 25% 25%":"28px"};box-shadow:0 20px 35px rgba(0,0,0,.45);position:relative"><div style="font-size:100px;position:absolute;inset:45px 0 auto">${shape}</div><div style="position:absolute;bottom:18px;left:0;right:0;font-size:28px">🎀 ✨ 🕯️ 🎃 🦇 ✨ 🎀</div></div><div style="font-size:22px">${choices.map(escapeHTML).join(" • ")}</div></div></body></html>`;await page.setContent(html,{waitUntil:"domcontentloaded"});return await page.screenshot({type:"png"});}finally{if(browser)await browser.close().catch(()=>{});}}
 
 function birthdayCakeEscape(value){return String(value||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
 function birthdayCakeImageSvg(g){const c=g.choices||[];const shape=c[0]||"Round";const flavor=c[1]||"Vanilla Mooncake";const frosting=c[2]||"Pink Frosting";const filling=c[3]||"Strawberry Filling";const topping=c[4]||"Pink Bow";const decor=c[5]||"Glitter";const effect=c[6]||"Sparkle Aura";const shapeType=shape.toLowerCase().includes("heart")?"M250 285 C170 190 70 270 250 420 C430 270 330 190 250 285":shape.toLowerCase().includes("pumpkin")?"M120 250 Q150 150 250 210 Q350 150 380 250 Q350 360 250 390 Q150 360 120 250":shape.toLowerCase().includes("moon")?"M300 190 A130 130 0 1 0 300 430 A90 90 0 1 1 300 190":shape.toLowerCase().includes("bat")?"M80 270 L135 225 L180 260 L250 205 L320 260 L365 225 L420 270 L370 335 L300 320 L250 375 L200 320 L130 335 Z":"M120 235 Q120 170 250 170 Q380 170 380 235 L355 380 Q250 430 145 380 Z";const frostingColor=frosting.toLowerCase().includes("purple")?"#b58cff":frosting.toLowerCase().includes("orange")?"#ff9a3d":frosting.toLowerCase().includes("black")?"#24202d":frosting.toLowerCase().includes("white")?"#f8f3ff":"#ff7fbd";const accent=decor.toLowerCase().includes("pumpkin")?"#ff9a3d":effect.toLowerCase().includes("moon")?"#9b8cff":"#ffd166";return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="650" viewBox="0 0 900 650"><rect width="900" height="650" rx="40" fill="#171222"/><circle cx="110" cy="100" r="55" fill="#ffd166" opacity=".9"/><circle cx="790" cy="110" r="70" fill="#ff7fbd" opacity=".18"/><circle cx="120" cy="540" r="80" fill="#9b8cff" opacity=".16"/><circle cx="780" cy="520" r="90" fill="#ff9a3d" opacity=".12"/><text x="450" y="70" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="34" font-weight="700">🦇🎂 BATTY CAKE BAKERY</text><path d="${shapeType}" fill="${frostingColor}" stroke="#fff" stroke-width="10"/><path d="M145 250 Q250 300 355 250 L355 380 Q250 430 145 380 Z" fill="#6b314f" opacity=".75"/><path d="M160 230 Q250 280 340 230" fill="none" stroke="${accent}" stroke-width="18" stroke-linecap="round"/><circle cx="205" cy="245" r="10" fill="#fff"/><circle cx="250" cy="260" r="10" fill="#fff"/><circle cx="295" cy="245" r="10" fill="#fff"/><text x="450" y="490" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="23">${birthdayCakeEscape(flavor)} • ${birthdayCakeEscape(filling)}</text><text x="450" y="530" text-anchor="middle" fill="#ffd6ef" font-family="Arial,sans-serif" font-size="22">${birthdayCakeEscape(topping)} • ${birthdayCakeEscape(decor)}</text><text x="450" y="570" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="20">✨ ${birthdayCakeEscape(effect)} ✨</text></svg>`;}
 async function birthdayCakeImageUrl(env,interaction,g){const uid=getUserFromInteraction(interaction).id;const key=`birthday-cakes/${interaction.guild_id}/${uid}-${Date.now()}.svg`;await env.TREE_DATA.put(key,birthdayCakeImageSvg(g),{httpMetadata:{contentType:"image/svg+xml",cacheControl:"public, max-age=31536000"}});return `${BASE_URL}${key}`;}
+function birthdayBakeryChoiceButtons(menu){
+  const options=Array.isArray(menu?.options)?menu.options:[];
+  if(!options.length)return [row(button("🎂 Birthday Menu","birthday:home",2))];
+  const rows=[];
+  for(let i=0;i<options.length;i+=5)rows.push(row(...options.slice(i,i+5).map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1))));
+  return rows;
+}
 const BIRTHDAY_BAKERY_MENUS=[
   {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
   {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
@@ -6107,7 +6196,7 @@ const BIRTHDAY_BAKERY_MENUS=[
   {name:"decorations",options:[["✨ Glitter","Glitter"],["🖤 Black Sprinkles","Black Sprinkles"],["🎃 Pumpkin Decorations","Pumpkin Decorations"],["🕸️ Spiderweb Caramel","Spiderweb Caramel"],["🌹 Midnight Roses","Midnight Roses"]]},
   {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
 ];
-async function startBirthdayBakery(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");const people=state.birthday.birthdayIds;const uid=getUserFromInteraction(interaction).id;state.birthday.games=state.birthday.games||{};state.birthday.games.bakeries=state.birthday.games.bakeries||{};state.birthday.games.bakeries[uid]={active:true,status:"choosing",userId:uid,recipient:people[0],step:0,choices:[]};await saveGuildState(env,interaction.guild_id,state);const menu=BIRTHDAY_BAKERY_MENUS[0];return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY**\n\nYou're designing a birthday cake for **${birthdayName(state)}**!\n\nChoose a **${menu.name}**:`,[row(...menu.options.map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1)))]);}
+async function startBirthdayBakery(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");const people=state.birthday.birthdayIds;const uid=getUserFromInteraction(interaction).id;state.birthday.games=state.birthday.games||{};state.birthday.games.bakeries=state.birthday.games.bakeries||{};state.birthday.games.bakeries[uid]={active:true,status:"choosing",userId:uid,recipient:people[0],step:0,choices:[]};await saveGuildState(env,interaction.guild_id,state);const menu=BIRTHDAY_BAKERY_MENUS[0];return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY**\n\nYou're designing a birthday cake for **${birthdayName(state)}**!\n\nChoose a **${menu.name}**:`,birthdayBakeryChoiceButtons(menu));}
 async function birthdayCakeChoice(env,interaction,value){
   const state=await getGuildState(env,interaction.guild_id);
   const uid=getUserFromInteraction(interaction).id;
@@ -6117,7 +6206,7 @@ async function birthdayCakeChoice(env,interaction,value){
   if(g.step<BIRTHDAY_BAKERY_MENUS.length){
     await saveGuildState(env,interaction.guild_id,state);
     const menu=BIRTHDAY_BAKERY_MENUS[g.step];
-    return sendText(env,interaction,`🎂 **Cake design step ${g.step+1}/${BIRTHDAY_BAKERY_MENUS.length}**\n\nChoose a **${menu.name}**:`,[row(...menu.options.map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1)))]);
+    return sendText(env,interaction,`🎂 **Cake design step ${g.step+1}/${BIRTHDAY_BAKERY_MENUS.length}**\n\nChoose a **${menu.name}**:`,birthdayBakeryChoiceButtons(menu));
   }
   g.status="finalizing";
   const p=await getPlayer(env,uid);
@@ -6132,10 +6221,10 @@ async function birthdayCakeChoice(env,interaction,value){
   try {
     bytes=await renderBirthdayCake(env,birthdayName(state),g.choices);
   } catch(error) {
-    console.error("Birthday cake PNG render failed:",error);
-    bytes=new TextEncoder().encode(birthdayCakeImageSvg(g));
-    filename="birthday-cake.svg";
-    contentType="image/svg+xml";
+    console.error("Birthday cake browser render failed; using built-in PNG renderer:",error);
+    bytes=birthdayCakePng(g);
+    filename="birthday-cake.png";
+    contentType="image/png";
   }
   const responseContent=`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake is attached below!**`;
   const response=await editOriginalResponseWithFile(env,interaction,responseContent,filename,bytes,contentType,[row(button("🎂 Birthday Menu","birthday:home",2))]);
