@@ -5825,6 +5825,12 @@ async function ensureBirthdayEvent(env, guildId) {
     state.birthday.birthdayIds = people.map(p => p.userId);
     state.birthday.birthdayNames = people.map(p => p.displayName || p.username || "Werewife");
   }
+
+  // IMPORTANT: persist the active birthday event. The hub can display correctly
+  // from the in-memory state, but game buttons such as Bingo/Roulette/Bakery
+  // read the saved guild state directly. Without this save, those buttons see
+  // an inactive birthday and incorrectly report that the game is closed.
+  await saveGuildState(env, guildId, state);
   return { state, people };
 }
 
@@ -6245,6 +6251,9 @@ async function handleComponent(
     const parts=id.split(":"); const action=parts[1];
     if(action==="home") return handleBirthdayCommand(env,interaction);
     if(action==="set") return handleBirthdaySet(env,interaction);
+    // Make sure the current day's birthday event is persisted before any
+    // button handler reads state.birthday directly.
+    if (interaction.guild_id) await ensureBirthdayEvent(env, interaction.guild_id);
     if(action==="shop") return showBirthdayShop(env,interaction,Number(parts[2]||0));
     if(action==="buy") return buyBirthdayItem(env,interaction,parts[2]);
     if(action==="hunt") return handleBirthdayHunt(env,interaction);
