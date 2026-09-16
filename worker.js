@@ -6940,7 +6940,27 @@ function birthdayBossButtons(g){return [row(button("⚔️ Attack","birthday:bos
 async function startBirthdayBoss(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boss Battle is closed.");let g=state.birthday.games?.boss;if(g?.active){if(!g.players.includes(getUserFromInteraction(interaction).id))g.players.push(getUserFromInteraction(interaction).id);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,birthdayBossText(g),birthdayBossButtons(g));}const bosses=[["Cursed Birthday Cake",500],["Haunted Pink Cake",650],["Midnight Monster Cake",800],["Pumpkin Doom Cake",700],["Batty Birthday Cake",900]];const b=bosses[randomInt(0,bosses.length-1)];g={active:true,bossName:b[0],maxHp:b[1]+randomInt(-50,100),hp:b[1]+randomInt(-50,100),players:[getUserFromInteraction(interaction).id],round:0,weakness:["attack","defend","decorate","candle","feed","bat"][randomInt(0,5)],lastEvent:""};g.hp=g.maxHp;state.birthday.games=state.birthday.games||{};state.birthday.games.boss=g;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,birthdayBossText(g),birthdayBossButtons(g));}
 async function birthdayBossAction(env,interaction,action){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.boss;const uid=getUserFromInteraction(interaction).id;if(!g?.active)return sendText(env,interaction,"🎂 The Boss Battle is over.");if(!g.players.includes(uid))g.players.push(uid);let damage=0,heal=0,msg="";const roll=Math.random();if(action===g.weakness){damage=randomInt(45,110);msg="✨ **WEAKNESS HIT!**";}else if(action==="attack"){damage=randomInt(15,65);msg="⚔️ Direct hit!";}else if(action==="defend"){damage=randomInt(5,35);msg="🛡️ Defensive counter!";}else if(action==="decorate"){damage=randomInt(10,50);msg="🎀 The cake hates the decorations!";}else if(action==="candle"){damage=randomInt(20,70);msg="🕯️ The candles flare with birthday magic!";}else if(action==="feed"){heal=randomInt(5,30);damage=randomInt(5,40);msg="🍰 Feeding the boss somehow made it weaker.";}else{damage=randomInt(25,85);msg="🦇 BATS ATTACK!";}g.hp=Math.max(0,g.hp-damage);g.round++;const events=["👻 Ghost phase!","🎃 Pumpkin explosion!","🦇 Bat swarm!","🕯️ Candle curse!","✨ Birthday sparkle surge!","🎂 The cake changes form!"];g.lastEvent=events[randomInt(0,events.length-1)];if(g.hp<=0){g.active=false;const participants=[...new Set(g.players)];for(const id of participants){const p=await getPlayer(env,id);p.birthdayCandies+=randomInt(100,300);await savePlayer(env,p);}const fin=await getPlayer(env,uid);fin.birthdayCollection=Array.isArray(fin.birthdayCollection)?fin.birthdayCollection:[];fin.birthdayCollection.push("cursed_birthday_cake");await savePlayer(env,fin);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"boss_win");return sendText(env,interaction,`🎂💥 **THE CURSED BIRTHDAY CAKE HAS BEEN DEFEATED!**\n\n${msg}\n${g.lastEvent}\n\n🏆 Every participant earned **100–300 Birthday Candies**.\n🦇 <@${uid}> dealt the final blow and received the permanent **Cursed Birthday Cake** collectible!`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${msg}\n${g.lastEvent}\n\n${birthdayBossText(g)}`,birthdayBossButtons(g));}
 
-async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);const key=birthdayTodayKey();if(!people.length){if(state.birthday?.activeDate===key&&state.birthday.active){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};await saveGuildState(env,guildId,state);}continue;}if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}const latestBirthdayState=await getGuildState(env,guildId);await saveGuildState(env,guildId,latestBirthdayState);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
+async function forceBirthdayServerEvent(env,interaction){
+  if(!(await requireOwner(env,interaction)))return;
+  const action=getOption(interaction,"event");
+  const labels={
+    pumpkin_appears:"🎃 **A Pumpkin Appears!** 🎃",
+    ghost_appears:"👻 **A Ghost Appears!** 👻",
+    bat_swarm:"🦇 **A Bat Swarm Appears!** 🦇"
+  };
+  if(!labels[action])return sendText(env,interaction,"❌ Choose **pumpkin**, **ghost**, or **bats**.");
+  const guildId=interaction.guild_id;
+  if(!guildId)return sendText(env,interaction,"❌ Birthday server events can only be forced inside a server.");
+  const state=await getGuildState(env,guildId);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Party is not active.");
+  await markBirthdayServerSquare(env,guildId,action);
+  const latest=await getGuildState(env,guildId);
+  const channel=latest.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;
+  if(channel)await sendChannelMessage(env,channel,labels[action]);
+  return sendText(env,interaction,`🧪 **Birthday server event forced:** ${action}\n\nThe event announcement was sent and the matching server Bingo square was marked.`);
+}
+
+async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);const key=birthdayTodayKey();if(!people.length){if(state.birthday?.activeDate===key&&state.birthday.active){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};await saveGuildState(env,guildId,state);}continue;}if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
 
 async function expireBirthdayEventState(env){const key=birthdayTodayKey();for(const guildId of await getKnownGuildIds(env)){const state=await getGuildState(env,guildId);if(state.birthday?.active&&state.birthday.activeDate!==key){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};state.birthday.bingoBoards={};await saveGuildState(env,guildId,state);}}}
 
@@ -18447,6 +18467,7 @@ async function handleCommand(
   if (name === "birthday-cannon") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayCannon(env, interaction); return; }
   if (name === "birthday-trickster") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayTrickster(env, interaction); return; }
   if (name === "birthday-name") { await ensureBirthdayEvent(env, interaction.guild_id); await handleBirthdayNameBingo(env, interaction); return; }
+  if (name === "birthday-force") { await forceBirthdayServerEvent(env, interaction); return; }
 
   if (name === "games") {
     await handleGamesMenu(env, interaction);
@@ -20436,6 +20457,21 @@ const COMMANDS = [
     name: "birthday-name",
     description: "Record a birthday person's name for Bingo",
     options: [{ type: 6, name: "user", description: "Today's birthday person", required: false }]
+  },
+  {
+    name: "birthday-force",
+    description: "Owner-only Birthday server event test",
+    options: [{
+      type: 3,
+      name: "event",
+      description: "Server event to force",
+      required: true,
+      choices: [
+        { name: "🎃 Pumpkin Appears", value: "pumpkin_appears" },
+        { name: "👻 Ghost Appears", value: "ghost_appears" },
+        { name: "🦇 Bat Swarm Appears", value: "bat_swarm" }
+      ]
+    }]
   },
   {
     name: "birthday-set",
