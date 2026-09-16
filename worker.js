@@ -6051,37 +6051,60 @@ async function handleBirthdayHunt(env,interaction){
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed.");
 
   let items=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
-  let channelId=state.birthday.lastHuntChannelId;
-  let messageId=state.birthday.lastHuntMessageId;
+  let channelId=state.birthday.lastHuntChannelId||null;
+  let messageId=state.birthday.lastHuntMessageId||null;
 
+  // If there are saved treasures, make absolutely sure the actual hunt
+  // message in Discord contains the claim buttons. A previous version could
+  // remember a channel/message but leave only the navigation response visible.
   if(items.length&&channelId&&messageId){
     const exists=await birthdayHuntMessageExists(env,channelId,messageId);
-    if(!exists){
-      // The saved hunt message was deleted/removed. Keep the unclaimed
-      // treasures, but place that same hunt into a newly rotated channel.
+    if(exists){
+      const repaired=await discordRequest(
+        env,
+        `/channels/${channelId}/messages/${messageId}`,
+        {
+          method:"PATCH",
+          body:JSON.stringify({
+            content:`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nThe spooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,
+            components:birthdayHuntComponents(items)
+          })
+        }
+      );
+      if(!repaired.ok){
+        console.error("Birthday Fright Hunt message repair failed:",repaired.status,await repaired.text());
+      }
+    }else{
+      channelId=null;
+      messageId=null;
       state.birthday.lastHuntChannelId=null;
       state.birthday.lastHuntMessageId=null;
       await saveGuildState(env,interaction.guild_id,state);
-      const candidates=await getBirthdayHuntCandidates(env,interaction.guild_id,channelId);
-      let posted=null;
-      for(const candidate of candidates){
-        const message=await sendChannelMessage(
-          env,
-          candidate,
-          `🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nThe spooky treasures are here! Claim one before another Werewife does! 👀✨`,
-          birthdayHuntComponents(items)
-        );
-        if(message?.id){posted={channelId:candidate,messageId:message.id};break;}
-      }
-      if(posted){
-        state.birthday.lastHuntChannelId=posted.channelId;
-        state.birthday.lastHuntMessageId=posted.messageId;
-        await saveGuildState(env,interaction.guild_id,state);
-        channelId=posted.channelId;
-        messageId=posted.messageId;
-      }else{
-        return sendText(env,interaction,"🎃 I couldn't place the Fright Hunt in another channel right now. Please try Hunt again!");
-      }
+    }
+  }
+
+  // If the saved hunt message is missing, repost the SAME unclaimed
+  // treasures into a different channel. Never silently create a new empty
+  // hunt when treasures already exist.
+  if(items.length&&!channelId){
+    const previousChannel=state.birthday.lastHuntChannelId||null;
+    const candidates=await getBirthdayHuntCandidates(env,interaction.guild_id,previousChannel);
+    let posted=null;
+    for(const candidate of candidates){
+      const message=await sendChannelMessage(
+        env,
+        candidate,
+        `🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nThe spooky birthday treasures are here! Claim one before another Werewife does! 👀✨`,
+        birthdayHuntComponents(items)
+      );
+      if(message?.id){posted={channelId:candidate,messageId:message.id};break;}
+    }
+    if(posted){
+      state.birthday.lastHuntChannelId=posted.channelId;
+      state.birthday.lastHuntMessageId=posted.messageId;
+      await saveGuildState(env,interaction.guild_id,state);
+      channelId=posted.channelId;
+      messageId=posted.messageId;
     }
   }
 
@@ -6089,9 +6112,14 @@ async function handleBirthdayHunt(env,interaction){
     const spawned=await spawnBirthdayHunt(env,interaction.guild_id,interaction.channel_id);
     const refreshed=await getGuildState(env,interaction.guild_id);
     items=(refreshed.birthday?.huntItems||[]).filter(x=>!x.claimed);
-    channelId=refreshed.birthday?.lastHuntChannelId;
+    channelId=refreshed.birthday?.lastHuntChannelId||null;
+    messageId=refreshed.birthday?.lastHuntMessageId||null;
     if(spawned&&items.length&&channelId){
-      return sendText(env,interaction,
+      // The actual treasure message was posted by spawnBirthdayHunt.
+      // Send only a locator response here.
+      return sendText(
+        env,
+        interaction,
         `🎃🦇 **A NEW FRIGHT HUNT HAS APPEARED!**\n\nThe spooky treasures are hiding in <#${channelId}>!\n\n🏃 Go there and claim them before another Werewife gets there first! 👀`,
         [row(button("🎂 Birthday Menu","birthday:home",2))]
       );
@@ -6101,7 +6129,9 @@ async function handleBirthdayHunt(env,interaction){
   if(!items.length)return sendText(env,interaction,"🎃 I couldn't place the Fright Hunt in a channel right now. Please try the Hunt button again!");
   if(!channelId)return sendText(env,interaction,"🎃 I couldn't confirm a hunt channel yet. Try Hunt once more.");
 
-  return sendText(env,interaction,
+  return sendText(
+    env,
+    interaction,
     `🎃 **BIRTHDAY FRIGHT HUNT**\n\nThe current hunt is happening in <#${channelId}>!\n\n🏃 Go there and claim the treasures before another Werewife does! 👀`,
     [row(button("🎂 Birthday Menu","birthday:home",2))]
   );
@@ -6116,6 +6146,24 @@ async function claimBirthdayHunt(env,interaction,id){
   const p=await getPlayer(env,getUserFromInteraction(interaction).id);
   p.birthdayCandies+=item.reward;
   await savePlayer(env,p);
+
+  const remaining=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
+  if(state.birthday.lastHuntChannelId&&state.birthday.lastHuntMessageId){
+    const huntResponse=await discordRequest(
+      env,
+      `/channels/${state.birthday.lastHuntChannelId}/messages/${state.birthday.lastHuntMessageId}`,
+      {
+        method:"PATCH",
+        body:JSON.stringify({
+          content:remaining.length
+            ? `🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nThe spooky birthday treasures are still here! Claim one before another Werewife does! 👀✨`
+            : `🎃🦇 **BIRTHDAY FRIGHT HUNT COMPLETE!**\n\nAll of the spooky birthday treasures have been claimed! 🎉🎂`,
+          components:remaining.length ? birthdayHuntComponents(remaining) : []
+        })
+      }
+    );
+    if(!huntResponse.ok)console.error("Birthday Fright Hunt live update failed:",huntResponse.status,await huntResponse.text());
+  }
   await saveGuildState(env,interaction.guild_id,state);
   if(p.birthdayCandies>=100) await markBingoAction(env,interaction.guild_id,p.userId,"hundred_candy");
   return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);
