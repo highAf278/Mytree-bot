@@ -6395,6 +6395,9 @@ async function claimBirthdayHunt(env,interaction,id){
   item.claimed=true;
   const p=await getPlayer(env,getUserFromInteraction(interaction).id);
   p.birthdayCandies+=item.reward;
+  const sparkleReward=randomInt(25,100);
+  p.sparkles=Number(p.sparkles||0)+sparkleReward;
+  await markBingoAction(env,interaction.guild_id,p.userId,"receive_sparkles");
   await savePlayer(env,p);
 
   const remaining=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
