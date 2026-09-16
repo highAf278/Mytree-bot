@@ -2907,13 +2907,18 @@ async function renderProfileDirect(env,player){
 }
 
 function drawBirthdayConfetti(frame){
-  const pieces=[[255,127,189],[255,244,255],[199,132,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255]];
-  for(let i=0;i<pieces.length;i++){
-    const x=25+((i*137)%880),y=35+((i*83)%900),w=8+(i%4)*3,h=16+(i%3)*7,c=pieces[i];
-    if(i%3===0)circleFrame(frame,x,y,Math.max(5,w/2),[c[0],c[1],c[2],235]);
-    else rectFrame(frame,x,y,x+w,y+h,[c[0],c[1],c[2],235]);
+  const pieces=[[255,127,189],[255,210,110],[181,140,255],[255,154,61],[255,244,255],[224,83,133]];
+  for(let i=0;i<72;i++){
+    const x=22+((i*137)%980),y=24+((i*83)%910),w=7+(i%5)*3,h=15+(i%4)*5,c=pieces[i%pieces.length];
+    if(x>260&&x<760&&y>250&&y<820&&i%2===0)continue;
+    if(i%3===0)circleFrame(frame,x,y,Math.max(4,w/2),[c[0],c[1],c[2],245]);
+    else{
+      rectFrame(frame,x,y,x+w,y+h,[c[0],c[1],c[2],245]);
+      if(i%2===0)rectFrame(frame,x+2,y+2,x+w-1,y+h-2,[255,255,255,55]);
+    }
   }
 }
+
 function circleFrame(frame,cx,cy,r,col){
   const r2=r*r;
   for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(frame.height-1,Math.ceil(cy+r));y++)
@@ -2985,7 +2990,7 @@ async function renderTreeDirectFallback(env, player) {
     }
   }
 
-  // Browser Rendering can animate confetti; the direct PNG fallback cannot.\n  // Draw a visible confetti frame so the effect is never silently dropped.\n  if(player.equipped?.effect === "birthday_confetti")drawBirthdayConfetti(scene);\n\n  // Draw the active sparkles directly so they still appear when Browser
+  // Browser Rendering can animate confetti; the direct PNG fallback cannot.\n  // Draw a visible confetti frame so the effect is never silently dropped.\n  if(["birthday_confetti","animated_confetti","birthday-confetti"].includes(String(player.equipped?.effect||"")))drawBirthdayConfetti(scene);\n\n  // Draw the active sparkles directly so they still appear when Browser
   // Rendering is unavailable.
   for (const sparkle of (player.sparklesOnTree || [])) {
     const x = Math.round((Number(sparkle.x) || 50) / 100 * width);
@@ -3043,7 +3048,7 @@ async function renderTree(env, player) {
       if (effect) {
         effectHTML = `<img src="${effect}" style="position:absolute;left:-5%;top:-5%;width:110%;height:110%;object-fit:contain;opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};z-index:2;pointer-events:none">`;
       }
-      const confettiHTML = player.equipped?.effect === "birthday_confetti" ? Array.from({length:42},(_,i)=>`<span style="position:absolute;left:${(i*37)%100}%;top:${(i*61)%100}%;font-size:${10+(i%4)*5}px;z-index:12;transform:rotate(${i*31%360}deg);animation:confettiFloat ${1.5+(i%5)*0.3}s ease-in-out infinite ${-(i%7)*0.2}s">${["🎊","✨","🎀","💗","💜","🧡"][i%6]}</span>`).join("") : "";
+      const confettiHTML = ["birthday_confetti","animated_confetti","birthday-confetti"].includes(String(player.equipped?.effect||"")) ? Array.from({length:72},(_,i)=>{const x=(i*137)%96+2,y=(i*83)%92+4,w=7+(i%5)*2,h=14+(i%4)*4,rot=(i*31)%360,d=1.4+(i%5)*0.25;const bg=["#ff7fbd","#ffd266","#b58cff","#ff9a3d","#fff4ff","#e05385"][i%6];return `<i style="position:absolute;left:${x}%;top:${y}%;width:${w}px;height:${h}px;background:${bg};border-radius:2px;z-index:12;transform:rotate(${rot}deg);box-shadow:0 0 6px rgba(255,255,255,.65);animation:confettiFloat ${d}s ease-in-out infinite ${-(i%7)*.18}s"></i>`}).join("") : "";
 
       const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}@keyframes confettiFloat{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(16px) rotate(90deg)}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML}${sparkleHTML}</div></body></html>`;
 
@@ -5419,7 +5424,8 @@ async function equipEffect(
   await sendText(
     env,
     interaction,
-    effect===null ? "✨ Effect removed!" : "✨ Effect equipped!"
+    effect===null ? "✨ Effect removed!" : "✨ Effect equipped!",
+    [row(button("🌳 Show Updated Tree", "tree", 2))]
   );
 }
 
@@ -5991,32 +5997,41 @@ async function handleBirthdayGift(env,interaction){
 function birthdayGiftMenuText(){return `🎁 **CURSED BIRTHDAY GIFTS**\n\n1. 🎀 Creepy Little Present — Common — 1,000 Sparkles\n2. 👻 Ghostly Gift Box — Uncommon — 150 Birthday Candies\n3. 🎃 Pumpkin Treasure — Rare — 5,000 Sparkles + 250 Birthday Candies\n4. 🦇 Midnight Keepsake — Epic — random exclusive birthday collectible\n5. 🌙 Moonlit Birthday Relic — Legendary — random permanent birthday-exclusive collectible\n\nUse \`/birthday gift\` to send one to today's birthday person. Each player may send **2 total gifts** per event.`}
 
 function birthdayHuntComponents(items){return items.map(x=>row(button(`${x.emoji} +${x.reward} 🍬`,`birthday:claim:${x.id}`,1)));}
-async function spawnBirthdayHunt(env,guildId){
+async function spawnBirthdayHunt(env,guildId,preferredChannelId=null){
   const state=await getGuildState(env,guildId);
   if(!birthdayEventActive(state)||state.birthday.huntItems?.length>=6)return false;
-  const count=randomInt(2,4); const items=[];
+  const count=randomInt(2,4),items=[];
   for(let i=0;i<count;i++){const e=BIRTHDAY_HUNT_EMOJIS[randomInt(0,BIRTHDAY_HUNT_EMOJIS.length-1)];items.push({id:crypto.randomUUID(),emoji:e[0],name:e[1],reward:e[2],claimed:false});}
 
-  const channels=await getGuildTextChannels(env,guildId);
+  let channels=[];
+  try{channels=await getGuildTextChannels(env,guildId);}catch(error){console.error("Birthday Hunt channel lookup failed:",error);}
   const eligible=channels.filter(c=>c?.id);
   const previous=state.birthday.lastHuntChannelId||null;
   const choices=eligible.filter(c=>c.id!==previous);
   const pool=choices.length?choices:eligible;
-  const channel=pool.length?pool[randomInt(0,pool.length-1)].id:(state.announcementChannelId||null);
+  let candidates=pool.length?pool.map(c=>c.id):[];
+  if(preferredChannelId&&!candidates.includes(preferredChannelId))candidates.push(preferredChannelId);
+  if(state.announcementChannelId&&!candidates.includes(state.announcementChannelId))candidates.push(state.announcementChannelId);
+  if(previous&&!candidates.includes(previous))candidates.push(previous);
+
+  let channel=null;
+  for(const candidate of candidates.sort(()=>Math.random()-.5)){
+    const sent=await sendChannelMessage(env,candidate,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items));
+    if(sent){channel=candidate;break;}
+  }
 
   state.birthday.huntItems=[...(state.birthday.huntItems||[]),...items];
   state.birthday.nextFrightHuntAt=Date.now()+30*60*1000;
-  state.birthday.lastHuntChannelId=channel||previous||null;
+  state.birthday.lastHuntChannelId=channel||null;
   await saveGuildState(env,guildId,state);
-  if(channel) await sendChannelMessage(env,channel,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items));
-  return true;
+  return Boolean(channel);
 }
 async function handleBirthdayHunt(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed.");
   let items=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
   if(!items.length){
-    await spawnBirthdayHunt(env,interaction.guild_id);
+    await spawnBirthdayHunt(env,interaction.guild_id,interaction.channel_id);
     const refreshed=await getGuildState(env,interaction.guild_id);
     items=(refreshed.birthday?.huntItems||[]).filter(x=>!x.claimed);
     const channelId=refreshed.birthday?.lastHuntChannelId;
@@ -6325,59 +6340,59 @@ function birthdayCakeChunk(type,data){
 }
 function birthdayCakePng(g){
   const W=900,H=650,rgba=new Uint8Array(W*H*4);
-  const c=g.choices||[],shape=String(c[0]||"Round"),flavor=String(c[1]||"Vanilla Mooncake");
-  const frosting=String(c[2]||"Pink Frosting"),filling=String(c[3]||"Strawberry Jam"),topping=String(c[4]||"Pink Bow");
-  const decor=String(c[5]||"Glitter"),effect=String(c[6]||"Sparkle Aura");
-  const set=(x,y,r,g,b,a=255)=>{if(x<0||y<0||x>=W||y>=H)return;const i=(y*W+x)*4;rgba[i]=r;rgba[i+1]=g;rgba[i+2]=b;rgba[i+3]=a;};
-  const rect=(x0,y0,x1,y1,col)=>{for(let y=Math.max(0,Math.floor(y0));y<Math.min(H,Math.ceil(y1));y++)for(let x=Math.max(0,Math.floor(x0));x<Math.min(W,Math.ceil(x1));x++)set(x,y,...col);};
-  const circle=(cx,cy,rr,col)=>{const r2=rr*rr;for(let y=Math.max(0,Math.floor(cy-rr));y<=Math.min(H-1,Math.ceil(cy+rr));y++)for(let x=Math.max(0,Math.floor(cx-rr));x<=Math.min(W-1,Math.ceil(cx+rr));x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2)set(x,y,...col);}};
-  const ellipse=(cx,cy,rx,ry,col)=>{for(let y=Math.max(0,Math.floor(cy-ry));y<=Math.min(H-1,Math.ceil(cy+ry));y++)for(let x=Math.max(0,Math.floor(cx-rx));x<=Math.min(W-1,Math.ceil(cx+rx));x++){const dx=(x-cx)/rx,dy=(y-cy)/ry;if(dx*dx+dy*dy<=1)set(x,y,...col);}};
-  const line=(x0,y0,x1,y1,w,col)=>{const n=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)));for(let i=0;i<=n;i++){const t=i/n;circle(Math.round(x0+(x1-x0)*t),Math.round(y0+(y1-y0)*t),w/2,col);}};
-  const heart=(cx,cy,s,col)=>{circle(cx-s*.34,cy-s*.18,s*.34,col);circle(cx+s*.34,cy-s*.18,s*.34,col);for(let y=-s*.05;y<s*.78;y++){const half=Math.max(0,s*.68*(1-y/(s*1.55)));for(let x=-half;x<=half;x++)set(Math.round(cx+x),Math.round(cy+y),...col);}};
-  const flavorColor=flavor.toLowerCase().includes("black")?[54,43,61]:flavor.toLowerCase().includes("strawberry")?[244,156,191]:flavor.toLowerCase().includes("pumpkin")?[217,128,53]:flavor.toLowerCase().includes("cherry")?[126,49,78]:[247,222,196];
-  const frostingColor=frosting.toLowerCase().includes("purple")?[181,140,255]:frosting.toLowerCase().includes("orange")?[255,154,61]:frosting.toLowerCase().includes("black")?[55,43,61]:frosting.toLowerCase().includes("ghost")?[248,243,255]:[255,127,189];
-  const fillingColor=filling.toLowerCase().includes("chocolate")?[91,54,65]:filling.toLowerCase().includes("blackberry")?[87,51,112]:filling.toLowerCase().includes("cherry")?[163,63,91]:filling.toLowerCase().includes("cotton")?[230,178,244]:[224,83,133];
-  const accent=decor.toLowerCase().includes("pumpkin")?[255,154,61]:effect.toLowerCase().includes("moon")?[155,140,255]:[255,210,110];
-
-  rect(0,0,W,H,[23,18,34]);circle(110,95,60,[255,210,110]);circle(790,100,78,[255,127,189]);circle(110,540,82,[155,140,255]);circle(795,530,88,[255,154,61]);
-  for(let i=0;i<18;i++)circle(35+((i*149)%830),35+((i*97)%185),2+(i%3),[255,255,255]);
-  ellipse(450,548,275,28,[10,8,16]);ellipse(450,525,270,30,[123,73,101]);
-
-  const roundCake=()=>{rect(245,365,655,505,flavorColor);ellipse(450,365,205,58,frostingColor);rect(245,285,655,425,flavorColor);ellipse(450,285,205,58,frostingColor);rect(260,405,640,425,fillingColor);ellipse(450,405,190,24,fillingColor);for(let x=275,i=0;x<=625;x+=50,i++)ellipse(x,318+(i%2)*5,25,28,frostingColor);ellipse(450,505,205,28,frostingColor);};
-  const heartCake=()=>{heart(450,395,190,flavorColor);heart(450,365,165,frostingColor);heart(450,402,125,fillingColor);heart(450,380,98,frostingColor);};
-  const pumpkinCake=()=>{const base=[Math.max(0,flavorColor[0]-12),Math.max(0,flavorColor[1]-8),Math.max(0,flavorColor[2]-3)];ellipse(450,405,205,120,base);for(let x=290;x<=610;x+=55)ellipse(x,405,62,112,flavorColor);ellipse(450,340,205,62,frostingColor);rect(438,270,462,315,[74,112,52]);ellipse(450,270,24,12,[94,145,63]);ellipse(450,505,205,24,frostingColor);};
-  const moonCake=()=>{circle(450,395,145,flavorColor);circle(505,350,128,[23,18,34]);ellipse(450,510,175,22,frostingColor);for(let i=0;i<7;i++)circle(375+i*25,400+(i%2)*24,6,frostingColor);};
-  const batCake=()=>{const pts=[[250,360],[315,315],[365,350],[450,300],[535,350],[585,315],[650,360],[590,430],[530,415],[450,475],[370,415],[310,430]];for(let y=300;y<=480;y++){const xs=[];for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if((yi>y)!=(yj>y))xs.push((xj-xi)*(y-yi)/(yj-yi)+xi);}xs.sort((a,b)=>a-b);for(let i=0;i+1<xs.length;i+=2)rect(xs[i],y,xs[i+1]+1,y+1,flavorColor);}line(315,370,585,370,22,frostingColor);circle(420,365,10,[255,255,255]);circle(480,365,10,[255,255,255]);circle(420,365,4,[35,25,45]);circle(480,365,4,[35,25,45]);ellipse(450,490,170,20,frostingColor);};
-  const sl=shape.toLowerCase();if(sl.includes("heart"))heartCake();else if(sl.includes("pumpkin"))pumpkinCake();else if(sl.includes("moon"))moonCake();else if(sl.includes("bat"))batCake();else roundCake();
-
-  const tl=topping.toLowerCase();
-  if(tl.includes("bow")){circle(395,250,34,[255,127,189]);circle(505,250,34,[255,127,189]);circle(450,250,20,accent);}
-  else if(tl.includes("bat")){circle(450,252,13,[45,32,55]);line(437,252,415,240,7,[45,32,55]);line(463,252,485,240,7,[45,32,55]);line(440,258,425,273,6,[45,32,55]);line(460,258,475,273,6,[45,32,55]);}
-  else if(tl.includes("ghost")){circle(450,250,38,[248,243,255]);rect(412,250,488,280,[248,243,255]);circle(435,245,5,[50,40,65]);circle(465,245,5,[50,40,65]);}
-  else if(tl.includes("pumpkin")){circle(450,255,34,[255,154,61]);rect(444,218,456,228,[75,120,55]);for(let x=425;x<=475;x+=25)line(x,230,x,280,3,[225,116,45]);}
-  else{rect(445,210,455,270,[245,245,245]);rect(439,204,461,214,accent);circle(450,194,10,[255,173,60]);}
-
-  const dl=decor.toLowerCase();
-  if(dl.includes("glitter"))for(let i=0;i<20;i++){const x=285+((i*67)%330),y=330+((i*41)%145);line(x-5,y,x+5,y,2,[255,255,255]);line(x,y-5,x,y+5,2,accent);}
-  else if(dl.includes("sprinkles"))for(let i=0;i<30;i++){const x=275+((i*53)%350),y=330+((i*29)%150);line(x,y,x+8,y+5,3,i%2?[255,127,189]:accent);}
-  else if(dl.includes("pumpkin"))for(let i=0;i<7;i++)circle(310+i*45,430-(i%2)*12,12,[255,154,61]);
-  else if(dl.includes("spiderweb"))for(let r=18;r<=70;r+=18)for(let a=0;a<6;a++){const ang=a*Math.PI/3;line(450+Math.cos(ang)*(r-18),395+Math.sin(ang)*(r-18),450+Math.cos(ang)*r,395+Math.sin(ang)*r,2,[225,225,235]);}
-  else for(const [x,y] of [[350,430],[450,455],[550,430]]){circle(x-9,y,10,[126,49,78]);circle(x+9,y,10,[126,49,78]);circle(x,y-9,10,[163,63,91]);circle(x,y+8,8,[126,49,78]);circle(x,y,5,[255,210,110]);}
-
-  const el=effect.toLowerCase();
-  if(el.includes("sparkle"))for(let i=0;i<16;i++){const x=300+((i*71)%300),y=300+((i*37)%160);line(x-6,y,x+6,y,2,[255,255,255]);line(x,y-6,x,y+6,2,[255,210,110]);}
-  else if(el.includes("moon")){for(let i=0;i<5;i++)circle(300+i*75,190+(i%2)*22,9,[155,140,255]);circle(650,190,25,[255,255,255]);circle(660,182,21,[23,18,34]);}
-  else if(el.includes("bat"))for(let i=0;i<4;i++){const x=285+i*105,y=170+(i%2)*28;line(x-24,y,x,y-15,5,[55,43,61]);line(x,y-15,x+24,y,5,[55,43,61]);circle(x,y,8,[55,43,61]);}
-  else if(el.includes("ghost"))for(let i=0;i<4;i++)circle(300+i*100,180+(i%2)*25,18,[248,243,255,150]);
-  else for(let i=0;i<5;i++)circle(320+i*70,185+(i%3)*18,12,[255,154,61,170]);
-
-  rect(300,565,600,610,[48,31,58]);ellipse(450,565,150,18,[84,45,75]);
+  const c=g.choices||[],shape=String(c[0]||"Round"),flavor=String(c[1]||"Vanilla Mooncake"),frosting=String(c[2]||"Pink Frosting"),filling=String(c[3]||"Strawberry Jam"),topping=String(c[4]||"Pink Bow"),decor=String(c[5]||"Glitter"),effect=String(c[6]||"Sparkle Aura");
+  const set=(x,y,r,g,b,a=255)=>{x=Math.round(x);y=Math.round(y);if(x<0||y<0||x>=W||y>=H)return;const i=(y*W+x)*4,sa=a/255;rgba[i]=Math.round(rgba[i]*(1-sa)+r*sa);rgba[i+1]=Math.round(rgba[i+1]*(1-sa)+g*sa);rgba[i+2]=Math.round(rgba[i+2]*(1-sa)+b*sa);rgba[i+3]=255;};
+  const rect=(x0,y0,x1,y1,col)=>{for(let y=Math.floor(y0);y<Math.ceil(y1);y++)for(let x=Math.floor(x0);x<Math.ceil(x1);x++)set(x,y,...col);};
+  const circle=(cx,cy,rr,col)=>{const r2=rr*rr;for(let y=Math.floor(cy-rr);y<=Math.ceil(cy+rr);y++)for(let x=Math.floor(cx-rr);x<=Math.ceil(cx+rr);x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2)set(x,y,...col);}};
+  const ellipse=(cx,cy,rx,ry,col)=>{for(let y=Math.floor(cy-ry);y<=Math.ceil(cy+ry);y++)for(let x=Math.floor(cx-rx);x<=Math.ceil(cx+rx);x++){const dx=(x-cx)/rx,dy=(y-cy)/ry;if(dx*dx+dy*dy<=1)set(x,y,...col);}};
+  const line=(x0,y0,x1,y1,w,col)=>{const n=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)));for(let i=0;i<=n;i++){const t=i/n;circle(x0+(x1-x0)*t,y0+(y1-y0)*t,w/2,col);}};
+  const heart=(cx,cy,s,col)=>{for(let y=-s;y<=s;y++)for(let x=-s;x<=s;x++){const X=x/s,Y=y/s;const f=Math.pow(X*X+Y*Y-1,3)-X*X*Y*Y*Y;if(f<=0)set(cx+x,cy+y,...col);}};
+  const fl=flavor.toLowerCase(),fr=frosting.toLowerCase(),fi=filling.toLowerCase(),tl=topping.toLowerCase(),dl=decor.toLowerCase(),el=effect.toLowerCase();
+  const flavorColor=fl.includes("black")?[59,43,62]:fl.includes("strawberry")?[245,157,191]:fl.includes("pumpkin")?[224,132,52]:fl.includes("cherry")?[137,55,84]:[247,222,196];
+  const frostingColor=fr.includes("purple")?[181,140,255]:fr.includes("orange")?[255,154,61]:fr.includes("black")?[57,45,65]:fr.includes("ghost")?[248,243,255]:[255,127,189];
+  const fillingColor=fi.includes("chocolate")?[91,54,65]:fi.includes("blackberry")?[91,54,116]:fi.includes("cherry")?[169,65,94]:fi.includes("cotton")?[229,177,244]:[225,83,133];
+  const accent=dl.includes("pumpkin")?[255,154,61]:dl.includes("black")?[55,43,61]:[255,210,110];
+  rect(0,0,W,H,[25,18,36]);circle(95,95,60,[255,210,110]);circle(805,95,74,[255,127,189]);circle(100,545,82,[155,140,255]);circle(805,535,88,[255,154,61]);
+  for(let i=0;i<28;i++)circle(35+((i*149)%830),28+((i*83)%185),2+(i%3),[255,255,255]);
+  const conf=[[255,127,189],[255,210,110],[181,140,255],[255,154,61],[255,244,255]];
+  for(let i=0;i<34;i++){const x=95+((i*101)%710),y=150+((i*67)%330);if(x>330&&x<570&&y>250&&y<500)continue;const cc=conf[i%conf.length];rect(x,y,x+7+(i%3)*2,y+15+(i%4)*3,cc);}
+  ellipse(450,548,285,30,[10,8,16]);ellipse(450,522,270,31,[112,61,91]);rect(330,522,570,570,[79,43,69]);ellipse(450,570,120,17,[61,35,56]);
+  const sl=shape.toLowerCase();
+  if(sl.includes("heart")){
+    heart(450,405,175,flavorColor);heart(450,385,150,frostingColor);heart(450,407,108,fillingColor);heart(450,390,78,frostingColor);
+    for(const [x,y] of [[360,315],[410,290],[490,290],[540,315],[375,440],[525,440]])circle(x,y,10,[255,244,255]);
+  }else if(sl.includes("pumpkin")){
+    ellipse(450,405,205,112,[116,64,57]);for(let x=292;x<=608;x+=52)ellipse(x,405,58,108,flavorColor);ellipse(450,320,205,62,frostingColor);ellipse(450,492,205,25,frostingColor);rect(438,252,462,310,[74,112,52]);ellipse(450,252,25,12,[95,145,63]);
+  }else if(sl.includes("moon")){
+    circle(450,395,150,flavorColor);circle(505,350,132,[25,18,36]);ellipse(450,515,175,23,frostingColor);circle(360,420,12,frostingColor);circle(405,465,10,fillingColor);circle(465,470,11,frostingColor);
+  }else if(sl.includes("bat")){
+    rect(285,385,615,490,flavorColor);ellipse(450,385,165,48,frostingColor);rect(305,475,595,495,fillingColor);ellipse(450,495,165,22,frostingColor);
+    const pts=[[285,360],[340,315],[390,350],[450,300],[510,350],[560,315],[615,360],[560,420],[510,410],[450,465],[390,410],[340,420]];
+    for(let y=300;y<=465;y++){const xs=[];for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if((yi>y)!=(yj>y))xs.push((xj-xi)*(y-yi)/(yj-yi)+xi);}xs.sort((a,b)=>a-b);for(let i=0;i+1<xs.length;i+=2)rect(xs[i],y,xs[i+1],y+1,frostingColor);}
+    circle(420,365,9,[255,255,255]);circle(480,365,9,[255,255,255]);circle(420,365,4,[35,25,45]);circle(480,365,4,[35,25,45]);
+  }else{
+    rect(270,365,630,490,flavorColor);ellipse(450,365,180,55,frostingColor);rect(285,285,615,385,flavorColor);ellipse(450,285,180,55,frostingColor);rect(295,370,605,392,fillingColor);ellipse(450,370,155,24,fillingColor);for(let x=305,i=0;x<=595;x+=48,i++)ellipse(x,305+(i%2)*5,24,29,frostingColor);ellipse(450,490,180,28,frostingColor);
+  }
+  if(tl.includes("bow")){circle(400,225,38,[255,127,189]);circle(500,225,38,[255,127,189]);circle(450,225,21,accent);}
+  else if(tl.includes("bat")){circle(450,235,15,[45,32,55]);line(438,235,410,220,8,[45,32,55]);line(462,235,490,220,8,[45,32,55]);line(440,243,418,265,7,[45,32,55]);line(460,243,482,265,7,[45,32,55]);}
+  else if(tl.includes("ghost")){circle(450,230,39,[248,243,255]);rect(412,230,488,268,[248,243,255]);circle(436,225,5,[50,40,65]);circle(464,225,5,[50,40,65]);}
+  else if(tl.includes("pumpkin")){circle(450,235,35,[255,154,61]);rect(444,198,456,210,[75,120,55]);for(let x=430;x<=470;x+=20)line(x,212,x,258,3,[225,116,45]);}
+  else {rect(445,180,455,245,[245,245,245]);rect(438,176,462,187,accent);circle(450,166,10,[255,173,60]);}
+  if(dl.includes("glitter"))for(let i=0;i<22;i++){const x=300+((i*67)%300),y=315+((i*41)%145);line(x-6,y,x+6,y,2,[255,255,255]);line(x,y-6,x,y+6,2,accent);}
+  else if(dl.includes("sprinkles"))for(let i=0;i<34;i++){const x=295+((i*53)%310),y=315+((i*29)%145);line(x,y,x+9,y+5,3,i%2?[255,127,189]:accent);}
+  else if(dl.includes("pumpkin"))for(let i=0;i<8;i++)circle(320+i*38,430-(i%2)*14,12,[255,154,61]);
+  else if(dl.includes("spiderweb"))for(let r=20;r<=70;r+=17)for(let a=0;a<8;a++){const ang=a*Math.PI/4;line(450+Math.cos(ang)*(r-17),390+Math.sin(ang)*(r-17),450+Math.cos(ang)*r,390+Math.sin(ang)*r,2,[225,225,235]);}
+  else for(const [x,y] of [[355,435],[450,450],[545,435]]){circle(x-9,y,10,[126,49,78]);circle(x+9,y,10,[126,49,78]);circle(x,y-9,10,[163,63,91]);circle(x,y+8,8,[126,49,78]);circle(x,y,5,[255,210,110]);}
+  if(el.includes("sparkle"))for(let i=0;i<18;i++){const x=300+((i*71)%300),y=275+((i*37)%190);line(x-7,y,x+7,y,2,[255,255,255]);line(x,y-7,x,y+7,2,[255,210,110]);}
+  else if(el.includes("moon")){for(let i=0;i<6;i++)circle(300+i*60,145+(i%2)*22,9,[155,140,255]);circle(650,155,25,[255,255,255]);circle(660,147,21,[25,18,36]);}
+  else if(el.includes("bat"))for(let i=0;i<4;i++){const x=300+i*100,y=145+(i%2)*25;line(x-24,y,x,y-15,5,[55,43,61]);line(x,y-15,x+24,y,5,[55,43,61]);circle(x,y,8,[55,43,61]);}
+  else if(el.includes("ghost"))for(let i=0;i<4;i++)circle(300+i*100,150+(i%2)*25,18,[248,243,255,190]);
+  else if(el.includes("pumpkin"))for(let i=0;i<5;i++)circle(320+i*65,150+(i%2)*20,13,[255,154,61,200]);
+  rect(220,585,680,635,[38,25,48]);const recipeColors=[flavorColor,frostingColor,fillingColor,accent];for(let i=0;i<7;i++)circle(255+i*65,610,9,recipeColors[i%recipeColors.length]);
   const raw=new Uint8Array((W*4+1)*H);let o=0;for(let y=0;y<H;y++){raw[o++]=0;raw.set(rgba.subarray(y*W*4,(y+1)*W*4),o);o+=W*4;}
-  const def=[];def.push(0x78,0x01);for(let pos=0;pos<raw.length;){const n=Math.min(65535,raw.length-pos),last=pos+n>=raw.length;def.push(last?1:0,n&255,(n>>>8)&255,(~n)&255,((~n)>>>8)&255,...raw.subarray(pos,pos+n));pos+=n;}
-  let a=1,b=0;for(const v of raw){a=(a+v)%65521;b=(b+a)%65521;}def.push(...birthdayCakeU32(((b<<16)|a)>>>0));
-  const ihdr=new Uint8Array([...birthdayCakeU32(W),...birthdayCakeU32(H),8,6,0,0,0]);
-  return new Uint8Array([137,80,78,71,13,10,26,10,...birthdayCakeChunk("IHDR",ihdr),...birthdayCakeChunk("IDAT",new Uint8Array(def)),...birthdayCakeChunk("IEND",new Uint8Array())]);
+  const def=[];def.push(0x78,0x01);for(let pos=0;pos<raw.length;){const n=Math.min(65535,raw.length-pos),last=pos+n>=raw.length;def.push(last?1:0,n&255,(n>>>8)&255,(~n)&255,((~n)>>>8)&255,...raw.subarray(pos,pos+n));pos+=n;}let a=1,b=0;for(const v of raw){a=(a+v)%65521;b=(b+a)%65521;}def.push(...birthdayCakeU32(((b<<16)|a)>>>0));const ihdr=new Uint8Array([...birthdayCakeU32(W),...birthdayCakeU32(H),8,6,0,0,0]);return new Uint8Array([137,80,78,71,13,10,26,10,...birthdayCakeChunk("IHDR",ihdr),...birthdayCakeChunk("IDAT",new Uint8Array(def)),...birthdayCakeChunk("IEND",new Uint8Array())]);
 }
+
 async function renderBirthdayCake(env,name,choices){let browser;try{browser=await puppeteer.launch(env.BROWSER);const page=await browser.newPage();await page.setViewport({width:900,height:700,deviceScaleFactor:1});const colors={"Pink Frosting":"#ff9ed8","Purple Frosting":"#a87be8","Orange Frosting":"#ff9b45"};const frosting=colors[choices.find(x=>colors[x])]||"#ff9ed8";const shape=choices[0]==="Heart"?"♥":choices[0]==="Pumpkin"?"🎃":choices[0]==="Moon"?"🌙":choices[0]==="Bat"?"🦇":"🎂";const html=`<!doctype html><html><body style="margin:0;width:900px;height:700px;background:#24162d;display:flex;align-items:center;justify-content:center;font-family:Arial"><div style="width:760px;height:560px;border-radius:40px;background:linear-gradient(145deg,#2d1b39,#120c18);text-align:center;color:white;padding:30px;box-sizing:border-box"><div style="font-size:42px;font-weight:900">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div><div style="font-size:28px;margin-top:8px">A birthday cake for <b>${escapeHTML(name)}</b></div><div style="margin:35px auto 20px;width:470px;height:230px;background:${frosting};border-radius:${choices[0]==="Heart"?"45% 45% 25% 25%":"28px"};box-shadow:0 20px 35px rgba(0,0,0,.45);position:relative"><div style="font-size:100px;position:absolute;inset:45px 0 auto">${shape}</div><div style="position:absolute;bottom:18px;left:0;right:0;font-size:28px">🎀 ✨ 🕯️ 🎃 🦇 ✨ 🎀</div></div><div style="font-size:22px">${choices.map(escapeHTML).join(" • ")}</div></div></body></html>`;await page.setContent(html,{waitUntil:"domcontentloaded"});return await page.screenshot({type:"png"});}finally{if(browser)await browser.close().catch(()=>{});}}
 
 function birthdayCakeEscape(value){return String(value||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
@@ -17754,7 +17769,7 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-name` — Mention today's birthday person for Bingo`,`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-name` — Mention today's birthday person for Bingo","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -18135,10 +18150,10 @@ async function birthdayNameMention(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Name Shoutout is closed.");
   const uid=getUserFromInteraction(interaction).id;
-  const target=getOption(interaction,"user");
   const birthdayIds=(state.birthday?.birthdayIds||[]).map(String);
-  if(!target)return sendText(env,interaction,"🎂 Choose today's birthday person.");
-  if(!birthdayIds.includes(String(target)))return sendText(env,interaction,"🎂 That player isn't today's birthday person. Pick the birthday person from the command's user selector.");
+  const target=getOption(interaction,"user")||birthdayIds[0];
+  if(!target)return sendText(env,interaction,"🎂 There isn't a birthday person active today.");
+  if(!birthdayIds.includes(String(target)))return sendText(env,interaction,"🎂 That player isn't today's birthday person.");
   await markBingoAction(env,interaction.guild_id,uid,"say_name");
   return sendText(env,interaction,`🎂🎉 **BIRTHDAY SHOUTOUT!**
 
@@ -20153,7 +20168,7 @@ const COMMANDS = [
   {
     name: "birthday-name",
     description: "Mention today's birthday person for Birthday Bingo",
-    options: [{ type: 6, name: "user", description: "Today's birthday person", required: true }]
+    options: [{ type: 6, name: "user", description: "Birthday person (optional)", required: false }]
   },
   {
     name: "birthday-set",
