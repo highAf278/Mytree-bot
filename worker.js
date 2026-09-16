@@ -2615,6 +2615,9 @@ function getEffectImage(player) {
     case "birthday":
       return IMAGES.birthdayEffect;
 
+    case "birthday_confetti":
+      return IMAGES.birthdayConfettiEffect || IMAGES.birthdayConfetti || null;
+
     case "raccoon_court_stink":
       return IMAGES.raccoonCourtStinkEffect;
 
@@ -2907,18 +2910,13 @@ async function renderProfileDirect(env,player){
 }
 
 function drawBirthdayConfetti(frame){
-  const pieces=[[255,127,189],[255,210,110],[181,140,255],[255,154,61],[255,244,255],[224,83,133]];
-  for(let i=0;i<72;i++){
-    const x=22+((i*137)%980),y=24+((i*83)%910),w=7+(i%5)*3,h=15+(i%4)*5,c=pieces[i%pieces.length];
-    if(x>260&&x<760&&y>250&&y<820&&i%2===0)continue;
-    if(i%3===0)circleFrame(frame,x,y,Math.max(4,w/2),[c[0],c[1],c[2],245]);
-    else{
-      rectFrame(frame,x,y,x+w,y+h,[c[0],c[1],c[2],245]);
-      if(i%2===0)rectFrame(frame,x+2,y+2,x+w-1,y+h-2,[255,255,255,55]);
-    }
+  const pieces=[[255,127,189],[255,244,255],[199,132,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255],[255,154,61],[255,210,110],[255,127,189],[199,132,255],[255,244,255]];
+  for(let i=0;i<pieces.length;i++){
+    const x=25+((i*137)%880),y=35+((i*83)%900),w=8+(i%4)*3,h=16+(i%3)*7,c=pieces[i];
+    if(i%3===0)circleFrame(frame,x,y,Math.max(5,w/2),[c[0],c[1],c[2],235]);
+    else rectFrame(frame,x,y,x+w,y+h,[c[0],c[1],c[2],235]);
   }
 }
-
 function circleFrame(frame,cx,cy,r,col){
   const r2=r*r;
   for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(frame.height-1,Math.ceil(cy+r));y++)
@@ -2990,7 +2988,7 @@ async function renderTreeDirectFallback(env, player) {
     }
   }
 
-  // Browser Rendering can animate confetti; the direct PNG fallback cannot.\n  // Draw a visible confetti frame so the effect is never silently dropped.\n  if(["birthday_confetti","animated_confetti","birthday-confetti"].includes(String(player.equipped?.effect||"")))drawBirthdayConfetti(scene);\n\n  // Draw the active sparkles directly so they still appear when Browser
+  // Browser Rendering can animate confetti; the direct PNG fallback cannot.\n  // Draw a visible confetti frame so the effect is never silently dropped.\n  if(player.equipped?.effect === "birthday_confetti")drawBirthdayConfetti(scene);\n\n  // Draw the active sparkles directly so they still appear when Browser
   // Rendering is unavailable.
   for (const sparkle of (player.sparklesOnTree || [])) {
     const x = Math.round((Number(sparkle.x) || 50) / 100 * width);
@@ -3048,7 +3046,7 @@ async function renderTree(env, player) {
       if (effect) {
         effectHTML = `<img src="${effect}" style="position:absolute;left:-5%;top:-5%;width:110%;height:110%;object-fit:contain;opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};z-index:2;pointer-events:none">`;
       }
-      const confettiHTML = ["birthday_confetti","animated_confetti","birthday-confetti"].includes(String(player.equipped?.effect||"")) ? Array.from({length:72},(_,i)=>{const x=(i*137)%96+2,y=(i*83)%92+4,w=7+(i%5)*2,h=14+(i%4)*4,rot=(i*31)%360,d=1.4+(i%5)*0.25;const bg=["#ff7fbd","#ffd266","#b58cff","#ff9a3d","#fff4ff","#e05385"][i%6];return `<i style="position:absolute;left:${x}%;top:${y}%;width:${w}px;height:${h}px;background:${bg};border-radius:2px;z-index:12;transform:rotate(${rot}deg);box-shadow:0 0 6px rgba(255,255,255,.65);animation:confettiFloat ${d}s ease-in-out infinite ${-(i%7)*.18}s"></i>`}).join("") : "";
+      const confettiHTML = player.equipped?.effect === "birthday_confetti" ? Array.from({length:42},(_,i)=>`<span style="position:absolute;left:${(i*37)%100}%;top:${(i*61)%100}%;font-size:${10+(i%4)*5}px;z-index:12;transform:rotate(${i*31%360}deg);animation:confettiFloat ${1.5+(i%5)*0.3}s ease-in-out infinite ${-(i%7)*0.2}s">${["🎊","✨","🎀","💗","💜","🧡"][i%6]}</span>`).join("") : "";
 
       const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}@keyframes confettiFloat{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(16px) rotate(90deg)}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${confettiHTML}${sparkleHTML}</div></body></html>`;
 
@@ -5424,8 +5422,7 @@ async function equipEffect(
   await sendText(
     env,
     interaction,
-    effect===null ? "✨ Effect removed!" : "✨ Effect equipped!",
-    [row(button("🌳 Show Updated Tree", "tree", 2))]
+    effect===null ? "✨ Effect removed!" : "✨ Effect equipped!"
   );
 }
 
@@ -5475,7 +5472,10 @@ async function equipDecoration(
         "duck_hat_boots_decoration",
 
       cheddar_falls:
-        "cheddar_falls_decoration"
+        "cheddar_falls_decoration",
+
+      birthday:
+        "birthday_decoration"
     }[decoration];
 
     if (
@@ -5501,6 +5501,8 @@ async function equipDecoration(
     env,
     player
   );
+
+  if(decoration!==null)await markBingoAction(env,interaction.guild_id,user.id,"decoration");
 
   await sendText(
     env,
@@ -5972,7 +5974,7 @@ async function showBirthdayBalance(env,interaction){
 async function showBirthdayCollection(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const c=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];const names={midnight_keepsake:"🦇 Midnight Keepsake",moonlit_relic:"🌙 Moonlit Birthday Relic",cursed_birthday_cake:"🦇🎂 Cursed Birthday Cake",midnight_heart_cupcake:"🖤🧁 Midnight Heart Cupcake"};return sendText(env,interaction,`🎂✨ **BIRTHDAY COLLECTION**\n\n${c.length?c.map(x=>`• ${names[x]||x}`).join("\n"):"Your collection is empty... for now. 👀"}`,[row(button("🎟️ Candy Balance","birthday:balance",1),button("🎂 Birthday Menu","birthday:home",2))]);}
 
 async function showBirthdayGifts(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];if(!gifts.length)return sendText(env,interaction,"🎁 **CURSED BIRTHDAY GIFTS**\n\nYou have no unopened birthday gifts.",[row(button("🎂 Birthday Menu","birthday:home",2))]);return sendText(env,interaction,`🎁 **YOUR UNOPENED BIRTHDAY GIFTS**\n\n${gifts.map((g,i)=>`${i+1}. ${BIRTHDAY_GIFTS[g.type]?.name||g.type} — ${BIRTHDAY_GIFTS[g.type]?.rarity||"Gift"}`).join("\n")}`,[...gifts.map(g=>row(button(`🎁 Open ${BIRTHDAY_GIFTS[g.type]?.name||g.type}`,`birthday:open:${g.id}`,1))),row(button("🎂 Birthday Menu","birthday:home",2))]);}
-async function openBirthdayGift(env,interaction,id){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes(def.reward.collectible))p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p);return sendText(env,interaction,msg,[row(button("🎁 Birthday Gifts","birthday:gifts",1),button("✨ Collection","birthday:collection",1)),row(button("🎂 Birthday Menu","birthday:home",2))]);}
+async function openBirthdayGift(env,interaction,id){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;await markBingoAction(env,interaction.guild_id,p.userId,"receive_sparkles");}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes(def.reward.collectible))p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p);return sendText(env,interaction,msg,[row(button("🎁 Birthday Gifts","birthday:gifts",1),button("✨ Collection","birthday:collection",1)),row(button("🎂 Birthday Menu","birthday:home",2))]);}
 
 async function handleBirthdayGift(env,interaction){
   const {people}=await ensureBirthdayEvent(env,interaction.guild_id); if(!people.length)return sendText(env,interaction,"🔒 Birthday gifting is closed.");
@@ -5999,47 +6001,52 @@ function birthdayGiftMenuText(){return `🎁 **CURSED BIRTHDAY GIFTS**\n\n1. �
 function birthdayHuntComponents(items){return items.map(x=>row(button(`${x.emoji} +${x.reward} 🍬`,`birthday:claim:${x.id}`,1)));}
 async function spawnBirthdayHunt(env,guildId,preferredChannelId=null){
   const state=await getGuildState(env,guildId);
-  if(!birthdayEventActive(state)||state.birthday.huntItems?.length>=6)return false;
+  if(!birthdayEventActive(state)||state.birthday.huntItems?.filter(x=>!x.claimed).length>=6)return false;
   const count=randomInt(2,4),items=[];
   for(let i=0;i<count;i++){const e=BIRTHDAY_HUNT_EMOJIS[randomInt(0,BIRTHDAY_HUNT_EMOJIS.length-1)];items.push({id:crypto.randomUUID(),emoji:e[0],name:e[1],reward:e[2],claimed:false});}
+  const channels=await getGuildTextChannels(env,guildId),eligible=channels.filter(c=>c?.id),previous=String(state.birthday.lastHuntChannelId||"");
+  const candidates=[];
+  const add=id=>{if(!id||candidates.includes(id)||!eligible.some(c=>String(c.id)===String(id)))return;candidates.push(id);};
+  add(preferredChannelId);add(state.announcementChannelId);
+  for(const c of eligible.filter(c=>String(c.id)!==previous).sort(()=>Math.random()-.5))add(c.id);
+  for(const c of eligible.sort(()=>Math.random()-.5))add(c.id);
+  let postedChannel=null;
+  for(const channelId of candidates){
+    const posted=await sendChannelMessage(env,channelId,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**
 
-  let channels=[];
-  try{channels=await getGuildTextChannels(env,guildId);}catch(error){console.error("Birthday Hunt channel lookup failed:",error);}
-  const eligible=channels.filter(c=>c?.id);
-  const previous=state.birthday.lastHuntChannelId||null;
-  const choices=eligible.filter(c=>c.id!==previous);
-  const pool=choices.length?choices:eligible;
-  let candidates=pool.length?pool.map(c=>c.id):[];
-  if(preferredChannelId&&!candidates.includes(preferredChannelId))candidates.push(preferredChannelId);
-  if(state.announcementChannelId&&!candidates.includes(state.announcementChannelId))candidates.push(state.announcementChannelId);
-  if(previous&&!candidates.includes(previous))candidates.push(previous);
-
-  let channel=null;
-  for(const candidate of candidates.sort(()=>Math.random()-.5)){
-    const sent=await sendChannelMessage(env,candidate,`🎃🦇 **BIRTHDAY FRIGHT HUNT!**\n\nSpooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items));
-    if(sent){channel=candidate;break;}
+Spooky birthday treasures have appeared! Claim one before another Werewife does! 👀✨`,birthdayHuntComponents(items));
+    if(posted?.id){postedChannel=channelId;break;}
   }
-
-  state.birthday.huntItems=[...(state.birthday.huntItems||[]),...items];
+  if(!postedChannel){console.error("Birthday Fright Hunt could not post to any eligible channel.");return false;}
+  state.birthday.huntItems=[...(state.birthday.huntItems||[]).filter(x=>!x.claimed),...items];
   state.birthday.nextFrightHuntAt=Date.now()+30*60*1000;
-  state.birthday.lastHuntChannelId=channel||null;
+  state.birthday.lastHuntChannelId=postedChannel;
   await saveGuildState(env,guildId,state);
-  return Boolean(channel);
+  return true;
 }
 async function handleBirthdayHunt(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Fright Hunt is closed.");
   let items=(state.birthday.huntItems||[]).filter(x=>!x.claimed);
   if(!items.length){
-    await spawnBirthdayHunt(env,interaction.guild_id,interaction.channel_id);
+    const spawned=await spawnBirthdayHunt(env,interaction.guild_id,interaction.channel_id);
     const refreshed=await getGuildState(env,interaction.guild_id);
     items=(refreshed.birthday?.huntItems||[]).filter(x=>!x.claimed);
     const channelId=refreshed.birthday?.lastHuntChannelId;
-    if(channelId) return sendText(env,interaction,`🎃🦇 **A NEW FRIGHT HUNT HAS APPEARED!**\n\nThe spooky treasures are hiding in <#${channelId}>!\n\n🏃 Go hunt them before another Werewife gets there first! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
+    if(spawned&&items.length&&channelId)return sendText(env,interaction,`🎃🦇 **A NEW FRIGHT HUNT HAS APPEARED!**
+
+The spooky treasures are hiding in <#${channelId}>!
+
+🏃 Go hunt them before another Werewife gets there first! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
+    if(!items.length)return sendText(env,interaction,"🎃 I couldn't place the Fright Hunt in a channel right now. Please try the Hunt button again!");
   }
-  if(!items.length)return sendText(env,interaction,"🎃 The hunt is active, but the spooky treasures couldn't spawn yet. Try the Hunt button again!");
-  const channelId=state.birthday?.lastHuntChannelId;
-  return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**\n\nThe current hunt is happening in ${channelId?`<#${channelId}>`:`another spooky channel`}!\n\n🏃 Go there and claim the treasures before another Werewife does! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
+  const latest=await getGuildState(env,interaction.guild_id),channelId=latest.birthday?.lastHuntChannelId;
+  if(!channelId)return sendText(env,interaction,"🎃 The Fright Hunt is active, but its channel could not be confirmed. Please press Hunt again.");
+  return sendText(env,interaction,`🎃 **BIRTHDAY FRIGHT HUNT**
+
+The current hunt is happening in <#${channelId}>!
+
+🏃 Go there and claim the treasures before another Werewife does! 👀`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
 }
 async function claimBirthdayHunt(env,interaction,id){const state=await getGuildState(env,interaction.guild_id); if(!birthdayEventActive(state))return sendText(env,interaction,"🎃 The Birthday Fright Hunt is over."); const item=(state.birthday.huntItems||[]).find(x=>x.id===id); if(!item||item.claimed)return sendText(env,interaction,"👻 Too late! Someone already claimed that spooky find."); item.claimed=true; const p=await getPlayer(env,getUserFromInteraction(interaction).id); p.birthdayCandies+=item.reward; await savePlayer(env,p); await saveGuildState(env,interaction.guild_id,state); await markBingoAction(env,interaction.guild_id,p.userId,"earn_candy"); if(p.birthdayCandies>=100) await markBingoAction(env,interaction.guild_id,p.userId,"hundred_candy"); const huntMarks={"🎂":"birthday_cake","🎀":"birthday_bow","🕯️":"candle_lit","🖤":"black_heart"}; if(huntMarks[item.emoji])await markBingoAction(env,interaction.guild_id,p.userId,huntMarks[item.emoji]); return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);}
 
@@ -6063,6 +6070,51 @@ async function recordBirthdayBingoHistory(env,userId,action,date){
     await savePlayer(env,p);
   }
   return p;
+}
+
+async function saveBirthdayBingoMessageRef(env,interaction,userId){
+  try{
+    if(!interaction?.guild_id||!interaction?.channel_id||!interaction?.token)return;
+    const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
+    if(!response.ok)return;
+    const data=await response.json();
+    if(!data?.id)return;
+    const state=await getGuildState(env,interaction.guild_id);
+    const b=state.birthday?.bingoBoards?.[userId];
+    if(!b)return;
+    b.messageId=data.id;
+    b.channelId=interaction.channel_id;
+    await saveGuildState(env,interaction.guild_id,state);
+  }catch(error){
+    console.error("Birthday Bingo message reference save failed:",error);
+  }
+}
+
+async function updateBirthdayBingoMessage(env,guildId,userId){
+  try{
+    const state=await getGuildState(env,guildId);
+    const b=state.birthday?.bingoBoards?.[userId];
+    if(!b?.messageId||!b?.channelId)return false;
+    const response=await discordRequest(
+      env,
+      `/channels/${b.channelId}/messages/${b.messageId}`,
+      {
+        method:"PATCH",
+        body:JSON.stringify({
+          content:bingoText(b),
+          components:bingoButtons(b)
+        })
+      }
+    );
+    if(!response.ok){
+      console.error("Birthday Bingo board update failed:",response.status,await response.text());
+      return false;
+    }
+    return true;
+  }catch(error){
+    console.error("Birthday Bingo board update error:",error);
+    return false;
+  }
 }
 
 async function syncBirthdayBingoProgress(env,guildId,userId){
@@ -6175,27 +6227,24 @@ async function startBirthdayBingo(env,interaction){
   state.birthday.bingoBoards=state.birthday.bingoBoards||{};
 
   if(state.birthday.bingoBoards[uid]){
-    try{
-      await syncBirthdayBingoProgress(env,interaction.guild_id,uid);
-    }catch(error){
-      console.error("Birthday Bingo progress sync failed:",error);
-    }
+    try{await syncBirthdayBingoProgress(env,interaction.guild_id,uid);}catch(error){console.error("Birthday Bingo progress sync failed:",error);}
     const refreshed=await getGuildState(env,interaction.guild_id);
-    return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
+    const board=refreshed.birthday.bingoBoards[uid];
+    if(board?.messageId)await updateBirthdayBingoMessage(env,interaction.guild_id,uid);
+    return sendText(env,interaction,`🎂✨ Your Birthday Bingo board has been synchronized with everything you've completed so far!\n\n${bingoText(board)}`,bingoButtons(board));
   }
 
-  const b={cells:bingoBoard(),linesPaid:0,fullPaid:false};
+  const b={cells:bingoBoard(),linesPaid:0,fullPaid:false,messageId:"",channelId:""};
   state.birthday.bingoBoards[uid]=b;
   await saveGuildState(env,interaction.guild_id,state);
 
-  try{
-    await syncBirthdayBingoProgress(env,interaction.guild_id,uid);
-  }catch(error){
-    console.error("Birthday Bingo progress sync failed:",error);
-  }
+  try{await syncBirthdayBingoProgress(env,interaction.guild_id,uid);}catch(error){console.error("Birthday Bingo progress sync failed:",error);}
 
   const refreshed=await getGuildState(env,interaction.guild_id);
-  return sendText(env,interaction,bingoText(refreshed.birthday.bingoBoards[uid]),bingoButtons(refreshed.birthday.bingoBoards[uid]));
+  const board=refreshed.birthday.bingoBoards[uid];
+  const response=await sendPublicText(env,interaction,bingoText(board),bingoButtons(board));
+  if(response?.ok)await saveBirthdayBingoMessageRef(env,interaction,uid);
+  return response;
 }
 
 async function applyBirthdayBingoReward(env,userId,b){
@@ -6236,17 +6285,13 @@ async function markBirthdayServerSquare(env,guildId,action){
   }
 
   await saveGuildState(env,guildId,state);
+  for(const uid of Object.keys(state.birthday?.bingoBoards||{}))await updateBirthdayBingoMessage(env,guildId,uid);
 }
 
 async function markBingoAction(env,guildId,userId,action){
   try{
     const stateForHistory=await getGuildState(env,guildId);
-    await recordBirthdayBingoHistory(
-      env,
-      userId,
-      action,
-      stateForHistory.birthday?.activeDate||birthdayTodayKey()
-    );
+    await recordBirthdayBingoHistory(env,userId,action,stateForHistory.birthday?.activeDate||birthdayTodayKey());
   }catch(error){
     console.error("Birthday Bingo history record failed:",error);
   }
@@ -6256,15 +6301,14 @@ async function markBingoAction(env,guildId,userId,action){
   if(!b)return;
 
   const cell=b.cells.find(c=>c.id===action&&!c.marked);
-  if(cell){
-    cell.marked=true;
-    await applyBirthdayBingoReward(env,userId,b);
-    await saveGuildState(env,guildId,state);
-  }else{
-    // Even if this action isn't on the current randomized board, keep the
-    // history so Refresh/starting a new board can reconstruct it.
-    await saveGuildState(env,guildId,state);
-  }
+  if(cell)cell.marked=true;
+
+  await applyBirthdayBingoReward(env,userId,b);
+  await saveGuildState(env,guildId,state);
+
+  // Keep the live Discord Bingo board synchronized immediately instead of
+  // requiring the player to reopen/refresh it after every accomplishment.
+  await updateBirthdayBingoMessage(env,guildId,userId);
 }
 
 async function maybeBirthdayBingoReward(env,guildId,userId,b){
@@ -6325,7 +6369,7 @@ async function startBirthdayCupcake(env,interaction){
 }
 function cupcakeButtons(used=[]){const available=BIRTHDAY_CUPCAKE_INGREDIENTS.filter(x=>!used.includes(x[0]));const shuffled=[...available].sort(()=>Math.random()-.5).slice(0,10);return [row(...shuffled.slice(0,5).map(x=>button(x[0],`birthday:cupcakepick:${encodeURIComponent(x[0])}`,1))),row(...shuffled.slice(5,10).map(x=>button(x[0],`birthday:cupcakepick:${encodeURIComponent(x[0])}`,1)))];}
 async function birthdayCupcakeView(env,interaction){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");return sendText(env,interaction,`🧁 **WICKED CUPCAKE TOWER**\n\n🎂 Layers: **${g.choices.length}**\n💗 Stability: **${g.stability}%**\n\nPick an ingredient. Its outcome is hidden until you choose it. The available choices reshuffle every turn, and used ingredients stay out of the choices.\n\n🎲 Secret recipes exist.\n\nChoose your next ingredient:`,cupcakeButtons(g.choices));}
-async function birthdayCupcakePick(env,interaction,encoded){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");const ingredient=decodeURIComponent(encoded);const info=BIRTHDAY_CUPCAKE_INGREDIENTS.find(x=>x[0]===ingredient);if(!info)return sendText(env,interaction,"❌ That ingredient disappeared into the pantry.");if(g.choices.includes(ingredient))return sendText(env,interaction,"🧁 You already used that ingredient in this tower.");g.choices.push(ingredient);g.steps++;const outcomes=["🎟️ Candy Bonus","💰 Sparkle Bonus","✨ Perfect Layer","🎂 Birthday Boost","🖤 Dark Magic","👻 Ghostly Surprise","🦇 Batty Bonus","🎀 Cute Combo","🌟 Rare Recipe","💥 Tower Wobble","🕸️ Sticky Mess","🎃 Pumpkin Luck","🧁 Perfect Cupcake","👻 Ghost Took It!","🖤 Cursed Layer","🌙 Midnight Magic"];const outcome=outcomes[randomInt(0,outcomes.length-1)];g.outcomes.push(outcome);if(["💥 Tower Wobble","🕸️ Sticky Mess","🖤 Cursed Layer","👻 Ghost Took It!"].includes(outcome))g.stability-=randomInt(10,28);else g.stability=Math.min(100,g.stability+randomInt(0,8));const matched=BIRTHDAY_SECRET_RECIPES.find(r=>r.need.every(n=>g.choices.some(c=>c.includes(n)))&&r.need.length===g.choices.length);if(matched){g.active=false;const p=await getPlayer(env,uid);p.birthdayCandies+=matched.reward;p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes("midnight_heart_cupcake"))p.birthdayCollection.push("midnight_heart_cupcake");await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"secret_recipe"); return sendText(env,interaction,`🌟🧁 **SECRET RECIPE DISCOVERED!**\n\n🖤 **${matched.name}**\n🎟️ **+${matched.reward} Birthday Candies!**\n✨ A permanent birthday collectible was added to your Birthday Collection.`);}if(g.stability<=0||g.steps>=8){g.active=false;const reward=randomInt(100,250);const p=await getPlayer(env,uid);p.birthdayCandies+=reward;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");await markBingoAction(env,interaction.guild_id,uid,"earn_candy");if(p.birthdayCandies>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");return sendText(env,interaction,`🧁💥 **THE TOWER ${g.stability<=0?"WOBBLED INTO OBLIVION":"IS COMPLETE"}!**\n\nLast outcome: ${outcome}\n🎟️ You earned **${reward} Birthday Candies**.`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${outcome}!\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nThe tower continues...`,cupcakeButtons(g.choices));}
+async function birthdayCupcakePick(env,interaction,encoded){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");const ingredient=decodeURIComponent(encoded);const info=BIRTHDAY_CUPCAKE_INGREDIENTS.find(x=>x[0]===ingredient);if(!info)return sendText(env,interaction,"❌ That ingredient disappeared into the pantry.");if(g.choices.includes(ingredient))return sendText(env,interaction,"🧁 You already used that ingredient in this tower.");if(String(ingredient).toLowerCase().includes("heart"))await markBingoAction(env,interaction.guild_id,uid,"black_heart");g.choices.push(ingredient);g.steps++;const outcomes=["🎟️ Candy Bonus","💰 Sparkle Bonus","✨ Perfect Layer","🎂 Birthday Boost","🖤 Dark Magic","👻 Ghostly Surprise","🦇 Batty Bonus","🎀 Cute Combo","🌟 Rare Recipe","💥 Tower Wobble","🕸️ Sticky Mess","🎃 Pumpkin Luck","🧁 Perfect Cupcake","👻 Ghost Took It!","🖤 Cursed Layer","🌙 Midnight Magic"];const outcome=outcomes[randomInt(0,outcomes.length-1)];g.outcomes.push(outcome);if(["💥 Tower Wobble","🕸️ Sticky Mess","🖤 Cursed Layer","👻 Ghost Took It!"].includes(outcome))g.stability-=randomInt(10,28);else g.stability=Math.min(100,g.stability+randomInt(0,8));const matched=BIRTHDAY_SECRET_RECIPES.find(r=>r.need.every(n=>g.choices.some(c=>c.includes(n)))&&r.need.length===g.choices.length);if(matched){g.active=false;const p=await getPlayer(env,uid);p.birthdayCandies+=matched.reward;p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes("midnight_heart_cupcake"))p.birthdayCollection.push("midnight_heart_cupcake");await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"secret_recipe"); return sendText(env,interaction,`🌟🧁 **SECRET RECIPE DISCOVERED!**\n\n🖤 **${matched.name}**\n🎟️ **+${matched.reward} Birthday Candies!**\n✨ A permanent birthday collectible was added to your Birthday Collection.`);}if(g.stability<=0||g.steps>=8){g.active=false;const reward=randomInt(100,250);const p=await getPlayer(env,uid);p.birthdayCandies+=reward;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");await markBingoAction(env,interaction.guild_id,uid,"earn_candy");if(p.birthdayCandies>=100)await markBingoAction(env,interaction.guild_id,uid,"hundred_candy");return sendText(env,interaction,`🧁💥 **THE TOWER ${g.stability<=0?"WOBBLED INTO OBLIVION":"IS COMPLETE"}!**\n\nLast outcome: ${outcome}\n🎟️ You earned **${reward} Birthday Candies**.`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${outcome}!\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nThe tower continues...`,cupcakeButtons(g.choices));}
 
 function birthdayCakeCrc32(bytes){
   let c=0xffffffff;
@@ -6505,6 +6549,7 @@ async function birthdayCakeChoice(env,interaction,value){
 
   g.choices.push(chosen);
   g.step=step+1;
+  if(String(chosen).toLowerCase().includes("heart"))await markBingoAction(env,interaction.guild_id,uid,"black_heart");
 
   if(g.step<BIRTHDAY_BAKERY_MENUS.length){
     await saveGuildState(env,interaction.guild_id,state);
@@ -6604,6 +6649,72 @@ Choose a **${nextMenu.name}**:`,
   return response;
 }
 
+
+async function startBirthdayCurse(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Curse is closed.");
+  state.birthday.games=state.birthday.games||{};
+  const existing=state.birthday.games.curse;
+  if(existing?.active&&existing.story?.prompts?.length){
+    const index=Math.min(Number(existing.index||0),existing.story.prompts.length-1);
+    return sendText(env,interaction,`👻 **The Birthday Curse is already running!**\n\nGive me a **${existing.story.prompts[index]}**.`,birthdayCurseInputButton());
+  }
+  const story=BIRTHDAY_STORIES[randomInt(0,BIRTHDAY_STORIES.length-1)];
+  state.birthday.games.curse={active:true,story,answers:[],index:0};
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendText(env,interaction,`📖👻 **THE BIRTHDAY CURSE**\n\nThe birthday person is **${birthdayName(state)}**.\n\n🏃 First appropriate answer wins each slot!\n\nType your answer using the button below for **${story.prompts[0]}**.`,birthdayCurseInputButton());
+}
+
+function rouletteLobbyText(g){return `🎃💀 **PUMPKIN ROULETTE LOBBY**\n\n👑 Host: <@${g.hostId}>\n👥 Players: **${g.players.length}/${g.maxPlayers||10}**\n\nWaiting for at least **2 players**. Another player can press **Join Roulette** below.\n\nWhen everyone is ready, the host can press **Start Roulette**. 🎃`;}
+
+function rouletteLobbyButtons(g){return [row(button("🎃 Join Roulette","birthday:roulettejoin",1),button("▶️ Start Roulette","birthday:roulettestart",3)),row(button("🎂 Birthday Menu","birthday:home",2))];}
+
+async function startBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");const uid=getUserFromInteraction(interaction).id;const existing=state.birthday.games?.roulette;if(existing?.status==="lobby")return sendText(env,interaction,rouletteLobbyText(existing),rouletteLobbyButtons(existing));if(existing?.active)return sendText(env,interaction,rouletteText(existing),rouletteButtons(existing));const game={status:"lobby",active:false,hostId:uid,maxPlayers:10,players:[{id:uid,alive:true}],pumpkins:[],cursed:0,count:0,round:0};state.birthday.games=state.birthday.games||{};state.birthday.games.roulette=game;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteLobbyText(game),rouletteLobbyButtons(game));}
+
+async function joinBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;if(!g||g.status!=="lobby")return sendText(env,interaction,"🎃 There isn't a Roulette lobby open right now.");const uid=getUserFromInteraction(interaction).id;if(g.players.some(p=>p.id===uid))return sendText(env,interaction,rouletteLobbyText(g),rouletteLobbyButtons(g));if(g.players.length>=(g.maxPlayers||10))return sendText(env,interaction,"🎃 The Roulette lobby is full.");g.players.push({id:uid,alive:true});await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteLobbyText(g),rouletteLobbyButtons(g));}
+
+async function beginBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;if(!g||g.status!=="lobby")return sendText(env,interaction,"🎃 There isn't a Roulette lobby waiting to start.");const uid=getUserFromInteraction(interaction).id;if(uid!==g.hostId)return sendText(env,interaction,"❌ Only the Roulette host can start the game.");if(g.players.length<2)return sendText(env,interaction,"🎃 You need at least **2 players** before Roulette can start.");const count=g.players.length===2?4:g.players.length===3?5:g.players.length===4?6:g.players.length===5?7:g.players.length+2;const cursed=g.players.length<=3?1:g.players.length<=5?2:3;g.status="active";g.active=true;g.count=count;g.cursed=cursed;g.round=0;g.players=g.players.map(p=>({...p,alive:true}));reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteText(g),rouletteButtons(g));}
+
+function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i,cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
+
+function rouletteText(g){return `🎃💀 **PUMPKIN ROULETTE**\n\n👥 Survivors: **${g.players.filter(p=>p.alive).length}**\n🎃 Pumpkins: **${g.count}**\n💀 Cursed: **${g.cursed}**\n\nChoose a pumpkin. The positions reshuffle after every pick, so there is NOTHING to memorize. 👀`}
+
+function rouletteButtons(g){const safe=g.pumpkins.map((p,i)=>button(`🎃 Pumpkin ${i+1}`,`birthday:roulettepick:${i}`,1));const rows=[];for(let i=0;i<safe.length;i+=5)rows.push(row(...safe.slice(i,i+5)));return rows;}
+
+async function birthdayRoulettePick(env,interaction,index){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;const uid=getUserFromInteraction(interaction).id;if(!g?.active||g.status!=="active")return sendText(env,interaction,"🎃 That Roulette game is over.");const pl=g.players.find(p=>p.id===uid&&p.alive);if(!pl)return sendText(env,interaction,"❌ You're not an active player in this Roulette game.");await markBingoAction(env,interaction.guild_id,uid,"roulette");const pumpkin=g.pumpkins[Number(index)];if(!pumpkin)return sendText(env,interaction,"❌ That pumpkin doesn't exist.");if(pumpkin.cursed){pl.alive=false;await saveGuildState(env,interaction.guild_id,state);if(g.players.filter(p=>p.alive).length<=1){g.active=false;g.status="finished";const winner=g.players.find(p=>p.alive);if(winner){const wp=await getPlayer(env,winner.id);wp.birthdayCandies+=500;wp.titles=Array.isArray(wp.titles)?wp.titles:[];if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");await savePlayer(env,wp);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 Last survivor: ${winner?`<@${winner.id}>`:`Nobody`}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> has been eliminated!`);}const effects=[["✨ Sparkle Burst",randomInt(20,100)],["🎟️ Birthday Candy bonus",randomInt(10,50)],["🦇 Bat swarm animation",0],["👻 Ghost message",0],["🎃 Pumpkin wiggle",0],["🕯️ Candle glow",0],["🍬 Candy shower",randomInt(10,75)]];const e=effects[randomInt(0,effects.length-1)];const p=await getPlayer(env,uid);if(e[0].includes("Sparkle"))p.sparkles+=e[1];else if(e[1])p.birthdayCandies+=e[1];await savePlayer(env,p);reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${e[0]}!\n\nYou survived this round. The pumpkins have reshuffled! 🔀🎃`);}
+
+async function startBirthdayCurse(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Curse is closed.");
+  state.birthday.games=state.birthday.games||{};
+  const existing=state.birthday.games.curse;
+  if(existing?.active&&existing.story?.prompts?.length){
+    const index=Math.min(Number(existing.index||0),existing.story.prompts.length-1);
+    return sendText(env,interaction,`👻 **The Birthday Curse is already running!**\n\nGive me a **${existing.story.prompts[index]}**.`,birthdayCurseInputButton());
+  }
+  const story=BIRTHDAY_STORIES[randomInt(0,BIRTHDAY_STORIES.length-1)];
+  state.birthday.games.curse={active:true,story,answers:[],index:0};
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendText(env,interaction,`📖👻 **THE BIRTHDAY CURSE**\n\nThe birthday person is **${birthdayName(state)}**.\n\n🏃 First appropriate answer wins each slot!\n\nType your answer using the button below for **${story.prompts[0]}**.`,birthdayCurseInputButton());
+}
+
+function rouletteLobbyText(g){return `🎃💀 **PUMPKIN ROULETTE LOBBY**\n\n👑 Host: <@${g.hostId}>\n👥 Players: **${g.players.length}/${g.maxPlayers||10}**\n\nWaiting for at least **2 players**. Another player can press **Join Roulette** below.\n\nWhen everyone is ready, the host can press **Start Roulette**. 🎃`;}
+
+function rouletteLobbyButtons(g){return [row(button("🎃 Join Roulette","birthday:roulettejoin",1),button("▶️ Start Roulette","birthday:roulettestart",3)),row(button("🎂 Birthday Menu","birthday:home",2))];}
+
+async function startBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");const uid=getUserFromInteraction(interaction).id;const existing=state.birthday.games?.roulette;if(existing?.status==="lobby")return sendText(env,interaction,rouletteLobbyText(existing),rouletteLobbyButtons(existing));if(existing?.active)return sendText(env,interaction,rouletteText(existing),rouletteButtons(existing));const game={status:"lobby",active:false,hostId:uid,maxPlayers:10,players:[{id:uid,alive:true}],pumpkins:[],cursed:0,count:0,round:0};state.birthday.games=state.birthday.games||{};state.birthday.games.roulette=game;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteLobbyText(game),rouletteLobbyButtons(game));}
+
+async function joinBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;if(!g||g.status!=="lobby")return sendText(env,interaction,"🎃 There isn't a Roulette lobby open right now.");const uid=getUserFromInteraction(interaction).id;if(g.players.some(p=>p.id===uid))return sendText(env,interaction,rouletteLobbyText(g),rouletteLobbyButtons(g));if(g.players.length>=(g.maxPlayers||10))return sendText(env,interaction,"🎃 The Roulette lobby is full.");g.players.push({id:uid,alive:true});await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteLobbyText(g),rouletteLobbyButtons(g));}
+
+async function beginBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;if(!g||g.status!=="lobby")return sendText(env,interaction,"🎃 There isn't a Roulette lobby waiting to start.");const uid=getUserFromInteraction(interaction).id;if(uid!==g.hostId)return sendText(env,interaction,"❌ Only the Roulette host can start the game.");if(g.players.length<2)return sendText(env,interaction,"🎃 You need at least **2 players** before Roulette can start.");const count=g.players.length===2?4:g.players.length===3?5:g.players.length===4?6:g.players.length===5?7:g.players.length+2;const cursed=g.players.length<=3?1:g.players.length<=5?2:3;g.status="active";g.active=true;g.count=count;g.cursed=cursed;g.round=0;g.players=g.players.map(p=>({...p,alive:true}));reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteText(g),rouletteButtons(g));}
+
+function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i,cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
+
+function rouletteText(g){return `🎃💀 **PUMPKIN ROULETTE**\n\n👥 Survivors: **${g.players.filter(p=>p.alive).length}**\n🎃 Pumpkins: **${g.count}**\n💀 Cursed: **${g.cursed}**\n\nChoose a pumpkin. The positions reshuffle after every pick, so there is NOTHING to memorize. 👀`}
+
+function rouletteButtons(g){const safe=g.pumpkins.map((p,i)=>button(`🎃 Pumpkin ${i+1}`,`birthday:roulettepick:${i}`,1));const rows=[];for(let i=0;i<safe.length;i+=5)rows.push(row(...safe.slice(i,i+5)));return rows;}
+
+async function birthdayRoulettePick(env,interaction,index){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;const uid=getUserFromInteraction(interaction).id;if(!g?.active||g.status!=="active")return sendText(env,interaction,"🎃 That Roulette game is over.");const pl=g.players.find(p=>p.id===uid&&p.alive);if(!pl)return sendText(env,interaction,"❌ You're not an active player in this Roulette game.");const pumpkin=g.pumpkins[Number(index)];if(!pumpkin)return sendText(env,interaction,"❌ That pumpkin doesn't exist.");if(pumpkin.cursed){pl.alive=false;await saveGuildState(env,interaction.guild_id,state);if(g.players.filter(p=>p.alive).length<=1){g.active=false;g.status="finished";const winner=g.players.find(p=>p.alive);if(winner){const wp=await getPlayer(env,winner.id);wp.birthdayCandies+=500;wp.titles=Array.isArray(wp.titles)?wp.titles:[];if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");await savePlayer(env,wp);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 Last survivor: ${winner?`<@${winner.id}>`:`Nobody`}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> has been eliminated!`);}const effects=[["✨ Sparkle Burst",randomInt(20,100)],["🎟️ Birthday Candy bonus",randomInt(10,50)],["🦇 Bat swarm animation",0],["👻 Ghost message",0],["🎃 Pumpkin wiggle",0],["🕯️ Candle glow",0],["🍬 Candy shower",randomInt(10,75)]];const e=effects[randomInt(0,effects.length-1)];const p=await getPlayer(env,uid);if(e[0].includes("Sparkle"))p.sparkles+=e[1];else if(e[1])p.birthdayCandies+=e[1];await savePlayer(env,p);reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${e[0]}!\n\nYou survived this round. The pumpkins have reshuffled! 🔀🎃`);}
 
 async function birthdayWish(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
@@ -6890,7 +7001,7 @@ async function handleComponent(
     if(action==="buy") return buyBirthdayItem(env,interaction,parts[2]);
     if(action==="hunt") return handleBirthdayHunt(env,interaction);
     if(action==="claim") return claimBirthdayHunt(env,interaction,parts[2]);
-    if(action==="bingo") return startBirthdayBingo(env,interaction);
+    if(action==="bingo"){if(parts[2]==="refresh"){const uid=getUserFromInteraction(interaction).id;await syncBirthdayBingoProgress(env,interaction.guild_id,uid);await updateBirthdayBingoMessage(env,interaction.guild_id,uid);return sendText(env,interaction,"🎂✨ Bingo progress synchronized!");}return startBirthdayBingo(env,interaction);}
     if(action==="roulette") return startBirthdayRoulette(env,interaction);
     if(action==="roulettepick") return birthdayRoulettePick(env,interaction,parts[2]);
     if(action==="curse") return startBirthdayCurse(env,interaction);
@@ -17769,7 +17880,7 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-name` — Mention today's birthday person for Bingo","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-name` — Mention today's birthday person for Bingo`,`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -18150,10 +18261,10 @@ async function birthdayNameMention(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Name Shoutout is closed.");
   const uid=getUserFromInteraction(interaction).id;
+  const target=getOption(interaction,"user") || (state.birthday?.birthdayIds||[])[0];
   const birthdayIds=(state.birthday?.birthdayIds||[]).map(String);
-  const target=getOption(interaction,"user")||birthdayIds[0];
-  if(!target)return sendText(env,interaction,"🎂 There isn't a birthday person active today.");
-  if(!birthdayIds.includes(String(target)))return sendText(env,interaction,"🎂 That player isn't today's birthday person.");
+  if(!target)return sendText(env,interaction,"🎂 There is no birthday person registered for today.");
+  if(!birthdayIds.includes(String(target)))return sendText(env,interaction,"🎂 That player isn't today's birthday person. Pick the birthday person from the command's user selector.");
   await markBingoAction(env,interaction.guild_id,uid,"say_name");
   return sendText(env,interaction,`🎂🎉 **BIRTHDAY SHOUTOUT!**
 
@@ -20168,7 +20279,7 @@ const COMMANDS = [
   {
     name: "birthday-name",
     description: "Mention today's birthday person for Birthday Bingo",
-    options: [{ type: 6, name: "user", description: "Birthday person (optional)", required: false }]
+    options: [{ type: 6, name: "user", description: "Today's birthday person (optional)", required: false }]
   },
   {
     name: "birthday-set",
