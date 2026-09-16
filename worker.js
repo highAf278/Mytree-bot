@@ -1,4 +1,4 @@
-mimport puppeteer from "@cloudflare/puppeteer";
+import puppeteer from "@cloudflare/puppeteer";
 
 /* =========================================================
    WEREWIVES TREE BOT
