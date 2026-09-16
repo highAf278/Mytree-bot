@@ -4697,6 +4697,23 @@ async function showCustomBackgrounds(
     );
   }
 
+  if (
+    player.inventory.includes(
+      "birthday_background"
+    )
+  ) {
+    buttons.push(
+      button(
+        "🌌 Spooky Birthday",
+        "equip_theme_birthday",
+        player.equipped.theme ===
+          "birthday"
+          ? 3
+          : 2
+      )
+    );
+  }
+
   const extraBackgrounds = [
     ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
     ["field_day_background", "🌾 Field Day", "field_day"],
