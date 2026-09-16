@@ -21047,41 +21047,42 @@ export default {
       }
     }
 
-    // Birthday Shop buttons need a direct Discord type-7 update response.
-    // This bypasses the generic deferred component path so the shop opens
-    // reliably even when the button came from an older Birthday Menu message.
+    // Birthday Shop buttons must ACK immediately, then do the KV work in
+    // waitUntil(). The previous direct type-7 version waited on KV before
+    // acknowledging Discord, which caused "MyTree didn't respond in time".
     if (interaction.type === 3 && /^birthday:shop(?::\d+)?$/.test(customId)) {
-      try {
-        const page = Number(customId.split(":")[2] || 0);
-        const {people} = await ensureBirthdayEvent(env, interaction.guild_id);
-        if (!people.length) {
-          return new Response(JSON.stringify({
-            type: 7,
-            data: { content: "🔒 The Midnight Birthday Shop is closed. No birthday is active today.", components: [] }
-          }), { status: 200, headers: { "Content-Type": "application/json" } });
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 6 })
         }
-        const user = getUserFromInteraction(interaction);
-        const p = await getPlayer(env, user.id);
-        const owned = p.inventory || [];
-        const ids = Object.keys(BIRTHDAY_SHOP_ITEMS);
-        const lines = ids.map(id => {
-          const x = BIRTHDAY_SHOP_ITEMS[id];
-          return `• ${x.name} — **${x.price.toLocaleString()} Birthday Candies**${owned.includes(id) ? " — ✅ Owned" : ""}`;
-        });
-        return new Response(JSON.stringify({
-          type: 7,
-          data: {
-            content: `🦇🛍️ **MIDNIGHT BIRTHDAY SHOP**\n\n🎟️ Your Birthday Candies: **${Number(p.birthdayCandies || 0).toLocaleString()}**\n\n${lines.join("\n")}\n\nBirthday Shop items are exclusive to the birthday event and do not appear in the normal shop.`,
-            components: birthdayShopComponents(page)
-          }
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
-      } catch (error) {
-        console.error("Birthday Shop direct button error:", error);
-        return new Response(JSON.stringify({
-          type: 7,
-          data: { content: `❌ Couldn't open the Birthday Shop: ${error?.message || "Unknown error"}`, components: [] }
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      );
+      if (!ack.ok) {
+        console.error("Birthday Shop button ACK failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
       }
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = true;
+      interaction.__deferredEphemeral = false;
+      const page = Number(customId.split(":")[2] || 0);
+      ctx.waitUntil((async () => {
+        try {
+          await showBirthdayShop(env, interaction, page);
+        } catch (error) {
+          console.error("Birthday Shop button error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Couldn't open the Birthday Shop: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Birthday Shop error:", editError);
+          }
+        }
+      })());
+      return new Response("OK", { status: 200 });
     }
 
     // Birthday Curse's Enter Answer button must open a Discord modal (type 9)
