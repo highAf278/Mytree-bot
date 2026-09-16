@@ -5867,7 +5867,7 @@ function birthdayMainText(state, people) {
 function birthdayMenuComponents(active) {
   if (!active) return [];
   return [
-    row(button("🛍️ Midnight Shop", "birthday:shop", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
+    row(button("🛍️ Midnight Shop", "birthday:shop:0", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
     row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1))
@@ -6352,6 +6352,8 @@ async function syncBirthdayBingoProgress(env,guildId,userId){
   if(collection.includes("cursed_birthday_cake"))actions.add("boss_win");
 
   const inv=Array.isArray(p.inventory)?p.inventory:[];
+  if(inv.some(id=>Object.prototype.hasOwnProperty.call(BIRTHDAY_SHOP_ITEMS,id)))actions.add("birthday_shop");
+
   for(const id of inv){
     const lower=String(id||"").toLowerCase();
     const item=BIRTHDAY_SHOP_ITEMS[id];
