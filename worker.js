@@ -6830,153 +6830,208 @@ async function birthdayCupcakeView(env,interaction){const state=await getGuildSt
 async function birthdayCupcakeSkip(env,interaction){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");return sendText(env,interaction,`⏭️ **LAYER SKIPPED!**\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nNo ingredient was used, no stability was changed, and the layer count did not increase. The choices have been reshuffled.`,cupcakeButtons(g.choices));}
 async function birthdayCupcakePick(env,interaction,encoded){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");const ingredient=decodeURIComponent(encoded);if(String(ingredient).toLowerCase().includes("heart"))await markBingoAction(env,interaction.guild_id,uid,"black_heart");const info=BIRTHDAY_CUPCAKE_INGREDIENTS.find(x=>x[0]===ingredient);if(!info)return sendText(env,interaction,"❌ That ingredient disappeared into the pantry.");if(g.choices.includes(ingredient))return sendText(env,interaction,"🧁 You already used that ingredient in this tower.");g.choices.push(ingredient);g.steps++;const outcomes=["🎟️ Candy Bonus","💰 Sparkle Bonus","✨ Perfect Layer","🎂 Birthday Boost","🖤 Dark Magic","👻 Ghostly Surprise","🦇 Batty Bonus","🎀 Cute Combo","🌟 Rare Recipe","💥 Tower Wobble","🕸️ Sticky Mess","🎃 Pumpkin Luck","🧁 Perfect Cupcake","👻 Ghost Took It!","🖤 Cursed Layer","🌙 Midnight Magic"];const outcome=outcomes[randomInt(0,outcomes.length-1)];g.outcomes.push(outcome);if(["💥 Tower Wobble","🕸️ Sticky Mess","🖤 Cursed Layer","👻 Ghost Took It!"].includes(outcome))g.stability-=randomInt(10,28);else g.stability=Math.min(100,g.stability+randomInt(0,8));const matched=BIRTHDAY_SECRET_RECIPES.find(r=>r.need.length===g.choices.length&&r.need.every(n=>g.choices.includes(n)));if(matched){g.active=false;const p=await getPlayer(env,uid);p.birthdayCandies+=matched.reward;p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes("midnight_heart_cupcake"))p.birthdayCollection.push("midnight_heart_cupcake");await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");await markBingoAction(env,interaction.guild_id,uid,"secret_recipe"); return sendText(env,interaction,`🌟🧁 **SECRET RECIPE DISCOVERED!**\n\n🖤 **${matched.name}**\n🎟️ **+${matched.reward} Birthday Candies!**\n✨ A permanent birthday collectible was added to your Birthday Collection.`);}if(g.stability<=0||g.steps>=8){g.active=false;const reward=randomInt(100,250);const p=await getPlayer(env,uid);p.birthdayCandies+=reward;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");return sendText(env,interaction,`🧁💥 **THE TOWER ${g.stability<=0?"WOBBLED INTO OBLIVION":"IS COMPLETE"}!**\n\nLast outcome: ${outcome}\n🎟️ You earned **${reward} Birthday Candies**.`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${outcome}!\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nThe tower continues...`,cupcakeButtons(g.choices));}
 
-async function renderBirthdayCake(env,name,choices){
-  let browser;
-  try{
-    browser=await puppeteer.launch(env.BROWSER);
-    const page=await browser.newPage();
-    await page.setViewport({width:1000,height:760,deviceScaleFactor:1});
-
-    const c=Array.isArray(choices)?choices:[];
-    const shape=c[0]||"Round";
-    const flavor=c[1]||"Black Velvet Cake";
-    const frosting=c[2]||"Pink Frosting";
-    const filling=c[3]||"Strawberry Jam";
-    const topping=c[4]||"Birthday Candle";
-    const decor=c[5]||"Glitter";
-    const special=c[6]||"Sparkle Aura";
-
-    const frostingColor={
-      "Pink Frosting":"#ff72b6","Purple Frosting":"#9b7bea","Orange Frosting":"#ff963d",
-      "Black Velvet Frosting":"#292033","Ghost Vanilla Frosting":"#f4eefb"
-    }[frosting]||"#ff72b6";
-    const fillingColor={
-      "Strawberry Jam":"#d93b72","Cherry Filling":"#9f204b","Blackberry Jam":"#5a2c75",
-      "Chocolate Cream":"#5b2d24","Cotton Candy Filling":"#ffb6e6"
-    }[filling]||"#d93b72";
-    const cakeColor={
-      "Black Velvet Cake":"#33213b","Vanilla Mooncake":"#f4dfbf","Strawberry Cake":"#f4a1bd",
-      "Pumpkin Spice Cake":"#d97732","Cherry Night Cake":"#54213e"
-    }[flavor]||"#33213b";
-
-    const shapeData={
-      Round:{
-        path:"M60 70 Q60 35 95 35 H425 Q460 35 460 70 V255 Q460 295 420 295 H100 Q60 295 60 255 Z",
-        label:"🎂"
-      },
-      Heart:{
-        path:"M260 305 C235 280 70 190 70 100 C70 30 155 15 205 65 L260 120 L315 65 C365 15 450 30 450 100 C450 190 285 280 260 305 Z",
-        label:"🖤"
-      },
-      Pumpkin:{
-        path:"M70 95 C70 50 150 25 260 30 C370 25 450 50 450 95 V240 C450 285 370 305 260 300 C150 305 70 285 70 240 Z",
-        label:"🎃"
-      },
-      Moon:{
-        path:"M330 30 C205 28 100 105 100 190 C100 275 190 320 275 300 C215 270 185 220 198 165 C213 100 270 55 330 30 Z",
-        label:"🌙"
-      },
-      Bat:{
-        path:"M45 105 L120 58 L175 92 L260 45 L345 92 L400 58 L475 105 L430 175 L365 148 L320 238 L260 190 L200 238 L155 148 L90 175 Z",
-        label:"🦇"
-      }
-    }[shape]||{
-      path:"M60 70 Q60 35 95 35 H425 Q460 35 460 70 V255 Q460 295 420 295 H100 Q60 295 60 255 Z",
-      label:"🎂"
-    };
-
-    const toppingHTML =
-      topping==="Bat Topper" ? `<text class="emoji" x="260" y="70" transform="scale(1.2)">🦇</text>` :
-      topping==="Ghost Marshmallow" ? `<text class="emoji" x="260" y="70" transform="scale(1.2)">👻</text>` :
-      topping==="Mini Pumpkin" ? `<text class="emoji" x="260" y="70" transform="scale(1.15)">🎃</text>` :
-      topping==="Pink Bow" ? `<text class="emoji" x="260" y="70" transform="scale(1.15)">🎀</text>` :
-      `<text class="emoji" x="260" y="70" transform="scale(1.15)">🕯️</text>`;
-
-    const decorHTML =
-      decor==="Black Sprinkles" ? `<g fill="#17121d">${Array.from({length:18},(_,i)=>`<rect x="${105+(i%6)*58}" y="${145+Math.floor(i/6)*38}" width="7" height="22" rx="3" transform="rotate(${(i%2?25:-25)} ${105+(i%6)*58} ${145+Math.floor(i/6)*38})"/>`).join("")}</g>` :
-      decor==="Pumpkin Decorations" ? `<g class="emoji small"><text x="115" y="225">🎃</text><text x="240" y="255">🎃</text><text x="365" y="225">🎃</text></g>` :
-      decor==="Spiderweb Caramel" ? `<g fill="none" stroke="#e8b27a" stroke-width="5" opacity=".95"><path d="M105 110 Q260 185 415 110"/><path d="M120 145 Q260 205 400 145"/><path d="M145 175 Q260 220 375 175"/></g>` :
-      decor==="Midnight Roses" ? `<g class="emoji small"><text x="115" y="215">🌹</text><text x="240" y="245">🌹</text><text x="365" y="215">🌹</text></g>` :
-      `<g fill="#fff4a8"><circle cx="120" cy="205" r="5"/><circle cx="155" cy="235" r="4"/><circle cx="205" cy="210" r="5"/><circle cx="315" cy="220" r="5"/><circle cx="365" cy="205" r="4"/><circle cx="405" cy="235" r="5"/></g>`;
-
-    const specialHTML =
-      special==="Moonlight Glow" ? `<g class="effect moon"><circle cx="430" cy="75" r="42" fill="#cbd8ff" opacity=".16"/><text x="410" y="92">🌙</text></g>` :
-      special==="Bat Swirl" ? `<g class="effect"><text x="75" y="105">🦇</text><text x="410" y="125">🦇</text><text x="90" y="290">🦇</text><text x="390" y="290">🦇</text></g>` :
-      special==="Ghost Mist" ? `<g fill="#f4eefb" opacity=".25"><circle cx="90" cy="180" r="35"/><circle cx="410" cy="190" r="42"/><circle cx="125" cy="300" r="28"/><circle cx="375" cy="300" r="30"/></g>` :
-      special==="Pumpkin Smoke" ? `<g class="effect"><text x="60" y="75">〰️</text><text x="415" y="75">〰️</text><text x="70" y="315">🎃</text><text x="405" y="315">🎃</text></g>` :
-      `<g fill="#fff6b8"><circle cx="70" cy="75" r="5"/><circle cx="440" cy="90" r="6"/><circle cx="80" cy="300" r="5"/><circle cx="430" cy="300" r="5"/><path d="M260 10 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z"/></g>`;
-
-    const pumpkinGrooves = shape==="Pumpkin" ? `<g fill="none" stroke="rgba(70,30,15,.28)" stroke-width="9" clip-path="url(#cakeClip)"><path d="M130 35 Q105 160 145 300"/><path d="M200 30 Q175 160 205 300"/><path d="M320 30 Q345 160 315 300"/><path d="M390 35 Q415 160 375 300"/></g>` : "";
-
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>
-      *{box-sizing:border-box}
-      html,body{margin:0;width:1000px;height:760px;overflow:hidden}
-      body{background:radial-gradient(circle at 50% 28%,#552d64 0,#24122f 48%,#100a17 100%);font-family:Arial,Helvetica,sans-serif;color:#fff}
-      .title{text-align:center;font-size:38px;font-weight:900;padding-top:24px;text-shadow:0 4px 14px #000}
-      .sub{text-align:center;font-size:22px;margin-top:6px;color:#f9d9f0}
-      .stage{position:relative;width:820px;height:610px;margin:8px auto 0}
-      .halo{position:absolute;left:170px;top:45px;width:480px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(255,135,215,.18),transparent 68%);filter:blur(4px)}
-      .plate{position:absolute;left:110px;right:110px;bottom:102px;height:60px;border-radius:50%;background:linear-gradient(#704b72,#321e3c);box-shadow:0 18px 30px rgba(0,0,0,.6),inset 0 3px 7px rgba(255,255,255,.18)}
-      .cakeSvg{position:absolute;left:150px;top:55px;width:520px;height:330px;filter:drop-shadow(0 18px 18px rgba(0,0,0,.55))}
-      .emoji{font-size:54px;text-anchor:middle}
-      .small{font-size:32px;text-anchor:middle}
-      .effect{font-size:34px}
-      .label{position:absolute;left:70px;right:70px;bottom:45px;text-align:center;background:rgba(25,12,32,.88);border:2px solid #9c6697;border-radius:18px;padding:11px 16px;font-size:16px;color:#f7e3f4}
-      .name{font-weight:800;color:#fff}
-      .design{position:absolute;left:30px;right:30px;bottom:4px;text-align:center;font-size:14px;color:#e8cfe5;white-space:nowrap}
-    </style></head><body>
-      <div class="title">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div>
-      <div class="sub">A custom birthday cake for <b>${escapeHTML(name)}</b></div>
-      <div class="stage">
-        <div class="halo"></div>
-        <div class="plate"></div>
-        <svg class="cakeSvg" viewBox="0 0 520 330" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <clipPath id="cakeClip"><path d="${shapeData.path}"/></clipPath>
-            <linearGradient id="cakeShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset=".45" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".20"/></linearGradient>
-            <linearGradient id="frostShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".28"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".12"/></linearGradient>
-          </defs>
-          ${specialHTML}
-          <g clip-path="url(#cakeClip)">
-            <rect x="40" y="20" width="440" height="300" rx="25" fill="${cakeColor}"/>
-            <rect x="40" y="155" width="440" height="42" fill="${fillingColor}"/>
-            <rect x="40" y="50" width="440" height="120" fill="${frostingColor}"/>
-            <rect x="40" y="20" width="440" height="300" fill="url(#cakeShade)"/>
-            <rect x="40" y="50" width="440" height="120" fill="url(#frostShade)"/>
-            <path d="M90 165 C110 205 130 185 150 165 S190 125 210 165 S250 205 270 165 S310 125 330 165 S370 205 390 165 S430 125 450 165" fill="none" stroke="${frostingColor}" stroke-width="20" stroke-linecap="round" opacity=".95"/>
-            ${pumpkinGrooves}
-          </g>
-          <path d="${shapeData.path}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="7"/>
-          ${decorHTML}
-          ${toppingHTML}
-        </svg>
-        <div class="label">🎂 <span class="name">Made for ${escapeHTML(name)}</span> • ${escapeHTML(shape)} Cake</div>
-        <div class="design">${[flavor,frosting,filling,topping,decor,special].map(escapeHTML).join(" • ")}</div>
-      </div>
-    </body></html>`;
-
-    await page.setContent(html,{waitUntil:"domcontentloaded",timeout:10000});
-    await page.evaluate(()=>document.fonts?.ready);
-    return await page.screenshot({type:"png"});
-  }finally{
-    if(browser)await browser.close().catch(()=>{});
+function birthdayCakeFillCircle(frame,cx,cy,r,rr,gg,bb,aa=255){
+  const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(frame.width,Math.ceil(cx+r));
+  const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(frame.height,Math.ceil(cy+r));
+  const r2=r*r;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+    const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy>r2)continue;
+    const o=(y*frame.width+x)*4;
+    frame.data[o]=rr;frame.data[o+1]=gg;frame.data[o+2]=bb;frame.data[o+3]=aa;
   }
 }
-const BIRTHDAY_BAKERY_MENUS=[
-  {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
-  {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
-  {name:"frosting",options:[["💗 Pink Frosting","Pink Frosting"],["💜 Purple Frosting","Purple Frosting"],["🧡 Orange Frosting","Orange Frosting"],["🖤 Black Velvet Frosting","Black Velvet Frosting"],["👻 Ghost Vanilla Frosting","Ghost Vanilla Frosting"]]},
-  {name:"filling",options:[["🍓 Strawberry Jam","Strawberry Jam"],["🍒 Cherry Filling","Cherry Filling"],["🫐 Blackberry Jam","Blackberry Jam"],["🍫 Chocolate Cream","Chocolate Cream"],["🍬 Cotton Candy Filling","Cotton Candy Filling"]]},
-  {name:"topping",options:[["🎀 Pink Bow","Pink Bow"],["🦇 Bat Topper","Bat Topper"],["👻 Ghost Marshmallow","Ghost Marshmallow"],["🎃 Mini Pumpkin","Mini Pumpkin"],["🕯️ Birthday Candle","Birthday Candle"]]},
-  {name:"decorations",options:[["✨ Glitter","Glitter"],["🖤 Black Sprinkles","Black Sprinkles"],["🎃 Pumpkin Decorations","Pumpkin Decorations"],["🕸️ Spiderweb Caramel","Spiderweb Caramel"],["🌹 Midnight Roses","Midnight Roses"]]},
-  {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
-];
-function birthdayBakeryChoiceButtons(menu){
-  const options=Array.isArray(menu?.options)?menu.options:[];
-  const rows=[];
-  for(let i=0;i<options.length;i+=5)rows.push(row(...options.slice(i,i+5).map(x=>button(x[0],`birthday:cakechoice:${encodeURIComponent(x[1])}`,1))));
-  return rows.length?rows:[row(button("🎂 Birthday Menu","birthday:home",2))];
+function birthdayCakeLine(frame,x1,y1,x2,y2,width,rr,gg,bb,aa=255){
+  const dx=x2-x1,dy=y2-y1,len=Math.max(1,Math.hypot(dx,dy)),steps=Math.ceil(len);
+  for(let i=0;i<=steps;i++){
+    const t=i/steps,cx=x1+dx*t,cy=y1+dy*t;
+    birthdayCakeFillCircle(frame,cx,cy,Math.max(1,width/2),rr,gg,bb,aa);
+  }
 }
+function birthdayCakePolygon(frame,points,rr,gg,bb,aa=255){
+  if(!points.length)return;
+  let minX=frame.width,maxX=0,minY=frame.height,maxY=0;
+  for(const [x,y] of points){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+  minX=Math.max(0,Math.floor(minX));maxX=Math.min(frame.width-1,Math.ceil(maxX));
+  minY=Math.max(0,Math.floor(minY));maxY=Math.min(frame.height-1,Math.ceil(maxY));
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+    let inside=false;
+    for(let i=0,j=points.length-1;i<points.length;j=i++){
+      const xi=points[i][0],yi=points[i][1],xj=points[j][0],yj=points[j][1];
+      const hit=((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi);
+      if(hit)inside=!inside;
+    }
+    if(inside){const o=(y*frame.width+x)*4;frame.data[o]=rr;frame.data[o+1]=gg;frame.data[o+2]=bb;frame.data[o+3]=aa;}
+  }
+}
+function birthdayCakeShape(frame,shape,x,y,w,h,rr,gg,bb){
+  if(shape==="Heart"){
+    birthdayCakePolygon(frame,[
+      [x+w/2,y+h],[x+w*.08,y+h*.48],[x+w*.10,y+h*.20],[x+w*.28,y+h*.06],
+      [x+w*.50,y+h*.28],[x+w*.72,y+h*.06],[x+w*.90,y+h*.20],[x+w*.92,y+h*.48]
+    ],rr,gg,bb);
+  }else if(shape==="Pumpkin"){
+    birthdayCakeFillCircle(frame,x+w*.28,y+h*.50,h*.43,rr,gg,bb);
+    birthdayCakeFillCircle(frame,x+w*.50,y+h*.50,h*.47,rr,gg,bb);
+    birthdayCakeFillCircle(frame,x+w*.72,y+h*.50,h*.43,rr,gg,bb);
+    profileFill(frame,x+w*.22,y+h*.34,w*.56,h*.34,rr,gg,bb,255);
+  }else if(shape==="Moon"){
+    birthdayCakeFillCircle(frame,x+w*.54,y+h*.50,h*.47,rr,gg,bb);
+    birthdayCakeFillCircle(frame,x+w*.68,y+h*.38,h*.43,245,226,238,255);
+  }else if(shape==="Bat"){
+    birthdayCakePolygon(frame,[
+      [x,y+h*.28],[x+w*.18,y+h*.05],[x+w*.35,y+h*.22],[x+w*.50,y],[x+w*.65,y+h*.22],
+      [x+w*.82,y+h*.05],[x+w,y+h*.28],[x+w*.82,y+h*.56],[x+w*.68,y+h*.46],
+      [x+w*.62,y+h],[x+w*.50,y+h*.70],[x+w*.38,y+h],[x+w*.32,y+h*.46],[x+w*.18,y+h*.56]
+    ],rr,gg,bb);
+  }else{
+    profileFill(frame,x,y,w,h,rr,gg,bb,255);
+    birthdayCakeFillCircle(frame,x+w*.12,y+h*.10,w*.12,Math.min(255,rr+20),Math.min(255,gg+20),Math.min(255,bb+20));
+    birthdayCakeFillCircle(frame,x+w*.88,y+h*.10,w*.12,Math.min(255,rr+20),Math.min(255,gg+20),Math.min(255,bb+20));
+  }
+}
+async function renderBirthdayCake(env,name,choices){
+  /*
+    Direct raster renderer.
+    This intentionally does NOT launch Cloudflare Browser Rendering. Step 7
+    must be able to finish even when the BROWSER binding is slow/rate-limited.
+  */
+  const width=900,height=650;
+  const frame=solidRGBA(width,height,[25,10,35,255]);
+
+  // Soft spooky-purple background made from horizontal bands.
+  for(let y=0;y<height;y++){
+    const t=y/(height-1);
+    const r=Math.round(55-32*t),g=Math.round(25-17*t),b=Math.round(70-30*t);
+    profileFill(frame,0,y,width,1,r,g,b,255);
+  }
+
+  const shape=choices?.[0]||"Round";
+  const flavor=choices?.[1]||"Black Velvet Cake";
+  const frosting=choices?.[2]||"Pink Frosting";
+  const filling=choices?.[3]||"Strawberry Jam";
+  const topping=choices?.[4]||"Birthday Candle";
+  const decor=choices?.[5]||"Glitter";
+  const special=choices?.[6]||"Sparkle Aura";
+
+  const cakeColors={
+    "Black Velvet Cake":[48,31,58],"Vanilla Mooncake":[244,223,191],
+    "Strawberry Cake":[244,161,189],"Pumpkin Spice Cake":[217,119,50],
+    "Cherry Night Cake":[84,33,62]
+  };
+  const frostColors={
+    "Pink Frosting":[255,114,182],"Purple Frosting":[155,123,234],
+    "Orange Frosting":[255,150,61],"Black Velvet Frosting":[41,32,51],
+    "Ghost Vanilla Frosting":[244,238,251]
+  };
+  const fillColors={
+    "Strawberry Jam":[217,59,114],"Cherry Filling":[159,32,75],
+    "Blackberry Jam":[90,44,117],"Chocolate Cream":[91,45,36],
+    "Cotton Candy Filling":[255,182,230]
+  };
+  const cc=cakeColors[flavor]||cakeColors["Black Velvet Cake"];
+  const fc=frostColors[frosting]||frostColors["Pink Frosting"];
+  const ic=fillColors[filling]||fillColors["Strawberry Jam"];
+
+  // Title and recipient.
+  drawBitmapText(frame,"BATTY CAKE BAKERY",235,28,5,[255,240,252],430);
+  drawBitmapText(frame,profileSafeText(name),335,75,3,[245,215,240],230);
+
+  // Plate and glow.
+  birthdayCakeFillCircle(frame,450,545,185,60,38,75,190);
+  birthdayCakeFillCircle(frame,450,470,220,90,45,105,45);
+  birthdayCakeFillCircle(frame,450,385,245,255,120,215,20);
+
+  // Cake body.
+  const bx=220,by=190,bw=460,bh=270;
+  birthdayCakeShape(frame,shape,bx,by,bw,bh,cc[0],cc[1],cc[2]);
+
+  // Filling stripe.
+  if(shape==="Round"||shape==="Pumpkin"){
+    profileFill(frame,bx+25,by+bh*.50,bw-50,bh*.14,ic[0],ic[1],ic[2],255);
+  }else if(shape==="Heart"){
+    birthdayCakeFillCircle(frame,450,320,45,ic[0],ic[1],ic[2]);
+  }else{
+    profileFill(frame,bx+35,by+bh*.47,bw-70,bh*.12,ic[0],ic[1],ic[2],255);
+  }
+
+  // Frosting layer.
+  const fx=bx+12,fy=by+22,fw=bw-24,fh=82;
+  profileFill(frame,fx,fy,fw,fh,fc[0],fc[1],fc[2],255);
+  for(let x=fx+15;x<fx+fw-10;x+=55){
+    birthdayCakeFillCircle(frame,x,fy+fh,31,fc[0],fc[1],fc[2]);
+  }
+
+  // Cake highlights / outline.
+  for(let d=0;d<5;d++){
+    birthdayCakeLine(frame,bx+20,by+8+d,bx+bw-20,by+8+d,1,255,255,255,Math.max(35,100-d*12));
+  }
+
+  // Decorations.
+  if(decor==="Black Sprinkles"){
+    for(let i=0;i<24;i++){
+      const dx=bx+35+(i*73)%390,dy=by+120+(i*41)%105;
+      birthdayCakeLine(frame,dx,dy,dx+7,dy+13,5,23,18,29,255);
+    }
+  }else if(decor==="Pumpkin Decorations"){
+    for(const [dx,dy] of [[315,405],[450,430],[585,405]]){
+      birthdayCakeFillCircle(frame,dx,dy,25,242,135,45,255);
+      birthdayCakeFillCircle(frame,dx+15,dy-22,7,72,130,55,255);
+    }
+  }else if(decor==="Spiderweb Caramel"){
+    birthdayCakeLine(frame,280,365,620,365,4,232,178,122,255);
+    birthdayCakeLine(frame,300,395,600,395,4,232,178,122,255);
+    birthdayCakeLine(frame,330,425,570,425,4,232,178,122,255);
+  }else if(decor==="Midnight Roses"){
+    for(const [dx,dy] of [[315,405],[450,430],[585,405]]){
+      birthdayCakeFillCircle(frame,dx,dy,17,170,45,75,255);
+      birthdayCakeFillCircle(frame,dx+13,dy-5,13,205,75,105,255);
+    }
+  }else{
+    for(const [dx,dy] of [[300,410],[355,435],[540,420],[600,400]]){
+      birthdayCakeFillCircle(frame,dx,dy,5,255,245,168,255);
+    }
+  }
+
+  // Topping.
+  if(topping==="Pink Bow"){
+    profileFill(frame,435,155,30,18,255,115,182,255);
+    birthdayCakeFillCircle(frame,425,165,22,255,115,182,255);
+    birthdayCakeFillCircle(frame,475,165,22,255,115,182,255);
+  }else if(topping==="Mini Pumpkin"){
+    birthdayCakeFillCircle(frame,450,155,25,242,135,45,255);
+    profileFill(frame,446,128,8,12,70,130,55,255);
+  }else if(topping==="Ghost Marshmallow"){
+    birthdayCakeFillCircle(frame,450,155,27,244,238,251,255);
+    profileFill(frame,432,165,36,22,244,238,251,255);
+  }else if(topping==="Bat Topper"){
+    birthdayCakePolygon(frame,[[410,160],[430,145],[442,157],[450,140],[458,157],[470,145],[490,160],[472,180],[450,170],[428,180]],28,22,36,255);
+  }else{
+    profileFill(frame,448,130,4,38,255,245,210,255);
+    birthdayCakeFillCircle(frame,450,127,8,255,180,75,255);
+  }
+
+  // Special effect around the cake.
+  if(special==="Moonlight Glow"){
+    birthdayCakeFillCircle(frame,690,150,42,190,210,255,90);
+    birthdayCakeFillCircle(frame,705,140,32,55,25,70,255);
+  }else if(special==="Bat Swirl"){
+    for(const [x,y] of [[155,230],[730,250],[170,500],[720,500]]) birthdayCakeFillCircle(frame,x,y,14,35,25,45,255);
+  }else if(special==="Ghost Mist"){
+    for(const [x,y,r] of [[150,300,40],[750,330,48],[170,500,32],[730,500,35]]) birthdayCakeFillCircle(frame,x,y,r,244,238,251,45);
+  }else if(special==="Pumpkin Smoke"){
+    for(const [x,y] of [[150,160],[750,170],[130,470],[770,460]]) birthdayCakeFillCircle(frame,x,y,15,242,135,45,170);
+  }else{
+    for(const [x,y] of [[130,150],[770,145],[135,510],[765,510],[450,105]]) drawSparkle(frame,x,y,"star");
+  }
+
+  // Design labels using the embedded font so no external renderer is required.
+  drawBitmapText(frame,"DESIGN",95,575,2,[210,185,215],90);
+  drawBitmapText(frame,profileSafeText(flavor),95,600,2,[255,230,245],180);
+  drawBitmapText(frame,profileSafeText(special),530,600,2,[255,230,245],260);
+
+  return rgbaToRgbPng(frame);
+}
+
 async function startBirthdayBakery(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");
