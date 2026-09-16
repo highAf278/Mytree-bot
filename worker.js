@@ -993,34 +993,78 @@ function nearestPaletteIndex(r,g,b,p){
   return rr*36+gg*6+bb;
 }
 function gifLZW(indices){
-  const clear=256,end=257;
-  const bytes=[]; let cur=0,bits=0;
-  const emit=(code,size)=>{cur|=(code<<bits);bits+=size;while(bits>=8){bytes.push(cur&255);cur>>=8;bits-=8;}};
-  const maxCodes=4096;
-  let dict=new Map(); let next=258;
-  let codeSize=9; let codeLimit=1<<codeSize;
-  emit(clear,codeSize);
-  if(!indices.length){emit(end,codeSize);if(bits)bytes.push(cur&255);return bytes;}
-  let prefix=indices[0];
-  for(let i=1;i<indices.length;i++){
-    const k=indices[i];
-    const key=(prefix<<8)|k;
-    if(dict.has(key)){ prefix=dict.get(key); continue; }
-    emit(prefix,codeSize);
-    if(next<maxCodes){
-      dict.set(key,next++);
-      if(next===codeLimit && codeSize<12){codeSize++;codeLimit=1<<codeSize;}
-    }else{
-      emit(clear,codeSize);
-      dict=new Map(); next=258; codeSize=9; codeLimit=512;
-    }
-    prefix=k;
+  const clear=256,end=257,codeSize=9,blockSize=240;
+  const codes=[];
+  for(let start=0;start<indices.length;start+=blockSize){
+    codes.push(clear);
+    const endAt=Math.min(indices.length,start+blockSize);
+    for(let i=start;i<endAt;i++) codes.push(indices[i]);
   }
-  emit(prefix,codeSize); emit(end,codeSize);
-  if(bits)bytes.push(cur&255);
+  codes.push(end);
+  const bytes=[];
+  let cur=0,bits=0;
+  for(const code of codes){
+    cur|=(code<<bits);
+    bits+=codeSize;
+    while(bits>=8){
+      bytes.push(cur&255);
+      cur>>=8;
+      bits-=8;
+    }
+  }
+  if(bits>0) bytes.push(cur&255);
   return bytes;
 }
 function u16(n){return [n&255,(n>>8)&255];}
+async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){
+  const palette=gifPalette(),out=[];
+  const push=(...xs)=>out.push(...xs);
+
+  push(...new TextEncoder().encode("GIF89a"));
+  push(...u16(width),...u16(height),0xF7,0,0);
+  for(const c of palette) push(...c);
+
+  push(
+    0x21,0xFF,0x0B,
+    ...new TextEncoder().encode("NETSCAPE2.0"),
+    0x03,0x01,0x00,0x00,0x00
+  );
+
+  for(const png of pngFrames){
+    const f=await decodePNG(png);
+    const idx=new Uint8Array(width*height);
+
+    for(let i=0;i<idx.length;i++){
+      idx[i]=nearestPaletteIndex(
+        f.data[i*4],
+        f.data[i*4+1],
+        f.data[i*4+2],
+        palette
+      );
+    }
+
+    push(
+      0x21,0xF9,0x04,0x00,
+      ...u16(delayCs),
+      0x00,0x00,
+      0x2C,
+      ...u16(0),...u16(0),
+      ...u16(width),...u16(height),
+      0x00,0x08
+    );
+
+    const lzw=gifLZW(idx);
+    for(let i=0;i<lzw.length;i+=255){
+      const chunk=lzw.slice(i,i+255);
+      push(chunk.length,...chunk);
+    }
+    push(0);
+  }
+
+  push(0x3B);
+  return new Uint8Array(out);
+}
+
 function gifSubBlocks(bytes){const out=[];for(let i=0;i<bytes.length;i+=255){const chunk=bytes.slice(i,i+255);out.push(chunk.length,...chunk);}out.push(0);return out;}
 function gifGraphicControl(out,delayCs,disposal=0,transparent=false,transparentIndex=255){
   out.push(0x21,0xF9,0x04,(disposal<<2)|(transparent?1:0),...u16(delayCs),transparent?transparentIndex:0,0);
