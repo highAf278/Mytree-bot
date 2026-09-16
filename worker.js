@@ -3128,7 +3128,7 @@ async function renderTree(env, player) {
         const frameCount = 8;
         for (let i = 0; i < frameCount; i++) {
           await page.evaluate((html) => { document.open(); document.write(html); document.close(); }, overlayHTML(i / frameCount));
-          overlayFrames.push(await page.screenshot({ type: "png" }));
+          overlayFrames.push(await page.screenshot({ type: "png", omitBackground: true }));
         }
         return { bytes: await encodeStaticPlusTransparentGIF(staticFrame, overlayFrames, 1024, 1024, 10), animated: true };
       }
