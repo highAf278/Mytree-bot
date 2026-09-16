@@ -2878,315 +2878,118 @@ async function renderProfileDirect(env,player){
   return rgbaToRgbPng(scene);
 }
 
-async function renderTree(
-  env,
-  player
-) {
-  let browser;
+async function renderTreeDirectFallback(env, player) {
+  const width = 1024, height = 1024;
+  const scene = solidRGBA(width, height, treeFallbackBackground(player));
+
+  // This fallback deliberately uses only PNG layers that the Worker can decode
+  // itself. It exists so /tree can NEVER be held hostage by Browser Rendering.
+  try {
+    const tree = await getPngAsset(env, getTreeImage(player));
+    const layer = containRGBA(tree, 922, 922);
+    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), 184);
+  } catch (error) {
+    console.error("Direct tree fallback tree layer failed:", error);
+  }
+
+  const decorationFile = getDecorationImage(player);
+  if (decorationFile) {
+    try {
+      const decoration = await getPngAsset(env, decorationFile);
+      const size = player.equipped?.decoration === "stoned_balloon" ? 330 : 280;
+      const layer = containRGBA(decoration, size, size);
+      alphaComposite(scene, layer, Math.round(width * 0.22 - layer.width / 2), Math.round(height * 0.84 - layer.height / 2));
+    } catch (error) {
+      console.warn("Direct tree fallback decoration skipped:", error?.message || error);
+    }
+  }
+
+  const effectFile = getEffectImage(player);
+  if (effectFile) {
+    try {
+      const effect = await getPngAsset(env, effectFile);
+      const layer = coverRGBA(effect, width, height);
+      alphaComposite(scene, layer, 0, 0, player.equipped?.effect === "raccoon_court_stink" ? 0.90 : 0.42);
+    } catch (error) {
+      console.warn("Direct tree fallback effect skipped:", error?.message || error);
+    }
+  }
+
+  // Draw the active sparkles directly so they still appear when Browser
+  // Rendering is unavailable.
+  for (const sparkle of (player.sparklesOnTree || [])) {
+    const x = Math.round((Number(sparkle.x) || 50) / 100 * width);
+    const y = Math.round((Number(sparkle.y) || 50) / 100 * height);
+    drawSparkle(scene, x, y, String(sparkle.kind || "pink"));
+  }
+
+  return rgbaToRgbPng(scene);
+}
+
+async function renderTree(env, player) {
+  // Browser Rendering is the preferred path because it preserves the real
+  // background artwork and CSS effects. The ENTIRE browser operation is
+  // bounded, including launch: page.setContent() timeouts alone cannot stop a
+  // Browser Rendering launch from hanging.
+  const fallback = async (reason) => {
+    console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
+    return renderTreeDirectFallback(env, player);
+  };
 
   try {
-    browser =
-      await puppeteer.launch(
-        env.BROWSER
-      );
+    const browser = await Promise.race([
+      puppeteer.launch(env.BROWSER),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Browser Rendering launch timed out after 12000ms")), 12000))
+    ]);
 
-    const page =
-      await browser.newPage();
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1024, height: 1024, deviceScaleFactor: 1 });
 
-    await page.setViewport({
-      width: 1024,
-      height: 1024,
-      deviceScaleFactor: 1
-    });
+      const background = imageUrl(getBackgroundImage(player));
+      const tree = imageUrl(getTreeImage(player));
+      const decorationFile = getDecorationImage(player);
+      const decoration = decorationFile ? imageUrl(decorationFile) : "";
+      const effectFile = getEffectImage(player);
+      const effect = effectFile ? imageUrl(effectFile) : "";
 
-    const background =
-      imageUrl(
-        getBackgroundImage(
-          player
-        )
-      );
-
-    const tree =
-      imageUrl(
-        getTreeImage(player)
-      );
-
-    const decorationFile =
-      getDecorationImage(
-        player
-      );
-
-    const decoration =
-      decorationFile
-        ? imageUrl(
-            decorationFile
-          )
-        : "";
-
-    const effectFile =
-      getEffectImage(
-        player
-      );
-
-    const effect =
-      effectFile
-        ? imageUrl(
-            effectFile
-          )
-        : "";
-
-    const sparkleHTML = (
-      player.sparklesOnTree ||
-      []
-    )
-      .map(sparkle => {
-        const left =
-          Number(sparkle.x) ||
-          50;
-
-        const top =
-          Number(sparkle.y) ||
-          50;
-
+      const sparkleHTML = (player.sparklesOnTree || []).map(sparkle => {
+        const left = Number(sparkle.x) || 50;
+        const top = Number(sparkle.y) || 50;
         const kind = escapeHTML(sparkle.kind || "pink");
         const symbol = kind === "rainbow" ? "✦" : kind === "moon" ? "✧" : kind === "star" ? "★" : "✦";
         const glow = kind === "rainbow" ? "#ff4fd8" : kind === "moon" ? "#9ddcff" : kind === "star" ? "#fff27a" : "#ffb6e8";
+        return `<div style="position:absolute;left:${left}%;top:${top}%;transform:translate(-50%,-50%);font-family:Arial,Helvetica,sans-serif;font-size:76px;font-weight:900;line-height:1;color:#ffffff;z-index:20;opacity:1;-webkit-text-stroke:2px ${glow};filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});text-shadow:0 0 8px #ffffff,0 0 20px ${glow},0 0 40px ${glow};animation:sparklePulse 1.2s ease-in-out infinite;user-select:none" title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles">${symbol}</div>`;
+      }).join("");
 
-        return `
-          <div
-            style="
-              position:absolute;
-              left:${left}%;
-              top:${top}%;
-              transform:translate(-50%,-50%);
-              font-family:Arial, Helvetica, sans-serif;
-              font-size:76px;
-              font-weight:900;
-              line-height:1;
-              color:#ffffff;
-              z-index:20;
-              opacity:1;
-              -webkit-text-stroke:2px ${glow};
-              filter:drop-shadow(0 0 7px #ffffff) drop-shadow(0 0 18px ${glow}) drop-shadow(0 0 34px ${glow});
-              text-shadow:0 0 8px #ffffff, 0 0 20px ${glow}, 0 0 40px ${glow};
-              animation:sparklePulse 1.2s ease-in-out infinite;
-              user-select:none;
-            "
-            title="${escapeHTML(sparkle.name || "Sparkle")} — ${Number(sparkle.value) || 0} sparkles"
-          >${symbol}</div>
-        `;
-      })
-      .join("");
-
-    let decorationHTML = "";
-
-    if (
-      decoration
-    ) {
-      const isBalloon =
-        player.equipped?.decoration ===
-        "stoned_balloon";
-
-      const decorationSize =
-        isBalloon
-          ? "330px"
-          : "280px";
-
-      decorationHTML = `
-        <img
-          src="${decoration}"
-          style="
-            position:absolute;
-            left:22%;
-            top:84%;
-            transform:translate(-50%,-50%);
-            width:${decorationSize};
-            height:${decorationSize};
-            object-fit:contain;
-            z-index:4;
-          "
-        />
-      `;
-    }
-
-    let effectHTML = "";
-
-    if (effect) {
-      /* Keep the effect atmospheric and behind the tree so the tree stays
-         the clear centerpiece instead of being covered by the overlay. */
-      effectHTML = `
-        <img
-          src="${effect}"
-          style="
-            position:absolute;
-            left:-5%;
-            top:-5%;
-            width:110%;
-            height:110%;
-            object-fit:contain;
-            opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};
-            mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};
-            z-index:2;
-            pointer-events:none;
-          "
-        />
-      `;
-    }
-
-    const html = `
-      <!DOCTYPE html>
-
-      <html>
-      <head>
-        <meta charset="UTF-8">
-
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-
-          .emoji {
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Emoji', sans-serif;
-            font-variant-emoji: emoji;
-          }
-
-          html,
-          body {
-            margin: 0;
-            padding: 0;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-            background: #ffd9ef;
-          }
-
-          #scene {
-            position: relative;
-            width: 1024px;
-            height: 1024px;
-            overflow: hidden;
-          }
-
-          #background {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          @keyframes sparkleFall {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
-          }
-
-          @keyframes sparklePulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.78; }
-          }
-
-          #tree {
-            position: absolute;
-            left: 50%;
-            top: 63%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            height: 90%;
-            object-fit: contain;
-            z-index: 4;
-          }
-        </style>
-      </head>
-
-      <body>
-        <div id="scene">
-
-          <img
-            id="background"
-            src="${background}"
-          >
-
-          <img
-            id="tree"
-            src="${tree}"
-          >
-
-          ${decorationHTML}
-
-          ${effectHTML}
-
-          ${sparkleHTML}
-
-        </div>
-      </body>
-      </html>
-    `;
-
-    /* Do not let one slow/unreachable R2 image hold the Discord interaction
-       forever. DOMContentLoaded is enough to build the scene; images get a
-       short bounded window to finish loading, and screenshot proceeds even
-       if one layer never responds. */
-    await page.setContent(
-      html,
-      {
-        waitUntil: "domcontentloaded",
-        timeout: 8000
+      let decorationHTML = "";
+      if (decoration) {
+        const isBalloon = player.equipped?.decoration === "stoned_balloon";
+        const decorationSize = isBalloon ? "330px" : "280px";
+        decorationHTML = `<img src="${decoration}" style="position:absolute;left:22%;top:84%;transform:translate(-50%,-50%);width:${decorationSize};height:${decorationSize};object-fit:contain;z-index:4">`;
       }
-    );
 
-    await page.evaluate(
-      async () => {
+      let effectHTML = "";
+      if (effect) {
+        effectHTML = `<img src="${effect}" style="position:absolute;left:-5%;top:-5%;width:110%;height:110%;object-fit:contain;opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};z-index:2;pointer-events:none">`;
+      }
+
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}@keyframes sparklePulse{0%,100%{opacity:1}50%{opacity:.78}}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${sparkleHTML}</div></body></html>`;
+
+      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.evaluate(async () => {
         const images = Array.from(document.images);
         await Promise.race([
-          Promise.all(
-            images.map(
-              image =>
-                image.complete
-                  ? Promise.resolve()
-                  : new Promise(resolve => {
-                      image.onload = resolve;
-                      image.onerror = resolve;
-                    })
-            )
-          ),
+          Promise.all(images.map(image => image.complete ? Promise.resolve() : new Promise(resolve => { image.onload = resolve; image.onerror = resolve; }))),
           new Promise(resolve => setTimeout(resolve, 5000))
         ]);
-      }
-    );
-
-    return await page.screenshot(
-      {
-        type: "png"
-      }
-    );
+      });
+      return await page.screenshot({ type: "png" });
+    } finally {
+      try { await browser.close(); } catch (error) { console.error("Tree browser close error:", error); }
+    }
   } catch (error) {
-    const message =
-      error?.message ||
-      String(error);
-
-    if (
-      message.includes("429") ||
-      message.toLowerCase().includes(
-        "rate limit"
-      )
-    ) {
-      throw new Error(
-        "Cloudflare Browser Rendering is rate-limited right now. Please wait a little before rendering another tree."
-      );
-    }
-
-    throw error;
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error(
-          "Browser close error:",
-          closeError
-        );
-      }
-    }
+    return fallback(error);
   }
 }
 
