@@ -19065,7 +19065,7 @@ async function renderPastelBoardBrowser(env,game){
           const cx=x+size/2,cy=y+size/2,rr=Math.max(10,Math.round(size*0.46));
           const symbol=pastelPalette(game).powerCell;
           const isDark=game.palette==="haunted_harvest"||game.palette==="strawberry_galaxy";
-          heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="${isDark?"#17131a":"#fff3f8"}" stroke="${pastelPalette(game).heartColor}" stroke-width="3"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.round(size*1.22)}" font-weight="900">${symbol}</text>`);
+          heartMarks.push(`<circle cx="${cx}" cy="${cy}" r="${rr+5}" fill="${isDark?"#17131a":"#fff3f8"}" stroke="${pastelPalette(game).heartColor}" stroke-width="3"/><text x="${cx}" y="${y+size*0.79}" text-anchor="middle" font-family="Noto Color Emoji,Apple Color Emoji,Segoe UI Emoji,sans-serif" font-size="${Math.round(size*1.22)}" font-weight="900">${symbol}</text>`);
         }
 
         if(cell.blocked)continue;
@@ -19108,13 +19108,34 @@ async function renderPastelBoardBrowser(env,game){
 }
 
 async function renderPastelBoard(env,game){
-  try{
-    const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("Color Chaos browser render timeout")),12000));
-    return await Promise.race([renderPastelBoardBrowser(env,game),timeout]);
-  }catch(error){
-    console.error("Color Chaos browser renderer failed; using Worker fallback:",error?.message||error);
-    return await renderPastelBoardDirectFallback(env,game);
+  /* Color Chaos is a pixel board. Rasterize it directly in the Worker so turns
+     and Refresh never wait on Browser Rendering. */
+  return renderPastelBoardDirectFallback(env,game);
+}
+
+function drawPastelPowerCellIcon(frame,cx,cy,cell,palette){
+  const scale=Math.max(2,Math.floor(cell/10));
+  const outline=[30,20,35];
+  const configs={
+    pastel_dreams:{main:[255,92,145],light:[255,190,215],dark:[190,45,105],pattern:["0011100","0111110","1111111","1111111","0111110","0011100","0001000"]},
+    teddy_bear:{main:[255,105,175],light:[255,205,230],dark:[190,55,120],pattern:["01110110","11111111","11111111","01111110","00111100","00011000","00011000"]},
+    haunted_harvest:{main:[245,130,35],light:[255,190,70],dark:[120,45,20],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
+    candy_shop:{main:[255,105,170],light:[255,225,245],dark:[180,50,120],pattern:["01100110","11111111","11111111","11111111","11111111","01100110"]},
+    strawberry_galaxy:{main:[245,70,115],light:[255,170,190],dark:[150,35,75],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
+    enchanted_garden:{main:[245,215,70],light:[255,245,150],dark:[170,135,30],pattern:["0011000","0111100","1111110","0111111","0011110","0001100","0001000"]}
+  };
+  const cfg=configs[palette]||configs.pastel_dreams;
+  const pat=cfg.pattern,w=pat[0].length,h=pat.length;
+  const px=Math.max(1,Math.floor(scale*0.8));
+  const ox=Math.round(cx-(w*px)/2),oy=Math.round(cy-(h*px)/2);
+  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1")boardFill(frame,ox+c*px-1,oy+r*px-1,px+2,px+2,outline[0],outline[1],outline[2],255);
+  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1"){
+    const edge=r===0||c===0||r===h-1||c===w-1||pat[r-1]?.[c]!=="1"||pat[r+1]?.[c]!=="1"||pat[r]?.[c-1]!=="1"||pat[r]?.[c+1]!=="1";
+    const col=edge?cfg.dark:cfg.main;
+    boardFill(frame,ox+c*px,oy+r*px,px,px,col[0],col[1],col[2],255);
   }
+  const hi=cfg.light;
+  boardFill(frame,ox+px,oy+px,Math.max(1,px),Math.max(1,px),hi[0],hi[1],hi[2],255);
 }
 
 async function renderPastelBoardDirectFallback(env,game){
@@ -19136,23 +19157,7 @@ async function renderPastelBoardDirectFallback(env,game){
     if(cellData.owner==="blackout")fill=[32,32,32];else if(cellData.wild)fill=hexRgb(pastelPalette(game).wildColor);else if(cellData.heart)fill=hexRgb(pastelPalette(game).heartColor);
     boardFill(frame,x,y,cell,cell,fill[0],fill[1],fill[2],255);
     if(cellData.heart&&!cellData.owner){
-      /* Power Cells use the palette's bow symbol in the normal browser renderer.
-         The Worker-only fallback cannot draw emoji glyphs reliably, so draw a
-         crisp pixel-art bow instead of the old plain pink dot. */
-      const isHaunted=game.palette==="haunted_harvest";
-      const bow=isHaunted?[143,61,24]:[255,63,159];
-      const light=isHaunted?[255,224,150]:[255,243,166];
-      const cx=Math.round(x+cell/2),cy=Math.round(y+cell/2);
-      const s=Math.max(2,Math.floor(cell*0.10));
-      // Worker-only fallback: recognizable pixel-art ribbon matching 🎀.
-      boardFill(frame,cx-s,cy-s,s*2,s*2,bow[0],bow[1],bow[2],255);
-      boardFill(frame,cx-s*5,cy-s*3,s*4,s*4,bow[0],bow[1],bow[2],255);
-      boardFill(frame,cx+s,cy-s*3,s*4,s*4,bow[0],bow[1],bow[2],255);
-      boardFill(frame,cx-s*4,cy-s*2,s*2,s*2,light[0],light[1],light[2],255);
-      boardFill(frame,cx+s*2,cy-s*2,s*2,s*2,light[0],light[1],light[2],255);
-      boardFill(frame,cx-s,cy+s,s*2,s*2,bow[0],bow[1],bow[2],255);
-      boardFill(frame,cx-s*4,cy+s*2,s*3,s*4,bow[0],bow[1],bow[2],255);
-      boardFill(frame,cx+s,cy+s*2,s*3,s*4,bow[0],bow[1],bow[2],255);
+      drawPastelPowerCellIcon(frame,Math.round(x+cell/2),Math.round(y+cell/2),cell,game.palette);
     }
     const owner=cellData.owner;if(!owner)continue;
     const border=owner==="blackout"?[255,255,255]:[0,0,0];
@@ -19227,8 +19232,7 @@ async function sendPastelBoard(env,interaction,game){
      channel-message edits/uploads. The old raw fetch had no Bot Authorization,
      so the 4th-player transition could fail exactly when the lobby became a game.
   */
-  const forceNew=interaction?.__pastelForceNew===true;
-  const messageId=forceNew?"":await getPastelPublicMessageId(env,game,interaction);
+  const messageId=await getPastelPublicMessageId(env,game,interaction);
   if(messageId&&game.channelId){
     const direct=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
     if(direct.ok)return direct;
@@ -19328,108 +19332,105 @@ async function handlePastelPalette(env,interaction,palette,gameId=""){
   await sendText(env,interaction,`🎨 **COLOR CHAOS PALETTE**\n\n${COLOR_CHAOS_PALETTES[palette].icon} **${COLOR_CHAOS_PALETTES[palette].name}** selected!\n\nChoose your game mode!`,pastelModeComponents(palette));
 }
 async function handlePastelRefresh(env,interaction,gameId){
+  await deferInteraction(env,interaction,{update:true});
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);
-  const game=state.pastel;
-  const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is no longer active.");
   if(!user||!game.players?.[user.id]||game.players[user.id].alive===false)return sendEphemeralFollowup(env,interaction,"❌ Only an active Color Chaos player can refresh the game.");
-  /* READ-ONLY: this never changes the turn, board, timers, or game state. */
-  try{await sendPastelBoard(env,interaction,game);}catch(error){
-    await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n⚠️ The board could not refresh, but the saved game is still active.`,components:pastelChoiceComponents(game)});
+  try{
+    const response=await sendPastelBoard(env,interaction,game);
+    if(!response?.ok)throw new Error(`Board refresh failed (${response?.status||"unknown"})`);
+  }catch(error){
+    console.error("Pastel Refresh failed:",error);
+    try{await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n⚠️ The board could not refresh, but the saved game is still active.`,pastelChoiceComponents(game),game);}catch{}
+    await sendEphemeralFollowup(env,interaction,"⚠️ The board could not refresh, but your Color Chaos game is still active.");
   }
 }
 
 async function handlePastelResume(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  if(interaction.type===3&&!interaction.__deferred&&!interaction.__acknowledged)await acknowledge(env,interaction);
+  await deferInteraction(env,interaction,{update:true});
   const state=await getGuildState(env,interaction.guild_id),game=state.pastel,user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
   if(!user||user.id!==game.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can restore the game.");
   if(game.status==="lobby"){
-    const created=await sendChannelMessage(env,game.channelId,pastelLobbyText(game),pastelLobbyComponents(game));
-    if(created?.ok){try{const data=await created.clone().json();if(data?.id){game.publicMessageId=data.id;await pastelSave(env,game);}}catch{}return;}
-    return sendEphemeralFollowup(env,interaction,"⚠️ I couldn't create the restored Color Chaos lobby message yet. Please try Restore again.");
+    const response=await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
+    if(!response?.ok)await sendEphemeralFollowup(env,interaction,"⚠️ I couldn't restore the Color Chaos lobby message yet.");
+    return;
   }
-  try{game.publicMessageId="";await sendPastelBoard(env,{...interaction,__pastelForceNew:true},game);await pastelSave(env,game);}catch(error){await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n⚠️ The board could not render, but the saved game is still active.`,pastelChoiceComponents(game),game);}
+  try{
+    const response=await sendPastelBoard(env,interaction,game);
+    if(!response?.ok)throw new Error(`Board restore failed (${response?.status||"unknown"})`);
+    await pastelSave(env,game);
+  }catch(error){
+    console.error("Color Chaos restore failed:",error);
+    await sendEphemeralFollowup(env,interaction,"⚠️ The board could not be restored, but the saved game is still active.");
+  }
 }
-async function handlePastelMode(env,interaction,mode){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");const state=await getGuildState(env,interaction.guild_id);if(state.pastel&&state.pastel.status!=="ended")return sendText(env,interaction,"❌ A Color Chaos game is already active in this server.");const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};state.pastel=game;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));await getPastelPublicMessageId(env,game,interaction);await pastelSave(env,game);}
+async function handlePastelMode(env,interaction,mode){
+  if(await checkGamePunishment(env,interaction))return;
+  if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
+  await deferInteraction(env,interaction,{update:true});
+  const state=await getGuildState(env,interaction.guild_id);
+  if(state.pastel&&state.pastel.status!=="ended")return sendEphemeralFollowup(env,interaction,"❌ A Color Chaos game is already active in this server.");
+  const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";
+  const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
+  const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};
+  state.pastel=game;await saveGuildState(env,interaction.guild_id,state);
+  const response=await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
+  if(!response?.ok)return sendEphemeralFollowup(env,interaction,"⚠️ I couldn't create the Color Chaos lobby yet. Please try again.");
+  const messageId=await getPastelPublicMessageId(env,game,interaction);if(messageId)game.publicMessageId=messageId;
+  await pastelSave(env,game);
+}
+
 async function pastelStartGame(env,game,interaction){
   const players=pastelStartingPlayers(game);
-  game.publicMessageId="";
-  /* Build the new game in memory first. Do not persist PLAYING until the public
-     board has successfully been posted/updated. This prevents a failed 4th-player
-     transition from leaving a hidden active game behind the vanished lobby. */
   game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players,game.palette);
   let startHearts=0;for(const row of game.board)for(const cell of row)if(cell.heart&&!cell.owner)startHearts++;
   if(startHearts<2){for(let r=0;r<game.board.length&&startHearts<2;r++)for(let c=0;c<game.board[r].length&&startHearts<2;c++){const cell=game.board[r][c];if(cell.owner||cell.heart)continue;cell.heart=true;cell.wild=false;startHearts++;}}
   game.turnsSinceRefresh=0;game.lastRefresh="";
-  for(const p of players){
-    p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);
-    if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}
-  }
+  for(const p of players){p.startingCells=1;p.pendingPastelTurns=0;p.selectedColor=Number(p.slot)%pastelColorCount(game);if(!game.statsRecorded){const pp=await getPlayer(env,p.id);pp.pastelGamesPlayed=Number(pp.pastelGamesPlayed||0)+1;await savePlayer(env,pp);}}
   game.statsRecorded=true;
   try{
-    const boardResponse=await sendPastelBoard(env,{...interaction,__pastelForceNew:true},game);
+    const boardResponse=await sendPastelBoard(env,interaction,game);
     if(!boardResponse?.ok)throw new Error(`Public Color Chaos board update failed: ${boardResponse?.status||"unknown"}`);
-    await pastelSave(env,game);
-    await sendPastelTurnMessage(env,game,game.turnId);
+    await pastelSave(env,game);await sendPastelTurnMessage(env,game,game.turnId);
   }catch(error){
-    /* Restore the lobby state instead of leaving a phantom PLAYING game. */
+    console.error("Color Chaos start failed:",error);
     game.status="lobby";game.round=0;game.board=null;game.turnId=game.hostId;game.turnStartedAt=Date.now();game.lastRefresh="";
     await pastelSave(env,game);
-    const msg=`${pastelLobbyText(game)}\n\n⚠️ **The game board could not start yet.** The lobby is still safe — press Join Game again after the bot finishes recovering.`;
-    const response=await pastelPublicUpdate(env,interaction,msg,pastelLobbyComponents(game),game);
+    const response=await pastelPublicUpdate(env,interaction,`${pastelLobbyText(game)}\n\n⚠️ **The game board could not start yet.** The lobby is still safe — press Join Game again after the bot finishes recovering.`,pastelLobbyComponents(game),game);
     if(!response?.ok)console.error("Color Chaos lobby recovery failed:",response?.status);
   }
 }
+
 async function handlePastelJoin(env,interaction,gameId){
   if(await checkGamePunishment(env,interaction))return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
-  const user=getUserFromInteraction(interaction); if(!user)return;
-  const player=await getPlayer(env,user.id);
-  updatePlayerIdentity(player,interaction);
-  await savePlayer(env,player);
-
-  /* KV is eventually consistent, so merge this join against the freshest saved
-     lobby and verify the write. This prevents a near-simultaneous join from
-     replacing another player's entry. */
+  await deferInteraction(env,interaction,{update:true});
+  const user=getUserFromInteraction(interaction);if(!user)return sendEphemeralFollowup(env,interaction,"❌ Player not found.");
+  const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
   let game=null;
   for(let attempt=0;attempt<3;attempt++){
-    const state=await getGuildState(env,interaction.guild_id);
-    const current=state.pastel;
-    if(!current||current.id!==gameId||current.status!=="lobby")return sendText(env,interaction,"❌ That Color Chaos lobby is no longer open.");
-    if(current.players?.[user.id])return sendText(env,interaction,"🌈 You're already in this Color Chaos lobby!");
+    const state=await getGuildState(env,interaction.guild_id);const current=state.pastel;
+    if(!current||current.id!==gameId||current.status!=="lobby")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos lobby is no longer open.");
     const count=Object.keys(current.players||{}).length;
-    /* If the lobby has already reached its required player count, another
-       delivery of the Join interaction must NOT strand the game behind a
-       misleading "full" message. This can happen because Discord/KV can
-       deliver a near-simultaneous button interaction after the previous join
-       was saved but before that request finished starting the game. If the
-       lobby is exactly full, let this request finish the pending start. */
-    if(count>=current.needed){
-      if(count===current.needed){
-        game=current;
-        break;
-      }
-      return sendText(env,interaction,"❌ This Color Chaos lobby is full.");
+    if(current.players?.[user.id]){
+      if(count>=current.needed){game=current;break;}
+      return sendEphemeralFollowup(env,interaction,"🌈 You're already in this Color Chaos lobby!");
     }
+    if(count>=current.needed)return sendEphemeralFollowup(env,interaction,"❌ This Color Chaos lobby is full.");
     const next={...current,players:{...(current.players||{})}};
-    next.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:count,alive:true,choiceLocked:false,pendingPastelTurns:0};
-    next.interactionToken=interaction.token;
-    const saved=await pastelSave(env,next);
-    if(!saved)continue;
+    next.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:count,alive:true,choiceLocked:false,pendingPastelTurns:0};next.interactionToken=interaction.token;
+    const saved=await pastelSave(env,next);if(!saved)continue;
     const verify=(await getGuildState(env,interaction.guild_id)).pastel;
     if(verify?.id===gameId&&verify.status==="lobby"&&verify.players?.[user.id]){game=verify;break;}
   }
-  if(!game)return sendText(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
-  await acknowledge(env,interaction);
-  if(Object.keys(game.players||{}).length>=game.needed){
-    await pastelStartGame(env,game,interaction);
-    return;
-  }
+  if(!game)return sendEphemeralFollowup(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
+  if(Object.keys(game.players||{}).length>=game.needed){await pastelStartGame(env,game,interaction);return;}
   await pastelPublicUpdate(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game),game);
 }
+
 async function handlePastelCancel(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id);
   const game=state.pastel;
@@ -19494,7 +19495,6 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   const player=pastelFindOwned(game,user.id);if(!player?.alive)return sendEphemeralFollowup(env,interaction,"💀 You're out of the game.");
   const color=Number(colorIndex);const blocked=pastelOpponentColors(game,player);const own=Number(player.selectedColor);
   if(!Number.isInteger(color)||!pastelColors(game)[color]||blocked.has(color)||color===own)return sendEphemeralFollowup(env,interaction,"❌ You must choose a new color that is not currently owned by another player.");
-  await acknowledge(env,interaction);
   const before=pastelClaimedCells(game,user.id);player.selectedColor=color;
   for(const row of game.board)for(const cell of row)if(cell.owner===player.id)cell.color=color;
   const flood=pastelFlood(game,player,color);
@@ -19549,13 +19549,15 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   }
   game.turnStartedAt=Date.now();
   await pastelSave(env,game);
+  /* Commit the new turn before doing any image work, so the AFK timer sees the
+     new turn immediately even if Discord is slow to upload the board. */
+  await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel turn ping error:",error));
   try{
     await sendPastelBoard(env,interaction,game);
   }catch(error){
     console.error("Pastel same-message board refresh error:",error);
-    try{await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ The board could not refresh, but the game controls are still active.`,components:pastelChoiceComponents(game)});}catch{}
+    try{await pastelPublicUpdate(env,interaction,`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ The board could not refresh, but the game controls are still active.`,pastelChoiceComponents(game),game);}catch{}
   }
-  await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel turn ping error:",error));
 }
 async function handlePastelQuit(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id); const game=state.pastel; const user=getUserFromInteraction(interaction);
