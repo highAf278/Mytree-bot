@@ -6662,8 +6662,107 @@ async function markBingoAction(env,guildId,userId,action){
   await saveGuildState(env,guildId,state);
   await updateBirthdayBingoMessage(env,guildId,userId);
 }
-async function startBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");const rouletteGame=state.birthday.games?.roulette;if(rouletteGame?.active)return sendText(env,interaction,rouletteText(rouletteGame),rouletteButtons(rouletteGame));const members=await getGuildMembers(env,interaction.guild_id);if(members.length<2)return sendText(env,interaction,"🎃 Pumpkin Roulette needs at least 2 players.");const ids=members.slice(0,10).map(m=>m.id);const count=ids.length===2?4:ids.length===3?5:ids.length===4?6:ids.length===5?7:ids.length+2;const cursed=ids.length<=3?1:ids.length<=5?2:3;const game={active:true,players:ids.map(id=>({id,alive:true})),pumpkins:[],cursed,count,round:0};reshuffleRoulette(game);state.birthday.games=state.birthday.games||{};state.birthday.games.roulette=game;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteText(game),rouletteButtons(game));}
-function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i, cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
+async function startBirthdayRoulette(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");
+  const user=getUserFromInteraction(interaction);
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  state.birthday.games=state.birthday.games||{};
+  const rouletteGame=state.birthday.games.roulette;
+  if(rouletteGame?.active){
+    if(rouletteGame.status==="lobby")return sendPublicText(env,interaction,rouletteLobbyText(rouletteGame),rouletteLobbyButtons(rouletteGame));
+    return sendText(env,interaction,rouletteText(rouletteGame),rouletteButtons(rouletteGame));
+  }
+  const game={
+    active:true,
+    status:"lobby",
+    hostId:user.id,
+    players:[{id:user.id,username:user.username||"",displayName:user.global_name||user.username||"Player",alive:true}],
+    pumpkins:[],
+    cursed:0,
+    count:0,
+    round:0
+  };
+  state.birthday.games.roulette=game;
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendPublicText(env,interaction,rouletteLobbyText(game),rouletteLobbyButtons(game));
+}
+function rouletteLobbyText(g){
+  const players=Array.isArray(g.players)?g.players:[];
+  const names=players.map((p,i)=>`${i+1}. <@${p.id}>`).join("\n");
+  return `🎃💀 **PUMPKIN ROULETTE LOBBY**\n\n👑 Host: <@${g.hostId}>\n👥 Players: **${players.length}/10**\n\n${names||"No players yet."}\n\n${players.length>=2?"✨ Enough players! The host can start the game.":"⏳ Waiting for players to join... At least **2 players** are required."}`;
+}
+function rouletteLobbyButtons(g){
+  const players=Array.isArray(g.players)?g.players:[];
+  const full=players.length>=10;
+  const canStart=players.length>=2;
+  return [
+    row(button("👥 Join Roulette","birthday:roulettejoin",3,full),button("▶️ Start Roulette","birthday:roulettestart",1,!canStart),button("🚪 Leave","birthday:rouletteleave",2))
+  ];
+}
+async function birthdayRouletteJoin(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no open Roulette lobby right now.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  if(g.players.some(p=>p.id===user.id)){
+    await deferInteraction(env,interaction,{update:true});
+    return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+  }
+  if(g.players.length>=10)return sendText(env,interaction,"🎃 This Roulette lobby is full (10/10).");
+  g.players.push({id:user.id,username:user.username||"",displayName:user.global_name||user.username||"Player",alive:true});
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+}
+async function birthdayRouletteLeave(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no open Roulette lobby right now.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  const index=g.players.findIndex(p=>p.id===user.id);
+  if(index<0)return sendText(env,interaction,"❌ You're not in this Roulette lobby.");
+  g.players.splice(index,1);
+  if(g.players.length===0){
+    state.birthday.games.roulette=null;
+    await saveGuildState(env,interaction.guild_id,state);
+    if(!await deferInteraction(env,interaction,{update:true}))return;
+    return editOriginalResponse(env,interaction,{content:"🎃 The Pumpkin Roulette lobby was closed because everyone left.",components:[]});
+  }
+  if(g.hostId===user.id)g.hostId=g.players[0].id;
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+}
+async function birthdayRouletteStart(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no Roulette lobby waiting to start.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  if(g.hostId!==user.id)return sendText(env,interaction,"👑 Only the Roulette host can start the game.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  if(g.players.length<2)return sendText(env,interaction,"🎃 Pumpkin Roulette needs at least 2 players to start.");
+  const ids=g.players.slice(0,10).map(p=>p.id);
+  const count=ids.length===2?4:ids.length===3?5:ids.length===4?6:ids.length===5?7:ids.length+2;
+  const cursed=ids.length<=3?1:ids.length<=5?2:3;
+  g.status="active";
+  g.players=ids.map(id=>({id,alive:true}));
+  g.count=count;
+  g.cursed=cursed;
+  g.pumpkins=[];
+  g.round=0;
+  reshuffleRoulette(g);
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteText(g),components:rouletteButtons(g)});
+}
+function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i,cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
 function rouletteText(g){return `🎃💀 **PUMPKIN ROULETTE**\n\n👥 Survivors: **${g.players.filter(p=>p.alive).length}**\n🎃 Pumpkins: **${g.count}**\n💀 Cursed: **${g.cursed}**\n\nChoose a pumpkin. The positions reshuffle after every pick, so there is NOTHING to memorize. 👀`}
 function rouletteButtons(g){const safe=g.pumpkins.map((p,i)=>button(`🎃 Pumpkin ${i+1}`,`birthday:roulettepick:${i}`,1));const rows=[];for(let i=0;i<safe.length;i+=5)rows.push(row(...safe.slice(i,i+5)));return rows;}
 async function birthdayRoulettePick(env,interaction,index){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;const uid=getUserFromInteraction(interaction).id;if(!g?.active)return sendText(env,interaction,"🎃 That Roulette game is over.");const pl=g.players.find(p=>p.id===uid&&p.alive);if(!pl)return sendText(env,interaction,"❌ You're not an active player in this Roulette game.");const pumpkin=g.pumpkins[Number(index)];if(!pumpkin)return sendText(env,interaction,"❌ That pumpkin doesn't exist.");if(pumpkin.cursed){pl.alive=false;await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"roulette");if(g.players.filter(p=>p.alive).length<=1){g.active=false;const winner=g.players.find(p=>p.alive);if(winner){const wp=await getPlayer(env,winner.id);wp.birthdayCandies+=500;wp.titles=Array.isArray(wp.titles)?wp.titles:[];if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");await savePlayer(env,wp);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 Last survivor: ${winner?`<@${winner.id}>`:`Nobody`}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> has been eliminated!`);}const effects=[["✨ Sparkle Burst",randomInt(20,100)],["🎟️ Birthday Candy bonus",randomInt(10,50)],["🦇 Bat swarm animation",0],["👻 Ghost message",0],["🎃 Pumpkin wiggle",0],["🕯️ Candle glow",0],["🍬 Candy shower",randomInt(10,75)]];const e=effects[randomInt(0,effects.length-1)];const p=await getPlayer(env,uid);if(e[0].includes("Sparkle"))p.sparkles+=e[1];else if(e[1])p.birthdayCandies+=e[1];await savePlayer(env,p);reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"roulette");if(e[0].includes("Sparkle"))await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,`${e[0]}!\n\nYou survived this round. The pumpkins have reshuffled! 🔀🎃`);}
@@ -7203,6 +7302,9 @@ async function handleComponent(
     if(action==="claim") return claimBirthdayHunt(env,interaction,parts[2]);
     if(action==="bingo") return startBirthdayBingo(env,interaction);
     if(action==="roulette") return startBirthdayRoulette(env,interaction);
+    if(action==="roulettejoin") return birthdayRouletteJoin(env,interaction);
+    if(action==="roulettestart") return birthdayRouletteStart(env,interaction);
+    if(action==="rouletteleave") return birthdayRouletteLeave(env,interaction);
     if(action==="roulettepick") return birthdayRoulettePick(env,interaction,parts[2]);
     if(action==="curse") return startBirthdayCurse(env,interaction);
     if(action==="cupcake") return startBirthdayCupcake(env,interaction);
