@@ -2996,7 +2996,7 @@ async function renderProfileDirect(env,player){
 }
 
 
-function drawBirthdayConfetti(frame) {
+function drawBirthdayConfetti(frame, phase=0) {
   const pieces = [
     [0.10,0.18,255,115,190,12,34],[0.19,0.30,255,210,90,10,28],
     [0.28,0.16,170,130,255,12,32],[0.38,0.26,255,205,90,11,30],
@@ -3007,9 +3007,13 @@ function drawBirthdayConfetti(frame) {
     [0.56,0.68,255,205,90,10,29],[0.70,0.59,255,235,120,11,32],
     [0.84,0.66,170,130,255,12,30]
   ];
-  for (const [px,py,r,g,b,w,h] of pieces) {
-    profileFill(frame, px*frame.width, py*frame.height, w, h, r,g,b,255);
-    profileFill(frame, px*frame.width+Math.round(w*0.45), py*frame.height-6, Math.max(2,Math.round(w*0.18)), 12, 255,255,255,230);
+  for (let i=0;i<pieces.length;i++) {
+    const [baseX,baseY,r,g,b,w,h] = pieces[i];
+    const x = baseX + Math.sin((phase*Math.PI*2)+(i*0.9))*0.018;
+    const y = ((baseY + phase*0.20 + (i%3)*0.015) % 1.12) - 0.06;
+    const px=x*frame.width, py=y*frame.height;
+    profileFill(frame, px, py, w, h, r,g,b,255);
+    profileFill(frame, px+Math.round(w*0.45), py-6, Math.max(2,Math.round(w*0.18)), 12, 255,255,255,230);
   }
 }
 
@@ -3062,10 +3066,6 @@ async function renderTreeDirectFallback(env, player) {
     }
   }
 
-  // Animated Confetti is represented by a visible confetti frame in the PNG.
-  // The browser renderer below provides the moving version while open.
-  if (player.equipped?.effect === "birthday_confetti") drawBirthdayConfetti(scene);
-
   // Draw the active sparkles directly so they still appear when Browser
   // Rendering is unavailable.
   for (const sparkle of (player.sparklesOnTree || [])) {
@@ -3074,7 +3074,26 @@ async function renderTreeDirectFallback(env, player) {
     drawSparkle(scene, x, y, String(sparkle.kind || "pink"));
   }
 
-  return rgbaToRgbPng(scene);
+  if (player.equipped?.effect === "birthday_confetti") {
+    // IMPORTANT: Confetti no longer depends on Cloudflare Browser Rendering.
+    // Browser launch has been timing out, so build the animation directly from
+    // the already-rasterized scene. This keeps /tree responsive and gives us a
+    // real multi-frame GIF even when Browser Rendering is unavailable.
+    const frames=[];
+    const frameCount=8;
+    const baseData=scene.data.slice();
+    for(let i=0;i<frameCount;i++){
+      const frame={width,height,data:new Uint8Array(baseData)};
+      drawBirthdayConfetti(frame,i/frameCount);
+      frames.push(rgbaToRgbPng(frame));
+    }
+    return {
+      bytes: await encodePNGFramesToGIF(frames,width,height,10),
+      animated: true
+    };
+  }
+
+  return { bytes: rgbaToRgbPng(scene), animated: false };
 }
 
 async function renderTree(env, player) {
@@ -3084,8 +3103,16 @@ async function renderTree(env, player) {
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
-    return { bytes: await renderTreeDirectFallback(env, player), animated: false };
+    return await renderTreeDirectFallback(env, player);
   };
+
+  // Browser Rendering is currently timing out in this environment. Confetti
+  // does not need a browser anymore: the direct raster pipeline below can
+  // produce the full animated GIF without launching a browser at all.
+  if (wantsAnimatedConfetti) {
+    console.log("🎊 Birthday Confetti: using direct animated renderer (no Browser Rendering)");
+    return await renderTreeDirectFallback(env, player);
+  }
 
   try {
     console.log("🎊 Birthday Confetti: launching Browser Rendering...");
