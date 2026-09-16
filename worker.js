@@ -21047,24 +21047,31 @@ export default {
       }
     }
 
-    // Birthday Shop buttons must ACK immediately, then do the KV work in
-    // waitUntil(). The previous direct type-7 version waited on KV before
-    // acknowledging Discord, which caused "MyTree didn't respond in time".
+    // Birthday Shop buttons use an immediate type-4 response instead of a
+    // type-6 update ACK. This gives Discord a complete initial interaction
+    // response immediately, then the real shop is edited into that response
+    // after the KV reads finish. This avoids both the 3-second timeout and the
+    // blank/no-op behavior caused by the previous type-6 path.
     if (interaction.type === 3 && /^birthday:shop(?::\d+)?$/.test(customId)) {
       const ack = await fetch(
         `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: 6 })
+          body: JSON.stringify({
+            type: 4,
+            data: { content: "🦇🛍️ Loading the Midnight Birthday Shop..." }
+          })
         }
       );
       if (!ack.ok) {
-        console.error("Birthday Shop button ACK failed:", ack.status, await ack.text());
+        console.error("Birthday Shop initial response failed:", ack.status, await ack.text());
         return new Response("OK", { status: 200 });
       }
+      // The type-4 response above creates @original, which can safely be
+      // edited by sendText/editOriginalResponse after the KV work completes.
       interaction.__deferred = true;
-      interaction.__deferredUpdate = true;
+      interaction.__deferredUpdate = false;
       interaction.__deferredEphemeral = false;
       const page = Number(customId.split(":")[2] || 0);
       ctx.waitUntil((async () => {
