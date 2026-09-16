@@ -7032,6 +7032,16 @@ async function renderBirthdayCake(env,name,choices){
   return rgbaToRgbPng(frame);
 }
 
+const BIRTHDAY_BAKERY_MENUS=[
+  {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
+  {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
+  {name:"frosting",options:[["💗 Pink Frosting","Pink Frosting"],["💜 Purple Frosting","Purple Frosting"],["🧡 Orange Frosting","Orange Frosting"],["🖤 Black Velvet Frosting","Black Velvet Frosting"],["👻 Ghost Vanilla Frosting","Ghost Vanilla Frosting"]]},
+  {name:"filling",options:[["🍓 Strawberry Jam","Strawberry Jam"],["🍒 Cherry Filling","Cherry Filling"],["🫐 Blackberry Jam","Blackberry Jam"],["🍫 Chocolate Cream","Chocolate Cream"],["🍬 Cotton Candy Filling","Cotton Candy Filling"]]},
+  {name:"topping",options:[["🎀 Pink Bow","Pink Bow"],["🦇 Bat Topper","Bat Topper"],["👻 Ghost Marshmallow","Ghost Marshmallow"],["🎃 Mini Pumpkin","Mini Pumpkin"],["🕯️ Birthday Candle","Birthday Candle"]]},
+  {name:"decorations",options:[["✨ Glitter","Glitter"],["🖤 Black Sprinkles","Black Sprinkles"],["🎃 Pumpkin Decorations","Pumpkin Decorations"],["🕸️ Spiderweb Caramel","Spiderweb Caramel"],["🌹 Midnight Roses","Midnight Roses"]]},
+  {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
+];
+
 async function startBirthdayBakery(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Batty Cake Bakery is closed.");
