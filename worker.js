@@ -3110,6 +3110,83 @@ function drawBirthdayConfetti(frame, phase=0) {
   }
 }
 
+
+function drawBirthdayCupcakeChaos(frame, phase=0) {
+  const items = [
+    [0.13,0.18,0],[0.29,0.31,1],[0.47,0.15,2],[0.66,0.27,3],[0.84,0.16,4],
+    [0.20,0.63,5],[0.40,0.55,6],[0.61,0.68,7],[0.80,0.58,8]
+  ];
+  const frosting=[[255,156,213],[255,207,232],[198,151,255],[255,239,139],[157,232,255]];
+  for(let i=0;i<items.length;i++){
+    const [bx,by,kind]=items[i];
+    const x=(bx+Math.sin(phase*Math.PI*2+i)*0.018)*frame.width;
+    const y=((by+phase*0.10+(i%3)*0.012)%1.05-0.025)*frame.height;
+    const w=42,h=34,c=frosting[kind%frosting.length];
+    profileFill(frame,x,y,w,h,255,255,255,235);
+    profileFill(frame,x+5,y+8,w-10,h-8,c[0],c[1],c[2],255);
+    profileFill(frame,x+9,y+2,w-18,8,c[0],c[1],c[2],255);
+    const spr=[255,90,170,255,230,80,200,150][i%8];
+    profileFill(frame,x+10,y+13,5,3,255,255,255,255);
+    profileFill(frame,x+25,y+19,5,3,255,255,255,255);
+    profileFill(frame,x+16,y+27,5,3,spr,255,255,255);
+  }
+}
+
+function drawBirthdayRaccoonParty(frame, phase=0) {
+  const raccoons=[[0.10,0.20],[0.34,0.33],[0.58,0.18],[0.82,0.32],[0.22,0.68],[0.48,0.57],[0.73,0.68]];
+  for(let i=0;i<raccoons.length;i++){
+    const [bx,by]=raccoons[i], x=(bx+Math.sin(phase*Math.PI*2+i)*0.012)*frame.width;
+    const y=((by+phase*0.06+(i%2)*0.01)%1.08-0.04)*frame.height;
+    // tiny pixel raccoon: ears, head, mask, eyes, body, tail
+    profileFill(frame,x+8,y,10,10,70,70,78,255); profileFill(frame,x+28,y,10,10,70,70,78,255);
+    profileFill(frame,x,y+8,46,30,112,112,120,255);
+    profileFill(frame,x+5,y+14,36,16,55,55,62,255);
+    profileFill(frame,x+11,y+17,7,7,255,255,255,255); profileFill(frame,x+28,y+17,7,7,255,255,255,255);
+    profileFill(frame,x+14,y+19,3,3,20,20,25,255); profileFill(frame,x+31,y+19,3,3,20,20,25,255);
+    profileFill(frame,x+18,y+27,10,5,30,30,35,255);
+    profileFill(frame,x+6,y+38,34,24,150,120,130,255);
+    profileFill(frame,x+39,y+45,18,8,112,112,120,255);
+    // party hat
+    profileFill(frame,x+15,y-12,16,4,255,105,190,255); profileFill(frame,x+19,y-18,8,7,255,105,190,255);
+    profileFill(frame,x+22,y-21,3,3,255,235,90,255);
+  }
+  for(let i=0;i<8;i++){const x=(0.08+i*0.12)*frame.width,y=(0.48+Math.sin(phase*6+i)*0.08)*frame.height;profileFill(frame,x,y,7,7,255,220,90,255);}
+}
+
+function drawBirthdayBalloonFloat(frame, phase=0) {
+  const balloons=[
+    [0.12,0.82,255,120,170],[0.25,0.58,255,190,80],[0.40,0.88,150,220,255],[0.56,0.64,190,140,255],
+    [0.72,0.84,255,120,170],[0.86,0.58,255,210,80],[0.32,0.30,170,255,190],[0.68,0.27,190,160,255]
+  ];
+  for(let i=0;i<balloons.length;i++){
+    const [bx,by,r,g,b]=balloons[i], x=(bx+Math.sin(phase*6+i)*0.025)*frame.width;
+    const y=((by-phase*0.13+(i%2)*0.03)%1.15-0.08)*frame.height;
+    const cx=Math.round(x),cy=Math.round(y),rad=25;
+    for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
+      if((dx*dx)/(rad*rad)+(dy*dy)/(rad*rad)>1)continue;
+      const px=cx+dx,py=cy+dy;if(px<0||py<0||px>=frame.width||py>=frame.height)continue;
+      profileFill(frame,px,py,1,1,r,g,b,255);
+    }
+    profileFill(frame,cx-4,cy+rad-1,8,8,r,g,b,255);
+    for(let t=0;t<90;t++){const sy=cy+rad+7+t;if(sy>=frame.height)break;const sway=Math.round(Math.sin(t/13+phase*7+i)*5);profileFill(frame,cx+sway,sy,2,1,255,255,255,150);}
+  }
+}
+
+function drawBirthdayPumpkinSparkle(frame, phase=0) {
+  const pumpkins=[[0.13,0.22],[0.32,0.34],[0.51,0.18],[0.70,0.31],[0.88,0.20],[0.23,0.67],[0.47,0.58],[0.73,0.68]];
+  for(let i=0;i<pumpkins.length;i++){
+    const [bx,by]=pumpkins[i],x=(bx+Math.sin(phase*5+i)*0.012)*frame.width,y=((by+phase*0.08)%1.08-0.04)*frame.height;
+    profileFill(frame,x+8,y,34,28,255,139,45,255); profileFill(frame,x+3,y+8,44,18,255,139,45,255);
+    profileFill(frame,x+20,y-5,10,7,75,150,65,255);
+    profileFill(frame,x+13,y+15,6,5,35,35,40,255); profileFill(frame,x+28,y+15,6,5,35,35,40,255); profileFill(frame,x+20,y+22,9,4,35,35,40,255);
+    const glow=phase*8+i;
+    for(let j=0;j<3;j++){
+      const sx=x+55+Math.sin(glow+j*2)*12,sy=y+8+j*16+Math.cos(glow+j)*8;
+      drawSparkle(frame,Math.round(sx),Math.round(sy),'star');
+    }
+  }
+}
+
 async function renderTreeDirectFallback(env, player) {
   const width = 1024, height = 1024;
   // Start with a safe color, then replace it with the player's ACTUAL
@@ -3165,6 +3242,21 @@ async function renderTreeDirectFallback(env, player) {
     const x = Math.round((Number(sparkle.x) || 50) / 100 * width);
     const y = Math.round((Number(sparkle.y) || 50) / 100 * height);
     drawSparkle(scene, x, y, String(sparkle.kind || "pink"));
+  }
+
+  const birthdayAnimatedEffect = player.equipped?.effect;
+  if (birthdayAnimatedEffect === "birthday_cupcake_chaos" || birthdayAnimatedEffect === "birthday_raccoon_party" || birthdayAnimatedEffect === "birthday_balloon_float" || birthdayAnimatedEffect === "birthday_pumpkin_sparkle") {
+    const frames=[]; const frameCount=8; const baseData=scene.data.slice();
+    for(let i=0;i<frameCount;i++){
+      const frame={width,height,data:new Uint8Array(baseData)};
+      const phase=i/frameCount;
+      if(birthdayAnimatedEffect==="birthday_cupcake_chaos") drawBirthdayCupcakeChaos(frame,phase);
+      else if(birthdayAnimatedEffect==="birthday_raccoon_party") drawBirthdayRaccoonParty(frame,phase);
+      else if(birthdayAnimatedEffect==="birthday_balloon_float") drawBirthdayBalloonFloat(frame,phase);
+      else drawBirthdayPumpkinSparkle(frame,phase);
+      frames.push(rgbaToRgbPng(frame));
+    }
+    return { bytes: await encodePNGFramesToGIF(frames,width,height,10), animated:true };
   }
 
   if (player.equipped?.effect === "birthday_confetti") {
@@ -5207,6 +5299,10 @@ async function showCustomEffects(
   }
   if (player.inventory.includes("birthday_effect")) buttons.push(button("🦇🎂 Spooky Birthday", "equip_effect_birthday", player.equipped.effect === "birthday" ? 3 : 2));
   if (player.inventory.includes("birthday_confetti")) buttons.push(button("🎊 Animated Confetti", "equip_effect_birthday_confetti", player.equipped.effect === "birthday_confetti" ? 3 : 2));
+  if (player.inventory.includes("birthday_cupcake_chaos_effect")) buttons.push(button("🧁 Cupcake Chaos", "equip_effect_birthday_cupcake_chaos", player.equipped.effect === "birthday_cupcake_chaos" ? 3 : 2));
+  if (player.inventory.includes("birthday_raccoon_party_effect")) buttons.push(button("🦝 Raccoon Party", "equip_effect_birthday_raccoon_party", player.equipped.effect === "birthday_raccoon_party" ? 3 : 2));
+  if (player.inventory.includes("birthday_balloon_float_effect")) buttons.push(button("🎈 Balloon Float", "equip_effect_birthday_balloon_float", player.equipped.effect === "birthday_balloon_float" ? 3 : 2));
+  if (player.inventory.includes("birthday_pumpkin_sparkle_effect")) buttons.push(button("🎃 Pumpkin Sparkle", "equip_effect_birthday_pumpkin_sparkle", player.equipped.effect === "birthday_pumpkin_sparkle" ? 3 : 2));
   if (player.inventory.includes("halloween_effect")) {
     buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
   }
@@ -5668,7 +5764,11 @@ async function equipEffect(
       golden_pickle: "golden_pickle_effect",
       midnight_rider: "midnight_rider_effect",
       birthday: "birthday_effect",
-      birthday_confetti: "birthday_confetti"
+      birthday_confetti: "birthday_confetti",
+      birthday_cupcake_chaos: "birthday_cupcake_chaos_effect",
+      birthday_raccoon_party: "birthday_raccoon_party_effect",
+      birthday_balloon_float: "birthday_balloon_float_effect",
+      birthday_pumpkin_sparkle: "birthday_pumpkin_sparkle_effect"
     }[effect];
 
     if (
@@ -5932,7 +6032,11 @@ const INVENTORY_NAMES = {
   birthday_background: "🌌 Spooky Birthday Background",
   birthday_effect: "✨ Spooky Birthday Effect",
   birthday_decoration: "🎁 Spooky Birthday Decoration",
-  birthday_confetti: "🎊 Animated Confetti Effect"
+  birthday_confetti: "🎊 Animated Confetti Effect",
+  birthday_cupcake_chaos_effect: "🧁 Cupcake Chaos Effect",
+  birthday_raccoon_party_effect: "🦝 Raccoon Party Effect",
+  birthday_balloon_float_effect: "🎈 Balloon Float Effect",
+  birthday_pumpkin_sparkle_effect: "🎃 Pumpkin Sparkle Effect"
 };
 
 const INVENTORY_CATEGORIES = [
@@ -5946,7 +6050,7 @@ const INVENTORY_CATEGORIES = [
 const INVENTORY_CATEGORY_IDS = {
   trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
@@ -6009,6 +6113,10 @@ const BIRTHDAY_SHOP_ITEMS = {
   birthday_effect: { name: "✨ Spooky Birthday Effect", price: 1000, type: "effect", value: "birthday" },
   birthday_decoration: { name: "🎁 Spooky Birthday Decoration", price: 1000, type: "decoration", value: "birthday" },
   birthday_confetti: { name: "🎊 Animated Confetti Effect", price: 2000, type: "effect", value: "birthday_confetti" },
+  birthday_cupcake_chaos_effect: { name: "🧁 Cupcake Chaos", price: 2000, type: "effect", value: "birthday_cupcake_chaos" },
+  birthday_raccoon_party_effect: { name: "🦝 Raccoon Party", price: 5000, type: "effect", value: "birthday_raccoon_party" },
+  birthday_balloon_float_effect: { name: "🎈 Balloon Float", price: 2000, type: "effect", value: "birthday_balloon_float" },
+  birthday_pumpkin_sparkle_effect: { name: "🎃 Pumpkin Sparkle", price: 2000, type: "effect", value: "birthday_pumpkin_sparkle" },
   birthday_sparkles: { name: "💰 20,000 Sparkles", price: 2000, type: "sparkles", value: 20000 }
 };
 
