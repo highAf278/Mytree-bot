@@ -6309,17 +6309,25 @@ async function handleBirthdaySet(env, interaction) {
 }
 
 function birthdayShopComponents(page=0) {
-  // The Midnight Birthday Shop has only six items. Keep every item visible
-  // at once so none of the shop purchases are hidden behind pagination.
-  // Six items fit safely into three rows of two, plus the Birthday Menu row.
+  // Discord allows a maximum of five action rows per message. The Birthday
+  // Shop now has ten items, so keep the shop paginated instead of generating
+  // six rows and leaving the interaction stuck on the loading message.
   const ids=Object.keys(BIRTHDAY_SHOP_ITEMS);
+  const pageSize=5;
+  const pageCount=Math.max(1,Math.ceil(ids.length/pageSize));
+  const current=Math.min(Math.max(Number(page)||0,0),pageCount-1);
+  const visible=ids.slice(current*pageSize,(current+1)*pageSize);
   const rows=[];
-  for(let i=0;i<ids.length;i+=2){
-    rows.push(row(...ids.slice(i,i+2).map(id=>
+  for(let i=0;i<visible.length;i+=3){
+    rows.push(row(...visible.slice(i,i+3).map(id=>
       button(`${BIRTHDAY_SHOP_ITEMS[id].name} — ${BIRTHDAY_SHOP_ITEMS[id].price} 🍬`,`birthday:buy:${id}`,1)
     )));
   }
-  rows.push(row(button("🎂 Birthday Menu","birthday:home",2)));
+  const nav=[];
+  if(current>0) nav.push(button("⬅️ Previous","birthday:shop:${current-1}",2));
+  nav.push(button(`🎂 Menu${pageCount>1?` • ${current+1}/${pageCount}`:""}`,"birthday:home",2));
+  if(current<pageCount-1) nav.push(button("Next ➡️","birthday:shop:${current+1}",2));
+  rows.push(row(...nav));
   return rows;
 }
 
