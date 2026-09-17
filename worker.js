@@ -6324,9 +6324,9 @@ function birthdayShopComponents(page=0) {
     )));
   }
   const nav=[];
-  if(current>0) nav.push(button("⬅️ Previous","birthday:shop:${current-1}",2));
+  if(current>0) nav.push(button("⬅️ Previous",`birthday:shop:${current-1}`,2));
   nav.push(button(`🎂 Menu${pageCount>1?` • ${current+1}/${pageCount}`:""}`,"birthday:home",2));
-  if(current<pageCount-1) nav.push(button("Next ➡️","birthday:shop:${current+1}",2));
+  if(current<pageCount-1) nav.push(button("Next ➡️",`birthday:shop:${current+1}`,2));
   rows.push(row(...nav));
   return rows;
 }
