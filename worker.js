@@ -20130,28 +20130,23 @@ async function renderPastelBoard(env,game){
 }
 
 function drawPastelPowerCellIcon(frame,cx,cy,cell,palette){
-  const scale=Math.max(2,Math.floor(cell/10));
-  const outline=[30,20,35];
-  const configs={
-    pastel_dreams:{main:[255,92,145],light:[255,190,215],dark:[190,45,105],pattern:["0011100","0111110","1111111","1111111","0111110","0011100","0001000"]},
-    teddy_bear:{main:[255,105,175],light:[255,205,230],dark:[190,55,120],pattern:["01110110","11111111","11111111","01111110","00111100","00011000","00011000"]},
-    haunted_harvest:{main:[245,130,35],light:[255,190,70],dark:[120,45,20],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
-    candy_shop:{main:[255,105,170],light:[255,225,245],dark:[180,50,120],pattern:["01100110","11111111","11111111","11111111","11111111","01100110"]},
-    strawberry_galaxy:{main:[245,70,115],light:[255,170,190],dark:[150,35,75],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
-    enchanted_garden:{main:[245,215,70],light:[255,245,150],dark:[170,135,30],pattern:["0011000","0111100","1111110","0111111","0011110","0001100","0001000"]}
-  };
-  const cfg=configs[palette]||configs.pastel_dreams;
-  const pat=cfg.pattern,w=pat[0].length,h=pat.length;
-  const px=Math.max(1,Math.floor(scale*0.8));
-  const ox=Math.round(cx-(w*px)/2),oy=Math.round(cy-(h*px)/2);
-  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1")boardFill(frame,ox+c*px-1,oy+r*px-1,px+2,px+2,outline[0],outline[1],outline[2],255);
-  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1"){
-    const edge=r===0||c===0||r===h-1||c===w-1||pat[r-1]?.[c]!=="1"||pat[r+1]?.[c]!=="1"||pat[r]?.[c-1]!=="1"||pat[r]?.[c+1]!=="1";
-    const col=edge?cfg.dark:cfg.main;
-    boardFill(frame,ox+c*px,oy+r*px,px,px,col[0],col[1],col[2],255);
-  }
-  const hi=cfg.light;
-  boardFill(frame,ox+px,oy+px,Math.max(1,px),Math.max(1,px),hi[0],hi[1],hi[2],255);
+  /* Color Chaos Power Cell: recognizable sunflower, matching the original game art. */
+  const scale=Math.max(2,Math.floor(cell/18));
+  const petal=[255,211,64],petalLight=[255,235,112],petalDark=[218,154,24],center=[91,53,20],centerLight=[139,82,28],outline=[55,35,18];
+  const petalR=Math.max(2,Math.round(scale*2.15));
+  const centerR=Math.max(2,Math.round(scale*1.35));
+  const offsets=[
+    [0,-3],[2,-2],[3,0],[2,2],[0,3],[-2,2],[-3,0],[-2,-2],
+    [1,-2],[-2,-1],[-1,2],[2,1]
+  ];
+  for(const [dx,dy] of offsets)boardCircle(frame,cx+dx*scale,cy+dy*scale,petalR,[outline[0],outline[1],outline[2]],true);
+  for(const [dx,dy] of offsets)boardCircle(frame,cx+dx*scale,cy+dy*scale,Math.max(1,petalR-1),[petal[0],petal[1],petal[2]],true);
+  boardCircle(frame,cx,cy,centerR+1,[outline[0],outline[1],outline[2]],true);
+  boardCircle(frame,cx,cy,centerR,[center[0],center[1],center[2]],true);
+  boardCircle(frame,cx-Math.max(1,Math.floor(scale/2)),cy-Math.max(1,Math.floor(scale/2)),Math.max(1,Math.floor(centerR/3)),[centerLight[0],centerLight[1],centerLight[2]],true);
+  /* Small green stem so it reads as a flower rather than a generic yellow badge. */
+  const stemW=Math.max(1,Math.round(scale*0.8));
+  boardFill(frame,cx-Math.floor(stemW/2),cy+Math.round(scale*2.4),stemW,Math.max(1,Math.round(scale*1.7)),64,128,55,255);
 }
 
 async function renderPastelBoardDirectFallback(env,game){
