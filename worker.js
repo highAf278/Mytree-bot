@@ -20231,18 +20231,18 @@ async function renderPastelBoard(env,game){
 
 function drawPastelPowerCellIcon(frame,cx,cy,cell,palette){
   const scale=Math.max(2,Math.floor(cell/10));
-  const outline=[30,20,35];
+  const px=Math.max(1,Math.floor(scale*0.78));
+  const outline=[20,16,24];
   const configs={
-    pastel_dreams:{main:[255,92,145],light:[255,190,215],dark:[190,45,105],pattern:["0011100","0111110","1111111","1111111","0111110","0011100","0001000"]},
-    teddy_bear:{main:[255,105,175],light:[255,205,230],dark:[190,55,120],pattern:["01110110","11111111","11111111","01111110","00111100","00011000","00011000"]},
-    haunted_harvest:{main:[245,130,35],light:[255,190,70],dark:[120,45,20],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
-    candy_shop:{main:[255,105,170],light:[255,225,245],dark:[180,50,120],pattern:["01100110","11111111","11111111","11111111","11111111","01100110"]},
-    strawberry_galaxy:{main:[245,70,115],light:[255,170,190],dark:[150,35,75],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
-    enchanted_garden:{main:[245,215,70],light:[255,245,150],dark:[170,135,30],pattern:["0011000","0111100","1111110","0111111","0011110","0001100","0001000"]}
+    pastel_dreams:{main:[255,105,170],light:[255,215,235],dark:[190,45,105],pattern:["01100110","11111111","11111111","01111110","00111100","00011000"]},
+    haunted_harvest:{main:[245,120,28],light:[255,185,55],dark:[125,48,18],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100","0001000"]},
+    teddy_bear:{main:[245,165,185],light:[255,215,225],dark:[150,85,105],pattern:["00110011","01111110","11111111","01111110","00111100","01100110","11111111"]},
+    candy_shop:{main:[255,105,175],light:[255,220,245],dark:[190,45,125],pattern:["00111100","01111110","11111111","11111111","01111110","00111100"]},
+    strawberry_galaxy:{main:[235,65,95],light:[255,150,165],dark:[145,25,55],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100","0001000"]},
+    enchanted_garden:{main:[245,210,65],light:[255,245,155],dark:[165,125,25],pattern:["0011100","0111110","1111111","1111111","0111110","0011100","0001000"]}
   };
   const cfg=configs[palette]||configs.pastel_dreams;
   const pat=cfg.pattern,w=pat[0].length,h=pat.length;
-  const px=Math.max(1,Math.floor(scale*0.8));
   const ox=Math.round(cx-(w*px)/2),oy=Math.round(cy-(h*px)/2);
   for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1")boardFill(frame,ox+c*px-1,oy+r*px-1,px+2,px+2,outline[0],outline[1],outline[2],255);
   for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1"){
