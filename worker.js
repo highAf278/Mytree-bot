@@ -7224,6 +7224,9 @@ async function birthdayCakeChoice(env,interaction,value){
   }
 
   g.status="finalizing";
+  // A cake render can take longer than Discord's interaction acknowledgement window.
+  // Acknowledge the button immediately, then render and edit the original response.
+  await deferInteraction(env,interaction,{update:true});
   const p=await getPlayer(env,uid);
   const bakeryReward=randomInt(100,250);
   p.birthdayCandies=(Number(p.birthdayCandies)||0)+bakeryReward;
@@ -7238,7 +7241,7 @@ async function birthdayCakeChoice(env,interaction,value){
   catch(error){
     console.error("Birthday cake render failed:",error);
     g.active=false;g.status="completed";await saveGuildState(env,interaction.guild_id,state);
-    return sendText(env,interaction,`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n⚠️ The cake image renderer failed, but your cake design and reward were saved.`,[row(button("🎂 Birthday Menu","birthday:home",2))]);
+    return editOriginalResponse(env,interaction,{content:`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n⚠️ The cake image renderer failed, but your cake design and reward were saved.`,components:[row(button("🎂 Birthday Menu","birthday:home",2))]});
   }
 
   const responseContent=`🦇🎂 **BATTY CAKE BAKERY COMPLETE!**\n\n🎂 Cake for **${birthdayName(state)}**\n✨ Design: ${g.choices.join(" • ")}\n\n🧁 The bakery declares it: **${["Sweet","Spooktacular","Wickedly Delicious","Birthday Royalty"][randomInt(0,3)]}!**\n🎟️ You earned **${bakeryReward} Birthday Candies**!\n\n🖼️ **Your finished cake is attached below!**`;
