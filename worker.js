@@ -696,6 +696,17 @@ function defaultPlayer() {
     courtWatchLastAt: 0,
     courtPublicShameUntil: 0,
     courtPublicShameLastAt: 0,
+    courtLastFiledAt: 0,
+    courtLastTargetedDay: "",
+    courtTrashReleaseUntil: 0,
+    courtTrashReleaseNextAt: 0,
+    courtTrashReleaseChannelId: "",
+    courtSpoonInvestigationUntil: 0,
+    courtSpoonInvestigationLastAt: 0,
+    courtTreeConfiscationUntil: 0,
+    courtCases: 0,
+    courtGuilty: 0,
+    courtNotGuilty: 0,
     surpriseAlertClaimed: false,
     freeGiftClaimed: false,
     freeGoldenPickleClaimed: false,
@@ -1275,11 +1286,15 @@ async function refreshPunishmentState(env, player) {
     player.raccoonCourtPreviousEffect = null;
     changed = true;
   }
+  if (Number(player.courtTrashReleaseUntil || 0) > 0 && Number(player.courtTrashReleaseUntil || 0) <= now) {
+    player.courtTrashReleaseUntil = 0; player.courtTrashReleaseNextAt = 0; player.courtTrashReleaseChannelId = ""; changed = true;
+  }
   const timerFields = [
     "courtGameTimeoutUntil", "courtFortuneBanUntil", "courtRaccoonBanUntil",
     "courtRecycleBanUntil", "courtRiddleBanUntil", "courtUtilityLockUntil",
     "courtProbationUntil", "courtWatchUntil", "courtCriminalRecordUntil",
-    "courtShameCornerUntil", "courtRaccoonTitleUntil", "courtPublicShameUntil"
+    "courtShameCornerUntil", "courtRaccoonTitleUntil", "courtPublicShameUntil",
+    "courtSpoonInvestigationUntil", "courtTreeConfiscationUntil"
   ];
   for (const field of timerFields) {
     if (Number(player[field] || 0) > 0 && Number(player[field] || 0) <= now) {
@@ -1356,6 +1371,46 @@ function courtCharge() {
   return charges[randomInt(0, charges.length - 1)];
 }
 
+const COURT_JUDGES = [
+  { name:"🥒 Judge Pickles", lines:[
+    "Judge Pickles has reviewed the evidence. Unfortunately, the evidence smells suspicious.",
+    "Order in the trash can! Judge Pickles is ready to judge.",
+    "The raccoons have consulted the pickle. The pickle has concerns.",
+    "Judge Pickles has entered the courtroom and immediately distrusted everyone.",
+    "The pickle has been presented with the facts. The pickle is unimpressed."
+  ]},
+  { name:"🧇 Judge Waffles", lines:[
+    "Judge Waffles has arrived. Please remain calm and do not eat the evidence.",
+    "After careful consideration... Judge Waffles would like a waffle.",
+    "The Court is now in session. Breakfast will be served after the verdict.",
+    "Judge Waffles has reviewed the case and would like to remind everyone that waffles are innocent.",
+    "The evidence has been stacked. Much like waffles. Judge Waffles approves."
+  ]},
+  { name:"💩 Judge Stinky", lines:[
+    "Judge Stinky has entered the courtroom. Unfortunately, so has the smell.",
+    "The evidence has been sniffed. This is already looking bad.",
+    "Order! ORDER! Somebody open a window!",
+    "Judge Stinky has requested that the defendant stop pretending not to smell the problem.",
+    "The Court has detected suspicious odors. The defendant is somehow involved."
+  ]},
+  { name:"☢️🦝 Judge Rabid Raccoon", lines:[
+    "RABID RACCOON COURT IS NOW IN SESSION. EVERYONE PANIC.",
+    "The defendant has been examined. Judge Rabid Raccoon has decided to become louder.",
+    "SILENCE IN THE COURTROOM! THE RACCOON IS RABID!",
+    "Judge Rabid Raccoon has reviewed the case and is now aggressively pointing at the defendant.",
+    "THE COURT WILL NOW PROCEED WITH MAXIMUM RACCOON ENERGY."
+  ]},
+  { name:"🪨 Judge Stoney", lines:[
+    "Judge Stoney has reached a verdict... eventually.",
+    "Please wait while Judge Stoney thinks about this.",
+    "The Court has considered the evidence. Judge Stoney is still considering the evidence.",
+    "Judge Stoney has reviewed the case. There will now be a brief period of absolutely nothing.",
+    "After deep consideration, Judge Stoney has decided that this case is... interesting."
+  ]}
+];
+function courtRandomJudge(){ return COURT_JUDGES[randomInt(0,COURT_JUDGES.length-1)]; }
+function courtDayKey(){ const d=new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; }
+
 const COURT_PUNISHMENTS = [
   { id:"fine", name:"💸 Raccoon Tax Audit" },
   { id:"extortion", name:"🦝💰 Raccoon Extortion Fee" },
@@ -1371,7 +1426,10 @@ const COURT_PUNISHMENTS = [
   { id:"shame_corner", name:"🪑 Shame Corner" },
   { id:"stink_tree", name:"💩🌳 The Stink Tree" },
   { id:"appointed_raccoon", name:"🦝 Court-Appointed Raccoon" },
-  { id:"public_shame", name:"📢🦝 Public Shame" }
+  { id:"public_shame", name:"📢🦝 Public Shame" },
+  { id:"trash_release", name:"🗑️ Trash Can Release" },
+  { id:"spoon_investigation", name:"🥄 Spoon Investigation" },
+  { id:"tree_confiscation", name:"🌳 Tree Confiscation" }
 ];
 
 const COURT_MESSAGES = {
@@ -1389,7 +1447,10 @@ const COURT_MESSAGES = {
   shame_corner:["The court has reserved you a premium seat in the Shame Corner.","Please report to the corner and think about what you have done. Or don't. The raccoons don't care.","Your sentence includes one corner and approximately zero dignity.","The Shame Corner has been prepared. It is judging you already."],
   stink_tree:["Your tree has been reassigned to the Department of Bad Smells.","The raccoons have selected a tree that perfectly matches your legal situation.","Your cosmetics have been replaced by consequences.","Welcome to the Stink Tree era. Please enjoy the fumes responsibly."],
   appointed_raccoon:["The court has assigned you a raccoon supervisor.","You are now under professional raccoon management.","Your new legal guardian is a raccoon with a clipboard.","A raccoon has been appointed to supervise your future nonsense."],
-  public_shame:["The court has sentenced you to six hours of public embarrassment.","Your crimes have been upgraded to a community announcement.","The raccoons have decided everyone deserves to know you are being silly.","Your dignity has been placed on a six-hour public trial."]
+  public_shame:["The court has sentenced you to six hours of public embarrassment.","Your crimes have been upgraded to a community announcement.","The raccoons have decided everyone deserves to know you are being silly.","Your dignity has been placed on a six-hour public trial."],
+  trash_release:["The trash can has reviewed your finances and would like another payment.","The raccoons found Sparkles in your pockets. This is unfortunate for you.","Payment accepted. Freedom denied.","The trash can is hungry again.","Raccoon Finance has processed another completely unnecessary fee."],
+  spoon_investigation:["We know you have the spoon.","The spoon was last seen near you. Explain.","Stop pretending you do not have the spoon.","The Court remains convinced you are hiding the spoon.","THE SPOON. WHERE IS IT?"],
+  tree_confiscation:["The Court has seized your tree pending further raccoon review.","Your tree has been placed into legal custody.","The raccoons have confiscated the tree. Do not attempt to negotiate.","The Court has determined that your tree is currently evidence.","Your tree has been escorted away by extremely suspicious raccoons."]
 };
 
 function courtRandomMessage(id) { const a=COURT_MESSAGES[id]||[]; return a[randomInt(0, Math.max(0,a.length-1))] || "The raccoons have spoken."; }
@@ -1457,78 +1518,99 @@ function applyCourtPunishment(target, id) {
     target.courtPublicShameUntil=Math.max(Number(target.courtPublicShameUntil||0),courtUntil(6*60));
     target.courtPublicShameLastAt=0;
     detail=`📢🦝 **Public Shame:** exactly **6 hours**. Public shaming can appear at most once every **20 minutes**.`;
+  } else if(id==="trash_release"){
+    target.courtTrashReleaseUntil=Math.max(Number(target.courtTrashReleaseUntil||0),courtUntil(6*60));
+    target.courtTrashReleaseNextAt=now+30*60000;
+    detail=`🗑️ **Trash Can Release:** 6 hours. Every 30 minutes the raccoons collect a random Sparkle fee. If you cannot afford the full fee, they take whatever you have.`;
+  } else if(id==="spoon_investigation"){
+    target.courtSpoonInvestigationUntil=Math.max(Number(target.courtSpoonInvestigationUntil||0),courtUntil(10*60));
+    target.courtSpoonInvestigationLastAt=0;
+    detail=`🥄 **Spoon Investigation:** 10 hours. The bot will randomly insist that you have the missing spoon.`;
+  } else if(id==="tree_confiscation"){
+    target.courtTreeConfiscationUntil=Math.max(Number(target.courtTreeConfiscationUntil||0),courtUntil(6*60));
+    detail=`🌳 **Tree Confiscation:** ${punishmentTimeText(target.courtTreeConfiscationUntil)}. Your tree is temporarily unavailable until the Court returns it.`;
   }
   return detail;
 }
 
-async function handleCourt(env, interaction) {
-  if (!(await requireOwner(env, interaction))) return;
-  const targetId=getOption(interaction,"user");
-  if(!targetId) return sendText(env,interaction,"🦝⚖️ The Raccoon Court needs a defendant.");
-  const target=await getPlayer(env,targetId); await refreshPunishmentState(env,target);
-  const caseNumber=`RAC-${randomInt(100000,999999)}`;
-  const charge=courtCharge();
-  const guilty=randomInt(1,100)<=55;
-  let punishment="", punishmentName="";
-  if(guilty){ const chosen=COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)]; punishmentName=chosen.name; punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`; }
-  await env.TREE_DATA.put(target.userId,JSON.stringify(target));
-  const verdict=guilty?"🔴 **GUILTY**":"🟢 **NOT GUILTY**";
-  const innocentLine="🦝 Judge Raccoon has released you. Enjoy your freedom... but we'll catch you next time.";
-  const full=guilty
-    ? `🦝⚖️ **THE RACCOON COURT**\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}\n\n🦝 The court has spoken. Do not argue with the raccoons.`
-    : `🦝⚖️ **THE RACCOON COURT**\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n${innocentLine}\n\n**CASE CLOSED.**`;
-  await sendUserDM(env,targetId,full);
-
-  // Court uses the channel configured by /announcements. This keeps the
-  // court public notice in the same place the server already uses for
-  // Werewives announcements, so no separate COURT_CHANNEL_ID binding is
-  // required.
-  const guildState = interaction.guild_id ? await getGuildState(env, interaction.guild_id) : null;
-  const announcementChannelId = guildState?.announcementChannelId || null;
-
-  if (announcementChannelId) {
-    let avatarUrl = "https://cdn.discordapp.com/embed/avatars/0.png";
-    try {
-      const userResponse = await discordRequest(env, `/users/${targetId}`);
-      if (userResponse.ok) {
-        const discordUser = await userResponse.json();
-        if (discordUser.avatar) {
-          const extension = String(discordUser.avatar).startsWith("a_") ? "gif" : "png";
-          avatarUrl = `https://cdn.discordapp.com/avatars/${targetId}/${discordUser.avatar}.${extension}?size=128`;
-        } else if (discordUser.id) {
-          const discriminator = Number(BigInt(discordUser.id) >> 22n) % 6;
-          avatarUrl = `https://cdn.discordapp.com/embed/avatars/${discriminator}.png`;
-        }
-      }
-    } catch (avatarError) {
-      console.error("Court avatar lookup failed:", avatarError);
-    }
-
-    const publicEmbed = {
-      title: "🦝⚖️ THE RACCOON COURT",
-      description: guilty
-        ? `**${verdict}**\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}`
-        : `**${verdict}**\n\n${innocentLine}\n\n**CASE CLOSED.**`,
-      color: guilty ? 0xD94A4A : 0x4CAF50,
-      fields: [
-        { name: "📁 Case", value: `**${caseNumber}**`, inline: true },
-        { name: "👤 Defendant", value: `<@${targetId}>`, inline: true },
-        { name: "📜 Charge", value: charge, inline: false }
-      ],
-      author: {
-        name: `${target.displayName || target.username || "Werewife"} — Court Defendant`,
-        icon_url: avatarUrl
-      },
-      thumbnail: { url: avatarUrl },
-      footer: { text: "Raccoon Court • Judge Raccoon has spoken. 🦝⚖️" },
-      timestamp: new Date().toISOString()
-    };
-
-    await sendChannelMessage(env, announcementChannelId, "🦝⚖️ **Raccoon Court Case Filed**", [], { embeds: [publicEmbed] });
-  } else {
-    console.error("Raccoon Court public notice skipped: no announcement channel configured. Use /announcements first.");
+async function getCourtLeaderboard(env) {
+  const rows=[];
+  for(const userId of await listAllPlayerKeys(env)){
+    try{
+      const player=await getPlayer(env,userId);
+      const cases=Number(player.courtCases||0);
+      const guilty=Number(player.courtGuilty||0);
+      const notGuilty=Number(player.courtNotGuilty||0);
+      if(cases>0||guilty>0||notGuilty>0)rows.push({userId,displayName:player.displayName||player.username||"Werewife",cases,guilty,notGuilty});
+    }catch(error){console.error(`Court leaderboard player read failed for ${userId}:`,error);}
   }
+  rows.sort((a,b)=>b.guilty-a.guilty||b.cases-a.cases||b.notGuilty-a.notGuilty||String(a.displayName).localeCompare(String(b.displayName)));
+  return rows;
+}
 
+async function handleCourtLeaderboard(env, interaction) {
+  const rows=await getCourtLeaderboard(env);
+  if(!rows.length)return sendText(env,interaction,"🦝⚖️ **RACCOON COURT LEADERBOARD**\n\nNo one has been to Court yet. The raccoons are waiting. 👀");
+  const topGuilty=rows[0].guilty;
+  let championText="";
+  if(topGuilty>0){
+    const leaders=rows.filter(r=>r.guilty===topGuilty);
+    championText=`\n🏆 **Current Court Champion:** ${leaders.slice(0,5).map(r=>`<@${r.userId}>`).join(", ")}\n🦝 **Title:** *the Raccoons' Favorite Criminal*\n`;
+    for(const leader of leaders){
+      try{
+        const player=await getPlayer(env,leader.userId);
+        if(!Array.isArray(player.titles))player.titles=[];
+        if(!player.titles.includes("court_favorite")){player.titles.push("court_favorite");await savePlayer(env,player);}
+      }catch(error){console.error(`Court champion title update failed for ${leader.userId}:`,error);}
+    }
+  }
+  const lines=rows.slice(0,10).map((r,i)=>`${i+1}. <@${r.userId}> — **${r.cases} cases** • 🔴 ${r.guilty} guilty • 🟢 ${r.notGuilty} not guilty`);
+  return sendText(env,interaction,`🦝⚖️ **RACCOON COURT LEADERBOARD**\n\n${lines.join("\n")}${championText}\n📊 Ranked by **guilty verdicts**, then total cases.\n🦝 The raccoons are keeping score.`);
+}
+
+async function handleCourt(env, interaction) {
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  const targetId=getOption(interaction,"user");
+  if(!targetId)return sendText(env,interaction,"🦝⚖️ The Raccoon Court needs a defendant.");
+  if(String(targetId)===String(user.id))return sendText(env,interaction,"🦝⚖️ You cannot put yourself on trial. The raccoons have standards. Barely.");
+  const now=Date.now();
+  const accuser=await getPlayer(env,user.id); await refreshPunishmentState(env,accuser);
+  const sixHours=6*60*60000;
+  if(Number(accuser.courtLastFiledAt||0)>0 && now-Number(accuser.courtLastFiledAt)<sixHours)return sendText(env,interaction,`⏳🦝 **COURT IS CLOSED FOR YOU.**\n\nYou must wait **${punishmentTimeText(Number(accuser.courtLastFiledAt)+sixHours)}** before filing another case.`);
+  const target=await getPlayer(env,targetId); await refreshPunishmentState(env,target);
+  const day=courtDayKey();
+  if(String(target.courtLastTargetedDay||"")===day)return sendText(env,interaction,"🚫🦝 **THIS DEFENDANT HAS ALREADY BEEN TO COURT TODAY.**\n\nThe raccoons will not hear another case against them until tomorrow.");
+  accuser.courtLastFiledAt=now; target.courtLastTargetedDay=day;
+  const caseNumber=`RAC-${randomInt(100000,999999)}`; const charge=courtCharge();
+  const judge=courtRandomJudge(); const judgeLine=judge.lines[randomInt(0,judge.lines.length-1)];
+  const guilty=randomInt(1,100)<=55;
+  target.courtCases=Number(target.courtCases||0)+1;
+  target.courtGuilty=Number(target.courtGuilty||0)+(guilty?1:0);
+  target.courtNotGuilty=Number(target.courtNotGuilty||0)+(guilty?0:1);
+  let punishment="",punishmentName="";
+  if(guilty){const chosen=COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)];punishmentName=chosen.name;if(chosen.id==="trash_release")target.courtTrashReleaseChannelId=String((await getGuildState(env,interaction.guild_id))?.announcementChannelId||interaction.channel_id||"");punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`;}
+  await env.TREE_DATA.put(accuser.userId,JSON.stringify(accuser)); await env.TREE_DATA.put(target.userId,JSON.stringify(target));
+  if(guilty && Number(target.courtGuilty||0)>0){
+    try{
+      const rows=await getCourtLeaderboard(env);
+      const highest=rows.length?rows[0].guilty:0;
+      if(Number(target.courtGuilty||0)>=highest){
+        if(!Array.isArray(target.titles))target.titles=[];
+        if(!target.titles.includes("court_favorite")){target.titles.push("court_favorite");await savePlayer(env,target);}
+      }
+    }catch(error){console.error("Court champion title update failed:",error);}
+  }
+  const verdict=guilty?"🔴 **GUILTY**":"🟢 **NOT GUILTY**";
+  const innocentLine=`🦝 ${judge.name} has released you. ${judgeLine}`;
+  const full=guilty?`🦝⚖️ **THE RACCOON COURT**\n\n👨‍⚖️ **Presiding Judge:** ${judge.name}\n🗯️ *${judgeLine}*\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}\n\n🦝 The court has spoken. Do not argue with the raccoons.`:`🦝⚖️ **THE RACCOON COURT**\n\n👨‍⚖️ **Presiding Judge:** ${judge.name}\n🗯️ *${judgeLine}*\n\n📁 **Case:** ${caseNumber}\n👤 **Defendant:** <@${targetId}>\n📜 **Charge:** ${charge}\n\n**VERDICT:** ${verdict}\n\n${innocentLine}\n\n**CASE CLOSED.**`;
+  await sendUserDM(env,targetId,full);
+  const guildState=interaction.guild_id?await getGuildState(env,interaction.guild_id):null; const announcementChannelId=guildState?.announcementChannelId||null;
+  if(announcementChannelId){
+    let avatarUrl="https://cdn.discordapp.com/embed/avatars/0.png";
+    try{const userResponse=await discordRequest(env,`/users/${targetId}`);if(userResponse.ok){const discordUser=await userResponse.json();if(discordUser.avatar){const extension=String(discordUser.avatar).startsWith("a_")?"gif":"png";avatarUrl=`https://cdn.discordapp.com/avatars/${targetId}/${discordUser.avatar}.${extension}?size=128`;}else if(discordUser.id){const discriminator=Number(BigInt(discordUser.id)>>22n)%6;avatarUrl=`https://cdn.discordapp.com/embed/avatars/${discriminator}.png`;}}}catch(avatarError){console.error("Court avatar lookup failed:",avatarError);}
+    const publicEmbed={title:"🦝⚖️ THE RACCOON COURT",description:guilty?`**${verdict}**\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}`:`**${verdict}**\n\n${innocentLine}\n\n**CASE CLOSED.**`,color:guilty?0xD94A4A:0x4CAF50,fields:[{name:"👨‍⚖️ Judge",value:judge.name,inline:true},{name:"📁 Case",value:`**${caseNumber}**`,inline:true},{name:"👤 Defendant",value:`<@${targetId}>`,inline:true},{name:"📜 Charge",value:charge,inline:false}],author:{name:`${target.displayName||target.username||"Werewife"} — Court Defendant`,icon_url:avatarUrl},thumbnail:{url:avatarUrl},footer:{text:`Raccoon Court • ${judge.name} has spoken. 🦝⚖️`},timestamp:new Date().toISOString()};
+    await sendChannelMessage(env,announcementChannelId,"🦝⚖️ **Raccoon Court Case Filed**",[],{embeds:[publicEmbed]});
+  }
   await sendText(env,interaction,`🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
 }
 
@@ -1642,6 +1724,17 @@ async function maybePublicShame(env,interaction){
   player.courtPublicShameLastAt=now; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
   const msg=PUBLIC_SHAME_MESSAGES[randomInt(0,PUBLIC_SHAME_MESSAGES.length-1)].replaceAll("<@USER>",`<@${user.id}>`);
   await sendChannelMessage(env,interaction.channel_id,msg);
+}
+
+async function maybeSpoonInvestigation(env,interaction){
+  const user=getUserFromInteraction(interaction); if(!user||!interaction.guild_id||!interaction.channel_id)return;
+  const player=await getPlayer(env,user.id); await refreshPunishmentState(env,player);
+  if(Number(player.courtSpoonInvestigationUntil||0)<=Date.now())return;
+  const now=Date.now(); if(Number(player.courtSpoonInvestigationLastAt||0) && now-Number(player.courtSpoonInvestigationLastAt)<30*60000)return;
+  if(Math.random()>0.45)return;
+  player.courtSpoonInvestigationLastAt=now; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+  const msg=COURT_MESSAGES.spoon_investigation[randomInt(0,COURT_MESSAGES.spoon_investigation.length-1)];
+  await sendChannelMessage(env,interaction.channel_id,`🥄🦝 **SPOON INVESTIGATION:** <@${user.id}> — ${msg}`);
 }
 
 async function buildTitlesResponseData(env, interaction, section="home", page=0) {
@@ -7337,6 +7430,11 @@ async function handleTree(
     player,
     interaction
   );
+
+  await refreshPunishmentState(env, player);
+  if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
+    return sendText(env, interaction, `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`);
+  }
 
   cleanSparkles(
     player
@@ -14247,7 +14345,8 @@ const SOLO_TITLES = {
   golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
-  court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" }
+  court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
+  court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" }
 };
 
 const SOLO_STORY_LEVELS = [
@@ -18293,7 +18392,7 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/court` — Put another player before the Raccoon Court","`/court-leaderboard` — View Court cases, guilty verdicts, and not-guilty verdicts","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -18722,6 +18821,7 @@ async function handleCommand(
     return;
   }
   if (name === "court") { await handleCourt(env, interaction); return; }
+  if (name === "court-leaderboard") { await handleCourtLeaderboard(env, interaction); return; }
 
   if (name === "profile") { await handleProfile(env, interaction); return; }
   if (name === "panel") { const sub = interaction.data?.options?.find(option => option.type === 1)?.name; if (sub === "color") await handleProfileColor(env, interaction, (interaction.data?.options?.find(option => option.type === 1)?.options?.find(option => option.name === "hex")?.value ?? null)); return; }
@@ -20130,23 +20230,28 @@ async function renderPastelBoard(env,game){
 }
 
 function drawPastelPowerCellIcon(frame,cx,cy,cell,palette){
-  /* Color Chaos Power Cell: recognizable sunflower, matching the original game art. */
-  const scale=Math.max(2,Math.floor(cell/18));
-  const petal=[255,211,64],petalLight=[255,235,112],petalDark=[218,154,24],center=[91,53,20],centerLight=[139,82,28],outline=[55,35,18];
-  const petalR=Math.max(2,Math.round(scale*2.15));
-  const centerR=Math.max(2,Math.round(scale*1.35));
-  const offsets=[
-    [0,-3],[2,-2],[3,0],[2,2],[0,3],[-2,2],[-3,0],[-2,-2],
-    [1,-2],[-2,-1],[-1,2],[2,1]
-  ];
-  for(const [dx,dy] of offsets)boardCircle(frame,cx+dx*scale,cy+dy*scale,petalR,[outline[0],outline[1],outline[2]],true);
-  for(const [dx,dy] of offsets)boardCircle(frame,cx+dx*scale,cy+dy*scale,Math.max(1,petalR-1),[petal[0],petal[1],petal[2]],true);
-  boardCircle(frame,cx,cy,centerR+1,[outline[0],outline[1],outline[2]],true);
-  boardCircle(frame,cx,cy,centerR,[center[0],center[1],center[2]],true);
-  boardCircle(frame,cx-Math.max(1,Math.floor(scale/2)),cy-Math.max(1,Math.floor(scale/2)),Math.max(1,Math.floor(centerR/3)),[centerLight[0],centerLight[1],centerLight[2]],true);
-  /* Small green stem so it reads as a flower rather than a generic yellow badge. */
-  const stemW=Math.max(1,Math.round(scale*0.8));
-  boardFill(frame,cx-Math.floor(stemW/2),cy+Math.round(scale*2.4),stemW,Math.max(1,Math.round(scale*1.7)),64,128,55,255);
+  const scale=Math.max(2,Math.floor(cell/10));
+  const outline=[30,20,35];
+  const configs={
+    pastel_dreams:{main:[255,92,145],light:[255,190,215],dark:[190,45,105],pattern:["0011100","0111110","1111111","1111111","0111110","0011100","0001000"]},
+    teddy_bear:{main:[255,105,175],light:[255,205,230],dark:[190,55,120],pattern:["01110110","11111111","11111111","01111110","00111100","00011000","00011000"]},
+    haunted_harvest:{main:[245,130,35],light:[255,190,70],dark:[120,45,20],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
+    candy_shop:{main:[255,105,170],light:[255,225,245],dark:[180,50,120],pattern:["01100110","11111111","11111111","11111111","11111111","01100110"]},
+    strawberry_galaxy:{main:[245,70,115],light:[255,170,190],dark:[150,35,75],pattern:["0011100","0111110","1111111","1111111","1111111","0111110","0011100"]},
+    enchanted_garden:{main:[245,215,70],light:[255,245,150],dark:[170,135,30],pattern:["0011000","0111100","1111110","0111111","0011110","0001100","0001000"]}
+  };
+  const cfg=configs[palette]||configs.pastel_dreams;
+  const pat=cfg.pattern,w=pat[0].length,h=pat.length;
+  const px=Math.max(1,Math.floor(scale*0.8));
+  const ox=Math.round(cx-(w*px)/2),oy=Math.round(cy-(h*px)/2);
+  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1")boardFill(frame,ox+c*px-1,oy+r*px-1,px+2,px+2,outline[0],outline[1],outline[2],255);
+  for(let r=0;r<h;r++)for(let c=0;c<w;c++)if(pat[r][c]==="1"){
+    const edge=r===0||c===0||r===h-1||c===w-1||pat[r-1]?.[c]!=="1"||pat[r+1]?.[c]!=="1"||pat[r]?.[c-1]!=="1"||pat[r]?.[c+1]!=="1";
+    const col=edge?cfg.dark:cfg.main;
+    boardFill(frame,ox+c*px,oy+r*px,px,px,col[0],col[1],col[2],255);
+  }
+  const hi=cfg.light;
+  boardFill(frame,ox+px,oy+px,Math.max(1,px),Math.max(1,px),hi[0],hi[1],hi[2],255);
 }
 
 async function renderPastelBoardDirectFallback(env,game){
@@ -20755,8 +20860,12 @@ const COMMANDS = [
   {
     name: "court",
     description: "Send a player before the Raccoon Court",
-    default_member_permissions: "8",
     options: [{ type: 6, name: "user", description: "Player to put on trial", required: true }]
+  },
+
+  {
+    name: "court-leaderboard",
+    description: "View the Raccoon Court leaderboard"
   },
 
   {
@@ -21267,6 +21376,24 @@ async function processPastelTimers(env){
   }
 }
 
+async function processCourtTrashRelease(env){
+    const now=Date.now(); const keys=await listAllPlayerKeys(env);
+    for(const userId of keys){
+      try{
+        const player=await getPlayer(env,userId); const until=Number(player.courtTrashReleaseUntil||0);
+        if(until<=0)continue;
+        if(until<=now){player.courtTrashReleaseUntil=0;player.courtTrashReleaseNextAt=0;player.courtTrashReleaseChannelId="";await env.TREE_DATA.put(player.userId,JSON.stringify(player));continue;}
+        if(Number(player.courtTrashReleaseNextAt||0)>now)continue;
+        const requested=randomInt(100,2000),balance=Math.max(0,Number(player.sparkles||0)),actual=Math.min(requested,balance);
+        player.sparkles=Math.max(0,balance-actual); player.courtTrashReleaseNextAt=now+30*60000; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+        const messages=["The trash can is hungry again.","Payment accepted. Freedom denied.","The raccoons found your Sparkles. This is unfortunate for you.","Raccoon Finance has processed another completely unnecessary fee.","The trash can has reviewed your finances and would like another payment.","Your Sparkles have been legally converted into trash-can property.","The raccoons have returned for their regularly scheduled nonsense fee.","Judge Pickles says you still owe the trash can."];
+        const channelId=String(player.courtTrashReleaseChannelId||"");
+        if(channelId)await sendChannelMessage(env,channelId,`🗑️🦝 **TRASH CAN RELEASE FEE**\n\n<@${player.userId}> ${messages[randomInt(0,messages.length-1)]}\n\n💰 **${actual.toLocaleString()} Sparkles confiscated.**${actual<requested?`\n\n😭 They only had **${actual.toLocaleString()}**, so the raccoons took all of it.`:""}`);
+      }catch(error){console.error(`Trash Release processing failed for ${userId}:`,error);}
+    }
+  }
+
+
 export default {
   async fetch(
     request,
@@ -21417,6 +21544,8 @@ export default {
     const isBirthdayCommand = interaction.type === 2 && interaction.data?.name === "birthday";
     const isPunishmentCommand =
       interaction.type === 2 && (interaction.data?.name === "pickle" || interaction.data?.name === "timeout");
+    const isCourtCommand =
+      interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -21452,7 +21581,7 @@ export default {
       );
 
     const relevant =
-      isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isCourtCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
@@ -21566,6 +21695,9 @@ export default {
         // and join them. Only the end-game command remains private.
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "create";
         ephemeral = ["end", "leaderboard"].includes(sub);
+      } else if (isCourtCommand) {
+        // Raccoon Court is a public community feature.
+        ephemeral = false;
       } else if (isFreeCommand || isTitlesCommand || isPunishmentCommand) {
         // FREE guesses and the Titles menu are private.
         ephemeral = true;
@@ -21622,6 +21754,7 @@ export default {
           if (!isPunishmentCommand) await maybeShowSurpriseAlert(env, interaction);
           await maybeCourtWatch(env, interaction);
           await maybePublicShame(env, interaction);
+          await maybeSpoonInvestigation(env, interaction);
           if (interaction.type === 2) {
             await handleCommand(env, interaction);
           } else {
@@ -21692,6 +21825,7 @@ export default {
         processPastelTimers(
           env
         ),
+        processCourtTrashRelease(env),
         processBirthdayEvent(env),
         expireBirthdayEventState(env)
       ])
