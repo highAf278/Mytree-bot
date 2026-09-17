@@ -6662,11 +6662,207 @@ async function markBingoAction(env,guildId,userId,action){
   await saveGuildState(env,guildId,state);
   await updateBirthdayBingoMessage(env,guildId,userId);
 }
-async function startBirthdayRoulette(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");const rouletteGame=state.birthday.games?.roulette;if(rouletteGame?.active)return sendText(env,interaction,rouletteText(rouletteGame),rouletteButtons(rouletteGame));const members=await getGuildMembers(env,interaction.guild_id);if(members.length<2)return sendText(env,interaction,"🎃 Pumpkin Roulette needs at least 2 players.");const ids=members.slice(0,10).map(m=>m.id);const count=ids.length===2?4:ids.length===3?5:ids.length===4?6:ids.length===5?7:ids.length+2;const cursed=ids.length<=3?1:ids.length<=5?2:3;const game={active:true,players:ids.map(id=>({id,alive:true})),pumpkins:[],cursed,count,round:0};reshuffleRoulette(game);state.birthday.games=state.birthday.games||{};state.birthday.games.roulette=game;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,rouletteText(game),rouletteButtons(game));}
-function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i, cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
-function rouletteText(g){return `🎃💀 **PUMPKIN ROULETTE**\n\n👥 Survivors: **${g.players.filter(p=>p.alive).length}**\n🎃 Pumpkins: **${g.count}**\n💀 Cursed: **${g.cursed}**\n\nChoose a pumpkin. The positions reshuffle after every pick, so there is NOTHING to memorize. 👀`}
+async function startBirthdayRoulette(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");
+  const user=getUserFromInteraction(interaction);
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  state.birthday.games=state.birthday.games||{};
+  const rouletteGame=state.birthday.games.roulette;
+  if(rouletteGame?.active){
+    if(rouletteGame.status==="lobby")return sendPublicText(env,interaction,rouletteLobbyText(rouletteGame),rouletteLobbyButtons(rouletteGame));
+    return sendText(env,interaction,rouletteText(rouletteGame),rouletteButtons(rouletteGame));
+  }
+  const game={
+    active:true,
+    status:"lobby",
+    hostId:user.id,
+    players:[{id:user.id,username:user.username||"",displayName:user.global_name||user.username||"Player",alive:true}],
+    pumpkins:[],
+    cursed:0,
+    count:0,
+    round:0
+  };
+  state.birthday.games.roulette=game;
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendPublicText(env,interaction,rouletteLobbyText(game),rouletteLobbyButtons(game));
+}
+function rouletteLobbyText(g){
+  const players=Array.isArray(g.players)?g.players:[];
+  const names=players.map((p,i)=>`${i+1}. <@${p.id}>`).join("\n");
+  return `🎃💀 **PUMPKIN ROULETTE LOBBY**\n\n👑 Host: <@${g.hostId}>\n👥 Players: **${players.length}/10**\n\n${names||"No players yet."}\n\n${players.length>=2?"✨ Enough players! The host can start the game.":"⏳ Waiting for players to join... At least **2 players** are required."}`;
+}
+function rouletteLobbyButtons(g){
+  const players=Array.isArray(g.players)?g.players:[];
+  const full=players.length>=10;
+  const canStart=players.length>=2;
+  return [
+    row(button("👥 Join Roulette","birthday:roulettejoin",3,full),button("▶️ Start Roulette","birthday:roulettestart",1,!canStart),button("🚪 Leave","birthday:rouletteleave",2))
+  ];
+}
+async function birthdayRouletteJoin(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Pumpkin Roulette is closed.");
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no open Roulette lobby right now.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  if(g.players.some(p=>p.id===user.id)){
+    await deferInteraction(env,interaction,{update:true});
+    return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+  }
+  if(g.players.length>=10)return sendText(env,interaction,"🎃 This Roulette lobby is full (10/10).");
+  g.players.push({id:user.id,username:user.username||"",displayName:user.global_name||user.username||"Player",alive:true});
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+}
+async function birthdayRouletteLeave(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no open Roulette lobby right now.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  const index=g.players.findIndex(p=>p.id===user.id);
+  if(index<0)return sendText(env,interaction,"❌ You're not in this Roulette lobby.");
+  g.players.splice(index,1);
+  if(g.players.length===0){
+    state.birthday.games.roulette=null;
+    await saveGuildState(env,interaction.guild_id,state);
+    if(!await deferInteraction(env,interaction,{update:true}))return;
+    return editOriginalResponse(env,interaction,{content:"🎃 The Pumpkin Roulette lobby was closed because everyone left.",components:[]});
+  }
+  if(g.hostId===user.id)g.hostId=g.players[0].id;
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteLobbyText(g),components:rouletteLobbyButtons(g)});
+}
+async function birthdayRouletteStart(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="lobby")return sendText(env,interaction,"🎃 There is no Roulette lobby waiting to start.");
+  if(!user)return sendText(env,interaction,"❌ Could not identify the player.");
+  if(g.hostId!==user.id)return sendText(env,interaction,"👑 Only the Roulette host can start the game.");
+  g.players=Array.isArray(g.players)?g.players:[];
+  if(g.players.length<2)return sendText(env,interaction,"🎃 Pumpkin Roulette needs at least 2 players to start.");
+  const ids=g.players.slice(0,10).map(p=>p.id);
+  const count=ids.length===2?4:ids.length===3?5:ids.length===4?6:ids.length===5?7:ids.length+2;
+  const cursed=ids.length<=3?1:ids.length<=5?2:3;
+  g.status="active";
+  g.players=ids.map(id=>({id,alive:true}));
+  g.count=count;
+  g.cursed=cursed;
+  g.pumpkins=[];
+  g.round=0;
+  g.turnIndex=0;
+  g.turnId=g.players[0]?.id||null;
+  reshuffleRoulette(g);
+  await saveGuildState(env,interaction.guild_id,state);
+  if(!await deferInteraction(env,interaction,{update:true}))return;
+  return editOriginalResponse(env,interaction,{content:rouletteText(g),components:rouletteButtons(g)});
+}
+function reshuffleRoulette(g){const arr=Array.from({length:g.count},(_,i)=>({id:i,cursed:i<g.cursed})).sort(()=>Math.random()-.5);g.pumpkins=arr;}
+function rouletteText(g){
+  const alive=g.players.filter(p=>p.alive);
+  let turnId=g.turnId;
+  if(!turnId||!alive.some(p=>p.id===turnId))turnId=alive[0]?.id||null;
+  return `🎃💀 **PUMPKIN ROULETTE**\n\n👥 Survivors: **${alive.length}**\n🎃 Pumpkins: **${g.count}**\n💀 Cursed: **${g.cursed}**\n🔄 Round: **${Number(g.round||0)+1}**\n\n${turnId?`🎯 **Turn:** <@${turnId}>`:"🏆 No turns remaining."}\n\nChoose a pumpkin. The pumpkins reshuffle after EVERY pick! 👀🎃`;
+}
 function rouletteButtons(g){const safe=g.pumpkins.map((p,i)=>button(`🎃 Pumpkin ${i+1}`,`birthday:roulettepick:${i}`,1));const rows=[];for(let i=0;i<safe.length;i+=5)rows.push(row(...safe.slice(i,i+5)));return rows;}
-async function birthdayRoulettePick(env,interaction,index){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.roulette;const uid=getUserFromInteraction(interaction).id;if(!g?.active)return sendText(env,interaction,"🎃 That Roulette game is over.");const pl=g.players.find(p=>p.id===uid&&p.alive);if(!pl)return sendText(env,interaction,"❌ You're not an active player in this Roulette game.");const pumpkin=g.pumpkins[Number(index)];if(!pumpkin)return sendText(env,interaction,"❌ That pumpkin doesn't exist.");if(pumpkin.cursed){pl.alive=false;await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"roulette");if(g.players.filter(p=>p.alive).length<=1){g.active=false;const winner=g.players.find(p=>p.alive);if(winner){const wp=await getPlayer(env,winner.id);wp.birthdayCandies+=500;wp.titles=Array.isArray(wp.titles)?wp.titles:[];if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");await savePlayer(env,wp);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 Last survivor: ${winner?`<@${winner.id}>`:`Nobody`}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);}return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> has been eliminated!`);}const effects=[["✨ Sparkle Burst",randomInt(20,100)],["🎟️ Birthday Candy bonus",randomInt(10,50)],["🦇 Bat swarm animation",0],["👻 Ghost message",0],["🎃 Pumpkin wiggle",0],["🕯️ Candle glow",0],["🍬 Candy shower",randomInt(10,75)]];const e=effects[randomInt(0,effects.length-1)];const p=await getPlayer(env,uid);if(e[0].includes("Sparkle"))p.sparkles+=e[1];else if(e[1])p.birthdayCandies+=e[1];await savePlayer(env,p);reshuffleRoulette(g);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"roulette");if(e[0].includes("Sparkle"))await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,`${e[0]}!\n\nYou survived this round. The pumpkins have reshuffled! 🔀🎃`);}
+async function birthdayRoulettePick(env,interaction,index){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.roulette;
+  const user=getUserFromInteraction(interaction);
+  const uid=user?.id;
+  if(!g?.active)return sendText(env,interaction,"🎃 That Roulette game is over.");
+  if(!uid)return sendText(env,interaction,"❌ Could not identify the player.");
+
+  g.players=Array.isArray(g.players)?g.players:[];
+  const alive=g.players.filter(p=>p.alive);
+  if(alive.length<=1){
+    g.active=false;
+    const winner=alive[0];
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,winner?`🏆🎃 **PUMPKIN ROULETTE OVER!**\n\nLast survivor: <@${winner.id}>\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`:"🏆🎃 Pumpkin Roulette is over. Nobody survived.");
+  }
+
+  // Turn-based protection: only the player shown as the current turn may pick.
+  // Older active games may not have turnId yet, so safely initialize it.
+  if(!g.turnId||!alive.some(p=>p.id===g.turnId)){
+    g.turnIndex=0;
+    g.turnId=alive[0].id;
+  }
+  if(uid!==g.turnId){
+    return sendEphemeralFollowup(env,interaction,`⏳ It's <@${g.turnId}>'s turn! Please wait for your turn. 🎃`);
+  }
+
+  const pl=g.players.find(p=>p.id===uid&&p.alive);
+  if(!pl)return sendEphemeralFollowup(env,interaction,"❌ You're not an active player in this Roulette game.");
+  const pumpkin=g.pumpkins[Number(index)];
+  if(!pumpkin)return sendEphemeralFollowup(env,interaction,"❌ That pumpkin doesn't exist.");
+
+  g.round=Number(g.round||0)+1;
+  const aliveBefore=g.players.filter(p=>p.alive);
+  const currentPos=aliveBefore.findIndex(p=>p.id===uid);
+
+  if(pumpkin.cursed){
+    pl.alive=false;
+    await markBingoAction(env,interaction.guild_id,uid,"roulette");
+
+    const survivors=g.players.filter(p=>p.alive);
+    if(survivors.length<=1){
+      g.active=false;
+      g.turnId=null;
+      await saveGuildState(env,interaction.guild_id,state);
+      const winner=survivors[0];
+      if(winner){
+        const wp=await getPlayer(env,winner.id);
+        wp.birthdayCandies+=500;
+        wp.titles=Array.isArray(wp.titles)?wp.titles:[];
+        if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");
+        await savePlayer(env,wp);
+      }
+      return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 **Last survivor:** ${winner?`<@${winner.id}>`:"Nobody"}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);
+    }
+
+    const nextIndex=currentPos>=0?(currentPos%survivors.length):0;
+    g.turnId=survivors[nextIndex]?.id||survivors[0].id;
+    g.turnIndex=g.players.findIndex(p=>p.id===g.turnId);
+    reshuffleRoulette(g);
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n${rouletteText(g)}`,rouletteButtons(g));
+  }
+
+  const effects=[
+    ["✨ Sparkle Burst",randomInt(20,100)],
+    ["🎟️ Birthday Candy bonus",randomInt(10,50)],
+    ["🦇 Bat swarm animation",0],
+    ["👻 Ghost message",0],
+    ["🎃 Pumpkin wiggle",0],
+    ["🕯️ Candle glow",0],
+    ["🍬 Candy shower",randomInt(10,75)]
+  ];
+  const e=effects[randomInt(0,effects.length-1)];
+  const p=await getPlayer(env,uid);
+  if(e[0].includes("Sparkle"))p.sparkles+=e[1];
+  else if(e[1])p.birthdayCandies+=e[1];
+  await savePlayer(env,p);
+  await markBingoAction(env,interaction.guild_id,uid,"roulette");
+  if(e[0].includes("Sparkle"))await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");
+
+  const survivors=g.players.filter(p=>p.alive);
+  const currentAliveIndex=survivors.findIndex(p=>p.id===uid);
+  const nextIndex=(currentAliveIndex+1)%survivors.length;
+  g.turnId=survivors[nextIndex]?.id||survivors[0].id;
+  g.turnIndex=g.players.findIndex(p=>p.id===g.turnId);
+  reshuffleRoulette(g);
+  await saveGuildState(env,interaction.guild_id,state);
+
+  return sendText(env,interaction,`${e[0]}!${e[1]&&e[0].includes("Sparkle")?` You gained **${e[1]} Sparkles**.`:e[1]?` You gained **${e[1]} Birthday Candies**.`:""}\n\nYou survived this round!\n\n${rouletteText(g)}`,rouletteButtons(g));
+}
 function randomWordPrompt(prompt){const pools={"adjective":["sparkly","creepy","pink","mysterious","ridiculous"],"spooky noun":["ghost","bat","tombstone","cauldron","candle"],"food":["pizza","cupcake","cake","spaghetti","donut"],"verb":["dance","sprint","hide","wiggle","scream"],"place":["castle","graveyard","kitchen","forest","attic"],"cake topping":["sprinkles","strawberry","bat candy","bow"],"animal":["raccoon","cat","bat","frog","owl"],"sound":["BOOM","squeak","whooo","BANG"],"dessert":["cupcakes","candy","cake","cookies"],"color":["pink","purple","orange","black"],"object":["key","mirror","candle","present"],"monster":["vampire","zombie","witch","cake monster"]};return pools[prompt]||["spooky","birthday","cake"]}
 function birthdayCurseInputButton(){
   return [row(button("✏️ Enter Answer","birthday:curseinput",1))];
@@ -6933,12 +7129,20 @@ async function birthdayWish(env,interaction){const state=await getGuildState(env
 async function birthdayCannon(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boo Cannon is closed.");const uid=getUserFromInteraction(interaction).id;if(!birthdayPersonId(state,uid))return sendText(env,interaction,"💥 Only the birthday person can fire the Birthday Boo Cannon.");if(state.birthday.cannon?.active)return sendText(env,interaction,"💥 Your Birthday Boo Cannon is already firing!");state.birthday.cannon={active:true,userId:uid,endAt:Date.now()+60000,total:0,shots:0};await saveGuildState(env,interaction.guild_id,state);await markBirthdayServerSquare(env,interaction.guild_id,"boo_cannon");return sendText(env,interaction,`💥🎃 **BIRTHDAY BOO CANNON!**\n\nYou have **60 seconds**! Press the button as many times as possible.\n\nEvery successful shot awards **1–10 Birthday Candies**.`,[row(button("💥 FIRE!","birthday:firecannon",1),button("🎂 Birthday Menu","birthday:home",2))]);}
 async function fireBirthdayCannon(env,interaction){const state=await getGuildState(env,interaction.guild_id);const c=state.birthday?.cannon;const uid=getUserFromInteraction(interaction).id;if(!c?.active||c.userId!==uid)return sendText(env,interaction,"💥 The cannon isn't active for you.");if(Date.now()>=c.endAt){c.active=false;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`💥🎃 **TIME'S UP!**\n\nYou fired **${c.shots} shots** and earned **${c.total} Birthday Candies!**`);}const amount=randomInt(1,10);c.shots++;c.total+=amount;const p=await getPlayer(env,uid);p.birthdayCandies+=amount;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`💥🎃 **BOOM! +${amount} Birthday Candies!**\n\n🎟️ Session total: **${c.total}**\n⏱️ Keep firing!`,[row(button("💥 FIRE AGAIN!","birthday:firecannon",1))]);}
 
-async function birthdayTrickster(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Trickster is closed.");const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const now=Date.now();if(p.birthdayTricksterLast&&now-p.birthdayTricksterLast<3*60*60*1000)return sendText(env,interaction,`🦝 Trickster cooldown: **${Math.ceil((3*60*60*1000-(now-p.birthdayTricksterLast))/60000)} minutes** remaining.`);const target=getOption(interaction,"user");if(!target||target===uid)return sendText(env,interaction,"🦝 Choose another player.");const tp=await getPlayer(env,target);p.birthdayTricksterLast=now;const outcomes=["candy","tax","bonk","bat","present","sparkle","web"];const out=outcomes[randomInt(0,outcomes.length-1)];const protectedSteal=["candy","tax","sparkle"].includes(out)&&birthdayPersonId(state,target);if(protectedSteal){p.birthdayCandies=Math.max(0,Number(p.birthdayCandies||0)-100);await savePlayer(env,p);return sendText(env,interaction,"🚨🎂 **BIRTHDAY PROTECTION ACTIVATED!**\n\nYou targeted the birthday person with a stealing effect. Your attempt is wasted and you lose **100 Birthday Candies**. Their birthday rewards remain untouched.");}let msg="";if(out==="candy"){const a=randomInt(50,150);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`🎟️ Candy Heist! You stole **${a2} Birthday Candies**.`;}else if(out==="tax"){const a=randomInt(25,75);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`👻 Ghostly Tax! **${a2} Candies** transferred.`;}else if(out==="sparkle"){const a=randomInt(100,500);const a2=Math.min(a,Number(tp.sparkles||0));tp.sparkles-=a2;p.sparkles+=a2;msg=`✨ Sparkle Snatch! You stole **${a2} Sparkles**.`;}else if(out==="bat"){p.birthdayCandies+=50;msg="🦇 Bat Ambush! The target gets bats and you gain **50 Birthday Candies**.";}else if(out==="present"){p.birthdayCandies+=randomInt(10,30);msg="🎁 Present Swipe! A tiny gift mysteriously ended up in your pockets.";}else if(out==="web"){msg="🕸️ Webbed! The target has been covered in a temporary silly status.";}else{msg="🎃 Pumpkin Bonk! Harmless spooky birthday mischief!";}await savePlayer(env,p);await savePlayer(env,tp);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,`🦝🎂 **BIRTHDAY TRICKSTER!**\n\n${msg}`);}
+function birthdayTricksterComponents(){return [{type:1,components:[{type:5,custom_id:"birthday:trickstertarget",placeholder:"🦝 Choose a player to prank...",min_values:1,max_values:1}]}];}
 
-function birthdayBossText(g){return `🦇🎂⚔️ **CURSED BIRTHDAY CAKE BOSS BATTLE**\n\n🎂 Boss: **${g.bossName}**\n❤️ HP: **${g.hp}/${g.maxHp}**\n\n👥 Players: **${g.players.length}**\n🎲 This battle was randomly generated. Boss attacks, events, weaknesses, and outcomes change every battle.\n\nChoose your action!`}
+async function birthdayTrickster(env,interaction,targetOverride=null){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Trickster is closed.");const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const now=Date.now();if(p.birthdayTricksterLast&&now-p.birthdayTricksterLast<3*60*60*1000)return sendText(env,interaction,`🦝 Trickster cooldown: **${Math.ceil((3*60*60*1000-(now-p.birthdayTricksterLast))/60000)} minutes** remaining.`);const target=targetOverride||getOption(interaction,"user")||interaction.data?.values?.[0];if(!target)return sendText(env,interaction,"🦝 **Birthday Trickster**\n\nChoose another player to prank!",birthdayTricksterComponents());if(target===uid)return sendText(env,interaction,"🦝 You can't trick yourself! Choose another player.",birthdayTricksterComponents());const tp=await getPlayer(env,target);p.birthdayTricksterLast=now;const outcomes=["candy","tax","bonk","bat","present","sparkle","web"];const out=outcomes[randomInt(0,outcomes.length-1)];const protectedSteal=["candy","tax","sparkle"].includes(out)&&birthdayPersonId(state,target);if(protectedSteal){p.birthdayCandies=Math.max(0,Number(p.birthdayCandies||0)-100);await savePlayer(env,p);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,"🚨🎂 **BIRTHDAY PROTECTION ACTIVATED!**\n\nYou targeted the birthday person with a stealing effect. Your attempt is wasted and you lose **100 Birthday Candies**. Their birthday rewards remain untouched.");}let msg="";if(out==="candy"){const a=randomInt(50,150);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`🎟️ Candy Heist! You stole **${a2} Birthday Candies**.`;}else if(out==="tax"){const a=randomInt(25,75);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`👻 Ghostly Tax! **${a2} Candies** transferred.`;}else if(out==="sparkle"){const a=randomInt(100,500);const a2=Math.min(a,Number(tp.sparkles||0));tp.sparkles-=a2;p.sparkles+=a2;msg=`✨ Sparkle Snatch! You stole **${a2} Sparkles**.`;}else if(out==="bat"){p.birthdayCandies+=50;msg="🦇 Bat Ambush! The target gets bats and you gain **50 Birthday Candies**.";}else if(out==="present"){p.birthdayCandies+=randomInt(10,30);msg="🎁 Present Swipe! A tiny gift mysteriously ended up in your pockets.";}else if(out==="web"){msg="🕸️ Webbed! The target has been covered in a temporary silly status.";}else{msg="🎃 Pumpkin Bonk! Harmless spooky birthday mischief!";}await savePlayer(env,p);await savePlayer(env,tp);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,`🦝🎂 **BIRTHDAY TRICKSTER!**\n\n${msg}`);}
+
+function birthdayBossLobbyText(g){return `🦇🎂 **CURSED BIRTHDAY CAKE BOSS BATTLE LOBBY**\n\n👑 Host: <@${g.host}>\n👥 Players: **${g.players.length}/10**\n\n${g.players.length?g.players.map((id,i)=>`${i+1}. <@${id}>`).join("\n"):"No players yet."}\n\n🎂 Gather your party, then the host can start the battle!`}
+function birthdayBossLobbyButtons(g){return [row(button("👥 Join Boss Battle","birthday:bossjoin",1,g.players.length>=10),button("▶️ Start Boss Battle","birthday:bossstart",1,g.players.length<2)),row(button("🚪 Leave Lobby","birthday:bossleave",2))];}
+function birthdayBossText(g){const current=g.turn||g.players[Number(g.turnIndex)||0];return `🦇🎂⚔️ **CURSED BIRTHDAY CAKE BOSS BATTLE**\n\n🎂 Boss: **${g.bossName}**\n❤️ HP: **${g.hp}/${g.maxHp}**\n\n👥 Players: **${g.players.length}**\n👉 **Current Turn:** <@${current}>\n🔢 Round: **${g.round}**\n🎲 This battle was randomly generated. Boss attacks, events, weaknesses, and outcomes change every battle.\n\nChoose your action!`}
 function birthdayBossButtons(g){return [row(button("⚔️ Attack","birthday:bossaction:attack",1),button("🛡️ Defend","birthday:bossaction:defend",1),button("🎀 Decorate","birthday:bossaction:decorate",1)),row(button("🕯️ Light Candle","birthday:bossaction:candle",1),button("🍰 Feed Cake","birthday:bossaction:feed",1),button("🦇 Bat Attack","birthday:bossaction:bat",1))];}
-async function startBirthdayBoss(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boss Battle is closed.");let g=state.birthday.games?.boss;if(g?.active){if(!g.players.includes(getUserFromInteraction(interaction).id))g.players.push(getUserFromInteraction(interaction).id);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,birthdayBossText(g),birthdayBossButtons(g));}const bosses=[["Cursed Birthday Cake",500],["Haunted Pink Cake",650],["Midnight Monster Cake",800],["Pumpkin Doom Cake",700],["Batty Birthday Cake",900]];const b=bosses[randomInt(0,bosses.length-1)];g={active:true,bossName:b[0],maxHp:b[1]+randomInt(-50,100),hp:b[1]+randomInt(-50,100),players:[getUserFromInteraction(interaction).id],round:0,weakness:["attack","defend","decorate","candle","feed","bat"][randomInt(0,5)],lastEvent:""};g.hp=g.maxHp;state.birthday.games=state.birthday.games||{};state.birthday.games.boss=g;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,birthdayBossText(g),birthdayBossButtons(g));}
-async function birthdayBossAction(env,interaction,action){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.boss;const uid=getUserFromInteraction(interaction).id;if(!g?.active)return sendText(env,interaction,"🎂 The Boss Battle is over.");if(!g.players.includes(uid))g.players.push(uid);let damage=0,heal=0,msg="";const roll=Math.random();if(action===g.weakness){damage=randomInt(45,110);msg="✨ **WEAKNESS HIT!**";}else if(action==="attack"){damage=randomInt(15,65);msg="⚔️ Direct hit!";}else if(action==="defend"){damage=randomInt(5,35);msg="🛡️ Defensive counter!";}else if(action==="decorate"){damage=randomInt(10,50);msg="🎀 The cake hates the decorations!";}else if(action==="candle"){damage=randomInt(20,70);msg="🕯️ The candles flare with birthday magic!";}else if(action==="feed"){heal=randomInt(5,30);damage=randomInt(5,40);msg="🍰 Feeding the boss somehow made it weaker.";}else{damage=randomInt(25,85);msg="🦇 BATS ATTACK!";}g.hp=Math.max(0,g.hp-damage);g.round++;const events=["👻 Ghost phase!","🎃 Pumpkin explosion!","🦇 Bat swarm!","🕯️ Candle curse!","✨ Birthday sparkle surge!","🎂 The cake changes form!"];g.lastEvent=events[randomInt(0,events.length-1)];if(g.hp<=0){g.active=false;const participants=[...new Set(g.players)];for(const id of participants){const p=await getPlayer(env,id);p.birthdayCandies+=randomInt(100,300);await savePlayer(env,p);}const fin=await getPlayer(env,uid);fin.birthdayCollection=Array.isArray(fin.birthdayCollection)?fin.birthdayCollection:[];fin.birthdayCollection.push("cursed_birthday_cake");await savePlayer(env,fin);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"boss_win");return sendText(env,interaction,`🎂💥 **THE CURSED BIRTHDAY CAKE HAS BEEN DEFEATED!**\n\n${msg}\n${g.lastEvent}\n\n🏆 Every participant earned **100–300 Birthday Candies**.\n🦇 <@${uid}> dealt the final blow and received the permanent **Cursed Birthday Cake** collectible!`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${msg}\n${g.lastEvent}\n\n${birthdayBossText(g)}`,birthdayBossButtons(g));}
+function createBirthdayBossGame(lobby){const bosses=[["Cursed Birthday Cake",500],["Haunted Pink Cake",650],["Midnight Monster Cake",800],["Pumpkin Doom Cake",700],["Batty Birthday Cake",900]];const b=bosses[randomInt(0,bosses.length-1)];const maxHp=b[1]+randomInt(-50,100);return {active:true,bossName:b[0],maxHp,hp:maxHp,players:[...lobby.players],round:0,turnIndex:0,turn:lobby.players[0],weakness:["attack","defend","decorate","candle","feed","bat"][randomInt(0,5)],lastEvent:""};}
+async function startBirthdayBoss(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boss Battle is closed.");state.birthday.games=state.birthday.games||{};const uid=getUserFromInteraction(interaction).id;const g=state.birthday.games.boss;if(g?.active)return sendPublicText(env,interaction,birthdayBossText(g),birthdayBossButtons(g));let lobby=state.birthday.games.bossLobby;if(lobby?.active)return sendPublicText(env,interaction,birthdayBossLobbyText(lobby),birthdayBossLobbyButtons(lobby));lobby={active:true,host:uid,players:[uid]};state.birthday.games.bossLobby=lobby;await saveGuildState(env,interaction.guild_id,state);return sendPublicText(env,interaction,birthdayBossLobbyText(lobby),birthdayBossLobbyButtons(lobby));}
+async function birthdayBossJoin(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boss Battle is closed.");const lobby=state.birthday?.games?.bossLobby;const uid=getUserFromInteraction(interaction).id;if(!lobby?.active)return sendText(env,interaction,"🎂 There is no Boss Battle lobby open right now.");if(lobby.players.includes(uid))return sendText(env,interaction,"🎂 You're already in the Boss Battle lobby!");if(lobby.players.length>=10)return sendText(env,interaction,"🎂 The Boss Battle lobby is full (10 players max).");lobby.players.push(uid);await saveGuildState(env,interaction.guild_id,state);await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:birthdayBossLobbyText(lobby),components:birthdayBossLobbyButtons(lobby)});}
+async function birthdayBossLeave(env,interaction){const state=await getGuildState(env,interaction.guild_id);const lobby=state.birthday?.games?.bossLobby;const uid=getUserFromInteraction(interaction).id;if(!lobby?.active)return sendText(env,interaction,"🎂 There is no Boss Battle lobby open right now.");if(!lobby.players.includes(uid))return sendText(env,interaction,"❌ You're not in this Boss Battle lobby.");lobby.players=lobby.players.filter(id=>id!==uid);if(!lobby.players.length){delete state.birthday.games.bossLobby;await saveGuildState(env,interaction.guild_id,state);await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:"🎂 The Boss Battle lobby closed because everyone left.",components:[]});}if(lobby.host===uid)lobby.host=lobby.players[0];await saveGuildState(env,interaction.guild_id,state);await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:birthdayBossLobbyText(lobby),components:birthdayBossLobbyButtons(lobby)});}
+async function birthdayBossStart(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boss Battle is closed.");const lobby=state.birthday?.games?.bossLobby;const uid=getUserFromInteraction(interaction).id;if(!lobby?.active)return sendText(env,interaction,"🎂 There is no Boss Battle lobby open right now.");if(lobby.host!==uid)return sendText(env,interaction,"👑 Only the lobby host can start the Boss Battle.");if(lobby.players.length<2)return sendText(env,interaction,"🎂 You need at least 2 players to start the Boss Battle.");const g=createBirthdayBossGame(lobby);state.birthday.games.boss=g;delete state.birthday.games.bossLobby;await saveGuildState(env,interaction.guild_id,state);await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:birthdayBossText(g),components:birthdayBossButtons(g)});}
+async function birthdayBossAction(env,interaction,action){const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.boss;const uid=getUserFromInteraction(interaction).id;if(!g?.active)return sendText(env,interaction,"🎂 The Boss Battle is over.");if(!g.players.includes(uid))return sendText(env,interaction,"❌ You're not a player in this Boss Battle.");const current=g.turn||g.players[Number(g.turnIndex)||0];if(current!==uid)return sendText(env,interaction,`⏳ It's <@${current}>'s turn! Wait for them to make their move.`);let damage=0,msg="";if(action===g.weakness){damage=randomInt(45,110);msg="✨ **WEAKNESS HIT!**";}else if(action==="attack"){damage=randomInt(15,65);msg="⚔️ Direct hit!";}else if(action==="defend"){damage=randomInt(5,35);msg="🛡️ Defensive counter!";}else if(action==="decorate"){damage=randomInt(10,50);msg="🎀 The cake hates the decorations!";}else if(action==="candle"){damage=randomInt(20,70);msg="🕯️ The candles flare with birthday magic!";}else if(action==="feed"){damage=randomInt(5,40);msg="🍰 Feeding the boss somehow made it weaker.";}else{damage=randomInt(25,85);msg="🦇 BATS ATTACK!";}g.hp=Math.max(0,g.hp-damage);g.round++;const events=["👻 Ghost phase!","🎃 Pumpkin explosion!","🦇 Bat swarm!","🕯️ Candle curse!","✨ Birthday sparkle surge!","🎂 The cake changes form!"];g.lastEvent=events[randomInt(0,events.length-1)];if(g.hp<=0){g.active=false;const participants=[...new Set(g.players)];for(const id of participants){const p=await getPlayer(env,id);p.birthdayCandies+=randomInt(100,300);await savePlayer(env,p);}const fin=await getPlayer(env,uid);fin.birthdayCollection=Array.isArray(fin.birthdayCollection)?fin.birthdayCollection:[];fin.birthdayCollection.push("cursed_birthday_cake");await savePlayer(env,fin);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"boss_win");await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:`🎂💥 **THE CURSED BIRTHDAY CAKE HAS BEEN DEFEATED!**\n\n${msg}\n${g.lastEvent}\n\n🏆 Every participant earned **100–300 Birthday Candies**.\n🦇 <@${uid}> dealt the final blow and received the permanent **Cursed Birthday Cake** collectible!`,components:[]});}g.turnIndex=(Number(g.turnIndex)||0)+1;if(g.turnIndex>=g.players.length)g.turnIndex=0;g.turn=g.players[g.turnIndex];await saveGuildState(env,interaction.guild_id,state);await deferInteraction(env,interaction,{update:true});return editOriginalResponse(env,interaction,{content:`${msg}\n${g.lastEvent}\n\n${birthdayBossText(g)}`,components:birthdayBossButtons(g)});}
 
 async function forceBirthdayServerEvent(env,interaction){
   if(!(await requireOwner(env,interaction)))return;
@@ -7104,8 +7308,11 @@ async function handleTree(
   env,
   interaction
 ) {
-  // /tree is acknowledged by the main interaction router before this
-  // handler runs. Do not acknowledge it a second time here.
+  await acknowledge(
+    env,
+    interaction
+  );
+
   const user =
     getUserFromInteraction(
       interaction
@@ -7200,6 +7407,9 @@ async function handleComponent(
     if(action==="claim") return claimBirthdayHunt(env,interaction,parts[2]);
     if(action==="bingo") return startBirthdayBingo(env,interaction);
     if(action==="roulette") return startBirthdayRoulette(env,interaction);
+    if(action==="roulettejoin") return birthdayRouletteJoin(env,interaction);
+    if(action==="roulettestart") return birthdayRouletteStart(env,interaction);
+    if(action==="rouletteleave") return birthdayRouletteLeave(env,interaction);
     if(action==="roulettepick") return birthdayRoulettePick(env,interaction,parts[2]);
     if(action==="curse") return startBirthdayCurse(env,interaction);
     if(action==="cupcake") return startBirthdayCupcake(env,interaction);
@@ -7211,7 +7421,14 @@ async function handleComponent(
     if(action==="cannon") return birthdayCannon(env,interaction);
     if(action==="firecannon") return fireBirthdayCannon(env,interaction);
     if(action==="trickster") return birthdayTrickster(env,interaction);
+    if(action==="trickstertarget") return birthdayTrickster(env,interaction,interaction.data?.values?.[0]);
+    if(action==="collection") return showBirthdayCollection(env,interaction);
+    if(action==="gifts") return showBirthdayGifts(env,interaction);
+    if(action==="open") return openBirthdayGift(env,interaction,parts.slice(2).join(":"));
     if(action==="boss") return startBirthdayBoss(env,interaction);
+    if(action==="bossjoin") return birthdayBossJoin(env,interaction);
+    if(action==="bossstart") return birthdayBossStart(env,interaction);
+    if(action==="bossleave") return birthdayBossLeave(env,interaction);
     if(action==="bossaction") return birthdayBossAction(env,interaction,parts[2]);
     return;
   }
