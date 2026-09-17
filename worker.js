@@ -7143,127 +7143,52 @@ async function birthdayCupcakeView(env,interaction){const state=await getGuildSt
 async function birthdayCupcakeSkip(env,interaction){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");return sendText(env,interaction,`⏭️ **LAYER SKIPPED!**\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nNo ingredient was used, no stability was changed, and the layer count did not increase. The choices have been reshuffled.`,cupcakeButtons(g.choices));}
 async function birthdayCupcakePick(env,interaction,encoded){const state=await getGuildState(env,interaction.guild_id);const uid=getUserFromInteraction(interaction).id;const g=state.birthday?.games?.cupcakes?.[uid];if(!g?.active)return sendText(env,interaction,"🧁 Your cupcake tower is not active.");const ingredient=decodeURIComponent(encoded);if(String(ingredient).toLowerCase().includes("heart"))await markBingoAction(env,interaction.guild_id,uid,"black_heart");const info=BIRTHDAY_CUPCAKE_INGREDIENTS.find(x=>x[0]===ingredient);if(!info)return sendText(env,interaction,"❌ That ingredient disappeared into the pantry.");if(g.choices.includes(ingredient))return sendText(env,interaction,"🧁 You already used that ingredient in this tower.");g.choices.push(ingredient);g.steps++;const outcomes=["🎟️ Candy Bonus","💰 Sparkle Bonus","✨ Perfect Layer","🎂 Birthday Boost","🖤 Dark Magic","👻 Ghostly Surprise","🦇 Batty Bonus","🎀 Cute Combo","🌟 Rare Recipe","💥 Tower Wobble","🕸️ Sticky Mess","🎃 Pumpkin Luck","🧁 Perfect Cupcake","👻 Ghost Took It!","🖤 Cursed Layer","🌙 Midnight Magic"];const outcome=outcomes[randomInt(0,outcomes.length-1)];g.outcomes.push(outcome);if(["💥 Tower Wobble","🕸️ Sticky Mess","🖤 Cursed Layer","👻 Ghost Took It!"].includes(outcome))g.stability-=randomInt(10,28);else g.stability=Math.min(100,g.stability+randomInt(0,8));const matched=BIRTHDAY_SECRET_RECIPES.find(r=>r.need.length===g.choices.length&&r.need.every(n=>g.choices.includes(n)));if(matched){g.active=false;const p=await getPlayer(env,uid);p.birthdayCandies+=matched.reward;p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];if(!p.birthdayCollection.includes("midnight_heart_cupcake"))p.birthdayCollection.push("midnight_heart_cupcake");await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");await markBingoAction(env,interaction.guild_id,uid,"secret_recipe"); return sendText(env,interaction,`🌟🧁 **SECRET RECIPE DISCOVERED!**\n\n🖤 **${matched.name}**\n🎟️ **+${matched.reward} Birthday Candies!**\n✨ A permanent birthday collectible was added to your Birthday Collection.`);}if(g.stability<=0||g.steps>=8){g.active=false;const reward=randomInt(100,250);const p=await getPlayer(env,uid);p.birthdayCandies+=reward;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);await markBingoAction(env,interaction.guild_id,uid,"cupcake");return sendText(env,interaction,`🧁💥 **THE TOWER ${g.stability<=0?"WOBBLED INTO OBLIVION":"IS COMPLETE"}!**\n\nLast outcome: ${outcome}\n🎟️ You earned **${reward} Birthday Candies**.`);}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`${outcome}!\n\n🧁 Layers: **${g.choices.length}** | Stability: **${g.stability}%**\n\nThe tower continues...`,cupcakeButtons(g.choices));}
 
+const BIRTHDAY_CAKE_ASSETS = {
+  bases: {"Black Velvet":"IMG_7540.png","Vanilla Mooncake":"IMG_7535.png","Strawberry":"IMG_7541.png","Pumpkin Spice":"IMG_7542.png","Cherry Night":"IMG_7543.png"},
+  frostings: {"Black Velvet":"IMG_7545.png","Strawberry":"IMG_7550.png","Pumpkin":"IMG_7574.png","Ghost Vanilla":"IMG_7547.png","Purple":"IMG_7548.png","Red":"IMG_7549.png"},
+  fillings: {"Strawberry Jam":"IMG_7551.png","Cherry Filling":"IMG_7552.png","Blackberry Jam":"IMG_7554.png","Chocolate Cream":"IMG_7555.png","Caramel Apple Filling":"IMG_7556.png"},
+  toppings: {"Pink Bow":"IMG_7557.png","Ghost Marshmallow":"IMG_7558.png","Mini Pumpkin":"IMG_7559.png","Birthday Candles":"IMG_7560.png","Halloween Heart Sprinkles":"IMG_7561.png","Birthday Cake Sprinkles":"IMG_7562.png"},
+  decorations: {"Glitter":"IMG_7563.png","Black Sprinkles":"IMG_7564.png","Pumpkin Decorations":"IMG_7565.png","Spiderweb Caramel":"IMG_7566.png","Birthday Confetti Decorations":"IMG_7567.png"},
+  effects: {"Sparkle Aura":"IMG_7568.png","Moonlight Glow":"IMG_7569.png","Bat Swirl":"IMG_7570.png","Rainbow Birthday Glow":"IMG_7571.png","Pumpkin Smoke":"IMG_7572.png"}
+};
+
 async function renderBirthdayCake(env,name,choices){
   let browser;
   try{
     browser=await puppeteer.launch(env.BROWSER);
     const page=await browser.newPage();
     await page.setViewport({width:1000,height:760,deviceScaleFactor:1});
-
     const c=Array.isArray(choices)?choices:[];
-    const shape=c[0]||"Round";
-    const flavor=c[1]||"Black Velvet Cake";
-    const frosting=c[2]||"Pink Frosting";
-    const filling=c[3]||"Strawberry Jam";
-    const topping=c[4]||"Birthday Candle";
-    const decor=c[5]||"Glitter";
-    const special=c[6]||"Sparkle Aura";
-
-    const frostingColor={
-      "Pink Frosting":"#ff72b6","Purple Frosting":"#9b7bea","Orange Frosting":"#ff963d",
-      "Black Velvet Frosting":"#292033","Ghost Vanilla Frosting":"#f4eefb"
-    }[frosting]||"#ff72b6";
-    const fillingColor={
-      "Strawberry Jam":"#d93b72","Cherry Filling":"#9f204b","Blackberry Jam":"#5a2c75",
-      "Chocolate Cream":"#5b2d24","Cotton Candy Filling":"#ffb6e6"
-    }[filling]||"#d93b72";
-    const cakeColor={
-      "Black Velvet Cake":"#33213b","Vanilla Mooncake":"#f4dfbf","Strawberry Cake":"#f4a1bd",
-      "Pumpkin Spice Cake":"#d97732","Cherry Night Cake":"#54213e"
-    }[flavor]||"#33213b";
-
-    const shapeClass={
-      Round:"round",Heart:"heart",Pumpkin:"pumpkin",Moon:"moon",Bat:"bat"
-    }[shape]||"round";
-
-    const toppingHTML =
-      topping==="Bat Topper" ? `<div class="bat">🦇</div>` :
-      topping==="Ghost Marshmallow" ? `<div class="ghost">👻</div>` :
-      topping==="Mini Pumpkin" ? `<div class="pumpkin">🎃</div>` :
-      topping==="Pink Bow" ? `<div class="bow">🎀</div>` :
-      `<div class="candle">🕯️</div>`;
-
-    const decorHTML =
-      decor==="Black Sprinkles" ? `<div class="sprinkles dark"></div>` :
-      decor==="Pumpkin Decorations" ? `<div class="decor">🎃　🎃　🎃</div>` :
-      decor==="Spiderweb Caramel" ? `<div class="decor">🕸️　🕸️　🕸️</div>` :
-      decor==="Midnight Roses" ? `<div class="decor">🌹　🌹　🌹</div>` :
-      `<div class="glitter">✦　✧　✦　✧　✦</div>`;
-
-    const specialHTML =
-      special==="Moonlight Glow" ? `<div class="aura moonAura">☾ ✦ ☾</div>` :
-      special==="Bat Swirl" ? `<div class="aura">🦇　🦇　🦇</div>` :
-      special==="Ghost Mist" ? `<div class="aura mist">◌　◌　◌</div>` :
-      special==="Pumpkin Smoke" ? `<div class="aura">〰️　🎃　〰️</div>` :
-      `<div class="aura">✦　✨　✦</div>`;
-
-    const shapeDecoration = shapeClass==="moon" ? "☾" : shapeClass==="bat" ? "🦇" : "";
-
+    const base=c[0]||"Black Velvet", frosting=c[1]||"Strawberry", filling=c[2]||"Strawberry Jam", topping=c[3]||"Pink Bow", decor=c[4]||"Glitter", special=c[5]||"Sparkle Aura";
+    const baseUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.bases[base]||BIRTHDAY_CAKE_ASSETS.bases["Black Velvet"]);
+    const frostingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.frostings[frosting]||BIRTHDAY_CAKE_ASSETS.frostings["Strawberry"]);
+    const fillingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.fillings[filling]||BIRTHDAY_CAKE_ASSETS.fillings["Strawberry Jam"]);
+    const toppingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.toppings[topping]||BIRTHDAY_CAKE_ASSETS.toppings["Pink Bow"]);
+    const decorUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.decorations[decor]||BIRTHDAY_CAKE_ASSETS.decorations["Glitter"]);
+    const specialUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.effects[special]||BIRTHDAY_CAKE_ASSETS.effects["Sparkle Aura"]);
     const html=`<!doctype html><html><head><meta charset="UTF-8"><style>
-      *{box-sizing:border-box}
-      body{margin:0;width:1000px;height:760px;background:radial-gradient(circle at 50% 28%,#4b2858,#170d21 72%);font-family:Arial,Helvetica,sans-serif;color:#fff;overflow:hidden}
-      .title{text-align:center;font-size:38px;font-weight:900;padding-top:25px;text-shadow:0 3px 10px #000}
-      .sub{text-align:center;font-size:23px;margin-top:5px;color:#f9d9f0}
-      .stage{position:relative;width:760px;height:560px;margin:15px auto 0}
-      .plate{position:absolute;left:90px;right:90px;bottom:25px;height:55px;background:#4b294d;border-radius:50%;box-shadow:0 12px 25px #000}
-      .cake{position:absolute;left:190px;top:150px;width:380px;height:245px}
-      .layer{position:absolute;left:0;right:0;height:105px;border-radius:22px;background:${cakeColor};border:6px solid rgba(255,255,255,.15);box-shadow:0 15px 20px rgba(0,0,0,.35)}
-      .topLayer{top:55px}.bottomLayer{top:140px}
-      .filling{position:absolute;left:12px;right:12px;top:143px;height:28px;background:${fillingColor};border-radius:12px;box-shadow:inset 0 4px 7px rgba(0,0,0,.25)}
-      .frost{position:absolute;left:-12px;right:-12px;top:38px;height:75px;background:${frostingColor};border-radius:28px 28px 18px 18px;box-shadow:0 7px 12px rgba(0,0,0,.25)}
-      .drip{position:absolute;top:87px;width:35px;height:45px;background:${frostingColor};border-radius:0 0 20px 20px}
-      .d1{left:35px}.d2{left:145px;height:58px}.d3{right:60px;height:38px}
-      .heart{border-radius:0;transform:rotate(-45deg);background:${cakeColor}}
-      .heart:before,.heart:after{content:"";position:absolute;width:190px;height:190px;background:${cakeColor};border-radius:50%}.heart:before{top:-95px;left:0}.heart:after{left:95px;top:0}
-      .pumpkin{font-size:70px;text-align:center;position:absolute;top:-55px;left:150px;z-index:8;transform:none}
-      .moon{background:transparent!important;border:none!important;box-shadow:none!important}
-      .bat{position:absolute;top:-78px;left:140px;font-size:75px;z-index:8}
-      .candle{position:absolute;top:-110px;left:165px;font-size:72px;z-index:8}
-      .ghost{position:absolute;top:-78px;left:155px;font-size:70px;z-index:8}
-      .bow{position:absolute;top:-75px;left:155px;font-size:70px;z-index:8}
-      .decor{position:absolute;top:160px;left:0;right:0;text-align:center;font-size:28px;z-index:9}
-      .glitter{position:absolute;top:160px;left:0;right:0;text-align:center;font-size:30px;color:#fff3a8;z-index:9}
-      .sprinkles{position:absolute;top:62px;left:15px;right:15px;height:85px;background:repeating-linear-gradient(115deg,transparent 0 16px,#fff 17px 20px,transparent 21px 34px);z-index:10;opacity:.8}
-      .aura{position:absolute;top:95px;left:0;right:0;text-align:center;font-size:27px;color:#ffd6ff;z-index:11;text-shadow:0 0 14px #ff9eea}
-      .moonAura{color:#c9d8ff}
-      .mist{opacity:.55}
-      .plaque{position:absolute;left:155px;right:155px;bottom:-5px;background:#25152d;border:2px solid #8f5b83;border-radius:18px;text-align:center;padding:10px;font-size:17px}
-      .design{position:absolute;left:40px;right:40px;bottom:45px;text-align:center;font-size:16px;color:#f6dff1}
-      .shapeMark{position:absolute;top:77px;left:0;right:0;text-align:center;font-size:36px;z-index:12}
-      .${shapeClass}{}
-    </style></head><body>
-      <div class="title">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div>
-      <div class="sub">A custom birthday cake for <b>${escapeHTML(name)}</b></div>
-      <div class="stage">
-        <div class="plate"></div>
-        <div class="cake ${shapeClass}">
-          <div class="layer bottomLayer"></div>
-          <div class="filling"></div>
-          <div class="layer topLayer"></div>
-          <div class="frost"></div><div class="drip d1"></div><div class="drip d2"></div><div class="drip d3"></div>
-          ${toppingHTML}${decorHTML}${specialHTML}
-          ${shapeDecoration?`<div class="shapeMark">${shapeDecoration}</div>`:""}
-        </div>
-        <div class="plaque">🎂 Made for ${escapeHTML(name)} • ${escapeHTML(shape)} Cake</div>
-        <div class="design">${[flavor,frosting,filling,topping,decor,special].map(escapeHTML).join(" • ")}</div>
-      </div>
-    </body></html>`;
-
+      *{box-sizing:border-box}body{margin:0;width:1000px;height:760px;background:radial-gradient(circle at 50% 28%,#4b2858,#170d21 72%);font-family:Arial,Helvetica,sans-serif;color:#fff;overflow:hidden}
+      .title{text-align:center;font-size:38px;font-weight:900;padding-top:25px;text-shadow:0 3px 10px #000}.sub{text-align:center;font-size:23px;margin-top:5px;color:#f9d9f0}
+      .stage{position:relative;width:820px;height:590px;margin:15px auto 0}.plate{position:absolute;left:90px;right:90px;bottom:18px;height:55px;background:#4b294d;border-radius:50%;box-shadow:0 12px 25px #000}
+      .cake{position:absolute;left:110px;top:25px;width:600px;height:500px;display:flex;align-items:center;justify-content:center}.cakeLayer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+      .baseLayer{z-index:1}.fillingLayer{z-index:2}.frostingLayer{z-index:3}.toppingLayer{z-index:4}.decorLayer{z-index:5}.effectLayer{z-index:6;pointer-events:none}
+      .plaque{position:absolute;left:90px;right:90px;bottom:35px;background:#25152d;border:2px solid #8f5b83;border-radius:18px;text-align:center;padding:10px;font-size:17px;z-index:10}.design{position:absolute;left:20px;right:20px;bottom:0;text-align:center;font-size:15px;color:#f6dff1;z-index:10}
+    </style></head><body><div class="title">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div><div class="sub">A custom birthday cake for <b>${escapeHTML(name)}</b></div><div class="stage"><div class="plate"></div><div class="cake">
+      <img class="cakeLayer baseLayer" src="${baseUrl}"><img class="cakeLayer fillingLayer" src="${fillingUrl}"><img class="cakeLayer frostingLayer" src="${frostingUrl}"><img class="cakeLayer toppingLayer" src="${toppingUrl}"><img class="cakeLayer decorLayer" src="${decorUrl}"><img class="cakeLayer effectLayer" src="${specialUrl}">
+    </div><div class="plaque">🎂 Made for ${escapeHTML(name)} • ${escapeHTML(base)} Cake</div><div class="design">${[base,frosting,filling,topping,decor,special].map(escapeHTML).join(" • ")}</div></div></body></html>`;
     await page.setContent(html,{waitUntil:"domcontentloaded"});
+    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;})));});
     return await page.screenshot({type:"png"});
-  }finally{
-    if(browser)await browser.close().catch(()=>{});
-  }
+  }finally{if(browser)await browser.close().catch(()=>{});}
 }
 
 const BIRTHDAY_BAKERY_MENUS=[
-  {name:"cake shape",options:[["🎂 Round","Round"],["🖤 Heart","Heart"],["🎃 Pumpkin","Pumpkin"],["🌙 Moon","Moon"],["🦇 Bat","Bat"]]},
-  {name:"cake flavor",options:[["🍫 Black Velvet","Black Velvet Cake"],["🍰 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry Cake"],["🎃 Pumpkin Spice","Pumpkin Spice Cake"],["🍒 Cherry Night","Cherry Night Cake"]]},
-  {name:"frosting",options:[["💗 Pink Frosting","Pink Frosting"],["💜 Purple Frosting","Purple Frosting"],["🧡 Orange Frosting","Orange Frosting"],["🖤 Black Velvet Frosting","Black Velvet Frosting"],["👻 Ghost Vanilla Frosting","Ghost Vanilla Frosting"]]},
-  {name:"filling",options:[["🍓 Strawberry Jam","Strawberry Jam"],["🍒 Cherry Filling","Cherry Filling"],["🫐 Blackberry Jam","Blackberry Jam"],["🍫 Chocolate Cream","Chocolate Cream"],["🍬 Cotton Candy Filling","Cotton Candy Filling"]]},
-  {name:"topping",options:[["🎀 Pink Bow","Pink Bow"],["🦇 Bat Topper","Bat Topper"],["👻 Ghost Marshmallow","Ghost Marshmallow"],["🎃 Mini Pumpkin","Mini Pumpkin"],["🕯️ Birthday Candle","Birthday Candle"]]},
-  {name:"decorations",options:[["✨ Glitter","Glitter"],["🖤 Black Sprinkles","Black Sprinkles"],["🎃 Pumpkin Decorations","Pumpkin Decorations"],["🕸️ Spiderweb Caramel","Spiderweb Caramel"],["🌹 Midnight Roses","Midnight Roses"]]},
-  {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["👻 Ghost Mist","Ghost Mist"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
+  {name:"cake base",options:[["🖤 Black Velvet","Black Velvet"],["🌙 Vanilla Mooncake","Vanilla Mooncake"],["🍓 Strawberry","Strawberry"],["🎃 Pumpkin Spice","Pumpkin Spice"],["🍒 Cherry Night","Cherry Night"]]},
+  {name:"frosting",options:[["🖤 Black Velvet Frosting","Black Velvet"],["💗 Strawberry Frosting","Strawberry"],["🎃 Pumpkin Frosting","Pumpkin"],["👻 Ghost Vanilla Frosting","Ghost Vanilla"],["💜 Purple Frosting","Purple"],["❤️ Red Frosting","Red"]]},
+  {name:"filling",options:[["🍓 Strawberry Jam","Strawberry Jam"],["🍒 Cherry Filling","Cherry Filling"],["🫐 Blackberry Jam","Blackberry Jam"],["🍫 Chocolate Cream","Chocolate Cream"],["🍎 Caramel Apple Filling","Caramel Apple Filling"]]},
+  {name:"topping",options:[["🎀 Pink Bow","Pink Bow"],["👻 Ghost Marshmallow","Ghost Marshmallow"],["🎃 Mini Pumpkin","Mini Pumpkin"],["🕯️ Birthday Candles","Birthday Candles"],["🖤💗 Halloween Heart Sprinkles","Halloween Heart Sprinkles"],["🎂✨ Birthday Cake Sprinkles","Birthday Cake Sprinkles"]]},
+  {name:"decorations",options:[["✨ Glitter","Glitter"],["🖤 Black Sprinkles","Black Sprinkles"],["🎃 Pumpkin Decorations","Pumpkin Decorations"],["🕸️ Spiderweb Caramel","Spiderweb Caramel"],["🎉 Birthday Confetti Decorations","Birthday Confetti Decorations"]]},
+  {name:"special effect",options:[["✨ Sparkle Aura","Sparkle Aura"],["🌙 Moonlight Glow","Moonlight Glow"],["🦇 Bat Swirl","Bat Swirl"],["🌈 Rainbow Birthday Glow","Rainbow Birthday Glow"],["🎃 Pumpkin Smoke","Pumpkin Smoke"]]}
 ];
 function birthdayBakeryChoiceButtons(menu){
   const options=Array.isArray(menu?.options)?menu.options:[];
