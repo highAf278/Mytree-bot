@@ -3114,6 +3114,13 @@ async function renderTree(env, player) {
     return await renderTreeDirectFallback(env, player);
   }
 
+  // Keep ordinary /tree requests out of Cloudflare Browser Rendering too.
+  // The browser path can leave non-animated users sitting on Discord's
+  // "MyTree is thinking..." state while the render waits or hangs. The direct
+  // renderer is already capable of producing the normal tree response without
+  // a browser, so use it for every tree request.
+  return await renderTreeDirectFallback(env, player);
+
   try {
     console.log("🎊 Birthday Confetti: launching Browser Rendering...");
     const browser = await Promise.race([
