@@ -7153,33 +7153,31 @@ const BIRTHDAY_CAKE_ASSETS = {
 };
 
 async function renderBirthdayCake(env,name,choices){
-  let browser;
-  try{
-    browser=await puppeteer.launch(env.BROWSER);
-    const page=await browser.newPage();
-    await page.setViewport({width:1000,height:760,deviceScaleFactor:1});
-    const c=Array.isArray(choices)?choices:[];
-    const base=c[0]||"Black Velvet", frosting=c[1]||"Strawberry", filling=c[2]||"Strawberry Jam", topping=c[3]||"Pink Bow", decor=c[4]||"Glitter", special=c[5]||"Sparkle Aura";
-    const baseUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.bases[base]||BIRTHDAY_CAKE_ASSETS.bases["Black Velvet"]);
-    const frostingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.frostings[frosting]||BIRTHDAY_CAKE_ASSETS.frostings["Strawberry"]);
-    const fillingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.fillings[filling]||BIRTHDAY_CAKE_ASSETS.fillings["Strawberry Jam"]);
-    const toppingUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.toppings[topping]||BIRTHDAY_CAKE_ASSETS.toppings["Pink Bow"]);
-    const decorUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.decorations[decor]||BIRTHDAY_CAKE_ASSETS.decorations["Glitter"]);
-    const specialUrl=imageUrl(BIRTHDAY_CAKE_ASSETS.effects[special]||BIRTHDAY_CAKE_ASSETS.effects["Sparkle Aura"]);
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>
-      *{box-sizing:border-box}body{margin:0;width:1000px;height:760px;background:radial-gradient(circle at 50% 28%,#4b2858,#170d21 72%);font-family:Arial,Helvetica,sans-serif;color:#fff;overflow:hidden}
-      .title{text-align:center;font-size:38px;font-weight:900;padding-top:25px;text-shadow:0 3px 10px #000}.sub{text-align:center;font-size:23px;margin-top:5px;color:#f9d9f0}
-      .stage{position:relative;width:820px;height:590px;margin:15px auto 0}.plate{position:absolute;left:90px;right:90px;bottom:18px;height:55px;background:#4b294d;border-radius:50%;box-shadow:0 12px 25px #000}
-      .cake{position:absolute;left:110px;top:25px;width:600px;height:500px;display:flex;align-items:center;justify-content:center}.cakeLayer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
-      .baseLayer{z-index:1}.fillingLayer{z-index:2}.frostingLayer{z-index:3}.toppingLayer{z-index:4}.decorLayer{z-index:5}.effectLayer{z-index:6;pointer-events:none}
-      .plaque{position:absolute;left:90px;right:90px;bottom:35px;background:#25152d;border:2px solid #8f5b83;border-radius:18px;text-align:center;padding:10px;font-size:17px;z-index:10}.design{position:absolute;left:20px;right:20px;bottom:0;text-align:center;font-size:15px;color:#f6dff1;z-index:10}
-    </style></head><body><div class="title">🦇🎂 BATTY CAKE BAKERY 🎂🦇</div><div class="sub">A custom birthday cake for <b>${escapeHTML(name)}</b></div><div class="stage"><div class="plate"></div><div class="cake">
-      <img class="cakeLayer baseLayer" src="${baseUrl}"><img class="cakeLayer fillingLayer" src="${fillingUrl}"><img class="cakeLayer frostingLayer" src="${frostingUrl}"><img class="cakeLayer toppingLayer" src="${toppingUrl}"><img class="cakeLayer decorLayer" src="${decorUrl}"><img class="cakeLayer effectLayer" src="${specialUrl}">
-    </div><div class="plaque">🎂 Made for ${escapeHTML(name)} • ${escapeHTML(base)} Cake</div><div class="design">${[base,frosting,filling,topping,decor,special].map(escapeHTML).join(" • ")}</div></div></body></html>`;
-    await page.setContent(html,{waitUntil:"domcontentloaded"});
-    await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;})));});
-    return await page.screenshot({type:"png"});
-  }finally{if(browser)await browser.close().catch(()=>{});}
+  // Birthday cake rendering is intentionally done with the Worker's direct PNG
+  // pipeline. Browser Rendering can hang/rate-limit, which previously made the
+  // final Step 6 button appear to do nothing. The six cake assets are already
+  // PNG layers, so they can be fetched from R2 and composited directly.
+  const width=1000,height=760;
+  const c=Array.isArray(choices)?choices:[];
+  const base=c[0]||"Black Velvet", frosting=c[1]||"Strawberry", filling=c[2]||"Strawberry Jam", topping=c[3]||"Pink Bow", decor=c[4]||"Glitter", special=c[5]||"Sparkle Aura";
+  const scene=solidRGBA(width,height,"#24162d");
+
+  const layers=[
+    [BIRTHDAY_CAKE_ASSETS.bases[base]||BIRTHDAY_CAKE_ASSETS.bases["Black Velvet"],760,620,120,70],
+    [BIRTHDAY_CAKE_ASSETS.fillings[filling]||BIRTHDAY_CAKE_ASSETS.fillings["Strawberry Jam"],760,620,120,70],
+    [BIRTHDAY_CAKE_ASSETS.frostings[frosting]||BIRTHDAY_CAKE_ASSETS.frostings["Strawberry"],760,620,120,70],
+    [BIRTHDAY_CAKE_ASSETS.toppings[topping]||BIRTHDAY_CAKE_ASSETS.toppings["Pink Bow"],760,620,120,70],
+    [BIRTHDAY_CAKE_ASSETS.decorations[decor]||BIRTHDAY_CAKE_ASSETS.decorations["Glitter"],760,620,120,70],
+    [BIRTHDAY_CAKE_ASSETS.effects[special]||BIRTHDAY_CAKE_ASSETS.effects["Sparkle Aura"],760,620,120,70]
+  ];
+
+  for(const [filename,bw,bh,dx,dy] of layers){
+    const asset=await getPngAsset(env,filename);
+    const layer=containRGBA(asset,bw,bh);
+    alphaComposite(scene,layer,dx+Math.round((bw-layer.width)/2),dy+Math.round((bh-layer.height)/2));
+  }
+
+  return rgbaToRgbPng(scene);
 }
 
 const BIRTHDAY_BAKERY_MENUS=[
