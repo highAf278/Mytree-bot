@@ -5976,8 +5976,14 @@ async function equipEffect(
       birthday_cupcake_chaos: "birthday_cupcake_chaos_effect",
       birthday_raccoon_party: "birthday_raccoon_party_effect",
       birthday_balloon_float: "birthday_balloon_float_effect",
-      birthday_pumpkin_sparkle: "birthday_pumpkin_sparkle_effect"
-      ,beans: "beans_effect"
+      birthday_pumpkin_sparkle: "birthday_pumpkin_sparkle_effect",
+      petal_storm_animated: "petal_storm_animated_effect",
+      butterfly_garden_animated: "butterfly_garden_animated_effect",
+      rainbow_trail_animated: "rainbow_trail_animated_effect",
+      ember_glow_animated: "ember_glow_animated_effect",
+      meteor_shower_animated: "meteor_shower_animated_effect",
+      cosmic_rift_animated: "cosmic_rift_animated_effect",
+      beans: "beans_effect"
     }[effect];
 
     if (
