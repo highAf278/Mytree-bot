@@ -3422,7 +3422,7 @@ async function renderTreeDirectFallback(env, player) {
   const birthdayAnimatedEffect = player.equipped?.effect;
   const animatedShopEffect = birthdayAnimatedEffect;
   if (["petal_storm_animated","butterfly_garden_animated","rainbow_trail_animated","ember_glow_animated","meteor_shower_animated","cosmic_rift_animated"].includes(animatedShopEffect)) {
-    const frames=[]; const frameCount=12; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=8; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)}; const phase=i/frameCount;
       if(animatedShopEffect==="petal_storm_animated") drawAnimatedPetalStorm(frame,phase);
@@ -3433,7 +3433,7 @@ async function renderTreeDirectFallback(env, player) {
       else drawAnimatedCosmicRift(frame,phase);
       frames.push(rgbaToRgbPng(frame));
     }
-    return { bytes: await encodePNGFramesToGIF(frames,width,height,7), animated:true };
+    return { bytes: await encodePNGFramesToGIF(frames,width,height,10), animated:true };
   }
   if (birthdayAnimatedEffect === "beans") {
     const frames=[];
