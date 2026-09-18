@@ -759,7 +759,10 @@ async function getPlayer(env, userId) {
     const merged = {
       ...defaultPlayer(),
       ...player,
-      userId: player.userId || userId,
+      // The TREE_DATA key is the authoritative owner ID. Never trust a
+      // userId stored inside the JSON record, because a stale/corrupted
+      // record must never be allowed to migrate into another account.
+      userId: String(userId),
       inventory: Array.isArray(player.inventory)
         ? player.inventory
         : ["pink_sky_background"],
@@ -1785,15 +1788,20 @@ async function handleTitlesMenu(env, interaction) {
   if(interaction.__deferred) await editOriginalResponse(env,interaction,data); else await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:4,data})});
 }
 
-async function savePlayer(env, player) {
+async function savePlayer(env, player, ownerId = null) {
   updateAchievements(player);
   unlockNameEffects(player);
   if (Array.isArray(player.inventory) && player.inventory.filter(id => id !== "pink_sky_background").length >= 10) unlockOwnedTitle(player, "collector");
   if (Number(player.birthdayCandies || 0) > 0) player.birthdayCandyDate = easternDateKey();
-  await env.TREE_DATA.put(
-    player.userId,
-    JSON.stringify(player)
-  );
+
+  // Never let an object's stale userId decide which KV record gets written.
+  // When an explicit ownerId is supplied, it wins; otherwise the player must
+  // already have a valid ID. The saved object's userId is synchronized with
+  // the actual KV key so identity cannot drift between the two.
+  const key = ownerId != null ? String(ownerId) : String(player.userId || "").trim();
+  if (!key) throw new Error("Cannot save player without an owner ID");
+  player.userId = key;
+  await env.TREE_DATA.put(key, JSON.stringify(player));
 }
 
 function getUserFromInteraction(interaction) {
@@ -7865,7 +7873,9 @@ async function experimentFinish(env, interaction, game, chosenDoor) {
 
   for (const p of experimentPlayers(latest)) {
     const player = await getPlayer(env, p.id);
-    updatePlayerIdentity(player, interaction);
+    // This is another player's record, so NEVER stamp the current
+    // interaction user's identity onto it. getPlayer() already binds the
+    // record to p.id.
     player.experimentGames = Number(player.experimentGames || 0) + 1;
     player.experimentCompleted = Number(player.experimentCompleted || 0) + 1;
     player.experimentXP = Number(player.experimentXP || 0) + (latest.outcome === "success" ? 100 : 50);
@@ -7991,7 +8001,9 @@ async function handleExperimentVote(env, interaction, gameId, door) {
       game.outcome="tie";
       await saveGuildState(env,interaction.guild_id,state);
       for (const p of experimentPlayers(game)) {
-        const pl=await getPlayer(env,p.id); updatePlayerIdentity(pl,interaction);
+        const pl=await getPlayer(env,p.id);
+        // This is another player's record. Do not overwrite its identity
+        // with the user who happened to submit the final vote.
         pl.experimentGames=Number(pl.experimentGames||0)+1; pl.experimentCompleted=Number(pl.experimentCompleted||0)+1; pl.experimentXP=Number(pl.experimentXP||0)+25; await savePlayer(env,pl);
       }
       state.experiment=null; await saveGuildState(env,interaction.guild_id,state);
