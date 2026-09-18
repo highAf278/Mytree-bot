@@ -711,6 +711,7 @@ function defaultPlayer() {
     freeGiftClaimed: false,
     freeGoldenPickleClaimed: false,
     freeMidnightRiderClaimed: false,
+    freeBeansClaimed: false,
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -3191,6 +3192,82 @@ function drawBirthdayPumpkinSparkle(frame, phase=0) {
   }
 }
 
+function drawBeansBurst(frame, phase=0) {
+  // A private gift effect for Beans: real bean-shaped sprites fall from above,
+  // then pop into bright sparkle bursts. Everything is rendered directly into
+  // the animated GIF so it does not need Browser Rendering or an external asset.
+  const beans = [
+    [0.10, 0.00, 0.86, 0], [0.25, 0.20, 0.72, 1], [0.42, 0.05, 0.92, 2],
+    [0.58, 0.28, 0.70, 3], [0.75, 0.08, 0.88, 4], [0.90, 0.24, 0.74, 5],
+    [0.18, 0.40, 0.82, 6], [0.37, 0.34, 0.76, 7], [0.63, 0.43, 0.80, 8],
+    [0.82, 0.36, 0.74, 9]
+  ];
+  const beanColors = [
+    [190, 82, 105], [226, 118, 145], [164, 72, 96], [245, 145, 164], [142, 64, 88]
+  ];
+
+  function drawBean(frame, cx, cy, scale, rgb, tilt=0) {
+    const [r,g,b] = rgb;
+    const w = Math.max(18, Math.round(54*scale));
+    const h = Math.max(12, Math.round(34*scale));
+    const x = Math.round(cx - w/2), y = Math.round(cy - h/2);
+    const rows = [
+      [0.24,0.46],[0.10,0.78],[0.02,0.92],[0.00,1.00],[0.08,0.90],[0.20,0.70],[0.34,0.48]
+    ];
+    for(let i=0;i<rows.length;i++){
+      const [off,width]=rows[i];
+      const yy=y+Math.round(i*h/rows.length);
+      const ww=Math.round(w*width), xx=x+Math.round((w-ww)/2 + Math.sin(tilt+i*0.7)*scale*2);
+      profileFill(frame,xx,yy,ww,Math.max(2,Math.ceil(h/rows.length)+1),r,g,b,255);
+    }
+    // Inner curve/notch makes the silhouette read as a kidney bean rather than a capsule.
+    profileFill(frame,x+Math.round(w*0.43),y+Math.round(h*0.26),Math.round(w*0.30),Math.round(h*0.24),Math.max(80,r-65),Math.max(35,g-35),Math.max(50,b-35),255);
+    profileFill(frame,x+Math.round(w*0.18),y+Math.round(h*0.22),Math.max(3,Math.round(w*0.18)),Math.max(2,Math.round(h*0.10)),255,210,220,220);
+  }
+
+  for(let i=0;i<beans.length;i++){
+    const [bx,startY,impactY,seed]=beans[i];
+    const local=(phase*1.35 + i*0.087)%1;
+    const fallEnd=0.64;
+    const impactProgress=local<fallEnd ? 0 : (local-fallEnd)/(1-fallEnd);
+    let y;
+    let scale=1;
+    if(local<fallEnd){
+      const t=local/fallEnd;
+      y=(startY + (impactY-startY)*t)*frame.height;
+      y += Math.sin(t*Math.PI*4+seed)*10;
+    } else {
+      y=impactY*frame.height;
+      scale=Math.max(0.18,1-impactProgress*0.82);
+    }
+    const x=(bx + Math.sin(seed*2.3+local*Math.PI*2)*0.018)*frame.width;
+    if(local<fallEnd){
+      drawBean(frame,x,y,scale,beanColors[seed%beanColors.length],seed+local*4);
+      // Tiny glitter trail behind the falling bean.
+      for(let t=1;t<=3;t++){
+        const ty=y-18*t;
+        if(ty>0) drawSparkle(frame,Math.round(x+Math.sin(seed+t)*8),Math.round(ty),'star');
+      }
+    } else {
+      if(impactProgress<0.20) drawBean(frame,x,y,scale,beanColors[seed%beanColors.length],seed);
+      const burst=Math.min(1,impactProgress/0.72);
+      const count=8;
+      for(let j=0;j<count;j++){
+        const ang=(Math.PI*2*j/count)+(seed*0.41);
+        const radius=(18+burst*82)*(1+0.12*Math.sin(seed+j));
+        const sx=x+Math.cos(ang)*radius;
+        const sy=y+Math.sin(ang)*radius;
+        drawSparkle(frame,Math.round(sx),Math.round(sy),'star');
+        if(j%2===0){
+          const px=sx+Math.cos(ang+1.2)*12, py=sy+Math.sin(ang+1.2)*12;
+          profileFill(frame,Math.round(px),Math.round(py),5,5,255,190,235,255);
+        }
+      }
+      drawSparkle(frame,Math.round(x),Math.round(y),'star');
+    }
+  }
+}
+
 async function renderTreeDirectFallback(env, player) {
   const width = 1024, height = 1024;
   // Start with a safe color, then replace it with the player's ACTUAL
@@ -3249,6 +3326,20 @@ async function renderTreeDirectFallback(env, player) {
   }
 
   const birthdayAnimatedEffect = player.equipped?.effect;
+  if (birthdayAnimatedEffect === "beans") {
+    const frames=[];
+    const frameCount=12;
+    const baseData=scene.data.slice();
+    for(let i=0;i<frameCount;i++){
+      const frame={width,height,data:new Uint8Array(baseData)};
+      drawBeansBurst(frame,i/frameCount);
+      frames.push(rgbaToRgbPng(frame));
+    }
+    return {
+      bytes: await encodePNGFramesToGIF(frames,width,height,7),
+      animated: true
+    };
+  }
   if (birthdayAnimatedEffect === "birthday_cupcake_chaos" || birthdayAnimatedEffect === "birthday_raccoon_party" || birthdayAnimatedEffect === "birthday_balloon_float" || birthdayAnimatedEffect === "birthday_pumpkin_sparkle") {
     const frames=[]; const frameCount=8; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
@@ -5307,6 +5398,7 @@ async function showCustomEffects(
   if (player.inventory.includes("birthday_raccoon_party_effect")) buttons.push(button("🦝 Raccoon Party", "equip_effect_birthday_raccoon_party", player.equipped.effect === "birthday_raccoon_party" ? 3 : 2));
   if (player.inventory.includes("birthday_balloon_float_effect")) buttons.push(button("🎈 Balloon Float", "equip_effect_birthday_balloon_float", player.equipped.effect === "birthday_balloon_float" ? 3 : 2));
   if (player.inventory.includes("birthday_pumpkin_sparkle_effect")) buttons.push(button("🎃 Pumpkin Sparkle", "equip_effect_birthday_pumpkin_sparkle", player.equipped.effect === "birthday_pumpkin_sparkle" ? 3 : 2));
+  if (player.inventory.includes("beans_effect")) buttons.push(button("🫘💥 Bean Burst", "equip_effect_beans", player.equipped.effect === "beans" ? 3 : 2));
   if (player.inventory.includes("halloween_effect")) {
     buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
   }
@@ -5773,6 +5865,7 @@ async function equipEffect(
       birthday_raccoon_party: "birthday_raccoon_party_effect",
       birthday_balloon_float: "birthday_balloon_float_effect",
       birthday_pumpkin_sparkle: "birthday_pumpkin_sparkle_effect"
+      ,beans: "beans_effect"
     }[effect];
 
     if (
@@ -6040,7 +6133,8 @@ const INVENTORY_NAMES = {
   birthday_cupcake_chaos_effect: "🧁 Cupcake Chaos Effect",
   birthday_raccoon_party_effect: "🦝 Raccoon Party Effect",
   birthday_balloon_float_effect: "🎈 Balloon Float Effect",
-  birthday_pumpkin_sparkle_effect: "🎃 Pumpkin Sparkle Effect"
+  birthday_pumpkin_sparkle_effect: "🎃 Pumpkin Sparkle Effect",
+  beans_effect: "🫘💥 Bean Burst Effect"
 };
 
 const INVENTORY_CATEGORIES = [
@@ -6054,7 +6148,7 @@ const INVENTORY_CATEGORIES = [
 const INVENTORY_CATEGORY_IDS = {
   trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "beans_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
@@ -19185,7 +19279,23 @@ async function handleGift(env, interaction) {
 async function handleFree(env, interaction, guess) {
   const normalized=String(guess||"").trim().toLowerCase();
   const user=getUserFromInteraction(interaction); if(!user)return;
-  if(normalized!=="tanner"&&normalized!=="bob"){await sendText(env,interaction,`🎁 **FREE GIFT MYSTERY**\n\n💡 **Hint:** your name\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈`);return;}
+
+  // PRIVATE GIFT CODE: BEANS. No hint is ever shown for this code.
+  if(normalized==="beans"){
+    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
+    if(player.freeBeansClaimed){await sendText(env,interaction,"🫘💥 You already claimed the FREE **Bean Burst Effect**! ✨");return;}
+    if(!player.inventory.includes("beans_effect"))player.inventory.push("beans_effect");
+    player.freeBeansClaimed=true;
+    await savePlayer(env,player);
+    await sendText(env,interaction,"🫘💥 **BEAN BURST UNLOCKED!**\n\nYou entered the secret code and received the FREE **Bean Burst Effect**!\n\n🫘 Beans fall from the sky...\n💥 Then they explode into sparkles! ✨\n\nEnjoy your extremely bean-y gift. 😭🫘✨");
+    return;
+  }
+
+  if(normalized!=="tanner"&&normalized!=="bob"){
+    await sendText(env,interaction,"🎁 **FREE GIFT MYSTERY**\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈");
+    return;
+  }
+
   const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
   const isTanner=normalized==="tanner";
   const claimKey=isTanner?"freeGoldenPickleClaimed":"freeMidnightRiderClaimed";
