@@ -3604,81 +3604,59 @@ function drawBeansBurst(frame, phase=0) {
 }
 
 
-
-function effectPolygon(frame, points, rgb, a=230){
-  if(!Array.isArray(points)||points.length<3)return;
-  const ys=points.map(p=>p[1]);
-  const minY=Math.max(0,Math.floor(Math.min(...ys))), maxY=Math.min(frame.height-1,Math.ceil(Math.max(...ys)));
-  for(let y=minY;y<=maxY;y++){
-    const xs=[];
-    for(let i=0,j=points.length-1;i<points.length;j=i++){
-      const [x1,y1]=points[i],[x2,y2]=points[j];
-      if((y1>y)!==(y2>y)) xs.push(x1+(y-y1)*(x2-x1)/(y2-y1));
-    }
-    xs.sort((a,b)=>a-b);
-    for(let i=0;i+1<xs.length;i+=2){
-      const x0=Math.max(0,Math.ceil(xs[i])),x1=Math.min(frame.width-1,Math.floor(xs[i+1]));
-      for(let x=x0;x<=x1;x++) effectPixelBlend(frame,x,y,rgb[0],rgb[1],rgb[2],a);
-    }
-  }
-}
-function effectLine(frame, points, width, rgb, a=240){ effectRibbonPath(frame,points,width,rgb,a); }
-function drawCrystalGem(frame,cx,cy,size,angle,base,phase,seed){
-  const ca=Math.cos(angle),sa=Math.sin(angle);
-  const P=(lx,ly)=>[cx+(lx*ca-ly*sa),cy+(lx*sa+ly*ca)];
-  const pts=[P(0,-size),P(size*.42,-size*.58),P(size*.48,size*.60),P(0,size),P(-size*.48,size*.60),P(-size*.42,-size*.58)];
-  effectPolygon(frame,pts,base,235);
-  effectPolygon(frame,[P(0,-size*.92),P(size*.42,-size*.58),P(0,size*.05)], [245,255,255],145);
-  effectPolygon(frame,[P(0,-size*.92),P(0,size*.05),P(-size*.48,size*.60),P(-size*.42,-size*.58)], [255,255,255],95);
-  effectLine(frame,[P(-size*.48,size*.60),P(0,size),P(size*.48,size*.60)],Math.max(1,size*.055),[255,255,255],170);
-  effectLine(frame,[P(-size*.42,-size*.58),P(0,-size),P(size*.42,-size*.58)],Math.max(1,size*.045),[255,255,255],155);
-  if(Math.sin(phase*Math.PI*2+seed)>0.15) drawSparkle(frame,Math.round(cx+size*.85),Math.round(cy-size*.85),'star');
-}
-
 function drawAnimatedFairyFlight(frame, phase=0) {
-  const fairies=[[.16,.30,31,0],[.37,.60,27,1],[.62,.27,34,2],[.83,.50,29,3],[.70,.78,24,4]];
-  const colors=[[255,188,225],[205,182,255],[165,225,255],[255,222,145],[185,240,205]];
+  const fairies=[
+    [0.14,0.25,22,0],[0.34,0.55,18,1],[0.58,0.22,24,2],[0.82,0.48,20,3],[0.73,0.76,16,4]
+  ];
+  const colors=[[255,190,225],[205,180,255],[170,225,255],[255,225,155],[190,245,205]];
   for(let i=0;i<fairies.length;i++){
-    const [bx,by,size,seed]=fairies[i],t=phase*Math.PI*2+seed*1.4;
-    const x=(bx+Math.sin(t*1.15+seed)*.045)*frame.width;
-    const y=(by+Math.cos(t*1.25+seed)*.055)*frame.height;
-    const flap=.78+.22*Math.sin(phase*Math.PI*2*3+seed),c=colors[seed%colors.length];
-    drawRotatedEllipse(frame,x-size*.60*flap,y-size*.20,size*.48,size*.72,-.28,c,225);
-    drawRotatedEllipse(frame,x+size*.60*flap,y-size*.20,size*.48,size*.72,.28,c,225);
-    drawRotatedEllipse(frame,x-size*.50*flap,y+size*.28,size*.38,size*.52,.20,c,190);
-    drawRotatedEllipse(frame,x+size*.50*flap,y+size*.28,size*.38,size*.52,-.20,c,190);
-    effectDisc(frame,x,y-size*.48,size*.18,[255,239,250],245);
-    drawRotatedEllipse(frame,x,y+size*.05,size*.20,size*.48,0,[100,70,105],245);
-    effectPolygon(frame,[[x-size*.30,y+size*.25],[x+size*.30,y+size*.25],[x+size*.48,y+size*.72],[x-size*.48,y+size*.72]],c,230);
-    effectLine(frame,[[x-size*.10,y+size*.08],[x-size*.52,y-size*.10]],Math.max(2,size*.07),[100,70,105],230);
-    effectLine(frame,[[x+size*.10,y+size*.08],[x+size*.52,y-size*.10]],Math.max(2,size*.07),[100,70,105],230);
-    effectLine(frame,[[x-size*.08,y+size*.55],[x-size*.30,y+size*.90]],Math.max(2,size*.07),[100,70,105],235);
-    effectLine(frame,[[x+size*.08,y+size*.55],[x+size*.30,y+size*.90]],Math.max(2,size*.07),[100,70,105],235);
-    effectLine(frame,[[x+size*.48,y-size*.10],[x+size*.92,y-size*.58]],Math.max(1.5,size*.045),[245,220,150],240);
-    drawSparkle(frame,Math.round(x+size*1.02),Math.round(y-size*.72),'star');
+    const [bx,by,size,seed]=fairies[i],t=phase*Math.PI*2+i*1.7;
+    const x=(bx+Math.sin(t*1.1+seed)*0.055)*frame.width;
+    const y=(by+Math.cos(t*1.35+seed)*0.065)*frame.height;
+    const flap=0.78+0.22*Math.sin(phase*Math.PI*2*4+seed);
+    const c=colors[i%colors.length];
+    drawRotatedEllipse(frame,x-size*.48*flap,y-size*.35,size*.55,size*.82,Math.sin(t)*.18,c,210);
+    drawRotatedEllipse(frame,x+size*.48*flap,y-size*.35,size*.55,size*.82,-Math.sin(t)*.18,c,210);
+    drawRotatedEllipse(frame,x-size*.40*flap,y+size*.34,size*.43,size*.58,Math.sin(t)*.12,c,190);
+    drawRotatedEllipse(frame,x+size*.40*flap,y+size*.34,size*.43,size*.58,-Math.sin(t)*.12,c,190);
+    drawRotatedEllipse(frame,x,y,size*.11,size*.58,0,[80,55,90],245);
+    drawRotatedEllipse(frame,x,y-size*.47,size*.10,size*.10,0,[255,240,255],180);
+    effectRibbonPath(frame,[
+      [x-size*1.2,y+size*.55],[x-size*1.8,y+size*.9],[x-size*2.4,y+size*.45]
+    ],2.2,[255,220,250],130);
+    drawSparkle(frame,Math.round(x+size*.9),Math.round(y-size*.8),'star');
   }
 }
 
 function drawAnimatedCrystalAura(frame, phase=0) {
-  const cx=frame.width*.50,cy=frame.height*.49;
-  const gems=[[0,-155,-.10,34,[165,220,255]],[120,-78,.35,31,[220,165,255]],[125,72,-.35,36,[160,235,205]],[0,155,.12,33,[210,175,255]],[-125,72,.40,35,[170,215,255]],[-120,-78,-.35,30,[240,185,220]]];
-  for(let i=0;i<gems.length;i++){
-    const [ox,oy,rot,size,c]=gems[i],a=rot+phase*Math.PI*2*(i%2?-.18:.18),orbit=phase*Math.PI*2+i*Math.PI/3;
-    const x=cx+ox*Math.cos(orbit)-oy*.10*Math.sin(orbit),y=cy+oy*.72+Math.sin(orbit+i)*12;
-    drawCrystalGem(frame,x,y,size,a,c,phase,i);
+  const cx=frame.width*.5, cy=frame.height*.48;
+  const crystals=[
+    [0,-150,0.1,28,[180,220,255]],[115,-75,-.4,23,[220,170,255]],
+    [125,65,.5,30,[170,245,225]],[0,145,-.15,25,[210,180,255]],
+    [-125,65,.4,27,[180,220,255]],[-115,-75,-.5,22,[235,190,255]]
+  ];
+  for(let i=0;i<crystals.length;i++){
+    const [ox,oy,a,size,c]=crystals[i];
+    const ang=a+phase*Math.PI*2*(i%2?-.25:.25);
+    const x=cx+ox*Math.cos(phase*Math.PI*2+ i)-oy*.12*Math.sin(phase*Math.PI*2);
+    const y=cy+oy+Math.sin(phase*Math.PI*2+i)*10;
+    drawRotatedEllipse(frame,x,y,size*.45,size*1.45,ang,c,220);
+    effectDisc(frame,x,y,size*.22,[255,255,255],115);
   }
-  for(let i=0;i<10;i++){const a=phase*Math.PI*2+i*Math.PI*2/10,r=190+12*Math.sin(i+phase*5);effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.62,3,[215,240,255],150);}
+  for(let i=0;i<14;i++){
+    const a=phase*Math.PI*2+i*Math.PI*2/14, r=150+18*Math.sin(i+phase*6);
+    effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.65,3,[210,235,255],150);
+  }
 }
 
 function drawAnimatedStarfall(frame, phase=0) {
-  function star5(frame,cx,cy,r,rot,rgb,a){
-    const pts=[]; for(let k=0;k<10;k++){const ang=rot-k*Math.PI/5,rr=k%2===0?r:r*.42;pts.push([cx+Math.cos(ang)*rr,cy+Math.sin(ang)*rr]);}
-    effectPolygon(frame,pts,rgb,a); effectDisc(frame,cx,cy,Math.max(1,r*.16),[255,255,255],180);
-  }
-  for(let i=0;i<18;i++){
-    const t=(phase*.62+i/18)%1,x=(.05+((i*47)%90)/100+.018*Math.sin(phase*7+i))*frame.width,y=((t*.92+.02+(i%3)*.025)%1.08)*frame.height,r=6+(i%4)*2.2;
-    const cols=[[255,245,170],[255,215,245],[205,225,255],[235,200,255]];
-    star5(frame,x,y,r,phase*1.8+i*.7,cols[i%cols.length],235);
+  for(let i=0;i<28;i++){
+    const t=(phase*.75+i/28)%1;
+    const x=(.03+((i*37)%94)/100)*frame.width;
+    const y=((t*.95+.02+(i%4)*.015)%1.05)*frame.height;
+    const r=2+(i%4)*1.6;
+    effectDisc(frame,x,y,r*2,[255,245,190],90);
+    drawSparkle(frame,Math.round(x),Math.round(y),'star');
   }
 }
 
@@ -3798,62 +3776,79 @@ function drawAnimatedBubblePop(frame, phase=0) {
 }
 
 function drawAnimatedCandyStorm(frame, phase=0) {
-  const pieces=[[.10,.12,0],[.25,.27,1],[.42,.09,2],[.58,.22,3],[.75,.13,4],[.91,.30,5],[.15,.58,2],[.35,.70,0],[.56,.55,4],[.78,.68,1],[.91,.52,3]];
-  const cols=[[255,120,185],[255,210,90],[115,205,255],[190,135,255],[120,225,170]];
-  for(let i=0;i<pieces.length;i++){
-    const [bx,by,type]=pieces[i],t=(phase*.72+i*.075)%1,x=(bx+Math.sin(t*6+i)*.018)*frame.width,y=((by+t*.92)%1.12)*frame.height,c=cols[type%cols.length];
-    if(i%3===0){
-      const w=34,h=20; drawRotatedEllipse(frame,x,y,w,h,Math.sin(t*5+i)*.25,c,240);
-      effectPolygon(frame,[[x-w,y],[x-w-16,y-9],[x-w-12,y+9]],c,230); effectPolygon(frame,[[x+w,y],[x+w+16,y-9],[x+w+12,y+9]],c,230);
-      effectLine(frame,[[x-7,y-7],[x-7,y+7]],2,[255,245,255],160); effectLine(frame,[[x+7,y-7],[x+7,y+7]],2,[255,245,255],160);
-    } else if(i%3===1){
-      effectLine(frame,[[x,y+10],[x,y+50]],4,[245,235,225],230); drawRotatedEllipse(frame,x,y,20,20,0,c,240); effectLine(frame,[[x-10,y],[x+10,y]],2,[255,255,255],150);
-    } else {
-      effectLine(frame,[[x,y+38],[x,y-8],[x+7,y-18],[x+18,y-16],[x+24,y-7]],7,[255,245,245],235); effectLine(frame,[[x,y+38],[x,y-8],[x+7,y-18],[x+18,y-16],[x+24,y-7]],3,c,235);
-    }
-    if(i%2===0) drawSparkle(frame,Math.round(x+32),Math.round(y-30),'rainbow');
+  const candies=[
+    [55,.12,0],[145,.30,1],[250,.08,2],[355,.24,3],[470,.14,4],[620,.31,5],[770,.10,6],[900,.28,7],
+    [110,.56,8],[330,.66,9],[560,.55,10],[820,.65,11]
+  ];
+  const cols=[[255,105,170],[255,210,80],[110,205,255],[175,120,255],[115,225,160]];
+  for(let i=0;i<candies.length;i++){
+    const [x0,y0,seed]=candies[i],t=(phase*.82+i*.09)%1;
+    const x=x0+Math.sin(t*8+seed)*14, y=((y0+t*.95)%1.1)*frame.height;
+    const r=10+(seed%3)*3;
+    drawRotatedEllipse(frame,x,y,r*1.35,r*.72,t*4+seed,cols[seed%cols.length],230);
+    drawRotatedEllipse(frame,x,y,r*.55,r*.28,t*4+seed,[255,245,255],80);
+    drawSparkle(frame,Math.round(x),Math.round(y),'star');
   }
 }
 
 function drawAnimatedKittyParade(frame, phase=0) {
-  const cats=[[.14,.76,28,0],[.37,.67,31,1],[.61,.77,27,2],[.84,.66,32,3]],cols=[[248,222,232],[218,205,246],[232,242,250],[248,218,185]];
+  const cats=[
+    [.18,.78,23,0],[.40,.70,28,1],[.63,.79,24,2],[.84,.68,30,3]
+  ];
+  const cols=[[245,225,230],[215,205,245],[235,240,250],[245,220,180]];
   for(let i=0;i<cats.length;i++){
-    const [bx,by,size,seed]=cats[i],t=(phase*.50+i*.20)%1,x=((bx+t*.32)%1.18)*frame.width,y=(by+Math.sin(t*7+seed)*.025)*frame.height,c=cols[seed%cols.length],headX=x+size*.72,headY=y-size*.70;
-    drawRotatedEllipse(frame,x,y,size*1.00,size*.58,0,c,245);
-    effectPolygon(frame,[[headX-size*.42,headY-size*.15],[headX-size*.25,headY-size*.78],[headX-size*.03,headY-size*.25]],c,245);
-    effectPolygon(frame,[[headX+size*.03,headY-size*.25],[headX+size*.28,headY-size*.78],[headX+size*.43,headY-size*.12]],c,245);
-    drawRotatedEllipse(frame,headX,headY,size*.55,size*.48,0,c,245);
-    effectDisc(frame,headX-size*.18,headY-size*.03,size*.07,[65,50,80],255); effectDisc(frame,headX+size*.18,headY-size*.03,size*.07,[65,50,80],255); effectDisc(frame,headX,headY+size*.12,size*.055,[90,55,75],255);
-    for(const dx of [-.62,-.20,.28,.68]) effectDisc(frame,x+dx*size,y+size*.48,size*.15,c,235);
-    effectLine(frame,[[x-size*.82,y-size*.05],[x-size*1.25,y-size*.35],[x-size*1.38,y-size*.75],[x-size*1.15,y-size*.95]],size*.11,c,235);
-    effectLine(frame,[[headX-size*.38,headY+size*.10],[headX-size*.72,headY],[headX-size*.78,headY+size*.15]],2,[90,75,100],220);
-    effectLine(frame,[[headX+size*.38,headY+size*.10],[headX+size*.72,headY],[headX+size*.78,headY+size*.15]],2,[90,75,100],220);
+    const [bx,by,size,seed]=cats[i],t=(phase*.55+i*.22)%1;
+    const x=((bx+t*.35)%1.15)*frame.width, y=(by+Math.sin(t*8+seed)*.025)*frame.height;
+    const c=cols[seed%cols.length];
+    drawRotatedEllipse(frame,x,y,size*1.05,size*.72,0,c,245);
+    drawRotatedEllipse(frame,x+size*.8,y-size*.55,size*.58,size*.55,0,c,245);
+    // ears
+    drawRotatedEllipse(frame,x+size*.55,y-size*.95,size*.25,size*.38,-.4,c,245);
+    drawRotatedEllipse(frame,x+size*1.0,y-size*.98,size*.25,size*.38,.4,c,245);
+    effectDisc(frame,x+size*.98,y-size*.60,size*.055,[60,45,70],255);
+    effectDisc(frame,x+size*.68,y-size*.60,size*.055,[60,45,70],255);
+    // tail and paws
+    effectRibbonPath(frame,[[x-size*.95,y-size*.1],[x-size*1.35,y-size*.5],[x-size*1.2,y-size*.8]],size*.12,c,230);
+    for(const dx of [-.55,.55]) effectDisc(frame,x+dx*size,y+size*.65,size*.15,c,230);
+    if(i%2===0) drawSparkle(frame,Math.round(x+size*1.25),Math.round(y-size*1.25),'star');
   }
-  for(let i=0;i<8;i++){const x=((i*.13+phase*.08)%1)*frame.width,y=(.88+Math.sin(i+phase*8)*.025)*frame.height;effectDisc(frame,x,y,3,[245,210,235],150);}
 }
 
 function drawAnimatedElectricStorm(frame, phase=0) {
-  const bolts=[[.12,.18,0],[.30,.10,1],[.48,.20,2],[.66,.12,3],[.84,.22,4],[.23,.58,5],[.55,.62,6],[.78,.55,7]];
-  for(let i=0;i<bolts.length;i++){
-    const [bx,by,seed]=bolts[i]; if(Math.sin(phase*Math.PI*2*4+seed*1.7)<=0.10) continue;
-    const x=bx*frame.width,y=by*frame.height,s=34+(seed%3)*7;
-    const main=[[x,y],[x-s*.25,y+s*.38],[x+s*.08,y+s*.65],[x-s*.16,y+s*1.00],[x+s*.20,y+s*1.00],[x-s*.02,y+s*1.48]];
-    effectLine(frame,main,8,[145,205,255],190); effectLine(frame,main,3,[240,252,255],255);
-    const q=main[2],branch=[[q[0],q[1]],[q[0]-s*.58,q[1]+s*.18],[q[0]-s*.78,q[1]+s*.58]];
-    effectLine(frame,branch,5,[175,220,255],210); effectLine(frame,branch,2,[250,255,255],255); drawSparkle(frame,Math.round(main[3][0]),Math.round(main[3][1]),'moon');
+  for(let bolt=0;bolt<7;bolt++){
+    const seed=bolt*1.71;
+    const x0=(.08+bolt*.14)*frame.width;
+    const pts=[];
+    for(let j=0;j<10;j++){
+      const t=j/9;
+      pts.push([
+        x0+Math.sin(phase*Math.PI*4+seed+j*2.2)*22,
+        (.08+t*.72+Math.sin(seed+t*8)*.025)*frame.height
+      ]);
+    }
+    effectRibbonPath(frame,pts,5,[155,205,255],170);
+    effectRibbonPath(frame,pts,2,[235,250,255],255);
+  }
+  for(let i=0;i<14;i++){
+    const a=phase*Math.PI*2+i*.9,r=110+35*Math.sin(i);
+    effectDisc(frame,frame.width*.5+Math.cos(a)*r,frame.height*.45+Math.sin(a)*r*.6,4,[120,190,255],150);
   }
 }
 
 function drawAnimatedExperimentalEffect(frame, phase=0) {
-  const pool=[drawAnimatedPetalStorm,drawAnimatedRainbowTrail,drawAnimatedEmberGlow,drawAnimatedMeteorShower,drawAnimatedCosmicRift,drawAnimatedUnicornSparkle,drawAnimatedSnowfall,drawAnimatedFlowerBloom,drawAnimatedBubblePop,drawAnimatedFairyFlight,drawAnimatedCrystalAura,drawAnimatedStarfall,drawAnimatedCandyStorm,drawAnimatedKittyParade,drawAnimatedElectricStorm];
-  // Three complete "experiments" per loop, with each one lasting several frames.
-  const segment=Math.min(2,Math.floor(phase*3));
-  const local=phase*3-segment;
-  const chosen=[pool[0],pool[4],pool[1]][segment];
-  chosen(frame,local);
-  for(let i=0;i<6;i++){
-    const x=(.18+i*.13)*frame.width,y=(.22+(i%3)*.25)*frame.height;
-    if(Math.sin(local*Math.PI*2+i)>.35) drawSparkle(frame,Math.round(x),Math.round(y),'rainbow');
+  const pool=[
+    drawAnimatedPetalStorm,drawAnimatedButterflyGarden,drawAnimatedRainbowTrail,
+    drawAnimatedEmberGlow,drawAnimatedMeteorShower,drawAnimatedCosmicRift,
+    drawAnimatedFairyFlight,drawAnimatedCrystalAura,drawAnimatedStarfall,
+    drawAnimatedSnowfall,drawAnimatedFlowerBloom,drawAnimatedBubblePop,
+    drawAnimatedCandyStorm,drawAnimatedKittyParade,drawAnimatedElectricStorm
+  ];
+  // One experiment is selected per animation cycle, then changes next cycle.
+  const choice=Math.floor(Math.random()*pool.length);
+  pool[choice](frame,phase);
+  for(let i=0;i<7;i++){
+    const x=(.15+i*.12)*frame.width, y=(.18+(i%3)*.27)*frame.height;
+    drawSparkle(frame,Math.round(x+Math.sin(phase*7+i)*15),Math.round(y),'rainbow');
   }
 }
 
@@ -3936,13 +3931,13 @@ async function renderTreeDirectFallback(env, player) {
     experimental_effect_animated: drawAnimatedExperimentalEffect
   };
   if (animatedEffectDrawers[animatedShopEffect]) {
-    const frames=[]; const frameCount=animatedShopEffect === "experimental_effect_animated" ? 24 : 12; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=12; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)}; const phase=i/frameCount;
       animatedEffectDrawers[animatedShopEffect](frame,phase);
       frames.push(rgbaToRgbPng(frame));
     }
-    return { bytes: await encodePNGFramesToGIF(frames,width,height,animatedShopEffect === "experimental_effect_animated" ? 10 : 8), animated:true };
+    return { bytes: await encodePNGFramesToGIF(frames,width,height,8), animated:true };
   }
   if (birthdayAnimatedEffect === "beans") {
     const frames=[];
@@ -8381,6 +8376,7 @@ function experimentLobbyText(game) {
 function experimentLobbyComponents(game) {
   const rows=[row(button("🧪 Join Experiment",`experiment:join:${game.id}`,1),button("🚪 Leave",`experiment:leave:${game.id}`,2),button("👁️ Status",`experiment:status:${game.id}`,3))];
   if(game.hostId) rows.push(row(button("▶️ Start Experiment",`experiment:start:${game.id}`,1)));
+  rows.push(row(button("🛑 End Experiment",`experiment:end:${game.id}`,4)));
   return rows;
 }
 function experimentActionComponents(game) {
@@ -8517,6 +8513,19 @@ async function handleExperimentJoin(env,interaction,gameId){
   game.players[user.id]={id:user.id,username:user.username||"",displayName:getDisplayName(player),vote:null,clue:"",dmDelivered:false};await saveGuildState(env,interaction.guild_id,state);
   return editOriginalResponse(env,interaction,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});
 }
+async function handleExperimentEnd(env,interaction,gameId){
+  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
+  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
+  if(!user|| (user.id!==game.hostId && user.id!==env.OWNER_ID))return sendText(env,interaction,"❌ Only the Experiment host or bot owner can end this Experiment.");
+  const wasLobby=game.status==="lobby";
+  state.experiment=null;
+  await saveGuildState(env,interaction.guild_id,state);
+  const who=user.id===env.OWNER_ID?"👑 The bot owner":"👑 The Experiment host";
+  const message=wasLobby
+    ? `${who} ended the abandoned Experiment lobby. 🧹\n\nYou can now create a new Experiment with \`/experiment create\`.`
+    : `${who} ended the active Experiment. 🛑\n\nNo Experiment rewards were issued.`;
+  return editOriginalResponse(env,interaction,{content:message,components:[]});
+}
 async function handleExperimentLeave(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
@@ -8564,6 +8573,7 @@ async function handleExperimentCommand(env,interaction){
   const state=await getGuildState(env,interaction.guild_id),game=state.experiment;
   if(sub==="status"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now. Use `/experiment create` to start one.");return handleExperimentStatus(env,interaction,game.id);}
   if(sub==="leave"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentLeave(env,interaction,game.id);}
+  if(sub==="end"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentEnd(env,interaction,game.id);}
   if(sub==="start"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentStart(env,interaction,game.id);}
   if(sub==="join"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentJoin(env,interaction,game.id);}
   return handleExperimentCreate(env,interaction);
@@ -8639,6 +8649,7 @@ async function handleComponent(
     const gameId=parts[2];
     if(action==="join") { await handleExperimentJoin(env,interaction,gameId); return; }
     if(action==="leave") { await handleExperimentLeave(env,interaction,gameId); return; }
+    if(action==="end") { await handleExperimentEnd(env,interaction,gameId); return; }
     if(action==="start") { await handleExperimentStart(env,interaction,gameId); return; }
     if(action==="status") { await handleExperimentStatus(env,interaction,gameId); return; }
     if(action==="clue") { await experimentPrivateClue(env,interaction,gameId); return; }
@@ -22180,6 +22191,7 @@ const COMMANDS = [
       { type: 1, name: "join", description: "Join the active Experiment lobby" },
       { type: 1, name: "leave", description: "Leave the active Experiment lobby" },
       { type: 1, name: "start", description: "Start the Experiment (host only)" },
+      { type: 1, name: "end", description: "End the active Experiment (host or owner)" },
       { type: 1, name: "status", description: "View the active Experiment" }
     ]
   },
@@ -23117,7 +23129,8 @@ export default {
       } else if (isColorCommand) {
         ephemeral = true;
       } else if (isExperimentCommand) {
-        ephemeral = false;
+        const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "create";
+        ephemeral = sub === "end";
       } else if (isPastelCommand) {
         // Color Chaos lobbies must be public so other players can actually see
         // and join them. Only the end-game command remains private.
