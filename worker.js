@@ -3604,92 +3604,107 @@ function drawBeansBurst(frame, phase=0) {
 }
 
 
+function drawEffectTriangle(frame, p1, p2, p3, rgb, a=235){
+  const minX=Math.max(0,Math.floor(Math.min(p1[0],p2[0],p3[0]))-1);
+  const maxX=Math.min(frame.width-1,Math.ceil(Math.max(p1[0],p2[0],p3[0]))+1);
+  const minY=Math.max(0,Math.floor(Math.min(p1[1],p2[1],p3[1]))-1);
+  const maxY=Math.min(frame.height-1,Math.ceil(Math.max(p1[1],p2[1],p3[1]))+1);
+  const edge=(ax,ay,bx,by,cx,cy)=>((cx-ax)*(by-ay)-(cy-ay)*(bx-ax));
+  const area=edge(p1[0],p1[1],p2[0],p2[1],p3[0],p3[1]);
+  if(Math.abs(area)<0.01)return;
+  for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){
+    const e1=edge(p1[0],p1[1],p2[0],p2[1],x,y);
+    const e2=edge(p2[0],p2[1],p3[0],p3[1],x,y);
+    const e3=edge(p3[0],p3[1],p1[0],p1[1],x,y);
+    if((e1>=0&&e2>=0&&e3>=0)||(e1<=0&&e2<=0&&e3<=0)) effectPixelBlend(frame,x,y,rgb[0],rgb[1],rgb[2],a);
+  }
+}
+
+function drawEffectDiamond(frame,cx,cy,w,h,rgb,a=235){
+  drawEffectTriangle(frame,[cx,cy-h/2],[cx+w/2,cy],[cx,cy+h/2],rgb,a);
+  drawEffectTriangle(frame,[cx,cy-h/2],[cx-w/2,cy],[cx,cy+h/2],rgb,a);
+  effectRibbonPath(frame,[[cx,cy-h*.38],[cx,cy+h*.38]],Math.max(1,w*.035),[255,255,255],130);
+}
+
+function drawEffectFiveStar(frame,cx,cy,r,rgb,a=235){
+  const pts=[];
+  for(let i=0;i<10;i++){
+    const ang=-Math.PI/2+i*Math.PI/5;
+    const rr=i%2===0?r:r*.43;
+    pts.push([cx+Math.cos(ang)*rr,cy+Math.sin(ang)*rr]);
+  }
+  for(let i=1;i<pts.length-1;i++) drawEffectTriangle(frame,pts[0],pts[i],pts[i+1],rgb,a);
+  effectDisc(frame,cx,cy,Math.max(1,r*.12),[255,255,255],170);
+}
+
 function drawAnimatedFairyFlight(frame, phase=0) {
+  // GIF-safe fairies: large, simple silhouettes with unmistakable wings, heads,
+  // dresses and wands. Avoids tiny details that Discord's palette can destroy.
   const fairies=[
-    [0.14,0.25,22,0],[0.34,0.55,18,1],[0.58,0.22,24,2],[0.82,0.48,20,3],[0.73,0.76,16,4]
+    [.14,.27,34,0],[.36,.52,31,1],[.61,.22,36,2],[.83,.48,32,3],[.72,.73,27,4]
   ];
-  const colors=[[255,190,225],[205,180,255],[170,225,255],[255,225,155],[190,245,205]];
+  const cols=[[255,175,220],[205,180,255],[155,220,255],[255,220,145],[180,245,205]];
   for(let i=0;i<fairies.length;i++){
-    const [bx,by,size,seed]=fairies[i],t=phase*Math.PI*2+i*1.7;
-    const x=(bx+Math.sin(t*1.1+seed)*0.055)*frame.width;
-    const y=(by+Math.cos(t*1.35+seed)*0.065)*frame.height;
-    const flap=0.78+0.22*Math.sin(phase*Math.PI*2*4+seed);
-    const c=colors[i%colors.length];
-    drawRotatedEllipse(frame,x-size*.48*flap,y-size*.35,size*.55,size*.82,Math.sin(t)*.18,c,210);
-    drawRotatedEllipse(frame,x+size*.48*flap,y-size*.35,size*.55,size*.82,-Math.sin(t)*.18,c,210);
-    drawRotatedEllipse(frame,x-size*.40*flap,y+size*.34,size*.43,size*.58,Math.sin(t)*.12,c,190);
-    drawRotatedEllipse(frame,x+size*.40*flap,y+size*.34,size*.43,size*.58,-Math.sin(t)*.12,c,190);
-    drawRotatedEllipse(frame,x,y,size*.11,size*.58,0,[80,55,90],245);
-    drawRotatedEllipse(frame,x,y-size*.47,size*.10,size*.10,0,[255,240,255],180);
-    effectRibbonPath(frame,[
-      [x-size*1.2,y+size*.55],[x-size*1.8,y+size*.9],[x-size*2.4,y+size*.45]
-    ],2.2,[255,220,250],130);
-    drawSparkle(frame,Math.round(x+size*.9),Math.round(y-size*.8),'star');
+    const [bx,by,size,seed]=fairies[i], t=phase*Math.PI*2+seed*1.6;
+    const x=(bx+Math.sin(t*1.1)*.045)*frame.width;
+    const y=(by+Math.cos(t*1.3)*.045)*frame.height;
+    const c=cols[i%cols.length];
+    const flap=1+Math.sin(phase*Math.PI*2*4+seed)*.14;
+    // upper and lower wings: broad, round, separated from the body
+    drawRotatedEllipse(frame,x-size*.48,y-size*.18,size*.48,size*.72,-.34*flap,c,225);
+    drawRotatedEllipse(frame,x+size*.48,y-size*.18,size*.48,size*.72,.34*flap,c,225);
+    drawRotatedEllipse(frame,x-size*.40,y+size*.43,size*.36,size*.50,-.20*flap,c,190);
+    drawRotatedEllipse(frame,x+size*.40,y+size*.43,size*.36,size*.50,.20*flap,c,190);
+    // head + body + bell-shaped dress
+    effectDisc(frame,x,y-size*.48,size*.24,[255,238,220],245);
+    drawRotatedEllipse(frame,x,y+size*.08,size*.23,size*.52,[78,52,92],245);
+    drawRotatedEllipse(frame,x,y+size*.50,size*.52,size*.22,c,245);
+    // hair cap and tiny wand
+    drawRotatedEllipse(frame,x-size*.10,y-size*.59,size*.20,size*.10,c,220);
+    effectRibbonPath(frame,[[x+size*.42,y+size*.10],[x+size*.72,y-size*.18],[x+size*.90,y-size*.52]],Math.max(2,size*.055),[255,245,180],235);
+    drawSparkle(frame,Math.round(x+size*.94),Math.round(y-size*.55),'star');
+    // glitter trail behind the fairy
+    for(let k=0;k<3;k++){
+      const tx=x-size*(1.05+k*.45), ty=y+size*(.45+Math.sin(t+k)*.18);
+      drawSparkle(frame,Math.round(tx),Math.round(ty),'rainbow');
+    }
   }
 }
 
 function drawAnimatedCrystalAura(frame, phase=0) {
-  const cx=frame.width*.5, cy=frame.height*.48;
+  // Large faceted diamond crystals with strong silhouettes; no tiny shard blobs.
+  const cx=frame.width*.5, cy=frame.height*.47;
   const crystals=[
-    [0,-150,0.1,28,[180,220,255]],[115,-75,-.4,23,[220,170,255]],
-    [125,65,.5,30,[170,245,225]],[0,145,-.15,25,[210,180,255]],
-    [-125,65,.4,27,[180,220,255]],[-115,-75,-.5,22,[235,190,255]]
+    [0,-145,38,78,[170,225,255]],[112,-72,34,68,[220,170,255]],
+    [124,58,40,84,[155,240,215]],[0,145,36,74,[215,180,255]],
+    [-124,58,40,84,[170,220,255]],[-112,-72,34,68,[240,190,255]]
   ];
   for(let i=0;i<crystals.length;i++){
-    const [ox,oy,a,size,c]=crystals[i];
-    const ang=a+phase*Math.PI*2*(i%2?-.25:.25);
-    const x=cx+ox*Math.cos(phase*Math.PI*2+ i)-oy*.12*Math.sin(phase*Math.PI*2);
-    const y=cy+oy+Math.sin(phase*Math.PI*2+i)*10;
-    drawRotatedEllipse(frame,x,y,size*.45,size*1.45,ang,c,220);
-    effectDisc(frame,x,y,size*.22,[255,255,255],115);
+    const [ox,oy,w,h,c]=crystals[i];
+    const a=phase*Math.PI*2*(i%2?-.18:.18)+i*.7;
+    const x=cx+ox*Math.cos(a*.22)-oy*.10*Math.sin(a);
+    const y=cy+oy+Math.sin(phase*Math.PI*2+i)*12;
+    drawEffectDiamond(frame,x,y,w,h,c,238);
+    drawEffectDiamond(frame,x,y,w*.42,h*.72,[255,255,255],75);
+    drawSparkle(frame,Math.round(x+w*.75),Math.round(y-h*.48),'rainbow');
   }
-  for(let i=0;i<14;i++){
-    const a=phase*Math.PI*2+i*Math.PI*2/14, r=150+18*Math.sin(i+phase*6);
-    effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.65,3,[210,235,255],150);
+  for(let i=0;i<10;i++){
+    const a=phase*Math.PI*2+i*Math.PI*2/10, r=190+15*Math.sin(i+phase*5);
+    effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.62,3.5,[205,235,255],175);
   }
 }
 
 function drawAnimatedStarfall(frame, phase=0) {
-  for(let i=0;i<28;i++){
-    const t=(phase*.75+i/28)%1;
-    const x=(.03+((i*37)%94)/100)*frame.width;
-    const y=((t*.95+.02+(i%4)*.015)%1.05)*frame.height;
-    const r=2+(i%4)*1.6;
-    effectDisc(frame,x,y,r*2,[255,245,190],90);
-    drawSparkle(frame,Math.round(x),Math.round(y),'star');
+  // Five-point stars are much more robust than the old cross-shaped sparkle.
+  for(let i=0;i<18;i++){
+    const t=(phase*.72+i/18)%1;
+    const x=(.04+((i*47)%92)/100)*frame.width;
+    const y=((t*.92+.01+(i%3)*.025)%1.04)*frame.height;
+    const r=7+(i%4)*2.2;
+    const c=i%3===0?[255,235,150]:i%3===1?[220,205,255]:[180,225,255];
+    drawEffectFiveStar(frame,x,y,r,c,235);
+    if(i%3===0) drawSparkle(frame,Math.round(x),Math.round(y),'star');
   }
-}
-
-function drawUnicornShape(frame,x,y,size,mane,phase,seed){
-  const body=[250,244,255];
-  const bob=Math.sin(phase*Math.PI*2+seed)*3;
-  y+=bob;
-  drawRotatedEllipse(frame,x,y,size*1.45,size*.58,0,body,250);
-  for(const lx of [-.9,-.45,.35,.82]){
-    const swing=Math.sin(phase*Math.PI*2*1.5+seed+lx)*size*.12;
-    effectRibbonPath(frame,[[x+lx*size,y+size*.35],[x+(lx+.03)*size+swing,y+size*1.18]],size*.10,body,250);
-  }
-  effectRibbonPath(frame,[[x+size*.8,y],[x+size*1.05,y-size*.9],[x+size*1.55,y-size*.95]],size*.34,body,250);
-  drawRotatedEllipse(frame,x+size*1.42,y-size*.95,size*.62,size*.48,0,body,250);
-  drawRotatedEllipse(frame,x+size*1.86,y-size*.88,size*.32,size*.25,0,body,250);
-  // Integrated mane hugs the neck; it is short and layered, never a detached blob.
-  for(let k=0;k<3;k++){
-    const pts=[];
-    for(let j=0;j<7;j++){
-      const t=j/6;
-      pts.push([
-        x+size*(1.03-t*.55)+Math.sin(t*Math.PI+phase*2+seed+k)*size*.035,
-        y-size*(.98-t*.62)-k*size*.045
-      ]);
-    }
-    effectRibbonPath(frame,pts,size*(.13-.018*k),mane,220);
-  }
-  effectRibbonPath(frame,[[x-size*1.32,y-size*.05],[x-size*1.9,y-size*.15],[x-size*2.25,y+size*.18]],size*.18,mane,215);
-  // horn, ear, eye
-  effectRibbonPath(frame,[[x+size*1.60,y-size*1.27],[x+size*1.72,y-size*1.72]],size*.07,[255,225,145],250);
-  effectRibbonPath(frame,[[x+size*1.25,y-size*1.30],[x+size*1.18,y-size*1.60],[x+size*1.38,y-size*1.38]],size*.10,body,250);
-  effectDisc(frame,x+size*1.99,y-size*.98,size*.055,[65,45,90],255);
-  drawSparkle(frame,Math.round(x+size*1.72),Math.round(y-size*1.75),'star');
 }
 
 function drawAnimatedUnicornSparkle(frame, phase=0) {
@@ -3775,80 +3790,148 @@ function drawAnimatedBubblePop(frame, phase=0) {
   }
 }
 
+function drawWrappedCandy(frame,cx,cy,w,h,rgb,angle=0){
+  drawRotatedEllipse(frame,cx,cy,w*.62,h*.38,angle,rgb,240);
+  // twisted wrapper ends: unmistakably candy-like
+  const ca=Math.cos(angle),sa=Math.sin(angle);
+  for(const side of [-1,1]){
+    const ex=cx+ca*side*w*.78, ey=cy+sa*side*w*.78;
+    drawRotatedEllipse(frame,ex,ey,w*.20,h*.30,angle+side*.55,rgb,235);
+    effectRibbonPath(frame,[[ex-ca*w*.18,ey-sa*w*.18],[ex+ca*w*.18,ey+sa*w*.18]],Math.max(1.5,w*.035),[255,255,255],115);
+  }
+  effectRibbonPath(frame,[[cx-ca*w*.25,cy-sa*w*.25],[cx+ca*w*.25,cy+sa*w*.25]],Math.max(1.5,w*.05),[255,255,255],115);
+}
+function drawLollipop(frame,cx,cy,r,rgb,angle=0){
+  const ca=Math.cos(angle),sa=Math.sin(angle);
+  effectRibbonPath(frame,[[cx,cy+r*.65],[cx-ca*r*.08,cy+r*1.75],[cx+ca*r*.02,cy+r*2.35]],Math.max(2,r*.10),[245,245,245],235);
+  drawRotatedEllipse(frame,cx,cy,r*.78,r*.78,0,rgb,240);
+  // simple spiral-like diagonal bands that survive palette reduction
+  effectRibbonPath(frame,[[cx-r*.45,cy-r*.20],[cx,cy+r*.05],[cx+r*.45,cy-r*.20]],Math.max(2,r*.07),[255,245,255],170);
+  drawSparkle(frame,Math.round(cx+r*.55),Math.round(cy-r*.55),'star');
+}
+function drawCandyCane(frame,cx,cy,size,rgb){
+  const pts=[];
+  for(let j=0;j<12;j++){
+    const t=j/11;
+    pts.push([cx,cy+size*.95-t*size*1.7]);
+  }
+  for(let j=0;j<8;j++){
+    const a=Math.PI*(1.0-j/7*.95);
+    pts.push([cx+Math.cos(a)*size*.48,cy-size*.75+Math.sin(a)*size*.48]);
+  }
+  effectRibbonPath(frame,pts,Math.max(3,size*.16),rgb,245);
+  effectRibbonPath(frame,pts,Math.max(1.5,size*.06),[255,255,255],165);
+}
 function drawAnimatedCandyStorm(frame, phase=0) {
   const candies=[
-    [55,.12,0],[145,.30,1],[250,.08,2],[355,.24,3],[470,.14,4],[620,.31,5],[770,.10,6],[900,.28,7],
-    [110,.56,8],[330,.66,9],[560,.55,10],[820,.65,11]
+    [.10,.12,24,0],[.28,.30,20,1],[.47,.10,26,2],[.66,.25,22,3],[.86,.13,25,4],
+    [.16,.55,22,5],[.39,.68,27,6],[.61,.53,23,7],[.84,.65,28,8],[.73,.84,19,9]
   ];
-  const cols=[[255,105,170],[255,210,80],[110,205,255],[175,120,255],[115,225,160]];
+  const cols=[[255,100,175],[255,205,75],[105,195,255],[180,120,255],[110,220,160]];
   for(let i=0;i<candies.length;i++){
-    const [x0,y0,seed]=candies[i],t=(phase*.82+i*.09)%1;
-    const x=x0+Math.sin(t*8+seed)*14, y=((y0+t*.95)%1.1)*frame.height;
-    const r=10+(seed%3)*3;
-    drawRotatedEllipse(frame,x,y,r*1.35,r*.72,t*4+seed,cols[seed%cols.length],230);
-    drawRotatedEllipse(frame,x,y,r*.55,r*.28,t*4+seed,[255,245,255],80);
-    drawSparkle(frame,Math.round(x),Math.round(y),'star');
+    const [bx,by,size,seed]=candies[i];
+    const t=(phase*.75+i*.09)%1;
+    const x=((bx+Math.sin(t*7+seed)*.025)%1)*frame.width;
+    const y=((by+t*.70)%1.08)*frame.height;
+    if(seed%3===0) drawLollipop(frame,x,y,size,cols[seed%cols.length],(seed%2?-.2:.2));
+    else if(seed%3===1) drawCandyCane(frame,x,y,size,cols[seed%cols.length]);
+    else drawWrappedCandy(frame,x,y,size*1.7,size*.9,cols[seed%cols.length],Math.sin(t*4+seed)*.35);
+  }
+  for(let i=0;i<8;i++){
+    const x=(.08+i*.12)*frame.width, y=((phase*.6+i*.13)%1)*frame.height;
+    drawSparkle(frame,Math.round(x),Math.round(y),'rainbow');
   }
 }
 
+function drawCatSilhouette(frame,cx,cy,size,rgb,step=0){
+  // Large, unmistakable cat: triangular ears, round head, four paws and curved tail.
+  const bob=Math.sin(step*Math.PI*2)*size*.06;
+  cy+=bob;
+  drawRotatedEllipse(frame,cx,cy,size*.62,size*.42,0,rgb,245);
+  drawRotatedEllipse(frame,cx+size*.56,cy-size*.34,size*.40,size*.38,0,rgb,245);
+  drawEffectTriangle(frame,[cx+size*.34,cy-size*.55],[cx+size*.43,cy-size*.98],[cx+size*.63,cy-size*.54],rgb,245);
+  drawEffectTriangle(frame,[cx+size*.72,cy-size*.55],[cx+size*.84,cy-size*.98],[cx+size*.98,cy-size*.45],rgb,245);
+  // legs/paws
+  for(const dx of [-.42,-.08,.28,.52]) drawRotatedEllipse(frame,cx+dx*size,cy+size*.42,size*.13,size*.32,0,rgb,245);
+  // long curved tail
+  const tail=[];
+  for(let j=0;j<13;j++){
+    const t=j/12;
+    tail.push([cx-size*.52-t*size*.95,cy+size*.05-Math.sin(t*Math.PI)*size*.55]);
+  }
+  effectRibbonPath(frame,tail,Math.max(3,size*.13),rgb,240);
+  // face: eyes + nose + whiskers
+  effectDisc(frame,cx+size*.62,cy-size*.40,size*.055,[55,40,75],255);
+  effectDisc(frame,cx+size*.83,cy-size*.40,size*.055,[55,40,75],255);
+  effectDisc(frame,cx+size*.73,cy-size*.29,size*.045,[245,150,190],245);
+  for(const dy of [-.34,-.22,.0,.22,.34]){
+    effectRibbonPath(frame,[[cx+size*.62,cy+dy*size],[cx+size*1.12,cy+(dy+.04)*size]],1.4,[70,55,80],205);
+  }
+}
 function drawAnimatedKittyParade(frame, phase=0) {
-  const cats=[
-    [.18,.78,23,0],[.40,.70,28,1],[.63,.79,24,2],[.84,.68,30,3]
-  ];
-  const cols=[[245,225,230],[215,205,245],[235,240,250],[245,220,180]];
+  const cats=[[.13,.78,29,0],[.38,.67,33,1],[.64,.79,30,2],[.86,.66,34,3]];
+  const cols=[[248,225,235],[215,200,245],[225,240,250],[245,220,180]];
   for(let i=0;i<cats.length;i++){
-    const [bx,by,size,seed]=cats[i],t=(phase*.55+i*.22)%1;
-    const x=((bx+t*.35)%1.15)*frame.width, y=(by+Math.sin(t*8+seed)*.025)*frame.height;
-    const c=cols[seed%cols.length];
-    drawRotatedEllipse(frame,x,y,size*1.05,size*.72,0,c,245);
-    drawRotatedEllipse(frame,x+size*.8,y-size*.55,size*.58,size*.55,0,c,245);
-    // ears
-    drawRotatedEllipse(frame,x+size*.55,y-size*.95,size*.25,size*.38,-.4,c,245);
-    drawRotatedEllipse(frame,x+size*1.0,y-size*.98,size*.25,size*.38,.4,c,245);
-    effectDisc(frame,x+size*.98,y-size*.60,size*.055,[60,45,70],255);
-    effectDisc(frame,x+size*.68,y-size*.60,size*.055,[60,45,70],255);
-    // tail and paws
-    effectRibbonPath(frame,[[x-size*.95,y-size*.1],[x-size*1.35,y-size*.5],[x-size*1.2,y-size*.8]],size*.12,c,230);
-    for(const dx of [-.55,.55]) effectDisc(frame,x+dx*size,y+size*.65,size*.15,c,230);
-    if(i%2===0) drawSparkle(frame,Math.round(x+size*1.25),Math.round(y-size*1.25),'star');
+    const [bx,by,size,seed]=cats[i],t=(phase*.48+i*.22)%1;
+    const x=((bx+t*.28)%1.12)*frame.width;
+    const y=(by+Math.sin(t*8+seed)*.018)*frame.height;
+    drawCatSilhouette(frame,x,y,size,cols[seed%cols.length],t);
+    drawSparkle(frame,Math.round(x+size*.9),Math.round(y-size*1.15),'rainbow');
+    effectDisc(frame,x-size*.65,y+size*.70,size*.07,[245,180,215],180);
+    effectDisc(frame,x-size*.45,y+size*.72,size*.07,[245,180,215],180);
   }
 }
 
-function drawAnimatedElectricStorm(frame, phase=0) {
-  for(let bolt=0;bolt<7;bolt++){
-    const seed=bolt*1.71;
-    const x0=(.08+bolt*.14)*frame.width;
-    const pts=[];
-    for(let j=0;j<10;j++){
-      const t=j/9;
-      pts.push([
-        x0+Math.sin(phase*Math.PI*4+seed+j*2.2)*22,
-        (.08+t*.72+Math.sin(seed+t*8)*.025)*frame.height
-      ]);
-    }
-    effectRibbonPath(frame,pts,5,[155,205,255],170);
-    effectRibbonPath(frame,pts,2,[235,250,255],255);
+function drawLightningBolt(frame,x,y,length,width,rgb=[175,225,255],a=235,seed=0){
+  const pts=[];
+  const segments=6;
+  for(let j=0;j<=segments;j++){
+    const t=j/segments;
+    const side=(j===0||j===segments)?0:((j%2===0)?-1:1);
+    pts.push([x+side*width*(.55+Math.sin(seed+j)*.18),y+t*length]);
   }
-  for(let i=0;i<14;i++){
-    const a=phase*Math.PI*2+i*.9,r=110+35*Math.sin(i);
-    effectDisc(frame,frame.width*.5+Math.cos(a)*r,frame.height*.45+Math.sin(a)*r*.6,4,[120,190,255],150);
+  effectRibbonPath(frame,pts,width*.12,rgb,a);
+  effectRibbonPath(frame,pts,Math.max(1.5,width*.045),[255,255,255],255);
+}
+function drawAnimatedElectricStorm(frame, phase=0) {
+  // Short branching flashes instead of full-height continuous spaghetti bolts.
+  for(let i=0;i<9;i++){
+    const cycle=(phase*1.4+i*.17)%1;
+    const flash=cycle<.34;
+    if(!flash) continue;
+    const x=(.08+((i*31)%84)/100)*frame.width;
+    const y=(.12+((i*17)%64)/100)*frame.height;
+    const len=70+(i%4)*25;
+    drawLightningBolt(frame,x,y,len,18,[170,220,255],245,i*1.7);
+    if(i%2===0){
+      effectRibbonPath(frame,[[x,y+len*.42],[x-35,y+len*.62],[x-58,y+len*.82]],4,[180,225,255],220);
+      effectRibbonPath(frame,[[x,y+len*.45],[x+34,y+len*.64],[x+56,y+len*.86]],4,[180,225,255],220);
+    }
+    drawSparkle(frame,Math.round(x),Math.round(y+len*.5),'star');
+  }
+  for(let i=0;i<7;i++){
+    const a=phase*Math.PI*2+i*.9, r=95+20*Math.sin(i);
+    effectDisc(frame,frame.width*.5+Math.cos(a)*r,frame.height*.48+Math.sin(a)*r*.6,4,[145,205,255],150);
   }
 }
 
 function drawAnimatedExperimentalEffect(frame, phase=0) {
+  // The experiment cycles through complete, readable effects in deterministic
+  // stages so it never flickers into an arbitrary new effect every frame.
   const pool=[
-    drawAnimatedPetalStorm,drawAnimatedButterflyGarden,drawAnimatedRainbowTrail,
-    drawAnimatedEmberGlow,drawAnimatedMeteorShower,drawAnimatedCosmicRift,
-    drawAnimatedFairyFlight,drawAnimatedCrystalAura,drawAnimatedStarfall,
-    drawAnimatedSnowfall,drawAnimatedFlowerBloom,drawAnimatedBubblePop,
-    drawAnimatedCandyStorm,drawAnimatedKittyParade,drawAnimatedElectricStorm
+    drawAnimatedFairyFlight,
+    drawAnimatedCrystalAura,
+    drawAnimatedStarfall,
+    drawAnimatedCandyStorm,
+    drawAnimatedKittyParade,
+    drawAnimatedElectricStorm
   ];
-  // One experiment is selected per animation cycle, then changes next cycle.
-  const choice=Math.floor(Math.random()*pool.length);
-  pool[choice](frame,phase);
-  for(let i=0;i<7;i++){
-    const x=(.15+i*.12)*frame.width, y=(.18+(i%3)*.27)*frame.height;
-    drawSparkle(frame,Math.round(x+Math.sin(phase*7+i)*15),Math.round(y),'rainbow');
+  const stage=Math.min(pool.length-1,Math.floor((phase%1)*pool.length));
+  pool[stage](frame,(phase*pool.length)%1);
+  for(let i=0;i<6;i++){
+    const x=(.16+i*.14)*frame.width;
+    const y=(.16+(i%3)*.29)*frame.height;
+    drawSparkle(frame,Math.round(x+Math.sin(phase*8+i)*18),Math.round(y),'rainbow');
   }
 }
 
