@@ -3858,156 +3858,170 @@ function drawAnimatedBubblePop(frame, phase=0) {
 }
 
 function drawAnimatedCandyStorm(frame, phase=0) {
-  // SUPER CUTE CANDY STORM 🍭🍬
-  // Keep every piece chunky and unmistakable so Discord's GIF palette preserves
-  // the candy silhouettes: classic wrapped sweets + clearly separate lollipops.
-  const wrapped = [
-    [.10,.12,58,0],[.34,.08,52,1],[.61,.16,60,2],[.86,.10,54,3],
-    [.18,.45,55,4],[.46,.40,58,5],[.76,.46,54,6],[.91,.63,58,7],
-    [.09,.78,50,8],[.57,.78,56,9]
+  // Extra-cute candy shower: unmistakable wrapped sweets plus round lollipops.
+  // Shapes are chunky and high-contrast so they survive Discord's GIF palette.
+  const pieces=[
+    [.10,.10,48,0,0],[.29,.19,44,1,0],[.51,.08,50,2,1],[.75,.16,46,3,0],
+    [.90,.36,42,4,1],[.17,.50,46,5,0],[.43,.60,50,6,1],[.70,.52,45,7,0],
+    [.88,.78,48,8,0],[.28,.82,43,9,1],[.58,.88,46,10,0]
   ];
-  const lollipops = [
-    [.27,.25,42,0],[.72,.27,46,1],[.35,.64,40,2],[.82,.84,44,3]
-  ];
-  const cols=[
-    [255,105,175],   // cotton-candy pink
-    [255,205,65],    // lemon yellow
-    [100,195,255],   // candy blue
-    [180,115,255],   // grape purple
-    [105,220,165],   // mint
-    [255,145,115]    // peach
-  ];
-  const light=[255,250,255];
-  const dark=[78,48,88];
+  const cols=[[255,105,175],[255,205,65],[105,200,255],[185,120,255],[105,225,175],[255,155,125]];
+  const white=[255,250,255];
+  const outline=[75,48,92];
 
-  // Classic wrapped candies: oval center, pinched/crinkled ends, shine,
-  // and a tiny amount of rotation so they feel like real falling candy.
-  for(const [bx,by,size,seed] of wrapped){
-    const t=(phase*.34+seed*.071)%1;
-    const x=(bx+Math.sin(t*6+seed)*.028)*frame.width;
-    const y=((by+t*.78)%1.16-.08)*frame.height;
+  for(const [bx,by,size,seed,type] of pieces){
+    const t=(phase*.48+seed*.073)%1;
+    const x=(bx+Math.sin(t*6.2+seed)*.028)*frame.width;
+    const y=((by+t*.76)%1.12-.06)*frame.height;
     const c=cols[seed%cols.length];
-    const ang=(seed%2?-1:1)*(.10+Math.sin(phase*3.5+seed)*.055);
-    const shade=cols[(seed+2)%cols.length];
+    const bob=Math.sin(phase*Math.PI*4+seed)*.06;
+    const ang=(seed%2?-1:1)*(.10+bob);
 
-    // Dark outline + colorful candy center.
-    drawRotatedEllipse(frame,x,y,size*.55,size*.30,ang,dark,235);
-    drawRotatedEllipse(frame,x,y,size*.48,size*.245,ang,c,248);
+    if(type===1){
+      // Round lollipop with a visible stick and candy swirl/highlights.
+      effectRibbonPath(frame,[[x,y+size*.25],[x+size*.08,y+size*1.12]],size*.065,white,245);
+      effectDisc(frame,x,y-size*.43,size*.50,outline,240);
+      effectDisc(frame,x,y-size*.43,size*.43,c,250);
+      effectRibbonPath(frame,[[x-size*.22,y-size*.57],[x-size*.05,y-size*.66],[x+size*.18,y-size*.54]],size*.055,white,220);
+      effectRibbonPath(frame,[[x-size*.20,y-size*.34],[x+size*.12,y-size*.29]],size*.04,white,205);
+      effectDisc(frame,x+size*.13,y-size*.57,size*.065,white,235);
+    } else {
+      // Rounded candy center with deliberately pinched, crinkled wrapper ends.
+      drawRotatedEllipse(frame,x,y,size*.66,size*.39,ang,outline,240);
+      drawRotatedEllipse(frame,x,y,size*.57,size*.31,ang,c,250);
 
-    // Pinched wrapper ends — two little crinkles on each side.
-    effectTriangle(frame,
-      [x-size*.43,y-size*.10],[x-size*.72,y-size*.28],[x-size*.67,y+size*.02],
-      shade,240);
-    effectTriangle(frame,
-      [x-size*.43,y+size*.10],[x-size*.72,y+size*.28],[x-size*.67,y-size*.02],
-      c,235);
-    effectTriangle(frame,
-      [x+size*.43,y-size*.10],[x+size*.72,y-size*.28],[x+size*.67,y+size*.02],
-      shade,240);
-    effectTriangle(frame,
-      [x+size*.43,y+size*.10],[x+size*.72,y+size*.28],[x+size*.67,y-size*.02],
-      c,235);
+      // Left wrapper: two little folds + pointed crinkle.
+      effectTriangle(frame,[x-size*.48,y-size*.18],[x-size*.82,y-size*.34],[x-size*.72,y-size*.05],c,245);
+      effectTriangle(frame,[x-size*.72,y-size*.05],[x-size*.94,y-size*.27],[x-size*.88,y+size*.12],c,245);
+      effectTriangle(frame,[x-size*.47,y+size*.16],[x-size*.88,y+size*.12],[x-size*.74,y+size*.30],c,235);
 
-    // Cute candy shine and simple wrapper bands — short, solid marks survive
-    // Discord's palette reduction much better than thin continuous curves.
-    effectRibbonPath(frame,
-      [[x-size*.23,y-size*.20],[x-size*.13,y+size*.19]],size*.055,light,220);
-    effectRibbonPath(frame,
-      [[x+size*.13,y-size*.19],[x+size*.23,y+size*.20]],size*.055,light,205);
-    effectDisc(frame,x-size*.22,y-size*.10,size*.055,light,220);
+      // Right wrapper mirrors the folds.
+      effectTriangle(frame,[x+size*.48,y-size*.18],[x+size*.82,y-size*.34],[x+size*.72,y-size*.05],c,245);
+      effectTriangle(frame,[x+size*.72,y-size*.05],[x+size*.94,y-size*.27],[x+size*.88,y+size*.12],c,245);
+      effectTriangle(frame,[x+size*.47,y+size*.16],[x+size*.88,y+size*.12],[x+size*.74,y+size*.30],c,235);
 
-    // Tiny sparkle on some candies.
-    if(seed%3===0){
-      drawSparkle(frame,Math.round(x+size*.25),Math.round(y-size*.23),'star');
+      // Wrapper creases and a soft candy shine.
+      effectRibbonPath(frame,[[x-size*.64,y-size*.19],[x-size*.82,y-size*.28]],size*.045,white,215);
+      effectRibbonPath(frame,[[x+size*.64,y-size*.19],[x+size*.82,y-size*.28]],size*.045,white,215);
+      effectRibbonPath(frame,[[x-size*.18,y-size*.27],[x-size*.05,y+size*.25]],size*.055,white,205);
+      effectRibbonPath(frame,[[x+size*.12,y-size*.25],[x+size*.23,y+size*.22]],size*.045,white,190);
+      effectDisc(frame,x-size*.18,y-size*.17,size*.075,white,220);
     }
-  }
-
-  // Lollipops are separate objects: round candy head + unmistakable stick.
-  for(const [bx,by,size,seed] of lollipops){
-    const t=(phase*.30+seed*.13+.12)%1;
-    const x=(bx+Math.sin(t*5+seed)*.025)*frame.width;
-    const y=((by+t*.72)%1.15-.07)*frame.height;
-    const c=cols[(seed+1)%cols.length];
-    const accent=cols[(seed+3)%cols.length];
-    const bob=Math.sin(phase*5+seed)*3;
-
-    // Stick first so the candy head sits naturally on top of it.
-    effectRibbonPath(frame,
-      [[x,y+size*.34],[x+Math.sin(seed)*size*.10,y+size*.98]],
-      size*.075,light,245);
-    effectRibbonPath(frame,
-      [[x+size*.035,y+size*.40],[x+Math.sin(seed)*size*.10+size*.035,y+size*.88]],
-      size*.025,accent,210);
-
-    // Round lollipop with a dark outline and bright pastel face.
-    effectDisc(frame,x,y+bob,size*.48,dark,235);
-    effectDisc(frame,x,y+bob,size*.40,c,248);
-
-    // Simple diagonal candy stripe + two chunky shine dots.
-    effectRibbonPath(frame,
-      [[x-size*.28,y-size*.08+bob],[x+size*.20,y+size*.22+bob]],
-      size*.065,light,215);
-    effectRibbonPath(frame,
-      [[x-size*.20,y-size*.27+bob],[x+size*.08,y-size*.08+bob]],
-      size*.045,light,185);
-    effectDisc(frame,x-size*.14,y-size*.17+bob,size*.065,light,235);
-    if(seed%2===0) drawSparkle(frame,Math.round(x+size*.28),Math.round(y-size*.22+bob),'star');
   }
 }
+
 function drawAnimatedKittyParade(frame, phase=0) {
-  // Large, simple cat silhouettes: head + pointed ears + body + four paws +
-  // curved tail. The cats are deliberately oversized so Discord cannot turn
-  // them into mouse-looking blobs.
+  // Compact, cute cats: rounded bodies, short chunky legs, little paws,
+  // clear cat faces, and thick curved tails that survive GIF reduction.
   const cats=[
-    [.08,.72,78,0],[.43,.66,86,1],[.76,.73,80,2]
+    [.10,.72,68,0],[.43,.67,72,1],[.76,.73,66,2],[1.02,.60,64,3]
   ];
-  const cols=[[248,218,232],[205,190,245],[235,238,250]];
+  const cols=[[248,218,232],[205,190,245],[235,238,250],[250,225,190]];
   const outline=[55,45,70];
+
   for(const [bx,by,size,seed] of cats){
-    const t=(phase*.42+seed*.31)%1;
-    const x=((bx+t*.36)%1.18)*frame.width;
-    const y=(by+Math.sin(t*7+seed)*.018)*frame.height;
+    const t=(phase*.34+seed*.27)%1;
+    const x=((bx+t*.30)%1.20)*frame.width;
+    const y=(by+Math.sin(t*6+seed)*.015)*frame.height;
     const c=cols[seed%cols.length];
 
-    // Body and head.
-    drawRotatedEllipse(frame,x,y,size*.82,size*.40,0,outline,245);
-    drawRotatedEllipse(frame,x,y,size*.69,size*.31,0,c,245);
-    effectDisc(frame,x+size*.66,y-size*.20,size*.46,outline,245);
-    effectDisc(frame,x+size*.66,y-size*.20,size*.37,c,245);
+    // Compact body and slightly oversized head.
+    drawRotatedEllipse(frame,x,y,size*.66,size*.34,0,outline,245);
+    drawRotatedEllipse(frame,x,y,size*.56,size*.26,0,c,250);
+    effectDisc(frame,x+size*.53,y-size*.20,size*.40,outline,245);
+    effectDisc(frame,x+size*.53,y-size*.20,size*.32,c,250);
 
-    // Big triangular ears.
-    effectTriangle(frame,[x+size*.39,y-size*.43],[x+size*.53,y-size*.94],[x+size*.70,y-size*.40],outline,245);
-    effectTriangle(frame,[x+size*.69,y-size*.40],[x+size*.84,y-size*.92],[x+size*.99,y-size*.30],outline,245);
-    effectTriangle(frame,[x+size*.48,y-size*.46],[x+size*.54,y-size*.78],[x+size*.64,y-size*.43],[245,165,195],235);
-    effectTriangle(frame,[x+size*.76,y-size*.43],[x+size*.84,y-size*.77],[x+size*.93,y-size*.34],[245,165,195],235);
+    // Ears are close together and unmistakably cat-like.
+    effectTriangle(frame,[x+size*.28,y-size*.36],[x+size*.37,y-size*.72],[x+size*.49,y-size*.39],outline,245);
+    effectTriangle(frame,[x+size*.53,y-size*.38],[x+size*.65,y-size*.72],[x+size*.75,y-size*.31],outline,245);
+    effectTriangle(frame,[x+size*.34,y-size*.39],[x+size*.38,y-size*.60],[x+size*.45,y-size*.40],[245,165,195],235);
+    effectTriangle(frame,[x+size*.58,y-size*.40],[x+size*.65,y-size*.60],[x+size*.71,y-size*.34],[245,165,195],235);
 
-    // Face.
-    effectDisc(frame,x+size*.56,y-size*.29,size*.065,[45,35,55],255);
-    effectDisc(frame,x+size*.79,y-size*.29,size*.065,[45,35,55],255);
-    effectTriangle(frame,[x+size*.66,y-size*.16],[x+size*.74,y-size*.08],[x+size*.59,y-size*.08],[235,120,170],245);
-    effectRibbonPath(frame,[[x+size*.66,y-size*.06],[x+size*.66,y+size*.02]],size*.025,[75,55,80],230);
+    // Cute face: eyes, tiny nose and mouth.
+    effectDisc(frame,x+size*.47,y-size*.25,size*.052,[45,35,55],255);
+    effectDisc(frame,x+size*.66,y-size*.25,size*.052,[45,35,55],255);
+    effectTriangle(frame,[x+size*.54,y-size*.13],[x+size*.60,y-size*.07],[x+size*.49,y-size*.07],[235,120,170],245);
+    effectRibbonPath(frame,[[x+size*.55,y-size*.03],[x+size*.55,y+size*.02]],size*.022,[75,55,80],230);
 
-    // Four chunky legs/paws.
-    for(const dx of [-.48,-.15,.30,.58]){
-      effectRibbonPath(frame,[[x+dx*size,y+size*.22],[x+(dx+.01)*size,y+size*.67]],size*.13,outline,245);
-      effectRibbonPath(frame,[[x+dx*size,y+size*.22],[x+(dx+.01)*size,y+size*.62]],size*.075,c,245);
+    // Short, rounded legs with visible little paws.
+    for(const dx of [-.38,-.12,.26,.48]){
+      const px=x+dx*size;
+      effectRibbonPath(frame,[[px,y+size*.18],[px+size*.015,y+size*.52]],size*.105,outline,245);
+      effectRibbonPath(frame,[[px,y+size*.18],[px+size*.015,y+size*.48]],size*.060,c,250);
+      effectDisc(frame,px+size*.015,y+size*.51,size*.075,c,250);
     }
 
-    // Big curled tail.
+    // Thick, rounded curled tail.
     effectRibbonPath(frame,[
-      [x-size*.72,y+size*.02],[x-size*1.05,y-size*.20],[x-size*1.15,y-size*.58],
-      [x-size*.92,y-size*.82],[x-size*.65,y-size*.68]
-    ],size*.17,outline,240);
+      [x-size*.55,y],[x-size*.82,y-size*.12],[x-size*.94,y-size*.40],
+      [x-size*.83,y-size*.62],[x-size*.57,y-size*.57]
+    ],size*.16,outline,240);
     effectRibbonPath(frame,[
-      [x-size*.72,y+size*.02],[x-size*1.02,y-size*.20],[x-size*1.08,y-size*.55],
-      [x-size*.88,y-size*.75],[x-size*.68,y-size*.63]
-    ],size*.09,c,240);
+      [x-size*.55,y],[x-size*.79,y-size*.13],[x-size*.88,y-size*.38],
+      [x-size*.77,y-size*.55],[x-size*.58,y-size*.51]
+    ],size*.085,c,245);
 
-    // Whiskers and a little collar.
-    effectRibbonPath(frame,[[x+size*.86,y-size*.12],[x+size*1.18,y-size*.20]],size*.022,[70,55,80],210);
-    effectRibbonPath(frame,[[x+size*.86,y-size*.02],[x+size*1.18,y+size*.05]],size*.022,[70,55,80],210);
-    effectRibbonPath(frame,[[x+size*.40,y+size*.08],[x+size*.82,y+size*.08]],size*.035,[255,210,95],230);
-    if(seed%2===0) drawSparkle(frame,Math.round(x+size*1.08),Math.round(y-size*.95),'star');
+    // Whiskers + tiny collar/bell.
+    effectRibbonPath(frame,[[x+size*.78,y-size*.10],[x+size*1.02,y-size*.16]],size*.018,[70,55,80],210);
+    effectRibbonPath(frame,[[x+size*.78,y],[x+size*1.02,y+size*.05]],size*.018,[70,55,80],210);
+    effectRibbonPath(frame,[[x+size*.32,y+size*.04],[x+size*.70,y+size*.04]],size*.030,[255,210,95],230);
+    effectDisc(frame,x+size*.51,y+size*.08,size*.045,[255,220,100],235);
+    if(seed%2===0) drawSparkle(frame,Math.round(x+size*.95),Math.round(y-size*.72),'star');
+  }
+}
+
+function drawAnimatedFairyFlight(frame, phase=0) {
+  // Tiny humanoid fairies with small wings behind the shoulders, readable
+  // hair/head, dress, legs, wand and glitter. Kept compact for Discord GIFs.
+  const fairies=[
+    [.16,.23,40,0],[.38,.47,37,1],[.64,.22,41,2],[.84,.45,38,3],[.70,.75,34,4]
+  ];
+  const colors=[[255,175,220],[195,170,255],[150,220,255],[255,215,145],[170,235,190]];
+  const outline=[70,45,90];
+
+  for(const [bx,by,size,seed] of fairies){
+    const t=phase*Math.PI*2+seed*1.41;
+    const x=(bx+Math.sin(t*1.05)*.045)*frame.width;
+    const y=(by+Math.cos(t*1.18)*.05)*frame.height;
+    const c=colors[seed%colors.length];
+    const flap=Math.sin(phase*Math.PI*8+seed)*.10;
+
+    // Smaller wings tucked behind the shoulders.
+    drawRotatedEllipse(frame,x-size*.25,y-size*.02,size*.15,size*.30,-.32+flap,outline,165);
+    drawRotatedEllipse(frame,x+size*.25,y-size*.02,size*.15,size*.30,.32-flap,outline,165);
+    drawRotatedEllipse(frame,x-size*.24,y-size*.03,size*.11,size*.24,-.32+flap,c,185);
+    drawRotatedEllipse(frame,x+size*.24,y-size*.03,size*.11,size*.24,.32-flap,c,185);
+
+    // Dress with a rounded waist and obvious skirt.
+    effectTriangle(frame,[x-size*.22,y+size*.02],[x+size*.22,y+size*.02],[x+size*.34,y+size*.58],outline,245);
+    effectTriangle(frame,[x-size*.17,y+size*.03],[x+size*.17,y+size*.03],[x+size*.27,y+size*.51],c,250);
+    effectDisc(frame,x,y+size*.05,size*.13,c,245);
+
+    // Head + hair cap, intentionally larger than the body for readability.
+    effectDisc(frame,x,y-size*.38,size*.24,outline,250);
+    effectDisc(frame,x,y-size*.39,size*.19,[255,235,245],250);
+    drawRotatedEllipse(frame,x,y-size*.51,size*.22,size*.13,0,[105,65,125],240);
+    effectDisc(frame,x-size*.15,y-size*.40,size*.07,[105,65,125],230);
+    effectDisc(frame,x+size*.15,y-size*.40,size*.07,[105,65,125],230);
+
+    // Tiny arms and clearly separated legs.
+    effectRibbonPath(frame,[[x-size*.12,y-size*.02],[x-size*.35,y-size*.12],[x-size*.49,y-size*.02]],size*.055,outline,245);
+    effectRibbonPath(frame,[[x+size*.12,y-size*.02],[x+size*.35,y-size*.15],[x+size*.52,y-size*.30]],size*.055,outline,245);
+    effectRibbonPath(frame,[[x-size*.08,y+size*.45],[x-size*.15,y+size*.76]],size*.065,outline,245);
+    effectRibbonPath(frame,[[x+size*.08,y+size*.45],[x+size*.15,y+size*.76]],size*.065,outline,245);
+    effectDisc(frame,x-size*.15,y+size*.78,size*.06,[255,235,245],245);
+    effectDisc(frame,x+size*.15,y+size*.78,size*.06,[255,235,245],245);
+
+    // Wand is separated from the body and topped by a chunky star.
+    effectRibbonPath(frame,[[x+size*.35,y-size*.12],[x+size*.70,y-size*.48]],size*.028,[255,250,255],245);
+    effectStar5(frame,x+size*.76,y-size*.55,size*.12,size*.05,[255,240,120],250);
+
+    // Extra glitter around the fairy rather than replacing the silhouette.
+    for(let k=0;k<4;k++){
+      const gx=x+Math.sin(t*1.4+k*2.2)*size*(.65+.18*k);
+      const gy=y+Math.cos(t*1.1+k*1.7)*size*(.55+.12*k);
+      drawSparkle(frame,Math.round(gx),Math.round(gy),'star');
+    }
   }
 }
 
