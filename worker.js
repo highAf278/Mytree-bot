@@ -101,7 +101,9 @@ const IMAGES = {
   birthdayTree: "IMG_7494.png",
   birthdayBackground: "IMG_7500.png",
   birthdayEffect: "IMG_7497.png",
-  birthdayDecoration: "IMG_7499.png"
+  birthdayDecoration: "IMG_7499.png",
+  eggwardDecoration: "IMG_7663.png",
+  hedgyDecoration: "IMG_7666.png"
 };
 
 const SHOP_ITEMS = {
@@ -729,6 +731,8 @@ function defaultPlayer() {
     freeGoldenPickleClaimed: false,
     freeMidnightRiderClaimed: false,
     freeBeansClaimed: false,
+    freeEggwardClaimed: false,
+    freeHedgyClaimed: false,
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -2776,6 +2780,12 @@ function getDecorationImage(player) {
 
     case "birthday":
       return IMAGES.birthdayDecoration;
+
+    case "eggward":
+      return IMAGES.eggwardDecoration;
+
+    case "hedgy":
+      return IMAGES.hedgyDecoration;
 
     default:
       return null;
@@ -6446,7 +6456,9 @@ async function showCustomDecorations(
     ["raccoon_thief_decoration", "🦝 Raccoon Thief", "raccoon_thief"],
     ["frank_frog_decoration", "🐸 Frank the Frog", "frank_frog"],
     ["duck_hat_boots_decoration", "🦆 Duck With Hat & Boots", "duck_hat_boots"],
-    ["cheddar_falls_decoration", "🧀 Cheddar Falls", "cheddar_falls"]
+    ["cheddar_falls_decoration", "🧀 Cheddar Falls", "cheddar_falls"],
+    ["eggward_decoration", "🥚 Eggward", "eggward"],
+    ["hedgy_decoration", "🦔 Hedgy", "hedgy"]
   ];
   for (const [itemId,label,value] of newDecorations) {
     if (player.inventory.includes(itemId)) buttons.push(button(label, `equip_decoration_${value}`, player.equipped.decoration === value ? 3 : 2));
@@ -6890,7 +6902,13 @@ async function equipDecoration(
         "duck_hat_boots_decoration",
 
       cheddar_falls:
-        "cheddar_falls_decoration"
+        "cheddar_falls_decoration",
+
+      eggward:
+        "eggward_decoration",
+
+      hedgy:
+        "hedgy_decoration"
     }[decoration];
 
     if (
@@ -7076,6 +7094,8 @@ const INVENTORY_NAMES = {
   birthday_background: "🌌 Spooky Birthday Background",
   birthday_effect: "✨ Spooky Birthday Effect",
   birthday_decoration: "🎁 Spooky Birthday Decoration",
+  eggward_decoration: "🥚 Eggward Decoration",
+  hedgy_decoration: "🦔 Hedgy Decoration",
   birthday_confetti: "🎊 Animated Confetti Effect",
   birthday_cupcake_chaos_effect: "🧁 Cupcake Chaos Effect",
   birthday_raccoon_party_effect: "🦝 Raccoon Party Effect",
@@ -7113,7 +7133,7 @@ const INVENTORY_CATEGORY_IDS = {
   trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
   effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "beans_effect"],
-  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration"],
+  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
 
@@ -19935,7 +19955,7 @@ function helpText(){return [
   "`/gift @player amount` — Gift sparkles to another player",
   "`/recycle amount` — Recycle sparkles for a random payout",
   "`/daily-riddle` — Get or answer today's riddle",
-  "`/free` — Try the secret Werewives gift riddle",
+  "`/free` — Enter a secret Werewives gift code",
   "`/raccoon @player` — Send a raccoon to rob another player",
   "",
   "💡 **COMMUNITY**",
@@ -20274,8 +20294,30 @@ async function handleFree(env, interaction, guess) {
     return;
   }
 
+  // FREE GIFT CODE: EGGWARD. Unlocks the Eggward decoration.
+  if(normalized==="eggward"){
+    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
+    if(player.freeEggwardClaimed){await sendText(env,interaction,"🥚 You already claimed the FREE **Eggward Decoration**! ✨");return;}
+    if(!player.inventory.includes("eggward_decoration"))player.inventory.push("eggward_decoration");
+    player.freeEggwardClaimed=true;
+    await savePlayer(env,player);
+    await sendText(env,interaction,"🥚👁️ **EGGWARD UNLOCKED!**\n\nYou entered the secret code and received the FREE **Eggward Decoration**!\n\n🥚 Eggward is ready to stare into everyone's soul from your tree. 😭✨");
+    return;
+  }
+
+  // FREE GIFT CODE: HEDGY. Unlocks the Hedgy decoration.
+  if(normalized==="hedgy"){
+    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
+    if(player.freeHedgyClaimed){await sendText(env,interaction,"🦔 You already claimed the FREE **Hedgy Decoration**! ✨");return;}
+    if(!player.inventory.includes("hedgy_decoration"))player.inventory.push("hedgy_decoration");
+    player.freeHedgyClaimed=true;
+    await savePlayer(env,player);
+    await sendText(env,interaction,"🦔🌸 **HEDGY UNLOCKED!**\n\nYou entered the secret code and received the FREE **Hedgy Decoration**!\n\n🦔💗 Your adorable little Hedgy is ready for tree duty! ✨");
+    return;
+  }
+
   if(normalized!=="tanner"&&normalized!=="bob"){
-    await sendText(env,interaction,"🎁 **FREE GIFT MYSTERY**\n\n❌ Nope! Keep guessing — there is **no guess limit**. 😈");
+    await sendText(env,interaction,"🎁 **FREE GIFT**\n\n❌ Nope! That code isn't active. 😈");
     return;
   }
 
@@ -22887,9 +22929,9 @@ const COMMANDS = [
 
   {
     name: "free",
-    description: "Guess the secret word to unlock a free Werewives gift set",
+    description: "Enter a secret code to unlock a free Werewives gift",
     options: [
-      { type: 3, name: "guess", description: "Your guess for the secret word", required: true }
+      { type: 3, name: "guess", description: "Your secret gift code", required: true }
     ]
   },
 
