@@ -740,7 +740,8 @@ function defaultPlayer() {
     experimentGames: 0,
     experimentCompleted: 0,
     experimentSuccesses: 0,
-    experimentXP: 0
+    experimentXP: 0,
+    seenNewsIds: []
   };
 }
 
@@ -8314,6 +8315,8 @@ async function handleComponent(
   const id =
     interaction.data?.custom_id ||
     "";
+
+  if (interaction.type === 3 && id.startsWith("news:ok:")) return handleNewsComponent(env, interaction, id.split(":")[2]);
 
   if(interaction.type===3&&id==="birthday:curseinput")return showBirthdayCurseModal(env,interaction);
   if(interaction.type===5&&id==="birthday:cursemodal"){
@@ -19645,12 +19648,174 @@ async function handleIslandCommand(env, interaction) {
   await handleIslandRules(env, interaction);
 }
 
+
+/* =========================================================
+   OWNER NEWS + BLACKLIST CONTROLS
+========================================================= */
+
+const NEWS_STATE_KEY = "system:news";
+const BLACKLIST_STATE_KEY = "system:blacklist";
+const MAX_STORED_NEWS = 100;
+
+async function getNewsState(env) {
+  try {
+    const raw = await env.TREE_DATA.get(NEWS_STATE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return {
+      nextId: Math.max(1, Number(data.nextId || 1)),
+      announcements: Array.isArray(data.announcements) ? data.announcements : []
+    };
+  } catch (error) {
+    console.error("News state read failed:", error);
+    return { nextId: 1, announcements: [] };
+  }
+}
+
+async function saveNewsState(env, state) {
+  await env.TREE_DATA.put(NEWS_STATE_KEY, JSON.stringify({
+    nextId: Math.max(1, Number(state.nextId || 1)),
+    announcements: Array.isArray(state.announcements) ? state.announcements.slice(-MAX_STORED_NEWS) : []
+  }));
+}
+
+async function getBlacklistState(env) {
+  try {
+    const raw = await env.TREE_DATA.get(BLACKLIST_STATE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch (error) {
+    console.error("Blacklist state read failed:", error);
+    return {};
+  }
+}
+
+async function saveBlacklistState(env, state) {
+  await env.TREE_DATA.put(BLACKLIST_STATE_KEY, JSON.stringify(state || {}));
+}
+
+async function isUserBlacklisted(env, userId) {
+  if (!userId) return false;
+  const state = await getBlacklistState(env);
+  return Boolean(state[String(userId)]);
+}
+
+function newsAnnouncementComponents(newsId) {
+  return [{
+    type: 1,
+    components: [{
+      type: 2,
+      style: 1,
+      label: "OK 💗",
+      custom_id: `news:ok:${newsId}`
+    }]
+  }];
+}
+
+async function handleNewsCommand(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const message = String(getOption(interaction, "message") || "").trim();
+  if (!message) return sendText(env, interaction, "❌ Please include the announcement text.");
+
+  const state = await getNewsState(env);
+  const id = Number(state.nextId || 1);
+  state.nextId = id + 1;
+  state.announcements.push({ id, message, createdAt: Date.now() });
+  await saveNewsState(env, state);
+
+  return sendText(env, interaction, `📢 **News #${id} published!**\n\nEvery player will see it privately the next time they interact with the bot, once each. 💗`);
+}
+
+async function maybeShowNews(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || user.id === env.OWNER_ID) return;
+  if (await isUserBlacklisted(env, user.id)) return;
+
+  try {
+    const state = await getNewsState(env);
+    if (!state.announcements.length) return;
+    const player = await getPlayer(env, String(user.id));
+    const seen = new Set(Array.isArray(player.seenNewsIds) ? player.seenNewsIds.map(Number) : []);
+    const unseen = state.announcements
+      .filter(item => item && Number.isFinite(Number(item.id)) && !seen.has(Number(item.id)))
+      .sort((a, b) => Number(a.id) - Number(b.id));
+    if (!unseen.length) return;
+    const news = unseen[0];
+    await sendEphemeralFollowup(env, interaction, `📰 **Werewives News #${news.id}**\n\n${String(news.message)}`, newsAnnouncementComponents(news.id));
+  } catch (error) {
+    console.error("News popup failed:", error);
+  }
+}
+
+async function handleNewsComponent(env, interaction, newsId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  if (await isUserBlacklisted(env, user.id)) {
+    return sendEphemeralFollowup(env, interaction, "🚫 You currently cannot use the Werewives bot.");
+  }
+  const id = Number(newsId);
+  if (!Number.isFinite(id)) return;
+  const player = await getPlayer(env, String(user.id));
+  const seen = Array.isArray(player.seenNewsIds) ? player.seenNewsIds.map(Number) : [];
+  if (!seen.includes(id)) seen.push(id);
+  player.seenNewsIds = [...new Set(seen)].sort((a, b) => a - b).slice(-MAX_STORED_NEWS);
+  await savePlayer(env, player, String(user.id));
+  return editOriginalResponse(env, interaction, { content: `📰 **News #${id} acknowledged!** 💗`, components: [] });
+}
+
+async function handleBlacklistCommand(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const targetId = String(getOption(interaction, "user") || "").trim();
+  const reason = String(getOption(interaction, "reason") || "No reason provided.").trim();
+  if (!targetId) return sendText(env, interaction, "❌ Please choose a user to blacklist.");
+  if (targetId === String(env.OWNER_ID)) return sendText(env, interaction, "❌ You cannot blacklist the bot owner.");
+  const state = await getBlacklistState(env);
+  const existing = state[targetId];
+  state[targetId] = { reason: reason.slice(0, 500), blacklistedAt: existing?.blacklistedAt || Date.now(), updatedAt: Date.now() };
+  await saveBlacklistState(env, state);
+  return sendText(env, interaction, `🚫 **Blacklisted <@${targetId}>.**\nReason: ${state[targetId].reason}`);
+}
+
+async function handleUnblacklistCommand(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const targetId = String(getOption(interaction, "user") || "").trim();
+  if (!targetId) return sendText(env, interaction, "❌ Please choose a user to unblacklist.");
+  const state = await getBlacklistState(env);
+  if (!state[targetId]) return sendText(env, interaction, `ℹ️ <@${targetId}> is not currently blacklisted.`);
+  delete state[targetId];
+  await saveBlacklistState(env, state);
+  return sendText(env, interaction, `🔓 **Unblacklisted <@${targetId}>.** Their existing player data was not changed.`);
+}
+
+async function handleBlacklistList(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const state = await getBlacklistState(env);
+  const entries = Object.entries(state);
+  if (!entries.length) return sendText(env, interaction, "📋 **Blacklist is empty.**");
+  const lines = [];
+  let total = `🚫 **Blacklisted Players (${entries.length})**\n\n`;
+  for (const [id, info] of entries) {
+    const line = `• <@${id}> — ${String(info?.reason || "No reason provided.")}`;
+    if ((total + line + "\n").length > 1900) {
+      lines.push(`• …and ${entries.length - lines.length} more.`);
+      break;
+    }
+    lines.push(line);
+    total += line + "\n";
+  }
+  return sendText(env, interaction, `🚫 **Blacklisted Players (${entries.length})**\n\n${lines.join("\n")}`);
+}
+
 async function handleCommand(
   env,
   interaction
 ) {
   const name =
     interaction.data?.name;
+
+  if (name === "news") { await handleNewsCommand(env, interaction); return; }
+  if (name === "blacklist") { await handleBlacklistCommand(env, interaction); return; }
+  if (name === "unblacklist") { await handleUnblacklistCommand(env, interaction); return; }
+  if (name === "blacklist-list") { await handleBlacklistList(env, interaction); return; }
 
   if (name === "birthday") { await handleBirthdayCommand(env, interaction); return; }
   if (name === "birthday-games") { await handleBirthdayGamesCommand(env, interaction); return; }
@@ -21717,6 +21882,36 @@ const COMMANDS = [
   },
 
   {
+    name: "news",
+    description: "Owner-only one-time player news popup",
+    default_member_permissions: "8",
+    options: [{ type: 3, name: "message", description: "Announcement players should see", required: true, max_length: 2000 }]
+  },
+
+  {
+    name: "blacklist",
+    description: "Owner-only: blacklist a player from using the bot",
+    default_member_permissions: "8",
+    options: [
+      { type: 6, name: "user", description: "Player to blacklist", required: true },
+      { type: 3, name: "reason", description: "Optional reason", required: false, max_length: 500 }
+    ]
+  },
+
+  {
+    name: "unblacklist",
+    description: "Owner-only: restore a player's bot access",
+    default_member_permissions: "8",
+    options: [{ type: 6, name: "user", description: "Player to unblacklist", required: true }]
+  },
+
+  {
+    name: "blacklist-list",
+    description: "Owner-only: view currently blacklisted players",
+    default_member_permissions: "8"
+  },
+
+  {
     name: "pickle",
     description: "Owner-only punishment commands",
     default_member_permissions: "8",
@@ -22410,6 +22605,9 @@ export default {
       This is especially important for Heist and Chaos Island because their
       handlers do several KV reads/writes and Discord message updates.
     */
+    const isNewsCommand = interaction.type === 2 && interaction.data?.name === "news";
+    const isBlacklistCommand = interaction.type === 2 && (interaction.data?.name === "blacklist" || interaction.data?.name === "unblacklist" || interaction.data?.name === "blacklist-list");
+
     const isExperimentCommand =
       interaction.type === 2 && interaction.data?.name === "experiment";
     const isHeistCommand =
@@ -22442,6 +22640,7 @@ export default {
     const isCourtCommand =
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
+    const isNewsComponent = interaction.type === 3 && customId.startsWith("news:ok:");
     const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -22477,8 +22676,7 @@ export default {
         customId.startsWith("inventory:")
       );
 
-    const relevant =
-      isExperimentCommand || isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isCourtCommand || isExperimentComponent || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+    const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
@@ -22580,7 +22778,9 @@ export default {
       let update = false;
       let ephemeral = false;
 
-      if (isBattleCommand) {
+      if (isNewsCommand || isBlacklistCommand) {
+        ephemeral = true;
+      } else if (isBattleCommand) {
         ephemeral = interaction.data?.name === "battleshop" || interaction.data?.name === "battle-end";
       } else if (isSoloCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
@@ -22623,6 +22823,9 @@ export default {
         update = true;
       } else if (isTitlesComponent) {
         update = true;
+      } else if (isNewsComponent) {
+        update = true;
+        ephemeral = true;
       } else if (isSurpriseAlertComponent) {
         // The alert is an ephemeral follow-up message. Updating the
         // component interaction edits that private alert in place.
@@ -22651,10 +22854,15 @@ export default {
 
       ctx.waitUntil((async () => {
         try {
-          // Surprise alert is shown privately on the player's next normal
-          // interaction, without replacing or blocking the interaction's
-          // normal bot action.
-          if (!isPunishmentCommand) await maybeShowSurpriseAlert(env, interaction);
+          const user = getUserFromInteraction(interaction);
+          const isNewsAcknowledgement = isNewsComponent;
+          const blacklisted = user && user.id !== env.OWNER_ID ? await isUserBlacklisted(env, String(user.id)) : false;
+          if (blacklisted && !isNewsAcknowledgement) {
+            if (interaction.type === 3) await sendEphemeralFollowup(env, interaction, "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot. If you believe this was a mistake, contact the bot owner.");
+            else await sendText(env, interaction, "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot. If you believe this was a mistake, contact the bot owner.");
+            return;
+          }
+          if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
           await maybeCourtWatch(env, interaction);
           await maybePublicShame(env, interaction);
           await maybeSpoonInvestigation(env, interaction);
@@ -22663,6 +22871,7 @@ export default {
           } else {
             await handleComponent(env, interaction);
           }
+          if (!isNewsAcknowledgement) await maybeShowNews(env, interaction);
         } catch (error) {
           console.error("Interaction error:", error);
           try {
