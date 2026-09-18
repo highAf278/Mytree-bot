@@ -5405,7 +5405,8 @@ async function showAnimatedEffectShop(env, interaction) {
     return button(owned ? `${label} Owned` : `${label} — ${SHOP_ITEMS[itemId].price}`, buttonId, owned ? 2 : 1, owned);
   });
   const rows=[];
-  for(let i=0;i<buttons.length;i+=2) rows.push(row(...buttons.slice(i,i+2)));
+  // Discord allows at most 5 action rows. With 11 animated effects, use 3 buttons per row so the shop fits in 5 rows total including Back.
+  for(let i=0;i<buttons.length;i+=3) rows.push(row(...buttons.slice(i,i+3)));
   rows.push(row(button("⬅️ Back to Effects", "shop_effects", 2)));
   await sendText(env, interaction, "🎞️ **ANIMATED EFFECTS**\n\n🌸 Petals swirl • 🦋 Butterflies flutter • 🌈 A full rainbow sweeps around your tree • 🔥 Little flames rise • ☄️ Meteors streak across the sky • 🌌 A cosmic rift opens", rows);
 }
