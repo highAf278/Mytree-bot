@@ -3858,45 +3858,102 @@ function drawAnimatedBubblePop(frame, phase=0) {
 }
 
 function drawAnimatedCandyStorm(frame, phase=0) {
-  // Chunky, classic wrapped candies and lollipops. Fewer, larger pieces make
-  // the shapes survive the low-color GIF palette instead of becoming blobs.
-  const candies=[
-    [.12,.08,52,0],[.34,.20,48,1],[.57,.07,55,2],[.80,.18,50,3],
-    [.20,.52,50,4],[.48,.67,54,5],[.76,.55,48,6],[.90,.80,52,7]
+  // SUPER CUTE CANDY STORM 🍭🍬
+  // Keep every piece chunky and unmistakable so Discord's GIF palette preserves
+  // the candy silhouettes: classic wrapped sweets + clearly separate lollipops.
+  const wrapped = [
+    [.10,.12,58,0],[.34,.08,52,1],[.61,.16,60,2],[.86,.10,54,3],
+    [.18,.45,55,4],[.46,.40,58,5],[.76,.46,54,6],[.91,.63,58,7],
+    [.09,.78,50,8],[.57,.78,56,9]
   ];
-  const cols=[[255,105,175],[255,205,65],[100,195,255],[180,115,255],[105,220,165]];
-  const white=[255,250,255];
-  for(const [bx,by,size,seed] of candies){
-    const t=(phase*.58+seed*.09)%1;
-    const x=(bx+Math.sin(t*6+seed)*.025)*frame.width;
-    const y=((by+t*.82)%1.12-.05)*frame.height;
+  const lollipops = [
+    [.27,.25,42,0],[.72,.27,46,1],[.35,.64,40,2],[.82,.84,44,3]
+  ];
+  const cols=[
+    [255,105,175],   // cotton-candy pink
+    [255,205,65],    // lemon yellow
+    [100,195,255],   // candy blue
+    [180,115,255],   // grape purple
+    [105,220,165],   // mint
+    [255,145,115]    // peach
+  ];
+  const light=[255,250,255];
+  const dark=[78,48,88];
+
+  // Classic wrapped candies: oval center, pinched/crinkled ends, shine,
+  // and a tiny amount of rotation so they feel like real falling candy.
+  for(const [bx,by,size,seed] of wrapped){
+    const t=(phase*.34+seed*.071)%1;
+    const x=(bx+Math.sin(t*6+seed)*.028)*frame.width;
+    const y=((by+t*.78)%1.16-.08)*frame.height;
     const c=cols[seed%cols.length];
-    const ang=(seed%2?-1:1)*(.18+Math.sin(phase*4+seed)*.08);
+    const ang=(seed%2?-1:1)*(.10+Math.sin(phase*3.5+seed)*.055);
+    const shade=cols[(seed+2)%cols.length];
 
-    // Wrapper twists: triangular ends make the wrapped-candy silhouette clear.
-    drawRotatedEllipse(frame,x,y,size*.62,size*.42,ang,[70,45,95],235);
-    drawRotatedEllipse(frame,x,y,size*.53,size*.34,ang,c,245);
-    effectTriangle(frame,[x-size*.48,y-size*.16],[x-size*.95,y-size*.36],[x-size*.82,y+size*.08],c,235);
-    effectTriangle(frame,[x+size*.48,y-size*.16],[x+size*.95,y-size*.36],[x+size*.82,y+size*.08],c,235);
-    // Two bright wrapper creases.
-    effectRibbonPath(frame,[[x-size*.60,y-size*.17],[x-size*.79,y-size*.28]],size*.045,white,220);
-    effectRibbonPath(frame,[[x+size*.60,y-size*.17],[x+size*.79,y-size*.28]],size*.045,white,220);
-    // Candy stripes.
-    for(let s=-1;s<=1;s+=2){
-      effectRibbonPath(frame,[[x+size*.08*s,y-size*.29],[x+size*.22*s,y+size*.28]],size*.055,white,205);
-    }
+    // Dark outline + colorful candy center.
+    drawRotatedEllipse(frame,x,y,size*.55,size*.30,ang,dark,235);
+    drawRotatedEllipse(frame,x,y,size*.48,size*.245,ang,c,248);
 
-    // Every third piece is a lollipop with a proper stick and circular candy.
-    if(seed%3===1){
-      effectRibbonPath(frame,[[x,y+size*.30],[x,y+size*1.18]],size*.065,[250,245,255],245);
-      effectDisc(frame,x,y-size*.72,size*.43,[65,50,90],220);
-      effectDisc(frame,x,y-size*.72,size*.37,c,245);
-      effectRibbonPath(frame,[[x-size*.25,y-size*.82],[x+size*.24,y-size*.62]],size*.045,white,210);
-      effectDisc(frame,x+size*.10,y-size*.85,size*.07,white,220);
+    // Pinched wrapper ends — two little crinkles on each side.
+    effectTriangle(frame,
+      [x-size*.43,y-size*.10],[x-size*.72,y-size*.28],[x-size*.67,y+size*.02],
+      shade,240);
+    effectTriangle(frame,
+      [x-size*.43,y+size*.10],[x-size*.72,y+size*.28],[x-size*.67,y-size*.02],
+      c,235);
+    effectTriangle(frame,
+      [x+size*.43,y-size*.10],[x+size*.72,y-size*.28],[x+size*.67,y+size*.02],
+      shade,240);
+    effectTriangle(frame,
+      [x+size*.43,y+size*.10],[x+size*.72,y+size*.28],[x+size*.67,y-size*.02],
+      c,235);
+
+    // Cute candy shine and simple wrapper bands — short, solid marks survive
+    // Discord's palette reduction much better than thin continuous curves.
+    effectRibbonPath(frame,
+      [[x-size*.23,y-size*.20],[x-size*.13,y+size*.19]],size*.055,light,220);
+    effectRibbonPath(frame,
+      [[x+size*.13,y-size*.19],[x+size*.23,y+size*.20]],size*.055,light,205);
+    effectDisc(frame,x-size*.22,y-size*.10,size*.055,light,220);
+
+    // Tiny sparkle on some candies.
+    if(seed%3===0){
+      drawSparkle(frame,Math.round(x+size*.25),Math.round(y-size*.23),'star');
     }
   }
-}
 
+  // Lollipops are separate objects: round candy head + unmistakable stick.
+  for(const [bx,by,size,seed] of lollipops){
+    const t=(phase*.30+seed*.13+.12)%1;
+    const x=(bx+Math.sin(t*5+seed)*.025)*frame.width;
+    const y=((by+t*.72)%1.15-.07)*frame.height;
+    const c=cols[(seed+1)%cols.length];
+    const accent=cols[(seed+3)%cols.length];
+    const bob=Math.sin(phase*5+seed)*3;
+
+    // Stick first so the candy head sits naturally on top of it.
+    effectRibbonPath(frame,
+      [[x,y+size*.34],[x+Math.sin(seed)*size*.10,y+size*.98]],
+      size*.075,light,245);
+    effectRibbonPath(frame,
+      [[x+size*.035,y+size*.40],[x+Math.sin(seed)*size*.10+size*.035,y+size*.88]],
+      size*.025,accent,210);
+
+    // Round lollipop with a dark outline and bright pastel face.
+    effectDisc(frame,x,y+bob,size*.48,dark,235);
+    effectDisc(frame,x,y+bob,size*.40,c,248);
+
+    // Simple diagonal candy stripe + two chunky shine dots.
+    effectRibbonPath(frame,
+      [[x-size*.28,y-size*.08+bob],[x+size*.20,y+size*.22+bob]],
+      size*.065,light,215);
+    effectRibbonPath(frame,
+      [[x-size*.20,y-size*.27+bob],[x+size*.08,y-size*.08+bob]],
+      size*.045,light,185);
+    effectDisc(frame,x-size*.14,y-size*.17+bob,size*.065,light,235);
+    if(seed%2===0) drawSparkle(frame,Math.round(x+size*.28),Math.round(y-size*.22+bob),'star');
+  }
+}
 function drawAnimatedKittyParade(frame, phase=0) {
   // Large, simple cat silhouettes: head + pointed ears + body + four paws +
   // curved tail. The cats are deliberately oversized so Discord cannot turn
