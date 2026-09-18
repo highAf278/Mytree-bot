@@ -6301,9 +6301,7 @@ async function handleBirthdaySet(env, interaction) {
   if (requestedUserId === user.id) updatePlayerIdentity(targetPlayer, interaction);
 
   if (targetPlayer.birthdayUnlocked && !isOwner) {
-    return sendText(env, interaction, "🔒 **Your birthday is already locked in!** 🎂💗
-
-You can only set your birthday once. If you need to correct or change it, please ask the Werewives bot owner for approval. 👑");
+    return sendText(env, interaction, "🔒 **Your birthday is already locked in!** 🎂💗\n\nYou can only set your birthday once. If you need to correct or change it, please ask the Werewives bot owner for approval. 👑");
   }
 
   const month = Number(getOption(interaction, "month"));
@@ -6321,8 +6319,6 @@ You can only set your birthday once. If you need to correct or change it, please
   targetPlayer.birthdayMonth=month;
   targetPlayer.birthdayDay=day;
   targetPlayer.birthdayUnlocked=true;
-    return sendText(env, interaction, "🔒 **Your birthday is already locked in!** 🎂💗\n\nYou can only set your birthday once. If you need to correct or change it, please ask the Werewives bot owner for approval. 👑");
-
   // If the saved date is TODAY, immediately seed the guild birthday registry.
   // This makes the party activation survive the next /birthday/button request.
   if (interaction.guild_id && isBirthdayDate(new Date(), month, day)) {
