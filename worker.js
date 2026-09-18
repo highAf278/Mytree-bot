@@ -6282,11 +6282,42 @@ async function handleBirthdayGamesCommand(env, interaction) {
 
 async function handleBirthdaySet(env, interaction) {
   const user = getUserFromInteraction(interaction); if (!user) return;
-  const player = await getPlayer(env, user.id); updatePlayerIdentity(player, interaction);
-  const month = Number(getOption(interaction, "month")); const day = Number(getOption(interaction, "day"));
-  if (!Number.isInteger(month)||month<1||month>12||!Number.isInteger(day)||day<1||day>31) return sendText(env,interaction,"❌ Use a valid month (1–12) and day (1–31).");
-  const maxDays = new Date(Date.UTC(2028, month, 0)).getUTCDate(); if(day>maxDays) return sendText(env,interaction,"❌ That date does not exist.");
-  player.birthdayMonth=month; player.birthdayDay=day; player.birthdayUnlocked=true; await savePlayer(env,player);
+
+  // Players may choose their birthday exactly once. Only the bot owner can
+  // change an already-saved birthday, and the owner may target another player
+  // with the optional `user` argument.
+  const requestedUserId = getOption(interaction, "user") || user.id;
+  const isOwner = user.id === env.OWNER_ID;
+
+  if (requestedUserId !== user.id && !isOwner) {
+    return sendText(env, interaction, "❌ You can only set your own birthday. If you need your birthday changed, please ask the Werewives bot owner. 👑🎂");
+  }
+
+  const targetPlayer = await getPlayer(env, requestedUserId);
+  if (requestedUserId === user.id) updatePlayerIdentity(targetPlayer, interaction);
+
+  if (targetPlayer.birthdayUnlocked && !isOwner) {
+    return sendText(env, interaction, "🔒 **Your birthday is already locked in!** 🎂💗
+
+You can only set your birthday once. If you need to correct or change it, please ask the Werewives bot owner for approval. 👑");
+  }
+
+  const month = Number(getOption(interaction, "month"));
+  const day = Number(getOption(interaction, "day"));
+  if (!Number.isInteger(month)||month<1||month>12||!Number.isInteger(day)||day<1||day>31) {
+    return sendText(env,interaction,"❌ Use a valid month (1–12) and day (1–31).");
+  }
+  const maxDays = new Date(Date.UTC(2028, month, 0)).getUTCDate();
+  if(day>maxDays) return sendText(env,interaction,"❌ That date does not exist.");
+
+  const previousBirthday = targetPlayer.birthdayUnlocked
+    ? `${Number(targetPlayer.birthdayMonth)}/${Number(targetPlayer.birthdayDay)}`
+    : null;
+
+  targetPlayer.birthdayMonth=month;
+  targetPlayer.birthdayDay=day;
+  targetPlayer.birthdayUnlocked=true;
+    return sendText(env, interaction, "🔒 **Your birthday is already locked in!** 🎂💗\n\nYou can only set your birthday once. If you need to correct or change it, please ask the Werewives bot owner for approval. 👑");
 
   // If the saved date is TODAY, immediately seed the guild birthday registry.
   // This makes the party activation survive the next /birthday/button request.
@@ -6294,18 +6325,23 @@ async function handleBirthdaySet(env, interaction) {
     const guildId=interaction.guild_id;
     const state=await getGuildState(env,guildId);
     const key=birthdayTodayKey();
+    const targetName=targetPlayer.displayName||targetPlayer.username||"Werewife";
     if(!state.birthday || state.birthday.activeDate!==key){
-      state.birthday={active:true,activeDate:key,birthdayIds:[user.id],birthdayNames:[player.displayName||player.username||"Werewife"],announced:false,nextFrightHuntAt:Date.now(),huntItems:[],serverEvents:{},bingoBoards:{},games:{},lastTheme:"spooky",manualTestBirthdayIds:[user.id]};
+      state.birthday={active:true,activeDate:key,birthdayIds:[requestedUserId],birthdayNames:[targetName],announced:false,nextFrightHuntAt:Date.now(),huntItems:[],serverEvents:{},bingoBoards:{},games:{},lastTheme:"spooky",manualTestBirthdayIds:[requestedUserId]};
     }else{
       state.birthday.active=true;
-      state.birthday.birthdayIds=Array.from(new Set([...(state.birthday.birthdayIds||[]),user.id]));
-      state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),player.displayName||player.username||"Werewife"]));
-      state.birthday.manualTestBirthdayIds=Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]),user.id]));
+      state.birthday.birthdayIds=Array.from(new Set([...(state.birthday.birthdayIds||[]),requestedUserId]));
+      state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),targetName]));
+      state.birthday.manualTestBirthdayIds=Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]),requestedUserId]));
     }
     await saveGuildState(env,guildId,state);
   }
 
-  await sendText(env,interaction,`🎂 **Birthday saved!**\n\nYour birthday is set to **${month}/${day}**. 💗🎃\n\nOn that calendar date, your Birthday Party will automatically unlock for the whole day.\n\n🧪 **Testing note:** while we're building/testing, you can temporarily set it to the current date and then change it back to your real birthday afterward.`);
+  if (isOwner && previousBirthday) {
+    return sendText(env,interaction,`👑 **Birthday updated!**\n\n<@${requestedUserId}>'s birthday was changed from **${previousBirthday}** to **${month}/${day}**. 🎂💗`);
+  }
+
+  await sendText(env,interaction,`🎂 **Birthday saved and locked!**\n\nYour birthday is set to **${month}/${day}**. 💗🎃\n\nYou can only set your birthday once. If you ever need it changed, please ask the Werewives bot owner for approval. 👑\n\nOn that calendar date, your Birthday Party will automatically unlock for the whole day.`);
 }
 
 function birthdayShopComponents(page=0) {
@@ -20841,7 +20877,8 @@ const COMMANDS = [
     description: "Set your birthday month and day",
     options: [
       { type: 4, name: "month", description: "Birthday month (1–12)", required: true, min_value: 1, max_value: 12 },
-      { type: 4, name: "day", description: "Birthday day (1–31)", required: true, min_value: 1, max_value: 31 }
+      { type: 4, name: "day", description: "Birthday day (1–31)", required: true, min_value: 1, max_value: 31 },
+      { type: 6, name: "user", description: "Owner-only: player whose birthday is being set/changed", required: false }
     ]
   },
   {
