@@ -729,7 +729,11 @@ function defaultPlayer() {
     battleLosses: 0,
     battleStreak: 0,
     battleBestStreak: 0,
-    battleLowHpWins: 0
+    battleLowHpWins: 0,
+    experimentGames: 0,
+    experimentCompleted: 0,
+    experimentSuccesses: 0,
+    experimentXP: 0
   };
 }
 
@@ -7562,6 +7566,387 @@ async function handleTree(
   }
 }
 
+
+/* =========================================================
+   THE EXPERIMENT — EXPERIMENT 001: THREE DOORS
+   First prototype of the reusable social-experiment engine.
+========================================================= */
+const EXPERIMENT_MIN_PLAYERS = 3;
+const EXPERIMENT_MAX_PLAYERS = 10;
+
+function experimentGameId() {
+  return `exp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+}
+
+function experimentPlayers(game) {
+  return Object.values(game?.players || {});
+}
+
+function experimentLobbyText(game) {
+  const players = experimentPlayers(game);
+  return [
+    "🧪 **THE EXPERIMENT — EXPERIMENT 001: THREE DOORS**",
+    "",
+    "Three doors. One safe door. Nobody has the whole answer.",
+    "",
+    `👑 Host: <@${game.hostId}>`,
+    `👥 Players: **${players.length}/${EXPERIMENT_MAX_PLAYERS}**`,
+    "",
+    players.length ? players.map((p,i)=>`${i+1}. <@${p.id}>`).join("\n") : "Nobody has joined yet.",
+    "",
+    players.length >= EXPERIMENT_MIN_PLAYERS
+      ? "✨ Enough players! The host can start the experiment."
+      : `⏳ Need at least **${EXPERIMENT_MIN_PLAYERS} players** to begin.`,
+    "",
+    "🔐 Once it starts, every player receives a different private clue.",
+    "💬 Share what you know. You decide what to reveal."
+  ].join("\n");
+}
+
+function experimentLobbyComponents(game) {
+  const rows = [
+    row(
+      button("🧪 Join Experiment", `experiment:join:${game.id}`, 1),
+      button("🚪 Leave", `experiment:leave:${game.id}`, 2),
+      button("👁️ Status", `experiment:status:${game.id}`, 3)
+    )
+  ];
+  if (game.hostId) rows.push(row(button("▶️ Start Experiment", `experiment:start:${game.id}`, 1)));
+  return rows;
+}
+
+function experimentDoorComponents(game) {
+  return [
+    row(
+      button("🚪 Door A", `experiment:vote:${game.id}:A`, 1),
+      button("🚪 Door B", `experiment:vote:${game.id}:B`, 1),
+      button("🚪 Door C", `experiment:vote:${game.id}:C`, 1)
+    ),
+    row(button("🔐 View My Clue", `experiment:clue:${game.id}`, 2))
+  ];
+}
+
+function experimentChoiceCounts(game) {
+  const counts = { A: 0, B: 0, C: 0 };
+  for (const p of experimentPlayers(game)) {
+    const c = p.vote;
+    if (c && counts[c] !== undefined) counts[c]++;
+  }
+  return counts;
+}
+
+function experimentDoorLabel(door) {
+  return door === "A" ? "🚪 A" : door === "B" ? "🚪 B" : "🚪 C";
+}
+
+function experimentPublicText(game, extra = "") {
+  const counts = experimentChoiceCounts(game);
+  const players = experimentPlayers(game);
+  const voted = players.filter(p=>p.vote).length;
+  return [
+    "🧪 **THE EXPERIMENT — EXPERIMENT 001: THREE DOORS**",
+    "",
+    "🚪 **Three doors. One safe door.**",
+    "",
+    "🔐 Everyone has received a different private clue.",
+    "💬 Discuss your clues in the channel before locking in your choice.",
+    "",
+    `🗳️ Votes locked: **${voted}/${players.length}**`,
+    `🚪 A: **${counts.A}**  •  🚪 B: **${counts.B}**  •  🚪 C: **${counts.C}**`,
+    "",
+    extra || "⏳ Discussion is open. When you're ready, choose a door below."
+  ].join("\n");
+}
+
+function buildExperimentClues(safeDoor, players) {
+  // Ensure the group always receives enough information to identify the safe
+  // door: at least one player rules out each dangerous door. Additional players
+  // receive varied phrasings so repeated games do not feel identical.
+  const dangerous = ["A","B","C"].filter(d=>d!==safeDoor);
+  const clues = [];
+  for (let i=0;i<players.length;i++) {
+    const excluded = dangerous[i % dangerous.length];
+    const type = (i * 3 + Math.floor(Math.random()*3)) % 7;
+    const other = dangerous.find(d=>d!==excluded) || dangerous[0];
+    const templates = [
+      `I can confirm that ${experimentDoorLabel(excluded)} is **not** the safe door.`,
+      `The safe door is **not** ${excluded}.`,
+      `If you had to eliminate one door immediately, eliminate ${excluded}.`,
+      `I know for certain that ${excluded} is dangerous.`,
+      `The safe door is one of **${safeDoor}** and **${other}** — ${excluded} is ruled out.`,
+      `My information points away from ${excluded}. Do not treat ${excluded} as safe.`
+    ];
+    clues.push(templates[type]);
+  }
+  return clues;
+}
+
+function experimentStartText(game) {
+  return [
+    "🧪 **EXPERIMENT 001 HAS BEGUN**",
+    "",
+    "🚪 **THREE DOORS**",
+    "",
+    "One door is safe. The other two are dangerous.",
+    "",
+    "🔐 **SECRET INFORMATION**",
+    "Every player has been given a private clue.",
+    "Your clue is only one piece of the puzzle.",
+    "",
+    "💬 **DISCUSSION**",
+    "Talk with the other players and decide what information you trust.",
+    "",
+    "When you're ready, lock in your choice below. Your vote is private."
+  ].join("\n");
+}
+
+function experimentOutcomeText(game, chosenDoor) {
+  const safe = game.safeDoor;
+  const counts = experimentChoiceCounts(game);
+  const players = experimentPlayers(game);
+  const correct = chosenDoor === safe;
+  const tied = Object.values(counts).filter(v=>v===Math.max(...Object.values(counts))).length > 1;
+  const voteLines = `🚪 A: **${counts.A}**  •  🚪 B: **${counts.B}**  •  🚪 C: **${counts.C}**`;
+  const individual = players.map(p=>`• <@${p.id}> — ${p.vote ? experimentDoorLabel(p.vote) : "No vote"}`).join("\n");
+
+  let headline;
+  let body;
+  let reward;
+  if (tied) {
+    headline = "⚠️ THE EXPERIMENT REJECTED THE DECISION";
+    body = "The group did not reach a majority. The doors remain closed.";
+    reward = "✨ Everyone who participated earns **25 Experiment XP** for completing the experiment.";
+  } else if (correct) {
+    headline = "🟢 THE SAFE DOOR WAS OPENED";
+    body = `The group chose ${experimentDoorLabel(chosenDoor)} — and it was the safe door!`;
+    reward = "✨ Every participant earns **100 Experiment XP** and **100 Sparkles**.";
+  } else {
+    headline = "🔴 THE WRONG DOOR WAS OPENED";
+    body = `The group chose ${experimentDoorLabel(chosenDoor)}, but the safe door was ${experimentDoorLabel(safe)}.`;
+    reward = "✨ Every participant earns **50 Experiment XP** for completing the experiment.";
+  }
+
+  return [
+    "🧪 **EXPERIMENT 001 — RESULTS**",
+    "",
+    `**${headline}**`,
+    "",
+    body,
+    "",
+    "🗳️ **FINAL VOTE**",
+    voteLines,
+    "",
+    "🔎 **WHAT WAS ACTUALLY TRUE**",
+    `The safe door was ${experimentDoorLabel(safe)}.`,
+    "",
+    "👥 **PLAYER CHOICES**",
+    individual,
+    "",
+    reward
+  ].join("\n");
+}
+
+async function experimentPrivateClue(env, interaction, gameId) {
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ The Experiment can only be played inside a server.");
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.experiment;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env, interaction, "❌ That Experiment is no longer active.");
+  const p = user && game.players?.[user.id];
+  if (!p) return sendText(env, interaction, "❌ You are not a player in this Experiment.");
+  return sendText(env, interaction, `🔐 **YOUR SECRET CLUE — EXPERIMENT 001**\n\n${p.clue}\n\n🤫 This clue is private. Share it with the group only if you choose to.`, []);
+}
+
+async function experimentSendClues(env, game) {
+  for (const p of experimentPlayers(game)) {
+    const sent = await sendUserDM(env, p.id, `🧪 **THE EXPERIMENT — YOUR SECRET CLUE**\n\nExperiment 001: **Three Doors**\n\n🔐 ${p.clue}\n\n🤫 Keep this private unless you decide to reveal it during the group discussion.\n\nYou can also use the **View My Clue** button on the experiment message.`);
+    p.dmDelivered = sent;
+  }
+}
+
+async function experimentFinish(env, interaction, game, chosenDoor) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const latest = state.experiment;
+  if (!latest || latest.id !== game.id) return;
+  latest.status = "finished";
+  latest.chosenDoor = chosenDoor;
+  latest.finishedAt = Date.now();
+  latest.outcome = chosenDoor === latest.safeDoor ? "success" : "failure";
+
+  for (const p of experimentPlayers(latest)) {
+    const player = await getPlayer(env, p.id);
+    updatePlayerIdentity(player, interaction);
+    player.experimentGames = Number(player.experimentGames || 0) + 1;
+    player.experimentCompleted = Number(player.experimentCompleted || 0) + 1;
+    player.experimentXP = Number(player.experimentXP || 0) + (latest.outcome === "success" ? 100 : 50);
+    if (latest.outcome === "success") player.experimentSuccesses = Number(player.experimentSuccesses || 0) + 1;
+    player.sparkles = Number(player.sparkles || 0) + (latest.outcome === "success" ? 100 : 0);
+    await savePlayer(env, player);
+  }
+
+  state.experiment = null;
+  await saveGuildState(env, interaction.guild_id, state);
+  await editOriginalResponse(env, interaction, { content: experimentOutcomeText(latest, chosenDoor), components: [] });
+}
+
+async function handleExperimentCreate(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ The Experiment can only be played inside a server.");
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  if (state.experiment && state.experiment.status !== "finished") {
+    return sendText(env, interaction, "🧪 There is already an active Experiment in this server. Join it or finish it first!");
+  }
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  await savePlayer(env, player);
+  const game = {
+    id: experimentGameId(),
+    hostId: user.id,
+    status: "lobby",
+    createdAt: Date.now(),
+    players: {
+      [user.id]: { id:user.id, username:user.username||"", displayName:getDisplayName(player), vote:null, clue:"", dmDelivered:false }
+    }
+  };
+  state.experiment = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  return sendText(env, interaction, experimentLobbyText(game), experimentLobbyComponents(game));
+}
+
+async function handleExperimentJoin(env, interaction, gameId) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.experiment;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That Experiment lobby is no longer open.");
+  if (!user) return;
+  if (game.players?.[user.id]) return sendText(env, interaction, "🧪 You're already in this Experiment!");
+  const count = experimentPlayers(game).length;
+  if (count >= EXPERIMENT_MAX_PLAYERS) return sendText(env, interaction, "❌ This Experiment is full (10 players max).");
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  await savePlayer(env, player);
+  game.players[user.id] = { id:user.id, username:user.username||"", displayName:getDisplayName(player), vote:null, clue:"", dmDelivered:false };
+  await saveGuildState(env, interaction.guild_id, state);
+  return editOriginalResponse(env, interaction, { content: experimentLobbyText(game), components: experimentLobbyComponents(game) });
+}
+
+async function handleExperimentLeave(env, interaction, gameId) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.experiment;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId) return sendText(env, interaction, "❌ That Experiment no longer exists.");
+  if (!user || !game.players?.[user.id]) return sendText(env, interaction, "❌ You're not in this Experiment.");
+  if (game.status !== "lobby") return sendText(env, interaction, "❌ The Experiment has already started; you cannot leave during the experiment.");
+  delete game.players[user.id];
+  const remaining = experimentPlayers(game);
+  if (!remaining.length) {
+    state.experiment = null;
+    await saveGuildState(env, interaction.guild_id, state);
+    return editOriginalResponse(env, interaction, { content:"🧪 The Experiment lobby closed because everyone left.", components:[] });
+  }
+  if (game.hostId === user.id) game.hostId = remaining[0].id;
+  await saveGuildState(env, interaction.guild_id, state);
+  return editOriginalResponse(env, interaction, { content: experimentLobbyText(game), components: experimentLobbyComponents(game) });
+}
+
+async function handleExperimentStart(env, interaction, gameId) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.experiment;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That Experiment lobby is no longer available.");
+  if (!user || user.id !== game.hostId) return sendText(env, interaction, "❌ Only the Experiment host can start it.");
+  const players = experimentPlayers(game);
+  if (players.length < EXPERIMENT_MIN_PLAYERS) return sendText(env, interaction, `❌ You need at least **${EXPERIMENT_MIN_PLAYERS} players** to start.`);
+
+  const safeDoor = ["A","B","C"][randomInt(0,2)];
+  const clues = buildExperimentClues(safeDoor, players);
+  players.forEach((p,i)=>{ p.clue = clues[i]; p.vote = null; p.dmDelivered = false; });
+  game.safeDoor = safeDoor;
+  game.status = "playing";
+  game.phase = "discussion";
+  game.startedAt = Date.now();
+  game.interactionToken = interaction.token;
+  await saveGuildState(env, interaction.guild_id, state);
+  await experimentSendClues(env, game);
+  await saveGuildState(env, interaction.guild_id, state);
+  return editOriginalResponse(env, interaction, { content: experimentStartText(game), components: experimentDoorComponents(game) });
+}
+
+async function handleExperimentVote(env, interaction, gameId, door) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.experiment;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env, interaction, "❌ That Experiment is no longer accepting votes.");
+  if (!user || !game.players?.[user.id]) return sendText(env, interaction, "❌ You are not a player in this Experiment.");
+  if (!["A","B","C"].includes(door)) return sendText(env, interaction, "❌ Invalid door.");
+  if (game.players[user.id].vote) return sendText(env, interaction, `🔒 Your vote is already locked on **Door ${game.players[user.id].vote}**.`);
+  game.players[user.id].vote = door;
+  game.players[user.id].votedAt = Date.now();
+  const counts = experimentChoiceCounts(game);
+  const total = experimentPlayers(game).length;
+  const voted = experimentPlayers(game).filter(p=>p.vote).length;
+  await saveGuildState(env, interaction.guild_id, state);
+
+  if (voted >= total) {
+    const max = Math.max(counts.A,counts.B,counts.C);
+    const leaders = ["A","B","C"].filter(d=>counts[d]===max);
+    const chosen = leaders.length === 1 ? leaders[0] : null;
+    if (!chosen) {
+      game.status="finished";
+      game.outcome="tie";
+      await saveGuildState(env,interaction.guild_id,state);
+      for (const p of experimentPlayers(game)) {
+        const pl=await getPlayer(env,p.id); updatePlayerIdentity(pl,interaction);
+        pl.experimentGames=Number(pl.experimentGames||0)+1; pl.experimentCompleted=Number(pl.experimentCompleted||0)+1; pl.experimentXP=Number(pl.experimentXP||0)+25; await savePlayer(env,pl);
+      }
+      state.experiment=null; await saveGuildState(env,interaction.guild_id,state);
+      return editOriginalResponse(env,interaction,{content:experimentOutcomeText(game,leaders[0]),components:[]});
+    }
+    return experimentFinish(env, interaction, game, chosen);
+  }
+
+  return sendText(env, interaction, `🔒 **Vote locked:** ${experimentDoorLabel(door)}\n\nYour choice is private. **${voted}/${total}** players have voted.`, []);
+}
+
+async function handleExperimentStatus(env, interaction, gameId) {
+  const state=await getGuildState(env,interaction.guild_id); const game=state.experiment;
+  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
+  if(game.status==="lobby")return sendText(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));
+  const counts=experimentChoiceCounts(game); const voted=experimentPlayers(game).filter(p=>p.vote).length;
+  return sendText(env,interaction,experimentPublicText(game,`🗳️ **${voted}/${experimentPlayers(game).length}** votes locked.\n🚪 A: **${counts.A}** • B: **${counts.B}** • C: **${counts.C}**`),experimentDoorComponents(game));
+}
+
+async function handleExperimentCommand(env, interaction) {
+  const sub = interaction.data?.options?.find(o=>o.type===1)?.name || "create";
+  if(sub === "create") return handleExperimentCreate(env,interaction);
+  if(sub === "status") {
+    const state=await getGuildState(env,interaction.guild_id); const game=state.experiment;
+    if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now. Use `/experiment create` to start one.");
+    return handleExperimentStatus(env,interaction,game.id);
+  }
+  if(sub === "leave") {
+    const state=await getGuildState(env,interaction.guild_id); const game=state.experiment;
+    if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");
+    return handleExperimentLeave(env,interaction,game.id);
+  }
+  if(sub === "start") {
+    const state=await getGuildState(env,interaction.guild_id); const game=state.experiment;
+    if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");
+    return handleExperimentStart(env,interaction,game.id);
+  }
+  if(sub === "join") {
+    const state=await getGuildState(env,interaction.guild_id); const game=state.experiment;
+    if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");
+    return handleExperimentJoin(env,interaction,game.id);
+  }
+  return handleExperimentCreate(env,interaction);
+}
+
 /* =========================================================
    COMPONENT ROUTER
 ========================================================= */
@@ -7621,6 +8006,19 @@ async function handleComponent(
     if (choice === "kill" || choice === "no_kill") {
       await handleSurpriseAlertChoice(env, interaction, choice);
     }
+    return;
+  }
+
+  if (id.startsWith("experiment:")) {
+    const parts=id.split(":");
+    const action=parts[1];
+    const gameId=parts[2];
+    if(action==="join") { await handleExperimentJoin(env,interaction,gameId); return; }
+    if(action==="leave") { await handleExperimentLeave(env,interaction,gameId); return; }
+    if(action==="start") { await handleExperimentStart(env,interaction,gameId); return; }
+    if(action==="status") { await handleExperimentStatus(env,interaction,gameId); return; }
+    if(action==="clue") { await experimentPrivateClue(env,interaction,gameId); return; }
+    if(action==="vote") { await handleExperimentVote(env,interaction,gameId,parts[3]); return; }
     return;
   }
 
@@ -7692,6 +8090,11 @@ async function handleComponent(
     ].join("\n")); return; }
     if (action === "battle") { await sendText(env,interaction,"🌳⚔️ **Tree Battle**\n\nUse `/battle @player` to challenge another tree."); return; }
     if (action === "colorchaos") { await handlePastelStart(env,interaction); return; }
+    if (action === "experiment") {
+      const state = await getGuildState(env, interaction.guild_id);
+      if (state.experiment) return handleExperimentStatus(env, interaction, state.experiment.id);
+      return handleExperimentCreate(env, interaction);
+    }
     return;
   }
 
@@ -14586,11 +14989,11 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
-    row(button("🕵️ Solo Mission", "games:solo", 3), button("🌳⚔️ Tree Battle", "games:battle", 1)),
-    row(button("🌈 Color Chaos", "games:colorchaos", 3), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2)),
-    row(button("🏷️ Titles", "title:list", 2))
+    row(button("🧪 The Experiment", "games:experiment", 1), button("🕵️ Solo Mission", "games:solo", 3)),
+    row(button("🌳⚔️ Tree Battle", "games:battle", 1), button("🌈 Color Chaos", "games:colorchaos", 3)),
+    row(button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2))
   ]);
 }
 
@@ -18872,6 +19275,11 @@ async function handleCommand(
     return;
   }
 
+  if (name === "experiment") {
+    await handleExperimentCommand(env, interaction);
+    return;
+  }
+
   if (name === "solo") {
     const subcommand = interaction.data?.options?.find(option => option.type === 1)?.name || "start";
     if (subcommand === "leaderboard") await handleSoloLeaderboard(env, interaction);
@@ -20885,6 +21293,17 @@ const COMMANDS = [
     name: "games",
     description: "Open the Werewives games menu"
   },
+  {
+    name: "experiment",
+    description: "Play The Experiment — social puzzle chaos",
+    options: [
+      { type: 1, name: "create", description: "Create a Three Doors Experiment lobby" },
+      { type: 1, name: "join", description: "Join the active Experiment lobby" },
+      { type: 1, name: "leave", description: "Leave the active Experiment lobby" },
+      { type: 1, name: "start", description: "Start the Experiment (host only)" },
+      { type: 1, name: "status", description: "View the active Experiment" }
+    ]
+  },
 
   {
     name: "solo",
@@ -21596,6 +22015,8 @@ export default {
       This is especially important for Heist and Chaos Island because their
       handlers do several KV reads/writes and Discord message updates.
     */
+    const isExperimentCommand =
+      interaction.type === 2 && interaction.data?.name === "experiment";
     const isHeistCommand =
       interaction.type === 2 && interaction.data?.name === "heist";
     const isIslandCommand =
@@ -21626,6 +22047,7 @@ export default {
     const isCourtCommand =
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
+    const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
@@ -21660,7 +22082,7 @@ export default {
       );
 
     const relevant =
-      isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isCourtCommand || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
+      isExperimentCommand || isBirthdayCommand || isBirthdayComponent || isBirthdayModal || isHeistCommand || isIslandCommand || isBattleCommand || isPastelCommand || isColorCommand || isSoloCommand || isFreeCommand || isBlameCommand || isProfileCommand || isTreeCommand || isTitlesCommand || isPunishmentCommand || isCourtCommand || isExperimentComponent || isHeistComponent || isIslandComponent || isBattleComponent || isPastelComponent || isSurpriseAlertComponent || isTitlesComponent || isTreeComponent || isShopComponent;
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
@@ -21769,6 +22191,8 @@ export default {
         ephemeral = ["status", "end", "leaderboard"].includes(sub);
       } else if (isColorCommand) {
         ephemeral = true;
+      } else if (isExperimentCommand) {
+        ephemeral = false;
       } else if (isPastelCommand) {
         // Color Chaos lobbies must be public so other players can actually see
         // and join them. Only the end-game command remains private.
@@ -21786,6 +22210,10 @@ export default {
       } else if (isIslandCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
         ephemeral = ["rules", "status"].includes(sub);
+      } else if (isExperimentComponent) {
+        const action = String(interaction.data.custom_id).split(":")[1];
+        if (action === "vote" || action === "clue" || action === "status") ephemeral = true;
+        else update = true;
       } else if (isHeistComponent) {
         ephemeral = true;
       } else if (isIslandComponent) {
