@@ -19855,7 +19855,98 @@ async function sendOwnerSuggestion(env,interaction,message){
 }
 async function handleSuggestion(env,interaction,message){const ok=await sendOwnerSuggestion(env,interaction,message);await sendText(env,interaction,ok?"💡 **Suggestion sent!** Thank you for helping make Werewives better. 💖":"❌ I couldn't send that suggestion right now. Please try again later.");}
 
-function helpText(){return ["🆘 **WEREWIVES HELP**","","🌳 **Tree**","`/tree` — View your tree","`/water` — Water your tree and earn EXP","`/catch` — Catch sparkles on your tree","`/sparkle` — Check your sparkle balance","`/fortune` — Get a random fortune","`/inventory` — Browse owned cosmetics","`/customize` — Equip your cosmetics","`/shop` — Open the regular shop","`/rename` — Rename your tree","","🎮 **Games**","`/birthday` — Open the Birthday Party hub","`/birthday-games` — Open Birthday Games","`/birthday-shop` — Open the Midnight Birthday Shop","`/birthday-gift` — Send a birthday gift","`/birthday-gifts` — Open your birthday gifts","`/birthday-collection` — View your Birthday Collection","`/birthday-wish` — Perform the Birthday Wish Ritual","`/birthday-cannon` — Fire the Birthday Boo Cannon","`/birthday-trickster` — Use Birthday Trickster","`/birthday-set` — Set your birthday month/day","`/games` — Open the games menu","`/solo` — Play the 10-level Solo Mission","`/island` — Play Chaos Island","`/heist` — Play Raccoon Heist","`/battle` — Challenge another tree","`/battleshop` — Open the Tree Battle item shop","`/battle-end` — End your active Tree Battle","`/colorchaos create` — Create a Color Chaos game","`/colorchaos leaderboard` — View Color Chaos rankings","`/colorchaos end` — Request to end Color Chaos","`/blame` — Nudge the current Color Chaos player","","🏷️ **Cosmetics**","`/titles` — View owned/unlockable titles and Name Effects","`/profile` — View a player's Werewives profile card","`/panel color #HEX` — Choose your profile panel HEX color","`/present` — Gift an owned cosmetic to another player","`/delete` — Delete an unwanted cosmetic","`/achievements` — View achievements","","🎁 **Other**","`/gift` — Gift sparkles to another player","`/recycle` — Recycle sparkles","`/daily-riddle` — Solve the daily riddle","`/free` — Try the secret Werewives gift riddle","`/court` — Put another player before the Raccoon Court","`/court-leaderboard` — View Court cases, guilty verdicts, and not-guilty verdicts","`/suggest` — Send a suggestion or bug report privately to the bot owner","`/help` — Show this menu","","💗 Owner/admin-only commands are intentionally not listed here.","🌈 Color Chaos's existing game system is unchanged."] .join("\n");}
+function helpText(){return [
+  "🆘 **WEREWIVES HELP**",
+  "",
+  "🌳 **YOUR TREE**",
+  "`/tree` — View your tree and current cosmetics",
+  "`/water` — Water your tree and earn EXP",
+  "`/catch` — Catch sparkles from your tree",
+  "`/sparkle` — Check your sparkle balance",
+  "`/fortune` — Ask the Fortune Tree for a random reward",
+  "`/rename` — Rename your tree",
+  "`/shop` — Open the regular shop",
+  "`/inventory` — Browse your owned cosmetics",
+  "`/customize` — Equip trees, backgrounds, decorations, and effects",
+  "",
+  "🎮 **GAMES**",
+  "`/games` — Open the main games menu",
+  "`/solo start` — Play the 10-level Solo Mission",
+  "`/solo status` — Check your current Solo Mission",
+  "`/solo leaderboard` — View Solo Mission rankings",
+  "`/solo end` — End your current Solo Mission",
+  "`/island create` — Create a Chaos Island lobby",
+  "`/island join` — Join Chaos Island",
+  "`/island start` — Start Chaos Island (host)",
+  "`/island settings` — Choose Chaos Island rounds (host)",
+  "`/island status` — Check the current island game",
+  "`/island rules` — Read Chaos Island rules",
+  "`/island end` — End Chaos Island (host/owner)",
+  "`/heist create` — Create a Raccoon Heist lobby",
+  "`/heist join` — Join the current Heist",
+  "`/heist start` — Start the Heist (host)",
+  "`/heist status` — View the Heist and your secret information",
+  "`/heist leave` — Leave the Heist lobby",
+  "`/heist end` — End the Heist (host)",
+  "`/roles` — See all Raccoon Heist roles",
+  "`/battle @player` — Challenge another player's tree",
+  "`/battleshop` — Open the Tree Battle item shop",
+  "`/battle-end` — End your active Tree Battle",
+  "`/experiment create` — Create a randomized Experiment",
+  "`/experiment join` — Join the Experiment lobby",
+  "`/experiment start` — Start the Experiment (host)",
+  "`/experiment status` — View the current Experiment",
+  "`/experiment leave` — Leave an Experiment lobby",
+  "`/experiment end` — End the Experiment (host/owner)",
+  "",
+  "🌈 **COLOR CHAOS**",
+  "`/colorchaos create` — Start Color Chaos and choose a mode",
+  "🔄 **Refresh** — Posts the latest board again so it stays easy to find while everyone is chatting",
+  "🎨 **Color Key** — Shows the current palette and color names",
+  "📖 **Rules** — Shows the Color Chaos rules",
+  "🚪 **Quit Game** — Leave the current match",
+  "🛑 **End Game** — Ask to end the match; all active players must agree (owner can force-end)",
+  "`/colorchaos leaderboard` — View Color Chaos rankings",
+  "`/colorchaos end` — Request to end the current match",
+  "`/blame` — Nudge the current Color Chaos player",
+  "",
+  "🎂 **BIRTHDAY PARTY**",
+  "`/birthday` — Open the Birthday Party hub",
+  "`/birthday-games` — Open Birthday Games",
+  "`/birthday-shop` — Open the Midnight Birthday Shop",
+  "`/birthday-gift` — Send a birthday gift",
+  "`/birthday-gifts` — Open your unopened birthday gifts",
+  "`/birthday-collection` — View your permanent Birthday Collection",
+  "`/birthday-wish` — Perform the Birthday Wish Ritual",
+  "`/birthday-cannon` — Fire the Birthday Boo Cannon",
+  "`/birthday-trickster @player` — Use Birthday Trickster",
+  "`/birthday-name` — Record the birthday person's name for Bingo",
+  "`/birthday-set` — Set your birthday month and day",
+  "",
+  "🏷️ **COSMETICS & PROFILE**",
+  "`/titles` — View owned/unlockable titles and Name Effects",
+  "`/profile` — View a Werewives player profile",
+  "`/panel color #HEX` — Customize your profile panel color",
+  "`/present @player item` — Gift an owned cosmetic",
+  "`/delete item` — Delete an unwanted cosmetic",
+  "`/achievements` — View your achievements",
+  "",
+  "✨ **SPARKLES & DAILY STUFF**",
+  "`/gift @player amount` — Gift sparkles to another player",
+  "`/recycle amount` — Recycle sparkles for a random payout",
+  "`/daily-riddle` — Get or answer today's riddle",
+  "`/free` — Try the secret Werewives gift riddle",
+  "`/raccoon @player` — Send a raccoon to rob another player",
+  "",
+  "💡 **COMMUNITY**",
+  "`/suggest` — Send a suggestion or bug report privately to the bot owner",
+  "`/help` — Show this organized help menu",
+  "",
+  "🎞️ **ANIMATED EFFECTS**",
+  "17 animated effects are available in the Animated Effects shop, including Fairy Flight, Crystal Aura, Starfall, Unicorn Sparkle, Snowfall, Flower Bloom, Bubble Pop, Candy Storm, Kitty Parade, Electric Storm, Experimental Effect, and more.",
+  "",
+  "💗 Owner/admin-only commands are intentionally not listed here."
+].join("\\n");}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -21075,7 +21166,13 @@ async function sendBattleMessage(env, interaction, game) {
   const form = new FormData();
   form.append("payload_json", JSON.stringify({content:battleText(game),attachments:[{id:0,filename:"battle.png"}],components:battleComponents(game)}));
   form.append("files[0]", new Blob([image],{type:"image/png"}),"battle.png");
-  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
+  const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
+  if(!response.ok){
+    const detail=await response.text();
+    console.error("Battle message update failed:",response.status,detail);
+    throw new Error(`Battle message update failed (${response.status})`);
+  }
+  return response;
 }
 
 async function handleBattleStart(env, interaction) {
@@ -21985,58 +22082,55 @@ async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
-  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
+  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\\n\\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
   const makeForm=()=>{const form=new FormData();form.append("payload_json",JSON.stringify(payload));form.append("files[0]",new Blob([image],{type:"image/png"}),"color-chaos.png");return form;};
 
   /*
-     IMPORTANT: Color Chaos public messages belong to the bot, not to the
-     interaction webhook. Always use the authenticated bot request helper for
-     channel-message edits/uploads. The old raw fetch had no Bot Authorization,
-     so the 4th-player transition could fail exactly when the lobby became a game.
+     COLOR CHAOS BOARD REFRESH BEHAVIOR:
+     Every board refresh creates the new board message FIRST, then removes
+     the previous board message. This keeps the board at the bottom of the
+     channel so it cannot get buried while everyone is chatting.
+     The new message ID is saved immediately so the next refresh knows which
+     board to replace.
   */
-  const messageId=await getPastelPublicMessageId(env,game,interaction);
-  if(messageId&&game.channelId){
-    const direct=await discordRequest(env,`/channels/${game.channelId}/messages/${messageId}`,{method:"PATCH",body:makeForm()});
-    if(direct.ok)return direct;
-    const status=direct.status;const detail=await direct.text();
-    console.error("Pastel authenticated board update failed:",status,detail);
+  const oldMessageId=game.publicMessageId||"";
+  if(!game.channelId)throw new Error("Color Chaos channel is missing.");
 
-    /* If the old public message is gone, create a fresh bot-owned board message. */
-    if(status===404){
-      const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:makeForm()});
-      if(created.ok){
-        const data=await created.json();
-        if(data?.id){
-          game.publicMessageId=data.id;
-          return created;
-        }
-      }else{
-        console.error("Pastel board recreation failed:",created.status,await created.text());
-      }
+  const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{
+    method:"POST",
+    body:makeForm()
+  });
+
+  if(!created.ok){
+    const status=created.status;
+    const detail=await created.text();
+    console.error("Color Chaos board send failed:",status,detail);
+    throw new Error(`Color Chaos board send failed (${status})`);
+  }
+
+  let newMessageId="";
+  try{
+    const data=await created.json();
+    newMessageId=data?.id||"";
+  }catch(error){
+    console.error("Color Chaos board response JSON failed:",error);
+  }
+
+  if(!newMessageId)throw new Error("Color Chaos board was sent but Discord did not return a message ID.");
+
+  game.publicMessageId=newMessageId;
+  await pastelSave(env,game);
+
+  if(oldMessageId&&oldMessageId!==newMessageId){
+    const removed=await discordRequest(env,`/channels/${game.channelId}/messages/${oldMessageId}`,{
+      method:"DELETE"
+    });
+    if(!removed.ok&&removed.status!==404){
+      console.error("Old Color Chaos board could not be removed:",removed.status,await removed.text());
     }
   }
 
-  /* No known channel message: create one directly with the bot token. */
-  if(game.channelId){
-    const created=await discordRequest(env,`/channels/${game.channelId}/messages`,{method:"POST",body:makeForm()});
-    if(created.ok){
-      const data=await created.json();
-      if(data?.id){game.publicMessageId=data.id;return created;}
-    }else{
-      console.error("Pastel new board message failed:",created.status,await created.text());
-    }
-  }
-
-  /* Last-resort interaction webhook fallback for unusual Discord/API failures. */
-  const token=interaction?.token||game.interactionToken;
-  if(!token)throw new Error("Color Chaos public message could not be located.");
-  const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",body:makeForm()});
-  if(!response.ok){
-    console.error("Pastel interaction board update failed:",response.status,await response.text());
-    const fallback=await editOriginalResponse(env,{...interaction,token},{content:`${pastelGameText(game)}\n\n⚠️ The board image could not refresh, but the game controls are still active below.`,components});
-    if(!fallback.ok)console.error("Pastel board fallback failed:",fallback.status,await fallback.text());
-  }
-  return response;
+  return created;
 }
 async function handlePastelEndCommand(env,interaction){
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
@@ -23206,6 +23300,17 @@ export default {
       This is especially important for Heist and Chaos Island because their
       handlers do several KV reads/writes and Discord message updates.
     */
+    const isHelpCommand = interaction.type === 2 && interaction.data?.name === "help";
+    if (isHelpCommand) {
+      return new Response(JSON.stringify({
+        type: 4,
+        data: { content: helpText() }
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const isNewsCommand = interaction.type === 2 && interaction.data?.name === "news";
     const isBlacklistCommand = interaction.type === 2 && (interaction.data?.name === "blacklist" || interaction.data?.name === "unblacklist" || interaction.data?.name === "blacklist-list");
 
