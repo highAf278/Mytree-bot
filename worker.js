@@ -5953,116 +5953,26 @@ async function showCustomTrees(
 
 async function showCustomEffects(
   env,
-  interaction
+  interaction,
+  page = 0
 ) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
 
   const buttons = [];
 
-  if (player.inventory.includes("butterflies_effect")) {
-    buttons.push(
-      button(
-        "🦋 Butterflies",
-        "equip_effect_butterflies",
-        player.equipped.effect === "butterflies" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("hearts_effect")) {
-    buttons.push(
-      button(
-        "💕 Hearts",
-        "equip_effect_hearts",
-        player.equipped.effect === "hearts" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("green_glow_effect")) {
-    buttons.push(
-      button(
-        "💚 Green Glow",
-        "equip_effect_green_glow",
-        player.equipped.effect === "green_glow" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("prism_flutter_effect")) {
-    buttons.push(
-      button(
-        "🌈🦋 Prism Flutter",
-        "equip_effect_prism_flutter",
-        player.equipped.effect === "prism_flutter" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("lavender_twilight_effect")) {
-    buttons.push(
-      button(
-        "💜🌙 Lavender Twilight",
-        "equip_effect_lavender_twilight",
-        player.equipped.effect === "lavender_twilight" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("world_of_flags_effect")) {
-    buttons.push(
-      button(
-        "🌎🏳️ World of Flags",
-        "equip_effect_world_of_flags",
-        player.equipped.effect === "world_of_flags" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("ocean_opal_effect")) {
-    buttons.push(
-      button(
-        "🩵🌊 Ocean Opal",
-        "equip_effect_ocean_opal",
-        player.equipped.effect === "ocean_opal" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("werewives_effect")) {
-    buttons.push(
-      button(
-        "🐺🌙 Werewives",
-        "equip_effect_werewives",
-        player.equipped.effect === "werewives" ? 3 : 2
-      )
-    );
-  }
+  if (player.inventory.includes("butterflies_effect")) buttons.push(button("🦋 Butterflies", "equip_effect_butterflies", player.equipped.effect === "butterflies" ? 3 : 2));
+  if (player.inventory.includes("hearts_effect")) buttons.push(button("💕 Hearts", "equip_effect_hearts", player.equipped.effect === "hearts" ? 3 : 2));
+  if (player.inventory.includes("green_glow_effect")) buttons.push(button("💚 Green Glow", "equip_effect_green_glow", player.equipped.effect === "green_glow" ? 3 : 2));
+  if (player.inventory.includes("prism_flutter_effect")) buttons.push(button("🌈🦋 Prism Flutter", "equip_effect_prism_flutter", player.equipped.effect === "prism_flutter" ? 3 : 2));
+  if (player.inventory.includes("lavender_twilight_effect")) buttons.push(button("💜🌙 Lavender Twilight", "equip_effect_lavender_twilight", player.equipped.effect === "lavender_twilight" ? 3 : 2));
+  if (player.inventory.includes("world_of_flags_effect")) buttons.push(button("🌎🏳️ World of Flags", "equip_effect_world_of_flags", player.equipped.effect === "world_of_flags" ? 3 : 2));
+  if (player.inventory.includes("ocean_opal_effect")) buttons.push(button("🩵🌊 Ocean Opal", "equip_effect_ocean_opal", player.equipped.effect === "ocean_opal" ? 3 : 2));
+  if (player.inventory.includes("werewives_effect")) buttons.push(button("🐺🌙 Werewives", "equip_effect_werewives", player.equipped.effect === "werewives" ? 3 : 2));
   if (player.inventory.includes("golden_pickle_effect")) buttons.push(button("🥒✨ Golden Pickle", "equip_effect_golden_pickle", player.equipped.effect === "golden_pickle" ? 3 : 2));
   if (player.inventory.includes("midnight_rider_effect")) buttons.push(button("🏍️🌙 Midnight Rider", "equip_effect_midnight_rider", player.equipped.effect === "midnight_rider" ? 3 : 2));
-
-  if (player.inventory.includes("purr_princess_effect")) {
-    buttons.push(
-      button(
-        "👑 Purr Princess",
-        "equip_effect_purr_princess",
-        player.equipped.effect === "purr_princess" ? 3 : 2
-      )
-    );
-  }
-
-  if (player.inventory.includes("candy_effect")) {
-    buttons.push(button("🍭 Candy Rush", "equip_effect_candy_rush", player.equipped.effect === "candy_rush" ? 3 : 2));
-  }
+  if (player.inventory.includes("purr_princess_effect")) buttons.push(button("👑 Purr Princess", "equip_effect_purr_princess", player.equipped.effect === "purr_princess" ? 3 : 2));
+  if (player.inventory.includes("candy_effect")) buttons.push(button("🍭 Candy Rush", "equip_effect_candy_rush", player.equipped.effect === "candy_rush" ? 3 : 2));
   if (player.inventory.includes("birthday_effect")) buttons.push(button("🦇🎂 Spooky Birthday", "equip_effect_birthday", player.equipped.effect === "birthday" ? 3 : 2));
   if (player.inventory.includes("birthday_confetti")) buttons.push(button("🎊 Animated Confetti", "equip_effect_birthday_confetti", player.equipped.effect === "birthday_confetti" ? 3 : 2));
   if (player.inventory.includes("birthday_cupcake_chaos_effect")) buttons.push(button("🧁 Cupcake Chaos", "equip_effect_birthday_cupcake_chaos", player.equipped.effect === "birthday_cupcake_chaos" ? 3 : 2));
@@ -6087,21 +5997,28 @@ async function showCustomEffects(
   if (player.inventory.includes("electric_storm_animated_effect")) buttons.push(button("⚡ Electric Storm", "equip_effect_electric_storm_animated", player.equipped.effect === "electric_storm_animated" ? 3 : 2));
   if (player.inventory.includes("experimental_effect_animated_effect")) buttons.push(button("🧪 Experimental Effect", "equip_effect_experimental_effect_animated", player.equipped.effect === "experimental_effect_animated" ? 3 : 2));
   if (player.inventory.includes("beans_effect")) buttons.push(button("🫘💥 Bean Burst", "equip_effect_beans", player.equipped.effect === "beans" ? 3 : 2));
-  if (player.inventory.includes("halloween_effect")) {
-    buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
-  }
+  if (player.inventory.includes("halloween_effect")) buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
 
-  buttons.push(
-    button(
-      "❌ Remove",
-      "equip_effect_none",
-      player.equipped.effect === null ? 3 : 2
-    )
-  );
+  buttons.push(button("❌ Remove", "equip_effect_none", player.equipped.effect === null ? 3 : 2));
+
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(buttons.length / pageSize));
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+  const pageButtons = buttons.slice(page * pageSize, page * pageSize + pageSize);
 
   const rows = [];
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(row(...buttons.slice(i, i + 5)));
+  for (let i = 0; i < pageButtons.length; i += 5) {
+    rows.push(row(...pageButtons.slice(i, i + 5)));
+  }
+
+  if (pageCount > 1) {
+    rows.push(
+      row(
+        button("⬅️ Previous", `custom_effects_page_${page - 1}`, 2, page === 0),
+        button(`📄 Page ${page + 1}/${pageCount}`, "custom_effects_page_current", 2, true),
+        button("Next ➡️", `custom_effects_page_${page + 1}`, 2, page === pageCount - 1)
+      )
+    );
   }
 
   rows.push(row(button("⬅️ Back", "customize", 2)));
@@ -6109,7 +6026,7 @@ async function showCustomEffects(
   await sendText(
     env,
     interaction,
-    "✨ **Effect Customization**\n\nEffects are layered on top of your tree.",
+    `✨ **Effect Customization**\n\nEffects are layered on top of your tree.${pageCount > 1 ? `\n\n📄 Page **${page + 1}/${pageCount}**` : ""}`,
     rows
   );
 }
@@ -9283,12 +9200,21 @@ async function handleComponent(
     return;
   }
 
+  if (id.startsWith("custom_effects_page_")) {
+    const pageText = id.replace("custom_effects_page_", "");
+    if (pageText !== "current") {
+      await showCustomEffects(env, interaction, Number(pageText));
+    }
+    return;
+  }
+
   if (
     id === "custom_effects"
   ) {
     await showCustomEffects(
       env,
-      interaction
+      interaction,
+      0
     );
 
     return;
@@ -23065,6 +22991,15 @@ export default {
         customId.startsWith("inventory:")
       );
 
+    const isCustomizeComponent =
+      interaction.type === 3 &&
+      (
+        customId === "customize" ||
+        customId === "custom_effects" ||
+        customId.startsWith("custom_effects_page_") ||
+        customId.startsWith("equip_")
+      );
+
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
     // Color Key is a private, player-only response. It never edits the public game board.
@@ -23224,7 +23159,12 @@ export default {
         // Tree actions should update the existing /tree message rather than
         // showing a long-running ephemeral "Bot is thinking..." state.
         update = true;
-      } else if (isShopComponent) {
+      } else if (isCustomizeComponent) {
+        // Customize menus and equip actions can perform KV reads/writes.
+        // Acknowledge immediately so Discord does not leave the button
+        // spinning on "Bot is thinking..." while the menu is rebuilt.
+        update = true;
+            } else if (isShopComponent) {
         // Shop handlers edit the existing shop message after KV work.
         // A type-6 update ACK removes the Discord "Bot is thinking..."
         // state immediately and avoids leaving the button interaction
