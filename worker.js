@@ -3955,34 +3955,109 @@ function drawAnimatedKittyParade(frame, phase=0) {
 }
 
 function drawAnimatedElectricStorm(frame, phase=0) {
-  // Separate, chunky lightning bolts. Each bolt is a short zig-zag glyph;
-  // nothing connects them, so the effect cannot become "lightning noodles."
-  const bolts=[
-    [.10,.14,0],[.27,.32,1],[.46,.10,2],[.65,.27,3],[.86,.13,4],
-    [.17,.57,5],[.47,.66,6],[.79,.56,7]
+  // Full thunderstorm treatment: tall branching strikes fall from the sky,
+  // flash brightly, and briefly illuminate the area around the tree.
+  // The bolts are built from short connected segments rather than one long
+  // smooth ribbon, which keeps the jagged lightning silhouette intact after
+  // the GIF palette reduction.
+  const strikes=[
+    {x:.18,top:.02,bottom:.48,lean:-.04,seed:0},
+    {x:.42,top:.00,bottom:.36,lean:.03,seed:1},
+    {x:.63,top:.04,bottom:.54,lean:-.025,seed:2},
+    {x:.82,top:.01,bottom:.42,lean:.045,seed:3},
+    {x:.30,top:.16,bottom:.66,lean:.02,seed:4}
   ];
-  for(const [bx,by,seed] of bolts){
-    const x=bx*frame.width, y=by*frame.height;
-    const drift=Math.sin(phase*Math.PI*2+seed)*7;
-    const flash=Math.sin(phase*Math.PI*2*1.4+seed*1.7)>.05;
-    if(!flash) continue;
-    const s=42+(seed%3)*7;
-    const pts=[
-      [x-s*.18,y-s*.72],[x+s*.18,y-s*.08],[x-s*.05,y-s*.05],
-      [x+s*.38,y+s*.04],[x+s*.02,y+s*.62],[x+s*.12,y+s*.18]
-    ].map(([px,py],i)=>[px+(i%2?drift:0),py]);
-    // Dark edge + bright core.
-    effectRibbonPath(frame,pts,11,[35,65,120],220);
-    effectRibbonPath(frame,pts,6,[105,205,255],250);
-    effectRibbonPath(frame,pts,2.5,[245,255,255],255);
-    // Small fork near the upper bend.
-    effectRibbonPath(frame,[
-      [x+s*.16+drift,y-s*.10],[x+s*.48+drift,y-s*.38],[x+s*.63+drift,y-s*.28]
-    ],5,[130,215,255],235);
-    if(seed%2===0) effectDisc(frame,x,y,s*.10,[255,255,255],210);
+
+  const wave=phase*Math.PI*2;
+
+  for(const strike of strikes){
+    // Each strike has its own brief flash window so the storm feels random,
+    // but remains readable rather than flickering constantly.
+    const pulse=Math.sin(wave*2.35+strike.seed*2.17);
+    const active=pulse>0.12;
+    if(!active) continue;
+
+    const x0=strike.x*frame.width;
+    const y0=strike.top*frame.height;
+    const yEnd=strike.bottom*frame.height;
+    const total=yEnd-y0;
+
+    // Slight horizontal movement between flashes.
+    const sway=Math.sin(wave*.7+strike.seed)*12;
+
+    // Build a jagged main strike from the sky downward.
+    const pts=[];
+    const segments=7;
+    for(let i=0;i<=segments;i++){
+      const t=i/segments;
+      const y=y0+total*t;
+      const zig=(i===0||i===segments)
+        ? 0
+        : ((i%2===0?1:-1)*(24+(strike.seed%3)*5));
+      const curve=strike.lean*frame.width*t;
+      pts.push([x0+sway+curve+zig,y]);
+    }
+
+    // Wide electric aura, dark blue outer glow, bright blue body, white core.
+    effectRibbonPath(frame,pts,18,[25,55,120],170);
+    effectRibbonPath(frame,pts,11,[70,155,255],225);
+    effectRibbonPath(frame,pts,5,[175,230,255],245);
+    effectRibbonPath(frame,pts,2.2,[255,255,255],255);
+
+    // Two short natural branches splitting away from the main strike.
+    const branchA=pts[2], branchB=pts[4];
+    const forkA=[
+      branchA,
+      [branchA[0]-34,branchA[1]+22],
+      [branchA[0]-58,branchA[1]+12],
+      [branchA[0]-76,branchA[1]+30]
+    ];
+    const forkB=[
+      branchB,
+      [branchB[0]+32,branchB[1]+18],
+      [branchB[0]+55,branchB[1]+5],
+      [branchB[0]+72,branchB[1]+24]
+    ];
+
+    for(const fork of [forkA,forkB]){
+      effectRibbonPath(frame,fork,9,[35,90,175],185);
+      effectRibbonPath(frame,fork,4,[115,205,255],235);
+      effectRibbonPath(frame,fork,1.8,[255,255,255],245);
+    }
+
+    // Hot impact point at the end of the strike.
+    const impact=pts[pts.length-1];
+    effectDisc(frame,impact[0],impact[1],20,[115,205,255],90);
+    effectDisc(frame,impact[0],impact[1],9,[255,255,255],220);
+
+    // Small electrical fragments around the strike.
+    for(let k=0;k<4;k++){
+      const t=((k*.23+phase*.55+strike.seed*.11)%1);
+      const idx=Math.min(segments-1,Math.floor(t*segments));
+      const p=pts[idx];
+      const dx=(k%2===0?1:-1)*(9+k*5);
+      const dy=8+(k%3)*7;
+      effectRibbonPath(frame,[
+        [p[0],p[1]],
+        [p[0]+dx,p[1]+dy],
+        [p[0]+dx*.55,p[1]+dy+9]
+      ],2.5,[170,225,255],190);
+    }
+  }
+
+  // A brief whole-scene lightning flash makes the strikes feel powerful.
+  const globalFlash=Math.pow(Math.max(0,Math.sin(wave*2.35+.9)),12);
+  if(globalFlash>.15){
+    effectDisc(
+      frame,
+      frame.width*.5,
+      frame.height*.36,
+      105+globalFlash*70,
+      [210,235,255],
+      Math.round(globalFlash*55)
+    );
   }
 }
-
 function drawAnimatedExperimentalEffect(frame, phase=0) {
   // The intended gimmick: the experiment actually transforms into OTHER
   // finalized effects. Each form gets three full frames, so the change is
