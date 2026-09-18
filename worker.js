@@ -3920,124 +3920,128 @@ function drawAnimatedCandyStorm(frame, phase=0) {
 }
 
 function drawAnimatedKittyParade(frame, phase=0) {
-  // Super-cute seated kittens: round heads, soft pear-shaped bodies,
-  // tiny paws, fluffy curled tails, and very readable faces.
+  // Chibi kitten parade: oversized head, round seated body, tiny paws,
+  // fluffy tail, and the proven cute face. Built from bold simple shapes
+  // so the Discord GIF palette keeps the cats readable.
   const cats=[
-    [.08,.72,62,0],[.34,.68,66,1],[.64,.72,64,2],[.92,.63,60,3]
+    [.08,.73,58,0],[.33,.69,62,1],[.63,.73,60,2],[.91,.64,56,3]
   ];
   const cols=[[248,218,232],[205,190,245],[235,238,250],[250,225,190]];
   const outline=[52,42,66], eye=[45,35,52];
 
   for(const [bx,by,size,seed] of cats){
-    const t=(phase*.28+seed*.23)%1;
-    const bob=Math.sin(t*6+seed)*.014;
-    const x=((bx+t*.28)%1.20-.10)*frame.width;
+    const t=(phase*.24+seed*.23)%1;
+    const bob=Math.sin(t*6+seed)*.012;
+    const x=((bx+t*.24)%1.18-.09)*frame.width;
     const y=(by+bob)*frame.height;
     const c=cols[seed%cols.length];
-    const sway=Math.sin(t*6+seed)*size*.035;
+    const sway=Math.sin(t*6+seed)*size*.025;
+    const headY=y-size*.29;
+    const bodyY=y+size*.18;
 
-    // Fluffy tail first, so it naturally sits behind the kitten.
-    const tailSide=(seed%2===0)?-1:1;
-    const tx=x+tailSide*size*.28;
+    // Thick fluffy tail behind the kitten, curled upward like a real cat tail.
+    const side=(seed%2===0)?-1:1;
     effectRibbonPath(frame,[
-      [tx,y+size*.27],
-      [x+tailSide*size*.55,y+size*.30],
-      [x+tailSide*size*.67,y+size*.12],
-      [x+tailSide*size*.63,y-size*.08],
-      [x+tailSide*size*.47,y-size*.18]
-    ],size*.17,outline,242);
+      [x+side*size*.18,bodyY+size*.15],
+      [x+side*size*.38,bodyY+size*.25],
+      [x+side*size*.52,bodyY+size*.12],
+      [x+side*size*.55,bodyY-size*.05],
+      [x+side*size*.43,bodyY-size*.18],
+      [x+side*size*.30,bodyY-size*.20]
+    ],size*.13,outline,245);
     effectRibbonPath(frame,[
-      [tx,y+size*.25],
-      [x+tailSide*size*.51,y+size*.27],
-      [x+tailSide*size*.58,y+size*.11],
-      [x+tailSide*size*.55,y-size*.05],
-      [x+tailSide*size*.45,y-size*.14]
-    ],size*.095,c,250);
+      [x+side*size*.18,bodyY+size*.14],
+      [x+side*size*.36,bodyY+size*.22],
+      [x+side*size*.47,bodyY+size*.10],
+      [x+side*size*.49,bodyY-size*.04],
+      [x+side*size*.40,bodyY-size*.14]
+    ],size*.075,c,250);
 
-    // Soft seated body: round and slightly pear-shaped, not a flying saucer.
-    drawRotatedEllipse(frame,x+sway,y+size*.20,size*.58,size*.68,0,outline,248);
-    drawRotatedEllipse(frame,x+sway,y+size*.19,size*.47,size*.57,0,c,252);
+    // Round seated body. This is deliberately circular rather than UFO-shaped.
+    effectDisc(frame,x+sway,bodyY,size*.34,outline,250);
+    effectDisc(frame,x+sway,bodyY,size*.275,c,252);
 
-    // Tiny fluffy chest tuft.
-    effectDisc(frame,x+sway,y+size*.12,size*.13,[255,250,252],175);
+    // Little white chest bib/tuft.
+    effectDisc(frame,x+sway,bodyY-size*.035,size*.13,[255,250,252],220);
 
-    // Round head, clearly separated from the body.
-    effectDisc(frame,x+sway,y-size*.34,size*.46,outline,248);
-    effectDisc(frame,x+sway,y-size*.34,size*.37,c,252);
+    // Big round head overlaps the body slightly for a true chibi-kitten silhouette.
+    effectDisc(frame,x+sway,headY,size*.40,outline,250);
+    effectDisc(frame,x+sway,headY,size*.325,c,252);
 
-    // Cute triangular ears with inner ear.
+    // Ears.
     effectTriangle(frame,
-      [x-size*.32+sway,y-size*.51],
-      [x-size*.26+sway,y-size*.83],
-      [x-size*.04+sway,y-size*.62],outline,248);
+      [x-size*.29+sway,headY-size*.20],
+      [x-size*.23+sway,headY-size*.53],
+      [x-size*.035+sway,headY-size*.30],outline,250);
     effectTriangle(frame,
-      [x+size*.04+sway,y-size*.62],
-      [x+size*.26+sway,y-size*.83],
-      [x+size*.32+sway,y-size*.51],outline,248);
+      [x+size*.035+sway,headY-size*.30],
+      [x+size*.23+sway,headY-size*.53],
+      [x+size*.29+sway,headY-size*.20],outline,250);
     effectTriangle(frame,
-      [x-size*.25+sway,y-size*.55],
-      [x-size*.22+sway,y-size*.74],
-      [x-size*.09+sway,y-size*.64],[245,155,190],238);
+      [x-size*.22+sway,headY-size*.25],
+      [x-size*.19+sway,headY-size*.43],
+      [x-size*.075+sway,headY-size*.31],[245,155,190],235);
     effectTriangle(frame,
-      [x+size*.09+sway,y-size*.64],
-      [x+size*.22+sway,y-size*.74],
-      [x+size*.25+sway,y-size*.55],[245,155,190],238);
+      [x+size*.075+sway,headY-size*.31],
+      [x+size*.19+sway,headY-size*.43],
+      [x+size*.22+sway,headY-size*.25],[245,155,190],235);
 
-    // Keep the proven adorable face.
-    effectDisc(frame,x-size*.13+sway,y-size*.37,size*.060,eye,255);
-    effectDisc(frame,x+size*.13+sway,y-size*.37,size*.060,eye,255);
-    effectDisc(frame,x-size*.11+sway,y-size*.39,size*.018,[255,255,255],255);
-    effectDisc(frame,x+size*.15+sway,y-size*.39,size*.018,[255,255,255],255);
+    // KEEP THE CURRENT PROVEN FACE.
+    effectDisc(frame,x-size*.115+sway,headY-size*.035,size*.052,eye,255);
+    effectDisc(frame,x+size*.115+sway,headY-size*.035,size*.052,eye,255);
+    effectDisc(frame,x-size*.095+sway,headY-size*.055,size*.016,[255,255,255],255);
+    effectDisc(frame,x+size*.135+sway,headY-size*.055,size*.016,[255,255,255],255);
     effectTriangle(frame,
-      [x-size*.055+sway,y-size*.27],
-      [x+sway,y-size*.22],
-      [x+size*.055+sway,y-size*.27],[235,115,165],250);
+      [x-size*.05+sway,headY+size*.065],
+      [x+sway,headY+size*.115],
+      [x+size*.05+sway,headY+size*.065],[235,115,165],250);
     effectRibbonPath(frame,[
-      [x+sway,y-size*.22],[x+sway,y-size*.16],[x-size*.055+sway,y-size*.14]
-    ],size*.020,eye,230);
+      [x+sway,headY+size*.115],[x+sway,headY+size*.165],[x-size*.05+sway,headY+size*.18]
+    ],size*.018,eye,230);
     effectRibbonPath(frame,[
-      [x+sway,y-size*.22],[x+sway,y-size*.16],[x+size*.055+sway,y-size*.14]
-    ],size*.020,eye,230);
+      [x+sway,headY+size*.115],[x+sway,headY+size*.165],[x+size*.05+sway,headY+size*.18]
+    ],size*.018,eye,230);
 
-    // Little front paws held up against the chest.
-    effectDisc(frame,x-size*.20+sway,y+size*.12,size*.115,outline,245);
-    effectDisc(frame,x+size*.20+sway,y+size*.12,size*.115,outline,245);
-    effectDisc(frame,x-size*.20+sway,y+size*.11,size*.078,c,252);
-    effectDisc(frame,x+size*.20+sway,y+size*.11,size*.078,c,252);
+    // Tiny front paws tucked against the round body.
+    drawRotatedEllipse(frame,
+      x-size*.15+sway,bodyY+size*.055,size*.10,size*.16,-0.12,outline,245);
+    drawRotatedEllipse(frame,
+      x+size*.15+sway,bodyY+size*.055,size*.10,size*.16,0.12,outline,245);
+    drawRotatedEllipse(frame,
+      x-size*.15+sway,bodyY+size*.055,size*.065,size*.115,-0.12,c,252);
+    drawRotatedEllipse(frame,
+      x+size*.15+sway,bodyY+size*.055,size*.065,size*.115,0.12,c,252);
 
-    // Seated hind paws: broad little ovals tucked under the body.
-    drawRotatedEllipse(frame,x-size*.22+sway,y+size*.48,size*.22,size*.17,0,outline,245);
-    drawRotatedEllipse(frame,x+size*.22+sway,y+size*.48,size*.22,size*.17,0,c,252);
-    drawRotatedEllipse(frame,x-size*.22+sway,y+size*.48,size*.13,size*.10,0,[245,180,205],220);
-    drawRotatedEllipse(frame,x+size*.22+sway,y+size*.48,size*.13,size*.10,0,[245,180,205],220);
+    // Round hind feet peeking out at the bottom instead of dangling legs.
+    effectDisc(frame,x-size*.18+sway,bodyY+size*.25,size*.12,outline,248);
+    effectDisc(frame,x+size*.18+sway,bodyY+size*.25,size*.12,outline,248);
+    effectDisc(frame,x-size*.18+sway,bodyY+size*.25,size*.078,c,252);
+    effectDisc(frame,x+size*.18+sway,bodyY+size*.25,size*.078,c,252);
 
-    // A tiny collar and bell.
+    // Collar and tiny bell.
     effectRibbonPath(frame,[
-      [x-size*.23+sway,y-size*.01],
-      [x+sway,y+size*.04],
-      [x+size*.23+sway,y-size*.01]
-    ],size*.045,[255,205,95],238);
-    effectDisc(frame,x+sway,y+size*.045,size*.052,[255,220,105],245);
+      [x-size*.23+sway,bodyY-size*.09],
+      [x+sway,bodyY-size*.015],
+      [x+size*.23+sway,bodyY-size*.09]
+    ],size*.040,[255,205,95],238);
+    effectDisc(frame,x+sway,bodyY+size*.005,size*.045,[255,220,105],245);
 
     // Short whiskers.
     effectRibbonPath(frame,[
-      [x-size*.29+sway,y-size*.25],[x-size*.55+sway,y-size*.31]
-    ],size*.018,eye,215);
+      [x-size*.27+sway,headY+size*.08],[x-size*.49+sway,headY+size*.02]
+    ],size*.015,eye,215);
     effectRibbonPath(frame,[
-      [x-size*.29+sway,y-size*.19],[x-size*.55+sway,y-size*.18]
-    ],size*.018,eye,215);
+      [x-size*.27+sway,headY+size*.14],[x-size*.49+sway,headY+size*.16]
+    ],size*.015,eye,215);
     effectRibbonPath(frame,[
-      [x+size*.29+sway,y-size*.25],[x+size*.55+sway,y-size*.31]
-    ],size*.018,eye,215);
+      [x+size*.27+sway,headY+size*.08],[x+size*.49+sway,headY+size*.02]
+    ],size*.015,eye,215);
     effectRibbonPath(frame,[
-      [x+size*.29+sway,y-size*.19],[x+size*.55+sway,y-size*.18]
-    ],size*.018,eye,215);
+      [x+size*.27+sway,headY+size*.14],[x+size*.49+sway,headY+size*.16]
+    ],size*.015,eye,215);
 
-    // Tiny sparkle near some kittens.
     if(seed%2===0){
-      drawSparkle(frame,
-        Math.round(x+tailSide*size*.70),
-        Math.round(y-size*.63),'star');
+      drawSparkle(frame,Math.round(x-side*size*.56),Math.round(headY-size*.30),'star');
     }
   }
 }
