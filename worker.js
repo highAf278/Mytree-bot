@@ -3920,73 +3920,127 @@ function drawAnimatedCandyStorm(frame, phase=0) {
 }
 
 function drawAnimatedKittyParade(frame, phase=0) {
-  // Upright little kittens: round heads, ears, compact vertical bodies,
-  // front paws, short hind paws, and thick curled tails. No flying-saucer body.
+  // Super-cute seated kittens: round heads, soft pear-shaped bodies,
+  // tiny paws, fluffy curled tails, and very readable faces.
   const cats=[
-    [.08,.72,64,0],[.35,.67,68,1],[.64,.72,66,2],[.92,.62,62,3]
+    [.08,.72,62,0],[.34,.68,66,1],[.64,.72,64,2],[.92,.63,60,3]
   ];
   const cols=[[248,218,232],[205,190,245],[235,238,250],[250,225,190]];
   const outline=[52,42,66], eye=[45,35,52];
 
   for(const [bx,by,size,seed] of cats){
-    const t=(phase*.34+seed*.25)%1;
-    const x=((bx+t*.34)%1.22-.08)*frame.width;
-    const y=(by+Math.sin(t*6+seed)*.018)*frame.height;
+    const t=(phase*.28+seed*.23)%1;
+    const bob=Math.sin(t*6+seed)*.014;
+    const x=((bx+t*.28)%1.20-.10)*frame.width;
+    const y=(by+bob)*frame.height;
     const c=cols[seed%cols.length];
+    const sway=Math.sin(t*6+seed)*size*.035;
 
-    // Compact upright body, slightly taller than wide.
-    drawRotatedEllipse(frame,x,y+size*.18,size*.50,size*.62,0,outline,245);
-    drawRotatedEllipse(frame,x,y+size*.17,size*.41,size*.51,0,c,250);
+    // Fluffy tail first, so it naturally sits behind the kitten.
+    const tailSide=(seed%2===0)?-1:1;
+    const tx=x+tailSide*size*.28;
+    effectRibbonPath(frame,[
+      [tx,y+size*.27],
+      [x+tailSide*size*.55,y+size*.30],
+      [x+tailSide*size*.67,y+size*.12],
+      [x+tailSide*size*.63,y-size*.08],
+      [x+tailSide*size*.47,y-size*.18]
+    ],size*.17,outline,242);
+    effectRibbonPath(frame,[
+      [tx,y+size*.25],
+      [x+tailSide*size*.51,y+size*.27],
+      [x+tailSide*size*.58,y+size*.11],
+      [x+tailSide*size*.55,y-size*.05],
+      [x+tailSide*size*.45,y-size*.14]
+    ],size*.095,c,250);
 
-    // Round head sitting clearly above the body.
-    effectDisc(frame,x,y-size*.38,size*.43,outline,245);
-    effectDisc(frame,x,y-size*.38,size*.35,c,250);
+    // Soft seated body: round and slightly pear-shaped, not a flying saucer.
+    drawRotatedEllipse(frame,x+sway,y+size*.20,size*.58,size*.68,0,outline,248);
+    drawRotatedEllipse(frame,x+sway,y+size*.19,size*.47,size*.57,0,c,252);
 
-    // Strong cat ears.
-    effectTriangle(frame,[x-size*.31,y-size*.55],[x-size*.27,y-size*.88],[x-size*.05,y-size*.64],outline,245);
-    effectTriangle(frame,[x+size*.05,y-size*.64],[x+size*.27,y-size*.88],[x+size*.31,y-size*.55],outline,245);
-    effectTriangle(frame,[x-size*.24,y-size*.61],[x-size*.25,y-size*.80],[x-size*.10,y-size*.67],[245,155,190],235);
-    effectTriangle(frame,[x+size*.10,y-size*.67],[x+size*.25,y-size*.80],[x+size*.24,y-size*.61],[245,155,190],235);
+    // Tiny fluffy chest tuft.
+    effectDisc(frame,x+sway,y+size*.12,size*.13,[255,250,252],175);
 
-    // Perfectly readable kitty face.
-    effectDisc(frame,x-size*.13,y-size*.40,size*.060,eye,255);
-    effectDisc(frame,x+size*.13,y-size*.40,size*.060,eye,255);
-    effectDisc(frame,x-size*.11,y-size*.42,size*.018,[255,255,255],255);
-    effectDisc(frame,x+size*.15,y-size*.42,size*.018,[255,255,255],255);
-    effectTriangle(frame,[x-size*.055,y-size*.29],[x,y-size*.24],[x+size*.055,y-size*.29],[235,115,165],250);
-    effectRibbonPath(frame,[[x,y-size*.24],[x,y-size*.18],[x-size*.06,y-size*.15]],size*.020,eye,230);
-    effectRibbonPath(frame,[[x,y-size*.24],[x,y-size*.18],[x+size*.06,y-size*.15]],size*.020,eye,230);
+    // Round head, clearly separated from the body.
+    effectDisc(frame,x+sway,y-size*.34,size*.46,outline,248);
+    effectDisc(frame,x+sway,y-size*.34,size*.37,c,252);
 
-    // Two short front paws resting on the belly.
-    effectRibbonPath(frame,[[x-size*.19,y+size*.05],[x-size*.16,y+size*.35]],size*.14,outline,245);
-    effectRibbonPath(frame,[[x+size*.19,y+size*.05],[x+size*.16,y+size*.35]],size*.14,outline,245);
-    effectRibbonPath(frame,[[x-size*.19,y+size*.05],[x-size*.16,y+size*.33]],size*.085,c,250);
-    effectRibbonPath(frame,[[x+size*.19,y+size*.05],[x+size*.16,y+size*.33]],size*.085,c,250);
-    effectDisc(frame,x-size*.16,y+size*.36,size*.095,c,250);
-    effectDisc(frame,x+size*.16,y+size*.36,size*.095,c,250);
+    // Cute triangular ears with inner ear.
+    effectTriangle(frame,
+      [x-size*.32+sway,y-size*.51],
+      [x-size*.26+sway,y-size*.83],
+      [x-size*.04+sway,y-size*.62],outline,248);
+    effectTriangle(frame,
+      [x+size*.04+sway,y-size*.62],
+      [x+size*.26+sway,y-size*.83],
+      [x+size*.32+sway,y-size*.51],outline,248);
+    effectTriangle(frame,
+      [x-size*.25+sway,y-size*.55],
+      [x-size*.22+sway,y-size*.74],
+      [x-size*.09+sway,y-size*.64],[245,155,190],238);
+    effectTriangle(frame,
+      [x+size*.09+sway,y-size*.64],
+      [x+size*.22+sway,y-size*.74],
+      [x+size*.25+sway,y-size*.55],[245,155,190],238);
 
-    // Two tiny hind paws at the bottom, giving the kitten a seated shape.
-    effectRibbonPath(frame,[[x-size*.25,y+size*.48],[x-size*.27,y+size*.63]],size*.13,outline,245);
-    effectRibbonPath(frame,[[x+size*.25,y+size*.48],[x+size*.27,y+size*.63]],size*.13,outline,245);
-    effectDisc(frame,x-size*.27,y+size*.65,size*.12,c,250);
-    effectDisc(frame,x+size*.27,y+size*.65,size*.12,c,250);
+    // Keep the proven adorable face.
+    effectDisc(frame,x-size*.13+sway,y-size*.37,size*.060,eye,255);
+    effectDisc(frame,x+size*.13+sway,y-size*.37,size*.060,eye,255);
+    effectDisc(frame,x-size*.11+sway,y-size*.39,size*.018,[255,255,255],255);
+    effectDisc(frame,x+size*.15+sway,y-size*.39,size*.018,[255,255,255],255);
+    effectTriangle(frame,
+      [x-size*.055+sway,y-size*.27],
+      [x+sway,y-size*.22],
+      [x+size*.055+sway,y-size*.27],[235,115,165],250);
+    effectRibbonPath(frame,[
+      [x+sway,y-size*.22],[x+sway,y-size*.16],[x-size*.055+sway,y-size*.14]
+    ],size*.020,eye,230);
+    effectRibbonPath(frame,[
+      [x+sway,y-size*.22],[x+sway,y-size*.16],[x+size*.055+sway,y-size*.14]
+    ],size*.020,eye,230);
 
-    // Thick tail curls upward from the side of the body.
-    effectRibbonPath(frame,[[x-size*.35,y+size*.25],[x-size*.66,y+size*.24],[x-size*.83,y+size*.02],[x-size*.80,y-size*.27],[x-size*.58,y-size*.38]],size*.18,outline,240);
-    effectRibbonPath(frame,[[x-size*.35,y+size*.25],[x-size*.61,y+size*.23],[x-size*.75,y+size*.01],[x-size*.72,y-size*.22],[x-size*.57,y-size*.32]],size*.095,c,245);
+    // Little front paws held up against the chest.
+    effectDisc(frame,x-size*.20+sway,y+size*.12,size*.115,outline,245);
+    effectDisc(frame,x+size*.20+sway,y+size*.12,size*.115,outline,245);
+    effectDisc(frame,x-size*.20+sway,y+size*.11,size*.078,c,252);
+    effectDisc(frame,x+size*.20+sway,y+size*.11,size*.078,c,252);
 
-    // Whiskers and collar.
-    effectRibbonPath(frame,[[x+size*.29,y-size*.29],[x+size*.60,y-size*.35]],size*.020,eye,215);
-    effectRibbonPath(frame,[[x+size*.29,y-size*.22],[x+size*.60,y-size*.20]],size*.020,eye,215);
-    effectRibbonPath(frame,[[x-size*.29,y-size*.29],[x-size*.60,y-size*.35]],size*.020,eye,215);
-    effectRibbonPath(frame,[[x-size*.29,y-size*.22],[x-size*.60,y-size*.20]],size*.020,eye,215);
-    effectRibbonPath(frame,[[x-size*.27,y-size*.01],[x+size*.27,y-size*.01]],size*.045,[255,205,95],235);
-    effectDisc(frame,x,y+size*.01,size*.055,[255,220,105],240);
+    // Seated hind paws: broad little ovals tucked under the body.
+    drawRotatedEllipse(frame,x-size*.22+sway,y+size*.48,size*.22,size*.17,0,outline,245);
+    drawRotatedEllipse(frame,x+size*.22+sway,y+size*.48,size*.22,size*.17,0,c,252);
+    drawRotatedEllipse(frame,x-size*.22+sway,y+size*.48,size*.13,size*.10,0,[245,180,205],220);
+    drawRotatedEllipse(frame,x+size*.22+sway,y+size*.48,size*.13,size*.10,0,[245,180,205],220);
 
-    if(seed%2===0) drawSparkle(frame,Math.round(x+size*.70),Math.round(y-size*.72),'star');
+    // A tiny collar and bell.
+    effectRibbonPath(frame,[
+      [x-size*.23+sway,y-size*.01],
+      [x+sway,y+size*.04],
+      [x+size*.23+sway,y-size*.01]
+    ],size*.045,[255,205,95],238);
+    effectDisc(frame,x+sway,y+size*.045,size*.052,[255,220,105],245);
+
+    // Short whiskers.
+    effectRibbonPath(frame,[
+      [x-size*.29+sway,y-size*.25],[x-size*.55+sway,y-size*.31]
+    ],size*.018,eye,215);
+    effectRibbonPath(frame,[
+      [x-size*.29+sway,y-size*.19],[x-size*.55+sway,y-size*.18]
+    ],size*.018,eye,215);
+    effectRibbonPath(frame,[
+      [x+size*.29+sway,y-size*.25],[x+size*.55+sway,y-size*.31]
+    ],size*.018,eye,215);
+    effectRibbonPath(frame,[
+      [x+size*.29+sway,y-size*.19],[x+size*.55+sway,y-size*.18]
+    ],size*.018,eye,215);
+
+    // Tiny sparkle near some kittens.
+    if(seed%2===0){
+      drawSparkle(frame,
+        Math.round(x+tailSide*size*.70),
+        Math.round(y-size*.63),'star');
+    }
   }
 }
-
 
 function drawAnimatedElectricStorm(frame, phase=0) {
   // Full thunderstorm treatment: tall branching strikes fall from the sky,
