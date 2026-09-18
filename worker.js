@@ -3604,107 +3604,92 @@ function drawBeansBurst(frame, phase=0) {
 }
 
 
-function drawEffectTriangle(frame, p1, p2, p3, rgb, a=235){
-  const minX=Math.max(0,Math.floor(Math.min(p1[0],p2[0],p3[0]))-1);
-  const maxX=Math.min(frame.width-1,Math.ceil(Math.max(p1[0],p2[0],p3[0]))+1);
-  const minY=Math.max(0,Math.floor(Math.min(p1[1],p2[1],p3[1]))-1);
-  const maxY=Math.min(frame.height-1,Math.ceil(Math.max(p1[1],p2[1],p3[1]))+1);
-  const edge=(ax,ay,bx,by,cx,cy)=>((cx-ax)*(by-ay)-(cy-ay)*(bx-ax));
-  const area=edge(p1[0],p1[1],p2[0],p2[1],p3[0],p3[1]);
-  if(Math.abs(area)<0.01)return;
-  for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){
-    const e1=edge(p1[0],p1[1],p2[0],p2[1],x,y);
-    const e2=edge(p2[0],p2[1],p3[0],p3[1],x,y);
-    const e3=edge(p3[0],p3[1],p1[0],p1[1],x,y);
-    if((e1>=0&&e2>=0&&e3>=0)||(e1<=0&&e2<=0&&e3<=0)) effectPixelBlend(frame,x,y,rgb[0],rgb[1],rgb[2],a);
-  }
-}
-
-function drawEffectDiamond(frame,cx,cy,w,h,rgb,a=235){
-  drawEffectTriangle(frame,[cx,cy-h/2],[cx+w/2,cy],[cx,cy+h/2],rgb,a);
-  drawEffectTriangle(frame,[cx,cy-h/2],[cx-w/2,cy],[cx,cy+h/2],rgb,a);
-  effectRibbonPath(frame,[[cx,cy-h*.38],[cx,cy+h*.38]],Math.max(1,w*.035),[255,255,255],130);
-}
-
-function drawEffectFiveStar(frame,cx,cy,r,rgb,a=235){
-  const pts=[];
-  for(let i=0;i<10;i++){
-    const ang=-Math.PI/2+i*Math.PI/5;
-    const rr=i%2===0?r:r*.43;
-    pts.push([cx+Math.cos(ang)*rr,cy+Math.sin(ang)*rr]);
-  }
-  for(let i=1;i<pts.length-1;i++) drawEffectTriangle(frame,pts[0],pts[i],pts[i+1],rgb,a);
-  effectDisc(frame,cx,cy,Math.max(1,r*.12),[255,255,255],170);
-}
-
 function drawAnimatedFairyFlight(frame, phase=0) {
-  // GIF-safe fairies: large, simple silhouettes with unmistakable wings, heads,
-  // dresses and wands. Avoids tiny details that Discord's palette can destroy.
   const fairies=[
-    [.14,.27,34,0],[.36,.52,31,1],[.61,.22,36,2],[.83,.48,32,3],[.72,.73,27,4]
+    [0.14,0.25,22,0],[0.34,0.55,18,1],[0.58,0.22,24,2],[0.82,0.48,20,3],[0.73,0.76,16,4]
   ];
-  const cols=[[255,175,220],[205,180,255],[155,220,255],[255,220,145],[180,245,205]];
+  const colors=[[255,190,225],[205,180,255],[170,225,255],[255,225,155],[190,245,205]];
   for(let i=0;i<fairies.length;i++){
-    const [bx,by,size,seed]=fairies[i], t=phase*Math.PI*2+seed*1.6;
-    const x=(bx+Math.sin(t*1.1)*.045)*frame.width;
-    const y=(by+Math.cos(t*1.3)*.045)*frame.height;
-    const c=cols[i%cols.length];
-    const flap=1+Math.sin(phase*Math.PI*2*4+seed)*.14;
-    // upper and lower wings: broad, round, separated from the body
-    drawRotatedEllipse(frame,x-size*.48,y-size*.18,size*.48,size*.72,-.34*flap,c,225);
-    drawRotatedEllipse(frame,x+size*.48,y-size*.18,size*.48,size*.72,.34*flap,c,225);
-    drawRotatedEllipse(frame,x-size*.40,y+size*.43,size*.36,size*.50,-.20*flap,c,190);
-    drawRotatedEllipse(frame,x+size*.40,y+size*.43,size*.36,size*.50,.20*flap,c,190);
-    // head + body + bell-shaped dress
-    effectDisc(frame,x,y-size*.48,size*.24,[255,238,220],245);
-    drawRotatedEllipse(frame,x,y+size*.08,size*.23,size*.52,[78,52,92],245);
-    drawRotatedEllipse(frame,x,y+size*.50,size*.52,size*.22,c,245);
-    // hair cap and tiny wand
-    drawRotatedEllipse(frame,x-size*.10,y-size*.59,size*.20,size*.10,c,220);
-    effectRibbonPath(frame,[[x+size*.42,y+size*.10],[x+size*.72,y-size*.18],[x+size*.90,y-size*.52]],Math.max(2,size*.055),[255,245,180],235);
-    drawSparkle(frame,Math.round(x+size*.94),Math.round(y-size*.55),'star');
-    // glitter trail behind the fairy
-    for(let k=0;k<3;k++){
-      const tx=x-size*(1.05+k*.45), ty=y+size*(.45+Math.sin(t+k)*.18);
-      drawSparkle(frame,Math.round(tx),Math.round(ty),'rainbow');
-    }
+    const [bx,by,size,seed]=fairies[i],t=phase*Math.PI*2+i*1.7;
+    const x=(bx+Math.sin(t*1.1+seed)*0.055)*frame.width;
+    const y=(by+Math.cos(t*1.35+seed)*0.065)*frame.height;
+    const flap=0.78+0.22*Math.sin(phase*Math.PI*2*4+seed);
+    const c=colors[i%colors.length];
+    drawRotatedEllipse(frame,x-size*.48*flap,y-size*.35,size*.55,size*.82,Math.sin(t)*.18,c,210);
+    drawRotatedEllipse(frame,x+size*.48*flap,y-size*.35,size*.55,size*.82,-Math.sin(t)*.18,c,210);
+    drawRotatedEllipse(frame,x-size*.40*flap,y+size*.34,size*.43,size*.58,Math.sin(t)*.12,c,190);
+    drawRotatedEllipse(frame,x+size*.40*flap,y+size*.34,size*.43,size*.58,-Math.sin(t)*.12,c,190);
+    drawRotatedEllipse(frame,x,y,size*.11,size*.58,0,[80,55,90],245);
+    drawRotatedEllipse(frame,x,y-size*.47,size*.10,size*.10,0,[255,240,255],180);
+    effectRibbonPath(frame,[
+      [x-size*1.2,y+size*.55],[x-size*1.8,y+size*.9],[x-size*2.4,y+size*.45]
+    ],2.2,[255,220,250],130);
+    drawSparkle(frame,Math.round(x+size*.9),Math.round(y-size*.8),'star');
   }
 }
 
 function drawAnimatedCrystalAura(frame, phase=0) {
-  // Large faceted diamond crystals with strong silhouettes; no tiny shard blobs.
-  const cx=frame.width*.5, cy=frame.height*.47;
+  const cx=frame.width*.5, cy=frame.height*.48;
   const crystals=[
-    [0,-145,38,78,[170,225,255]],[112,-72,34,68,[220,170,255]],
-    [124,58,40,84,[155,240,215]],[0,145,36,74,[215,180,255]],
-    [-124,58,40,84,[170,220,255]],[-112,-72,34,68,[240,190,255]]
+    [0,-150,0.1,28,[180,220,255]],[115,-75,-.4,23,[220,170,255]],
+    [125,65,.5,30,[170,245,225]],[0,145,-.15,25,[210,180,255]],
+    [-125,65,.4,27,[180,220,255]],[-115,-75,-.5,22,[235,190,255]]
   ];
   for(let i=0;i<crystals.length;i++){
-    const [ox,oy,w,h,c]=crystals[i];
-    const a=phase*Math.PI*2*(i%2?-.18:.18)+i*.7;
-    const x=cx+ox*Math.cos(a*.22)-oy*.10*Math.sin(a);
-    const y=cy+oy+Math.sin(phase*Math.PI*2+i)*12;
-    drawEffectDiamond(frame,x,y,w,h,c,238);
-    drawEffectDiamond(frame,x,y,w*.42,h*.72,[255,255,255],75);
-    drawSparkle(frame,Math.round(x+w*.75),Math.round(y-h*.48),'rainbow');
+    const [ox,oy,a,size,c]=crystals[i];
+    const ang=a+phase*Math.PI*2*(i%2?-.25:.25);
+    const x=cx+ox*Math.cos(phase*Math.PI*2+ i)-oy*.12*Math.sin(phase*Math.PI*2);
+    const y=cy+oy+Math.sin(phase*Math.PI*2+i)*10;
+    drawRotatedEllipse(frame,x,y,size*.45,size*1.45,ang,c,220);
+    effectDisc(frame,x,y,size*.22,[255,255,255],115);
   }
-  for(let i=0;i<10;i++){
-    const a=phase*Math.PI*2+i*Math.PI*2/10, r=190+15*Math.sin(i+phase*5);
-    effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.62,3.5,[205,235,255],175);
+  for(let i=0;i<14;i++){
+    const a=phase*Math.PI*2+i*Math.PI*2/14, r=150+18*Math.sin(i+phase*6);
+    effectDisc(frame,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.65,3,[210,235,255],150);
   }
 }
 
 function drawAnimatedStarfall(frame, phase=0) {
-  // Five-point stars are much more robust than the old cross-shaped sparkle.
-  for(let i=0;i<18;i++){
-    const t=(phase*.72+i/18)%1;
-    const x=(.04+((i*47)%92)/100)*frame.width;
-    const y=((t*.92+.01+(i%3)*.025)%1.04)*frame.height;
-    const r=7+(i%4)*2.2;
-    const c=i%3===0?[255,235,150]:i%3===1?[220,205,255]:[180,225,255];
-    drawEffectFiveStar(frame,x,y,r,c,235);
-    if(i%3===0) drawSparkle(frame,Math.round(x),Math.round(y),'star');
+  for(let i=0;i<28;i++){
+    const t=(phase*.75+i/28)%1;
+    const x=(.03+((i*37)%94)/100)*frame.width;
+    const y=((t*.95+.02+(i%4)*.015)%1.05)*frame.height;
+    const r=2+(i%4)*1.6;
+    effectDisc(frame,x,y,r*2,[255,245,190],90);
+    drawSparkle(frame,Math.round(x),Math.round(y),'star');
   }
+}
+
+function drawUnicornShape(frame,x,y,size,mane,phase,seed){
+  const body=[250,244,255];
+  const bob=Math.sin(phase*Math.PI*2+seed)*3;
+  y+=bob;
+  drawRotatedEllipse(frame,x,y,size*1.45,size*.58,0,body,250);
+  for(const lx of [-.9,-.45,.35,.82]){
+    const swing=Math.sin(phase*Math.PI*2*1.5+seed+lx)*size*.12;
+    effectRibbonPath(frame,[[x+lx*size,y+size*.35],[x+(lx+.03)*size+swing,y+size*1.18]],size*.10,body,250);
+  }
+  effectRibbonPath(frame,[[x+size*.8,y],[x+size*1.05,y-size*.9],[x+size*1.55,y-size*.95]],size*.34,body,250);
+  drawRotatedEllipse(frame,x+size*1.42,y-size*.95,size*.62,size*.48,0,body,250);
+  drawRotatedEllipse(frame,x+size*1.86,y-size*.88,size*.32,size*.25,0,body,250);
+  // Integrated mane hugs the neck; it is short and layered, never a detached blob.
+  for(let k=0;k<3;k++){
+    const pts=[];
+    for(let j=0;j<7;j++){
+      const t=j/6;
+      pts.push([
+        x+size*(1.03-t*.55)+Math.sin(t*Math.PI+phase*2+seed+k)*size*.035,
+        y-size*(.98-t*.62)-k*size*.045
+      ]);
+    }
+    effectRibbonPath(frame,pts,size*(.13-.018*k),mane,220);
+  }
+  effectRibbonPath(frame,[[x-size*1.32,y-size*.05],[x-size*1.9,y-size*.15],[x-size*2.25,y+size*.18]],size*.18,mane,215);
+  // horn, ear, eye
+  effectRibbonPath(frame,[[x+size*1.60,y-size*1.27],[x+size*1.72,y-size*1.72]],size*.07,[255,225,145],250);
+  effectRibbonPath(frame,[[x+size*1.25,y-size*1.30],[x+size*1.18,y-size*1.60],[x+size*1.38,y-size*1.38]],size*.10,body,250);
+  effectDisc(frame,x+size*1.99,y-size*.98,size*.055,[65,45,90],255);
+  drawSparkle(frame,Math.round(x+size*1.72),Math.round(y-size*1.75),'star');
 }
 
 function drawAnimatedUnicornSparkle(frame, phase=0) {
@@ -3790,148 +3775,80 @@ function drawAnimatedBubblePop(frame, phase=0) {
   }
 }
 
-function drawWrappedCandy(frame,cx,cy,w,h,rgb,angle=0){
-  drawRotatedEllipse(frame,cx,cy,w*.62,h*.38,angle,rgb,240);
-  // twisted wrapper ends: unmistakably candy-like
-  const ca=Math.cos(angle),sa=Math.sin(angle);
-  for(const side of [-1,1]){
-    const ex=cx+ca*side*w*.78, ey=cy+sa*side*w*.78;
-    drawRotatedEllipse(frame,ex,ey,w*.20,h*.30,angle+side*.55,rgb,235);
-    effectRibbonPath(frame,[[ex-ca*w*.18,ey-sa*w*.18],[ex+ca*w*.18,ey+sa*w*.18]],Math.max(1.5,w*.035),[255,255,255],115);
-  }
-  effectRibbonPath(frame,[[cx-ca*w*.25,cy-sa*w*.25],[cx+ca*w*.25,cy+sa*w*.25]],Math.max(1.5,w*.05),[255,255,255],115);
-}
-function drawLollipop(frame,cx,cy,r,rgb,angle=0){
-  const ca=Math.cos(angle),sa=Math.sin(angle);
-  effectRibbonPath(frame,[[cx,cy+r*.65],[cx-ca*r*.08,cy+r*1.75],[cx+ca*r*.02,cy+r*2.35]],Math.max(2,r*.10),[245,245,245],235);
-  drawRotatedEllipse(frame,cx,cy,r*.78,r*.78,0,rgb,240);
-  // simple spiral-like diagonal bands that survive palette reduction
-  effectRibbonPath(frame,[[cx-r*.45,cy-r*.20],[cx,cy+r*.05],[cx+r*.45,cy-r*.20]],Math.max(2,r*.07),[255,245,255],170);
-  drawSparkle(frame,Math.round(cx+r*.55),Math.round(cy-r*.55),'star');
-}
-function drawCandyCane(frame,cx,cy,size,rgb){
-  const pts=[];
-  for(let j=0;j<12;j++){
-    const t=j/11;
-    pts.push([cx,cy+size*.95-t*size*1.7]);
-  }
-  for(let j=0;j<8;j++){
-    const a=Math.PI*(1.0-j/7*.95);
-    pts.push([cx+Math.cos(a)*size*.48,cy-size*.75+Math.sin(a)*size*.48]);
-  }
-  effectRibbonPath(frame,pts,Math.max(3,size*.16),rgb,245);
-  effectRibbonPath(frame,pts,Math.max(1.5,size*.06),[255,255,255],165);
-}
 function drawAnimatedCandyStorm(frame, phase=0) {
   const candies=[
-    [.10,.12,24,0],[.28,.30,20,1],[.47,.10,26,2],[.66,.25,22,3],[.86,.13,25,4],
-    [.16,.55,22,5],[.39,.68,27,6],[.61,.53,23,7],[.84,.65,28,8],[.73,.84,19,9]
+    [55,.12,0],[145,.30,1],[250,.08,2],[355,.24,3],[470,.14,4],[620,.31,5],[770,.10,6],[900,.28,7],
+    [110,.56,8],[330,.66,9],[560,.55,10],[820,.65,11]
   ];
-  const cols=[[255,100,175],[255,205,75],[105,195,255],[180,120,255],[110,220,160]];
+  const cols=[[255,105,170],[255,210,80],[110,205,255],[175,120,255],[115,225,160]];
   for(let i=0;i<candies.length;i++){
-    const [bx,by,size,seed]=candies[i];
-    const t=(phase*.75+i*.09)%1;
-    const x=((bx+Math.sin(t*7+seed)*.025)%1)*frame.width;
-    const y=((by+t*.70)%1.08)*frame.height;
-    if(seed%3===0) drawLollipop(frame,x,y,size,cols[seed%cols.length],(seed%2?-.2:.2));
-    else if(seed%3===1) drawCandyCane(frame,x,y,size,cols[seed%cols.length]);
-    else drawWrappedCandy(frame,x,y,size*1.7,size*.9,cols[seed%cols.length],Math.sin(t*4+seed)*.35);
-  }
-  for(let i=0;i<8;i++){
-    const x=(.08+i*.12)*frame.width, y=((phase*.6+i*.13)%1)*frame.height;
-    drawSparkle(frame,Math.round(x),Math.round(y),'rainbow');
+    const [x0,y0,seed]=candies[i],t=(phase*.82+i*.09)%1;
+    const x=x0+Math.sin(t*8+seed)*14, y=((y0+t*.95)%1.1)*frame.height;
+    const r=10+(seed%3)*3;
+    drawRotatedEllipse(frame,x,y,r*1.35,r*.72,t*4+seed,cols[seed%cols.length],230);
+    drawRotatedEllipse(frame,x,y,r*.55,r*.28,t*4+seed,[255,245,255],80);
+    drawSparkle(frame,Math.round(x),Math.round(y),'star');
   }
 }
 
-function drawCatSilhouette(frame,cx,cy,size,rgb,step=0){
-  // Large, unmistakable cat: triangular ears, round head, four paws and curved tail.
-  const bob=Math.sin(step*Math.PI*2)*size*.06;
-  cy+=bob;
-  drawRotatedEllipse(frame,cx,cy,size*.62,size*.42,0,rgb,245);
-  drawRotatedEllipse(frame,cx+size*.56,cy-size*.34,size*.40,size*.38,0,rgb,245);
-  drawEffectTriangle(frame,[cx+size*.34,cy-size*.55],[cx+size*.43,cy-size*.98],[cx+size*.63,cy-size*.54],rgb,245);
-  drawEffectTriangle(frame,[cx+size*.72,cy-size*.55],[cx+size*.84,cy-size*.98],[cx+size*.98,cy-size*.45],rgb,245);
-  // legs/paws
-  for(const dx of [-.42,-.08,.28,.52]) drawRotatedEllipse(frame,cx+dx*size,cy+size*.42,size*.13,size*.32,0,rgb,245);
-  // long curved tail
-  const tail=[];
-  for(let j=0;j<13;j++){
-    const t=j/12;
-    tail.push([cx-size*.52-t*size*.95,cy+size*.05-Math.sin(t*Math.PI)*size*.55]);
-  }
-  effectRibbonPath(frame,tail,Math.max(3,size*.13),rgb,240);
-  // face: eyes + nose + whiskers
-  effectDisc(frame,cx+size*.62,cy-size*.40,size*.055,[55,40,75],255);
-  effectDisc(frame,cx+size*.83,cy-size*.40,size*.055,[55,40,75],255);
-  effectDisc(frame,cx+size*.73,cy-size*.29,size*.045,[245,150,190],245);
-  for(const dy of [-.34,-.22,.0,.22,.34]){
-    effectRibbonPath(frame,[[cx+size*.62,cy+dy*size],[cx+size*1.12,cy+(dy+.04)*size]],1.4,[70,55,80],205);
-  }
-}
 function drawAnimatedKittyParade(frame, phase=0) {
-  const cats=[[.13,.78,29,0],[.38,.67,33,1],[.64,.79,30,2],[.86,.66,34,3]];
-  const cols=[[248,225,235],[215,200,245],[225,240,250],[245,220,180]];
+  const cats=[
+    [.18,.78,23,0],[.40,.70,28,1],[.63,.79,24,2],[.84,.68,30,3]
+  ];
+  const cols=[[245,225,230],[215,205,245],[235,240,250],[245,220,180]];
   for(let i=0;i<cats.length;i++){
-    const [bx,by,size,seed]=cats[i],t=(phase*.48+i*.22)%1;
-    const x=((bx+t*.28)%1.12)*frame.width;
-    const y=(by+Math.sin(t*8+seed)*.018)*frame.height;
-    drawCatSilhouette(frame,x,y,size,cols[seed%cols.length],t);
-    drawSparkle(frame,Math.round(x+size*.9),Math.round(y-size*1.15),'rainbow');
-    effectDisc(frame,x-size*.65,y+size*.70,size*.07,[245,180,215],180);
-    effectDisc(frame,x-size*.45,y+size*.72,size*.07,[245,180,215],180);
+    const [bx,by,size,seed]=cats[i],t=(phase*.55+i*.22)%1;
+    const x=((bx+t*.35)%1.15)*frame.width, y=(by+Math.sin(t*8+seed)*.025)*frame.height;
+    const c=cols[seed%cols.length];
+    drawRotatedEllipse(frame,x,y,size*1.05,size*.72,0,c,245);
+    drawRotatedEllipse(frame,x+size*.8,y-size*.55,size*.58,size*.55,0,c,245);
+    // ears
+    drawRotatedEllipse(frame,x+size*.55,y-size*.95,size*.25,size*.38,-.4,c,245);
+    drawRotatedEllipse(frame,x+size*1.0,y-size*.98,size*.25,size*.38,.4,c,245);
+    effectDisc(frame,x+size*.98,y-size*.60,size*.055,[60,45,70],255);
+    effectDisc(frame,x+size*.68,y-size*.60,size*.055,[60,45,70],255);
+    // tail and paws
+    effectRibbonPath(frame,[[x-size*.95,y-size*.1],[x-size*1.35,y-size*.5],[x-size*1.2,y-size*.8]],size*.12,c,230);
+    for(const dx of [-.55,.55]) effectDisc(frame,x+dx*size,y+size*.65,size*.15,c,230);
+    if(i%2===0) drawSparkle(frame,Math.round(x+size*1.25),Math.round(y-size*1.25),'star');
   }
 }
 
-function drawLightningBolt(frame,x,y,length,width,rgb=[175,225,255],a=235,seed=0){
-  const pts=[];
-  const segments=6;
-  for(let j=0;j<=segments;j++){
-    const t=j/segments;
-    const side=(j===0||j===segments)?0:((j%2===0)?-1:1);
-    pts.push([x+side*width*(.55+Math.sin(seed+j)*.18),y+t*length]);
-  }
-  effectRibbonPath(frame,pts,width*.12,rgb,a);
-  effectRibbonPath(frame,pts,Math.max(1.5,width*.045),[255,255,255],255);
-}
 function drawAnimatedElectricStorm(frame, phase=0) {
-  // Short branching flashes instead of full-height continuous spaghetti bolts.
-  for(let i=0;i<9;i++){
-    const cycle=(phase*1.4+i*.17)%1;
-    const flash=cycle<.34;
-    if(!flash) continue;
-    const x=(.08+((i*31)%84)/100)*frame.width;
-    const y=(.12+((i*17)%64)/100)*frame.height;
-    const len=70+(i%4)*25;
-    drawLightningBolt(frame,x,y,len,18,[170,220,255],245,i*1.7);
-    if(i%2===0){
-      effectRibbonPath(frame,[[x,y+len*.42],[x-35,y+len*.62],[x-58,y+len*.82]],4,[180,225,255],220);
-      effectRibbonPath(frame,[[x,y+len*.45],[x+34,y+len*.64],[x+56,y+len*.86]],4,[180,225,255],220);
+  for(let bolt=0;bolt<7;bolt++){
+    const seed=bolt*1.71;
+    const x0=(.08+bolt*.14)*frame.width;
+    const pts=[];
+    for(let j=0;j<10;j++){
+      const t=j/9;
+      pts.push([
+        x0+Math.sin(phase*Math.PI*4+seed+j*2.2)*22,
+        (.08+t*.72+Math.sin(seed+t*8)*.025)*frame.height
+      ]);
     }
-    drawSparkle(frame,Math.round(x),Math.round(y+len*.5),'star');
+    effectRibbonPath(frame,pts,5,[155,205,255],170);
+    effectRibbonPath(frame,pts,2,[235,250,255],255);
   }
-  for(let i=0;i<7;i++){
-    const a=phase*Math.PI*2+i*.9, r=95+20*Math.sin(i);
-    effectDisc(frame,frame.width*.5+Math.cos(a)*r,frame.height*.48+Math.sin(a)*r*.6,4,[145,205,255],150);
+  for(let i=0;i<14;i++){
+    const a=phase*Math.PI*2+i*.9,r=110+35*Math.sin(i);
+    effectDisc(frame,frame.width*.5+Math.cos(a)*r,frame.height*.45+Math.sin(a)*r*.6,4,[120,190,255],150);
   }
 }
 
 function drawAnimatedExperimentalEffect(frame, phase=0) {
-  // The experiment cycles through complete, readable effects in deterministic
-  // stages so it never flickers into an arbitrary new effect every frame.
   const pool=[
-    drawAnimatedFairyFlight,
-    drawAnimatedCrystalAura,
-    drawAnimatedStarfall,
-    drawAnimatedCandyStorm,
-    drawAnimatedKittyParade,
-    drawAnimatedElectricStorm
+    drawAnimatedPetalStorm,drawAnimatedButterflyGarden,drawAnimatedRainbowTrail,
+    drawAnimatedEmberGlow,drawAnimatedMeteorShower,drawAnimatedCosmicRift,
+    drawAnimatedFairyFlight,drawAnimatedCrystalAura,drawAnimatedStarfall,
+    drawAnimatedSnowfall,drawAnimatedFlowerBloom,drawAnimatedBubblePop,
+    drawAnimatedCandyStorm,drawAnimatedKittyParade,drawAnimatedElectricStorm
   ];
-  const stage=Math.min(pool.length-1,Math.floor((phase%1)*pool.length));
-  pool[stage](frame,(phase*pool.length)%1);
-  for(let i=0;i<6;i++){
-    const x=(.16+i*.14)*frame.width;
-    const y=(.16+(i%3)*.29)*frame.height;
-    drawSparkle(frame,Math.round(x+Math.sin(phase*8+i)*18),Math.round(y),'rainbow');
+  // One experiment is selected per animation cycle, then changes next cycle.
+  const choice=Math.floor(Math.random()*pool.length);
+  pool[choice](frame,phase);
+  for(let i=0;i<7;i++){
+    const x=(.15+i*.12)*frame.width, y=(.18+(i%3)*.27)*frame.height;
+    drawSparkle(frame,Math.round(x+Math.sin(phase*7+i)*15),Math.round(y),'rainbow');
   }
 }
 
@@ -8381,8 +8298,8 @@ async function handleTree(
 
 /* =========================================================
    THE EXPERIMENT — REUSABLE CHAOTIC EXPERIMENT ENGINE
-   Every match randomly selects an experiment, scenario flavor,
-   answer, clue wording, player secret, and optional twist.
+   20 experiments, partial evidence, secret roles, one-use powers,
+   public shared results, and deliberately imperfect information.
 ========================================================= */
 const EXPERIMENT_MIN_PLAYERS = 3;
 const EXPERIMENT_MAX_PLAYERS = 10;
@@ -8418,7 +8335,7 @@ const EXPERIMENT_TWISTS = [
   {id:"alarm",name:"🚨 FALSE ALARM",text:"The facility briefly announces an emergency. The rules have NOT changed, but someone may panic."},
   {id:"echo",name:"📡 ECHO SIGNAL",text:"A mysterious signal repeats one of the answer labels. It is atmospheric noise, not a clue."},
   {id:"clock",name:"⏰ FROZEN CLOCK",text:"The countdown display has frozen. There is no automatic timeout; discussion continues."},
-  {id:"observer",name:"👁️ THE OBSERVER",text:"One randomly selected player is secretly told that they are being watched. They receive no extra answer information."},
+  {id:"observer",name:"👁️ THE OBSERVER",text:"One randomly selected player is secretly watched. They receive no extra answer information."},
   {id:"swap",name:"🔀 FILE MIX-UP",text:"Two players receive differently worded versions of their true clues. The underlying information remains consistent."},
   {id:"glitch",name:"💻 SYSTEM GLITCH",text:"The public display briefly flickers with nonsense symbols. Ignore them."},
   {id:"second_signal",name:"✨ SECOND SIGNAL",text:"The system reveals a tiny extra hint: one randomly chosen dangerous option is definitely unsafe."},
@@ -8439,22 +8356,39 @@ const EXPERIMENT_FLAVORS = [
   "The room goes completely quiet. Then one tiny green light turns on."
 ];
 
+const EXPERIMENT_DOOR_COLORS = ["rose","aqua","violet","gold","mint","coral"];
+const EXPERIMENT_DOOR_SHAPES = ["moon","star","diamond","heart","bolt","flower"];
+const EXPERIMENT_ROLE_DEFS = [
+  {id:"analyst",label:"🧠 Analyst",text:"You can inspect one door and receive a cautious system reading."},
+  {id:"skeptic",label:"🧐 Skeptic",text:"You can audit another player's clue and learn whether it is consistent with the hidden truth."},
+  {id:"archivist",label:"📚 Archivist",text:"You can request a second evidence fragment that rules out one dangerous door."},
+  {id:"observer",label:"👁️ Observer",text:"You can secretly check whether one random other player is the Saboteur."},
+  {id:"wildcard",label:"🎲 Wildcard",text:"You can discard your clue and receive a fresh clue of a different type."},
+  {id:"cipher",label:"🔐 Cipher",text:"You can decode a hidden attribute of the safe door."},
+  {id:"oracle",label:"🔮 Oracle",text:"You can ask for a deliberately uncertain prediction about the safe door."},
+  {id:"interrogator",label:"🗣️ Interrogator",text:"You can obtain a private summary of one other player's evidence."},
+  {id:"forensic",label:"🔎 Forensic",text:"You can compare two doors and learn whether one of them is the safe door."},
+  {id:"guardian",label:"🛡️ Guardian",text:"You can reserve a tie-break door. If the final vote ties, your reserved door decides the outcome."},
+  {id:"trickster",label:"🃏 Trickster",text:"You can inject one clearly marked false system signal into the public display to cause chaos."},
+  {id:"saboteur",label:"🕵️ Saboteur",text:"Your clue is corrupted. You can also inject one false public signal without revealing yourself."}
+];
+
 function experimentGameId() { return `exp-${Date.now()}-${Math.random().toString(36).slice(2,9)}`; }
 function experimentPlayers(game) { return Object.values(game?.players || {}); }
 function experimentDef(game) { return EXPERIMENT_CATALOG.find(x=>x.id===game?.experimentId) || EXPERIMENT_CATALOG[0]; }
 function experimentDoorLabel(door) { return door === "A" ? "🚪 A" : door === "B" ? "🚪 B" : "🚪 C"; }
 function experimentRandomChoice() { return ["A","B","C"][randomInt(0,2)]; }
+function experimentOtherPlayers(game,userId){ return experimentPlayers(game).filter(p=>p.id!==userId); }
+function experimentRoleDef(roleId){ return EXPERIMENT_ROLE_DEFS.find(r=>r.id===roleId)||EXPERIMENT_ROLE_DEFS[0]; }
 
+function experimentDoorLine(game,door){
+  const d=game.doors?.[door]||{};
+  return `${experimentDoorLabel(door)} — ${d.color||"unknown"} • ${d.shape||"unknown"} • number ${d.number??"?"}`;
+}
+function experimentDoorSummary(game){ return ["A","B","C"].map(d=>experimentDoorLine(game,d)).join("\n"); }
 function experimentLobbyText(game) {
   const def=experimentDef(game), players=experimentPlayers(game);
-  return [
-    `🧪 **THE EXPERIMENT — ${def.emoji} EXPERIMENT ${def.id}: ${def.name.toUpperCase()}**`,"",
-    def.theme,"",`👑 Host: <@${game.hostId}>`,`👥 Players: **${players.length}/${EXPERIMENT_MAX_PLAYERS}**`,
-    "",players.length?players.map((p,i)=>`${i+1}. <@${p.id}>`).join("\n"):"Nobody has joined yet.","",
-    players.length>=EXPERIMENT_MIN_PLAYERS?"✨ Enough players! The host can start the experiment.":`⏳ Need at least **${EXPERIMENT_MIN_PLAYERS} players** to begin.`,
-    "","🎲 The exact scenario, evidence, wording, twist, and answer will be randomized when the experiment starts.",
-    "🔐 Nobody gets the whole picture. Decide what you trust."
-  ].join("\n");
+  return [`🧪 **THE EXPERIMENT — ${def.emoji} EXPERIMENT ${def.id}: ${def.name.toUpperCase()}**`,"",def.theme,"",`👑 Host: <@${game.hostId}>`,`👥 Players: **${players.length}/${EXPERIMENT_MAX_PLAYERS}**`,"",players.length?players.map((p,i)=>`${i+1}. <@${p.id}>`).join("\n"):"Nobody has joined yet.","",players.length>=EXPERIMENT_MIN_PLAYERS?"✨ Enough players! The host can start the experiment.":`⏳ Need at least **${EXPERIMENT_MIN_PLAYERS} players** to begin.`,"","🎲 The exact scenario, evidence, wording, roles, twist, and answer will be randomized when the experiment starts.","🔐 Nobody gets the whole picture. Trust is optional.","🛑 The host or bot owner can end this lobby if everyone falls asleep."] .join("\n");
 }
 function experimentLobbyComponents(game) {
   const rows=[row(button("🧪 Join Experiment",`experiment:join:${game.id}`,1),button("🚪 Leave",`experiment:leave:${game.id}`,2),button("👁️ Status",`experiment:status:${game.id}`,3))];
@@ -8463,204 +8397,107 @@ function experimentLobbyComponents(game) {
   return rows;
 }
 function experimentActionComponents(game) {
-  return [row(button("🅰️ Option A",`experiment:vote:${game.id}:A`,1),button("🅱️ Option B",`experiment:vote:${game.id}:B`,1),button("©️ Option C",`experiment:vote:${game.id}:C`,1)),row(button("🔐 View My Clue",`experiment:clue:${game.id}`,2))];
-}
-function experimentChoiceCounts(game) {
-  const counts={A:0,B:0,C:0}; for(const p of experimentPlayers(game)){if(p.vote&&counts[p.vote]!==undefined)counts[p.vote]++;} return counts;
-}
-
-function experimentTemplates(excluded, safe, other) {
   return [
-    `I can confirm that **Option ${excluded}** is not the answer.`,
-    `My evidence rules out **Option ${excluded}**.`,
-    `Do not choose **Option ${excluded}**. The evidence is clear.`,
-    `The correct option is not **${excluded}**.`,
-    `One of the bad possibilities is **${excluded}**. Eliminate it.`,
-    `My file narrows the answer to **${safe} or ${other}**. **${excluded}** is ruled out.`
+    row(button("🅰️ Option A",`experiment:vote:${game.id}:A`,1),button("🅱️ Option B",`experiment:vote:${game.id}:B`,1),button("©️ Option C",`experiment:vote:${game.id}:C`,1)),
+    row(button("🔐 View My Clue",`experiment:clue:${game.id}`,2),button("🎭 Use Role Power",`experiment:role:${game.id}`,1)),
+    row(button("🛑 End Experiment",`experiment:end:${game.id}`,4))
   ];
 }
-function buildExperimentClues(safeDoor, players) {
-  const dangerous=["A","B","C"].filter(d=>d!==safeDoor), clues=[];
-  for(let i=0;i<players.length;i++){
-    const excluded=dangerous[i%dangerous.length], other=dangerous.find(d=>d!==excluded)||dangerous[0];
-    const templates=experimentTemplates(excluded,safeDoor,other);
-    clues.push(templates[randomInt(0,templates.length-1)]);
-  }
-  return clues;
+function experimentChoiceCounts(game) { const counts={A:0,B:0,C:0}; for(const p of experimentPlayers(game)){if(p.vote&&counts[p.vote]!==undefined)counts[p.vote]++;} return counts; }
+
+function experimentBuildDoors(safeDoor){
+  const colors=shuffleArray([...EXPERIMENT_DOOR_COLORS]).slice(0,3),shapes=shuffleArray([...EXPERIMENT_DOOR_SHAPES]).slice(0,3),nums=shuffleArray([1,2,3,4,5,6,7,8,9]).slice(0,3);
+  const doors={}; ["A","B","C"].forEach((d,i)=>doors[d]={color:colors[i],shape:shapes[i],number:nums[i]});
+  return doors;
 }
-function experimentAssignSecrets(game) {
-  const players=experimentPlayers(game); if(!players.length)return;
-  const secretKinds=[
-    {id:"analyst",label:"🧠 Analyst",text:"Your private role is Analyst. Look for contradictions and ask precise questions."},
-    {id:"skeptic",label:"🧐 Skeptic",text:"Your private role is Skeptic. Do not accept a claim just because a friend says it confidently."},
-    {id:"observer",label:"👁️ Observer",text:"Your private role is Observer. Pay attention to who reveals information and who avoids it."},
-    {id:"archivist",label:"📚 Archivist",text:"Your private role is Archivist. Keep track of which options have been ruled out."},
-    {id:"wildcard",label:"🎲 Wildcard",text:"Your private role is Wildcard. You have no special power; your job is to make the discussion unpredictable."}
-  ];
-  for(let i=0;i<players.length;i++) players[i].secret=secretKinds[(i+randomInt(0,secretKinds.length-1))%secretKinds.length];
-  const chosen=players[randomInt(0,players.length-1)]; chosen.secret={id:"observer_twist",label:"👁️ The Watched One",text:"You have been secretly marked by the Observer twist. You gain no extra answer information, but the experiment is watching your choices."};
+function experimentTruthClue(game){
+  const safe=game.safeDoor,d=game.doors[safe],otherDoors=["A","B","C"].filter(x=>x!==safe),type=randomInt(0,7);
+  if(type===0)return `My file says the safe door has the **${d.color}** signal.`;
+  if(type===1)return `The safe door carries the **${d.shape}** symbol.`;
+  if(type===2)return `The safe door's number is **${d.number%2===0?"even":"odd"}**.`;
+  if(type===3)return `The safe door's number is **${d.number>=5?"5 or higher":"below 5"}**.`;
+  if(type===4){const bad=otherDoors[randomInt(0,1)];return `I can rule out **Option ${bad}**.`;}
+  if(type===5){const bad=otherDoors[randomInt(0,1)];return `The **${game.doors[bad].color}** signal is a false lead.`;}
+  if(type===6){const bad=otherDoors[randomInt(0,1)];return `The **${game.doors[bad].shape}** symbol does not belong to the safe door.`;}
+  const candidates=shuffleArray([safe,...otherDoors]).slice(0,2); return `The safe door is one of **${candidates[0]} or ${candidates[1]}**.`;
+}
+function experimentSaboteurClue(game){
+  const bad=["A","B","C"].filter(d=>d!==game.safeDoor),fake=bad[randomInt(0,bad.length-1)],d=game.doors[fake];
+  return `CORRUPTED FILE: The **${d.color}** signal points to the safe door.`;
+}
+function experimentAssignRoles(game){
+  const players=shuffleArray(experimentPlayers(game));
+  const saboteur=EXPERIMENT_ROLE_DEFS.find(r=>r.id==="saboteur");
+  const others=shuffleArray(EXPERIMENT_ROLE_DEFS.filter(r=>r.id!=="saboteur"));
+  const defs=shuffleArray([saboteur,...others.slice(0,Math.max(0,players.length-1))]);
+  players.forEach((p,i)=>{p.secret={...defs[i]};p.powerUsed=false;p.roleResult="";});
+  game.saboteurId=players.find(p=>p.secret.id==="saboteur")?.id||null;
 }
 function experimentApplyTwist(game) {
   const twist=EXPERIMENT_TWISTS[randomInt(0,EXPERIMENT_TWISTS.length-1)]; game.twist={...twist};
   const players=experimentPlayers(game);
-  if(twist.id==="second_signal"){
-    const dangerous=["A","B","C"].filter(d=>d!==game.safeDoor);
-    game.extraHint=dangerous[randomInt(0,dangerous.length-1)];
-  }
-  if(twist.id==="temptation"&&players.length){
-    const target=players[randomInt(0,players.length-1)]; target.bonusOffer=true;
-  }
+  if(twist.id==="second_signal"){const dangerous=["A","B","C"].filter(d=>d!==game.safeDoor);game.extraHint=dangerous[randomInt(0,dangerous.length-1)];}
+  if(twist.id==="temptation"&&players.length){const target=players[randomInt(0,players.length-1)];target.bonusOffer=true;}
+  if(twist.id==="observer"&&players.length){const target=players[randomInt(0,players.length-1)];target.watched=true;}
 }
 function experimentStartText(game) {
-  const def=experimentDef(game), players=experimentPlayers(game);
-  return [
-    `🧪 **EXPERIMENT ${def.id} — ${def.emoji} ${def.name.toUpperCase()} HAS BEGUN**`,"",def.theme,"",`✨ ${game.flavor}`,
-    "",`🌀 **TWIST: ${game.twist.name}**`,game.twist.text,
-    game.extraHint?`\n📡 **EXTRA SIGNAL:** The evidence confirms **Option ${game.extraHint} is unsafe.**`:"",
-    "","🔐 **PRIVATE INFORMATION**","Every player has a private clue and a private role note.","Use **View My Clue** if you need to review yours.",
-    "","💬 **DISCUSS**","Share as much—or as little—as you want. Nobody is forced to reveal their clue.","",
-    `👥 Players: **${players.length}**`,`🧪 Experiment: **${def.name}**`,`🎲 Scenario seed: **${game.scenarioTag}**`,
-    "","When the group is ready, everyone locks a private choice. The majority determines the group decision."
-  ].join("\n");
+  const def=experimentDef(game),players=experimentPlayers(game);
+  return [`🧪 **EXPERIMENT ${def.id} — ${def.emoji} ${def.name.toUpperCase()} HAS BEGUN**`,"",def.theme,"",`✨ ${game.flavor}`,"",`🌀 **TWIST: ${game.twist.name}**`,game.twist.text,game.extraHint?`\n📡 **EXTRA SIGNAL:** One dangerous option is confirmed unsafe: **${game.extraHint}**.`:"","","🚪 **THE THREE OPTIONS**",experimentDoorSummary(game),"","🔐 **PRIVATE INFORMATION**","Everyone receives a partial clue and one unique role. Some information may be misleading.","","💬 **DISCUSS**","Share what you choose. You do not have to reveal your clue.","",`👥 Players: **${players.length}**`,`🎲 Scenario seed: **${game.scenarioTag}**`,`🧪 Experiment: **${def.name}**`,"","When everyone is ready, lock a private choice. The majority decides the door. Role powers can change what you know—or what everyone sees."].join("\n");
 }
 function experimentPublicText(game,extra="") {
   const def=experimentDef(game),counts=experimentChoiceCounts(game),players=experimentPlayers(game),voted=players.filter(p=>p.vote).length;
-  return [`🧪 **THE EXPERIMENT — ${def.emoji} ${def.name.toUpperCase()}**`,"",def.theme,"",`🌀 **Twist:** ${game.twist?.name||"Unknown"}`,
-    "🔐 Private clues are active. Combine information carefully.","",`🗳️ Votes locked: **${voted}/${players.length}**`,`🅰️ A: **${counts.A}** • 🅱️ B: **${counts.B}** • ©️ C: **${counts.C}**`,"",extra||"⏳ Discussion is open. Lock your choice when ready."].join("\n");
+  return [`🧪 **THE EXPERIMENT — ${def.emoji} ${def.name.toUpperCase()}**`,"",def.theme,"",`🌀 **Twist:** ${game.twist?.name||"Unknown"}`,"🔐 Partial clues and secret role powers are active. Combine information carefully.","","🚪 **OPTIONS**",experimentDoorSummary(game),"",`🗳️ Votes locked: **${voted}/${players.length}**`,`🅰️ A: **${counts.A}** • 🅱️ B: **${counts.B}** • ©️ C: **${counts.C}**`,game.publicSignal?`\n📢 **SYSTEM SIGNAL:** ${game.publicSignal}`:"",extra||"⏳ Discussion is open. Lock your choice when ready."].join("\n");
 }
 function experimentOutcomeText(game,chosenDoor) {
   const def=experimentDef(game),counts=experimentChoiceCounts(game),players=experimentPlayers(game),safe=game.safeDoor;
-  const max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),tie=leaders.length>1,correct=chosenDoor===safe;
-  let headline,body,reward,xp;
-  if(tie){headline="⚠️ THE EXPERIMENT REJECTED THE DECISION";body="The group tied. The protocol refuses to open a tied choice.";reward=`✨ Every participant earns **${EXPERIMENT_XP_TIE} Experiment XP** for completing the experiment.`;xp=EXPERIMENT_XP_TIE;}
-  else if(correct){headline="🟢 THE EXPERIMENT SUCCEEDED";body=`The group chose ${experimentDoorLabel(chosenDoor)} — and the evidence was correct!`;reward=`✨ Every participant earns **${EXPERIMENT_XP_WIN} Experiment XP** and **100 Sparkles**.`;xp=EXPERIMENT_XP_WIN;}
-  else{headline="🔴 THE EXPERIMENT FAILED";body=`The group chose ${experimentDoorLabel(chosenDoor)}, but the evidence pointed to ${experimentDoorLabel(safe)}.`;reward=`✨ Every participant earns **${EXPERIMENT_XP_LOSS} Experiment XP** for surviving the experiment.`;xp=EXPERIMENT_XP_LOSS;}
+  const max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max);let finalDoor=chosenDoor;
+  if(leaders.length>1&&game.tieBreaker&&leaders.includes(game.tieBreaker))finalDoor=game.tieBreaker;
+  const tie=leaders.length>1&&!game.tieBreaker,correct=finalDoor===safe;
+  let headline,body,reward;
+  if(tie){headline="⚠️ THE EXPERIMENT REJECTED THE DECISION";body="The group tied, and no Guardian tie-break was reserved. The protocol refuses to open a tied choice.";reward=`✨ Every participant earns **${EXPERIMENT_XP_TIE} Experiment XP** for completing the experiment.`;}
+  else if(correct){headline="🟢 THE EXPERIMENT SUCCEEDED";body=`The group chose ${experimentDoorLabel(finalDoor)} — and the hidden answer was ${experimentDoorLabel(safe)}.`;reward=`✨ Every participant earns **${EXPERIMENT_XP_WIN} Experiment XP** and **100 Sparkles**.`;}
+  else{headline="🔴 THE EXPERIMENT FAILED";body=`The group chose ${experimentDoorLabel(finalDoor)}, but the hidden answer was ${experimentDoorLabel(safe)}.`;reward=`✨ Every participant earns **${EXPERIMENT_XP_LOSS} Experiment XP** for surviving the experiment.`;}
   const individual=players.map(p=>`• <@${p.id}> — ${p.vote?experimentDoorLabel(p.vote):"No vote"}`).join("\n");
-  const secrets=players.map(p=>`• <@${p.id}> — ${p.secret?.label||"Participant"}${p.bonusOffer?" 💎": ""}`).join("\n");
-  return [`🧪 **EXPERIMENT ${def.id} — ${def.name.toUpperCase()} RESULTS**`,"",`**${headline}**`,"",body,"",`🌀 **TWIST:** ${game.twist?.name||"None"}`,game.twist?.text||"","","🗳️ **FINAL VOTE**",`🅰️ A: **${counts.A}** • 🅱️ B: **${counts.B}** • ©️ C: **${counts.C}**`,"",`🔎 **THE ANSWER WAS ${experimentDoorLabel(safe)}**`,"", "👥 **PLAYER CHOICES**",individual,"","🎭 **PRIVATE ROLES REVEALED**",secrets,"",reward].join("\n");
+  const secrets=players.map(p=>`• <@${p.id}> — ${p.secret?.label||"Participant"}${p.bonusOffer?" 💎":""}`).join("\n");
+  return [`🧪 **EXPERIMENT ${def.id} — ${def.name.toUpperCase()} RESULTS**`,"",`**${headline}**`,"",body,"",`🌀 **TWIST:** ${game.twist?.name||"None"}`,game.twist?.text||"",game.tieBreaker?`🛡️ **GUARDIAN TIE-BREAK:** ${experimentDoorLabel(game.tieBreaker)}`:"","","🗳️ **FINAL VOTE**",`🅰️ A: **${counts.A}** • 🅱️ B: **${counts.B}** • ©️ C: **${counts.C}**`,"",`🔎 **THE ANSWER WAS ${experimentDoorLabel(safe)}**`,"", "👥 **PLAYER CHOICES**",individual,"","🎭 **ROLES REVEALED**",secrets,"",reward].join("\n");
 }
 async function experimentPrivateClue(env,interaction,gameId){
-  if(!interaction.guild_id)return sendText(env,interaction,"❌ The Experiment can only be played inside a server.");
+  if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ The Experiment can only be played inside a server.");
   const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Experiment is no longer active.");
-  const p=user&&game.players?.[user.id]; if(!p)return sendText(env,interaction,"❌ You are not a player in this Experiment.");
-  return sendText(env,interaction,`🔐 **YOUR PRIVATE EXPERIMENT FILE**\n\n🧩 **Clue:** ${p.clue}\n\n🎭 **Role:** ${p.secret?.label||"Participant"}\n${p.secret?.text||"Use your evidence carefully."}${p.bonusOffer?"\n\n💎 **PRIVATE BONUS:** If the group succeeds, you receive an extra 50 Sparkles.":""}\n\n🤫 This information is private. Share only what you choose to share.`,[]);
+  if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Experiment is no longer active.");
+  const p=user&&game.players?.[user.id]; if(!p)return sendEphemeralFollowup(env,interaction,"❌ You are not a player in this Experiment.");
+  return sendEphemeralFollowup(env,interaction,`🔐 **YOUR PRIVATE EXPERIMENT FILE**\n\n🧩 **Clue:** ${p.clue}\n\n🎭 **Role:** ${p.secret?.label||"Participant"}\n${p.secret?.text||"Use your evidence carefully."}${p.bonusOffer?"\n\n💎 **PRIVATE BONUS:** If the group succeeds, you receive an extra 50 Sparkles.":""}${p.roleResult?`\n\n📌 **ROLE INTEL:** ${p.roleResult}`:""}\n\n🤫 This information is private. Share only what you choose to share.`);
 }
-async function experimentSendClues(env,game){
-  for(const p of experimentPlayers(game)){
-    const sent=await sendUserDM(env,p.id,`🧪 **THE EXPERIMENT — YOUR PRIVATE FILE**\n\n**${experimentDef(game).name}**\n\n🔐 **Clue:** ${p.clue}\n\n🎭 **Role:** ${p.secret?.label||"Participant"}\n${p.secret?.text||"Use your evidence carefully."}${p.bonusOffer?"\n\n💎 **PRIVATE BONUS:** If the group succeeds, you receive an extra 50 Sparkles.":""}\n\n🤫 Keep this private unless you decide to reveal it.`);
-    p.dmDelivered=sent;
-  }
-}
-async function experimentRewardPlayers(env,game,outcome){
-  const players=experimentPlayers(game),xp=outcome==="success"?EXPERIMENT_XP_WIN:outcome==="tie"?EXPERIMENT_XP_TIE:EXPERIMENT_XP_LOSS;
-  for(const p of players){
-    const player=await getPlayer(env,p.id);
-    player.experimentGames=Number(player.experimentGames||0)+1;
-    player.experimentCompleted=Number(player.experimentCompleted||0)+1;
-    player.experimentXP=Number(player.experimentXP||0)+xp;
-    if(outcome==="success")player.experimentSuccesses=Number(player.experimentSuccesses||0)+1;
-    if(outcome==="success")player.sparkles=Number(player.sparkles||0)+100;
-    if(outcome==="success"&&p.bonusOffer)player.sparkles=Number(player.sparkles||0)+50;
-    await savePlayer(env,player,p.id);
-  }
-}
-async function experimentFinish(env,interaction,game,chosenDoor){
-  const state=await getGuildState(env,interaction.guild_id),latest=state.experiment;
-  if(!latest||latest.id!==game.id)return;
-  const counts=experimentChoiceCounts(latest),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max);
-  latest.status="finished";latest.chosenDoor=chosenDoor;latest.finishedAt=Date.now();
-  latest.outcome=leaders.length>1?"tie":(chosenDoor===latest.safeDoor?"success":"failure");
-  await experimentRewardPlayers(env,latest,latest.outcome);
-  const result=experimentOutcomeText(latest,chosenDoor);
-  state.experiment=null;await saveGuildState(env,interaction.guild_id,state);
-  return editOriginalResponse(env,interaction,{content:result,components:[]});
-}
-async function handleExperimentCreate(env,interaction){
-  if(await checkGamePunishment(env,interaction))return;
-  if(!interaction.guild_id)return sendText(env,interaction,"❌ The Experiment can only be played inside a server.");
-  const user=getUserFromInteraction(interaction);if(!user)return;
-  const state=await getGuildState(env,interaction.guild_id);
-  if(state.experiment&&state.experiment.status!=="finished")return sendText(env,interaction,"🧪 There is already an active Experiment in this server. Join it or finish it first!");
-  const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player,user.id);
-  const game={id:experimentGameId(),hostId:user.id,status:"lobby",createdAt:Date.now(),experimentId:EXPERIMENT_CATALOG[randomInt(0,EXPERIMENT_CATALOG.length-1)].id,players:{[user.id]:{id:user.id,username:user.username||"",displayName:getDisplayName(player),vote:null,clue:"",dmDelivered:false}}};
-  state.experiment=game;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));
-}
-async function handleExperimentJoin(env,interaction,gameId){
-  if(await checkGamePunishment(env,interaction))return;
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Experiment lobby is no longer open.");
-  if(!user)return;if(game.players?.[user.id])return sendText(env,interaction,"🧪 You're already in this Experiment!");
-  if(experimentPlayers(game).length>=EXPERIMENT_MAX_PLAYERS)return sendText(env,interaction,"❌ This Experiment is full (10 players max).");
-  const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player,user.id);
-  game.players[user.id]={id:user.id,username:user.username||"",displayName:getDisplayName(player),vote:null,clue:"",dmDelivered:false};await saveGuildState(env,interaction.guild_id,state);
-  return editOriginalResponse(env,interaction,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});
-}
-async function handleExperimentEnd(env,interaction,gameId){
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
-  if(!user|| (user.id!==game.hostId && user.id!==env.OWNER_ID))return sendText(env,interaction,"❌ Only the Experiment host or bot owner can end this Experiment.");
-  const wasLobby=game.status==="lobby";
-  state.experiment=null;
-  await saveGuildState(env,interaction.guild_id,state);
-  const who=user.id===env.OWNER_ID?"👑 The bot owner":"👑 The Experiment host";
-  const message=wasLobby
-    ? `${who} ended the abandoned Experiment lobby. 🧹\n\nYou can now create a new Experiment with \`/experiment create\`.`
-    : `${who} ended the active Experiment. 🛑\n\nNo Experiment rewards were issued.`;
-  return editOriginalResponse(env,interaction,{content:message,components:[]});
-}
-async function handleExperimentLeave(env,interaction,gameId){
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
-  if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You're not in this Experiment.");
-  if(game.status!=="lobby")return sendText(env,interaction,"❌ The Experiment has already started; you cannot leave during the experiment.");
-  delete game.players[user.id];const remaining=experimentPlayers(game);
-  if(!remaining.length){state.experiment=null;await saveGuildState(env,interaction.guild_id,state);return editOriginalResponse(env,interaction,{content:"🧪 The Experiment lobby closed because everyone left.",components:[]});}
-  if(game.hostId===user.id)game.hostId=remaining[0].id;await saveGuildState(env,interaction.guild_id,state);return editOriginalResponse(env,interaction,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});
-}
-async function handleExperimentStart(env,interaction,gameId){
-  if(await checkGamePunishment(env,interaction))return;
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Experiment lobby is no longer available.");
-  if(!user||user.id!==game.hostId)return sendText(env,interaction,"❌ Only the Experiment host can start it.");
-  const players=experimentPlayers(game);if(players.length<EXPERIMENT_MIN_PLAYERS)return sendText(env,interaction,`❌ You need at least **${EXPERIMENT_MIN_PLAYERS} players** to start.`);
-  game.safeDoor=experimentRandomChoice();game.scenarioTag=Math.random().toString(36).slice(2,8).toUpperCase();game.flavor=EXPERIMENT_FLAVORS[randomInt(0,EXPERIMENT_FLAVORS.length-1)];
-  const clues=buildExperimentClues(game.safeDoor,players);players.forEach((p,i)=>{p.clue=clues[i];p.vote=null;p.dmDelivered=false;p.bonusOffer=false;});
-  experimentAssignSecrets(game);experimentApplyTwist(game);
-  game.status="playing";game.phase="discussion";game.startedAt=Date.now();game.interactionToken=interaction.token;
-  await saveGuildState(env,interaction.guild_id,state);await experimentSendClues(env,game);await saveGuildState(env,interaction.guild_id,state);
-  return editOriginalResponse(env,interaction,{content:experimentStartText(game),components:experimentActionComponents(game)});
-}
-async function handleExperimentVote(env,interaction,gameId,door){
-  if(await checkGamePunishment(env,interaction))return;
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);
-  if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Experiment is no longer accepting votes.");
-  if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You are not a player in this Experiment.");
-  if(!["A","B","C"].includes(door))return sendText(env,interaction,"❌ Invalid option.");
-  if(game.players[user.id].vote)return sendText(env,interaction,`🔒 Your choice is already locked on **Option ${game.players[user.id].vote}**.`);
-  game.players[user.id].vote=door;game.players[user.id].votedAt=Date.now();const counts=experimentChoiceCounts(game),total=experimentPlayers(game).length,voted=experimentPlayers(game).filter(p=>p.vote).length;
-  await saveGuildState(env,interaction.guild_id,state);
-  if(voted>=total){const max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),chosen=leaders.length===1?leaders[0]:leaders[0];return experimentFinish(env,interaction,game,chosen);}
-  return sendText(env,interaction,`🔒 **Choice locked:** ${experimentDoorLabel(door)}\n\nYour choice is private. **${voted}/${total}** players have voted.`,[]);
-}
-async function handleExperimentStatus(env,interaction,gameId){
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment;
-  if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");
-  if(game.status==="lobby")return sendText(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));
-  const counts=experimentChoiceCounts(game),voted=experimentPlayers(game).filter(p=>p.vote).length;
-  return sendText(env,interaction,experimentPublicText(game,`🗳️ **${voted}/${experimentPlayers(game).length}** votes locked.\n🅰️ A: **${counts.A}** • 🅱️ B: **${counts.B}** • ©️ C: **${counts.C}**`),experimentActionComponents(game));
-}
-async function handleExperimentCommand(env,interaction){
-  const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"create";
-  if(sub==="create")return handleExperimentCreate(env,interaction);
-  const state=await getGuildState(env,interaction.guild_id),game=state.experiment;
-  if(sub==="status"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now. Use `/experiment create` to start one.");return handleExperimentStatus(env,interaction,game.id);}
-  if(sub==="leave"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentLeave(env,interaction,game.id);}
-  if(sub==="end"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentEnd(env,interaction,game.id);}
-  if(sub==="start"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentStart(env,interaction,game.id);}
-  if(sub==="join"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentJoin(env,interaction,game.id);}
-  return handleExperimentCreate(env,interaction);
-}
+async function experimentSendClues(env,game){for(const p of experimentPlayers(game)){p.dmDelivered=await sendUserDM(env,p.id,`🧪 **THE EXPERIMENT — YOUR PRIVATE FILE**\n\n**${experimentDef(game).name}**\n\n🔐 **Clue:** ${p.clue}\n\n🎭 **Role:** ${p.secret?.label||"Participant"}\n${p.secret?.text||"Use your evidence carefully."}${p.bonusOffer?"\n\n💎 **PRIVATE BONUS:** If the group succeeds, you receive an extra 50 Sparkles.":""}\n\n🤫 Keep this private unless you decide to share it.`);}}
+async function experimentRewardPlayers(env,game,outcome){const players=experimentPlayers(game),xp=outcome==="success"?EXPERIMENT_XP_WIN:outcome==="tie"?EXPERIMENT_XP_TIE:EXPERIMENT_XP_LOSS;for(const p of players){const player=await getPlayer(env,p.id);player.experimentGames=Number(player.experimentGames||0)+1;player.experimentCompleted=Number(player.experimentCompleted||0)+1;player.experimentXP=Number(player.experimentXP||0)+xp;if(outcome==="success")player.experimentSuccesses=Number(player.experimentSuccesses||0)+1;if(outcome==="success")player.sparkles=Number(player.sparkles||0)+100;if(outcome==="success"&&p.bonusOffer)player.sparkles=Number(player.sparkles||0)+50;await savePlayer(env,player,p.id);}}
+async function experimentEditPublic(env,game,data){if(!game?.messageId||!game?.channelId)return false;const r=await fetch(`https://discord.com/api/v10/channels/${game.channelId}/messages/${game.messageId}`,{method:"PATCH",headers:{"Authorization":`Bot ${env.BOT_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)console.error("experimentEditPublic failed",r.status,await r.text());return r.ok;}
+async function experimentCaptureOriginalMessage(env,interaction,game){try{const r=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{headers:{"Authorization":`Bot ${env.BOT_TOKEN}`}});if(r.ok){const m=await r.json();game.messageId=m.id;game.channelId=interaction.channel_id;}}catch(e){console.error("experimentCaptureOriginalMessage",e);}}
+async function experimentSendPublicInitial(env,interaction,content,components){return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:4,data:{content,components}})});}
+async function experimentFinish(env,interaction,game,chosenDoor){const state=await getGuildState(env,interaction.guild_id),latest=state.experiment;if(!latest||latest.id!==game.id)return;const counts=experimentChoiceCounts(latest),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),resolved=leaders.length===1?leaders[0]:leaders[0];latest.status="finished";latest.chosenDoor=chosenDoor;latest.finishedAt=Date.now();latest.outcome=leaders.length>1&&!latest.tieBreaker?"tie":(resolved===latest.safeDoor?"success":"failure");await experimentRewardPlayers(env,latest,latest.outcome);const result=experimentOutcomeText(latest,chosenDoor);state.experiment=null;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,latest,{content:result,components:[]});return sendEphemeralFollowup(env,interaction,"🧪 The shared Experiment board has been updated for everyone. Your vote was locked.");}
+async function experimentRolePowerMenu(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Experiment is no longer active.");const p=user&&game.players?.[user.id];if(!p)return sendEphemeralFollowup(env,interaction,"❌ You are not a player in this Experiment.");if(p.powerUsed)return sendEphemeralFollowup(env,interaction,"🎭 Your role power has already been used this Experiment.");const r=p.secret?.id;if(r==="guardian")return sendEphemeralFollowup(env,interaction,"🛡️ **Guardian Power**\nChoose the door you want to reserve as the tie-break.",[row(button("A",`experiment:rolepick:${game.id}:guardian:A`,1),button("B",`experiment:rolepick:${game.id}:guardian:B`,1),button("C",`experiment:rolepick:${game.id}:guardian:C`,1))]);if(r==="analyst")return sendEphemeralFollowup(env,interaction,"🧠 **Analyst Power**\nChoose one door to inspect.",[row(button("Inspect A",`experiment:rolepick:${game.id}:analyst:A`,1),button("Inspect B",`experiment:rolepick:${game.id}:analyst:B`,1),button("Inspect C",`experiment:rolepick:${game.id}:analyst:C`,1))]);return handleExperimentRolePower(env,interaction,gameId,null);}
+async function handleExperimentRolePower(env,interaction,gameId,pick){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Experiment is no longer active.");const p=user&&game.players?.[user.id];if(!p)return sendEphemeralFollowup(env,interaction,"❌ You are not a player in this Experiment.");if(p.powerUsed)return sendEphemeralFollowup(env,interaction,"🎭 Your role power has already been used.");const role=p.secret?.id,others=experimentOtherPlayers(game,user.id);let msg="";
+  if(role==="analyst"){const door=pick||experimentRandomChoice();const safe=door===game.safeDoor;msg=`You inspected ${experimentDoorLabel(door)}. System confidence: **${safe?"PROMISING":"RISKY"}**. This is a cautious reading, not a guarantee.`;}
+  else if(role==="skeptic"){if(!others.length)return sendEphemeralFollowup(env,interaction,"❌ No other player is available to audit.");const t=others[randomInt(0,others.length-1)];const truthful=!t.secret||t.secret.id!=="saboteur";msg=`You audited <@${t.id}>. Their current clue is **${truthful?"consistent":"corrupted"}** with the hidden experiment data.`;}
+  else if(role==="archivist"){const bad=["A","B","C"].filter(d=>d!==game.safeDoor)[randomInt(0,1)];msg=`📚 Archive fragment: **Option ${bad} is definitely unsafe.** Keep this private if you want the group to stay uncertain.`;}
+  else if(role==="observer"){if(!others.length)return sendEphemeralFollowup(env,interaction,"❌ No other player is available to observe.");const t=others[randomInt(0,others.length-1)];msg=`You observed <@${t.id}>. Saboteur check: **${t.id===game.saboteurId?"YES — they are the Saboteur.":"NO — they are not the Saboteur."}**`}
+  else if(role==="wildcard"){p.clue=experimentTruthClue(game);msg=`🎲 Your clue was rerolled. **New private clue:** ${p.clue}`;}
+  else if(role==="cipher"){const d=game.doors[game.safeDoor];msg=`🔐 Decoded attribute: the safe door has the **${d.shape}** symbol.`;}
+  else if(role==="oracle"){const prediction=Math.random()<0.60?game.safeDoor:["A","B","C"].filter(d=>d!==game.safeDoor)[randomInt(0,1)];msg=`🔮 Oracle prediction: **${experimentDoorLabel(prediction)}** is most likely safe. Confidence is intentionally uncertain (**60%** system reliability).`}
+  else if(role==="interrogator"){if(!others.length)return sendEphemeralFollowup(env,interaction,"❌ No other player is available to interrogate.");const t=others[randomInt(0,others.length-1)];msg=`🗣️ Evidence summary for <@${t.id}>: their clue references **${t.clue.match(/\*\*(.*?)\*\*/)?.[1]||"a hidden attribute"}**. You do not receive their full file.`;}
+  else if(role==="forensic"){const pair=shuffleArray(["A","B","C"]).slice(0,2),containsSafe=pair.includes(game.safeDoor);msg=`🔎 Forensic comparison: among ${experimentDoorLabel(pair[0])} and ${experimentDoorLabel(pair[1])}, **${containsSafe?"exactly one is the safe door":"neither is the safe door"}**.`;}
+  else if(role==="guardian"){const door=pick||experimentRandomChoice();game.tieBreaker=door;msg=`🛡️ You reserved ${experimentDoorLabel(door)} as your tie-break. If the final vote ties, this door will be used.`;}
+  else if(role==="trickster"||role==="saboteur"){const bad=["A","B","C"].filter(d=>d!==game.safeDoor)[randomInt(0,1)];game.publicSignal=`⚠️ A corrupted signal claims **${experimentDoorLabel(bad)}** looks safe. Do NOT treat this as verified evidence.`;msg=`🃏 You injected a false public signal pointing toward ${experimentDoorLabel(bad)}. Nobody is told who caused it.`;}
+  else msg="Your role power produced no usable signal.";
+  p.powerUsed=true;p.roleResult=msg;await saveGuildState(env,interaction.guild_id,state);if(game.messageId)await experimentEditPublic(env,game,{content:experimentPublicText(game),components:experimentActionComponents(game)});return sendEphemeralFollowup(env,interaction,`🎭 **${p.secret?.label||"Role Power"}**\n\n${msg}`);}
+
+async function handleExperimentCreate(env,interaction){if(await checkGamePunishment(env,interaction))return;if(!interaction.guild_id)return sendText(env,interaction,"❌ The Experiment can only be played inside a server.");const user=getUserFromInteraction(interaction);if(!user)return;const state=await getGuildState(env,interaction.guild_id);if(state.experiment&&state.experiment.status!=="finished")return sendText(env,interaction,"🧪 There is already an active Experiment in this server. End the old lobby/game first, or use its 🛑 End Experiment button.");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player,user.id);const game={id:experimentGameId(),hostId:user.id,status:"lobby",createdAt:Date.now(),experimentId:EXPERIMENT_CATALOG[randomInt(0,EXPERIMENT_CATALOG.length-1)].id,channelId:interaction.channel_id,messageId:null,players:{[user.id]:{id:user.id,username:user.username||"",displayName:getDisplayName(player),vote:null,clue:"",dmDelivered:false}}};state.experiment=game;await saveGuildState(env,interaction.guild_id,state);const response=await experimentSendPublicInitial(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));if(!response.ok){console.error("experiment create callback failed",response.status,await response.text());return response;}await experimentCaptureOriginalMessage(env,interaction,game);await saveGuildState(env,interaction.guild_id,state);return response;}
+async function handleExperimentJoin(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Experiment lobby is no longer open.");if(!user)return;if(game.players?.[user.id])return sendText(env,interaction,"🧪 You're already in this Experiment!");if(experimentPlayers(game).length>=EXPERIMENT_MAX_PLAYERS)return sendText(env,interaction,"❌ This Experiment is full (10 players max).");const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player,user.id);game.players[user.id]={id:user.id,username:user.username||"",displayName:getDisplayName(player),vote:null,clue:"",dmDelivered:false};await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});return sendEphemeralFollowup(env,interaction,"🧪 You joined the Experiment lobby!");}
+async function handleExperimentEnd(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(!user|| (user.id!==game.hostId && user.id!==env.OWNER_ID))return sendText(env,interaction,"❌ Only the Experiment host or bot owner can end this Experiment.");state.experiment=null;await saveGuildState(env,interaction.guild_id,state);const wasLobby=game.status==="lobby";await experimentEditPublic(env,game,{content:wasLobby?"🧹 The Experiment lobby was ended. You can now create a new Experiment.":"🛑 The active Experiment was ended. No Experiment rewards were issued.",components:[]});return sendEphemeralFollowup(env,interaction,wasLobby?"🧹 Abandoned Experiment lobby cleared.":"🛑 Experiment ended. No rewards were issued.");}
+async function handleExperimentLeave(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You're not in this Experiment.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The Experiment has already started; you cannot leave during the experiment.");delete game.players[user.id];const remaining=experimentPlayers(game);if(!remaining.length){state.experiment=null;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:"🧪 The Experiment lobby closed because everyone left.",components:[]});return sendEphemeralFollowup(env,interaction,"🧹 Lobby closed.");}if(game.hostId===user.id)game.hostId=remaining[0].id;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});return sendEphemeralFollowup(env,interaction,"🚪 You left the Experiment lobby.");}
+async function handleExperimentStart(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Experiment lobby is no longer available.");if(!user||user.id!==game.hostId)return sendText(env,interaction,"❌ Only the Experiment host can start it.");const players=experimentPlayers(game);if(players.length<EXPERIMENT_MIN_PLAYERS)return sendText(env,interaction,`❌ You need at least **${EXPERIMENT_MIN_PLAYERS} players** to start.`);game.safeDoor=experimentRandomChoice();game.doors=experimentBuildDoors(game.safeDoor);game.scenarioTag=Math.random().toString(36).slice(2,8).toUpperCase();game.flavor=EXPERIMENT_FLAVORS[randomInt(0,EXPERIMENT_FLAVORS.length-1)];players.forEach(p=>{p.clue=experimentTruthClue(game);p.vote=null;p.dmDelivered=false;p.bonusOffer=false;p.powerUsed=false;p.roleResult="";});experimentAssignRoles(game);const sab=game.players[game.saboteurId];if(sab)sab.clue=experimentSaboteurClue(game);experimentApplyTwist(game);game.status="playing";game.phase="discussion";game.startedAt=Date.now();await saveGuildState(env,interaction.guild_id,state);await experimentSendClues(env,game);await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:experimentStartText(game),components:experimentActionComponents(game)});return sendEphemeralFollowup(env,interaction,"🧪 The Experiment has started. Your private file has been sent.");}
+async function handleExperimentVote(env,interaction,gameId,door){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Experiment is no longer accepting votes.");if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You are not a player in this Experiment.");if(!["A","B","C"].includes(door))return sendText(env,interaction,"❌ Invalid option.");if(game.players[user.id].vote)return sendEphemeralFollowup(env,interaction,`🔒 Your choice is already locked on **Option ${game.players[user.id].vote}**.`);game.players[user.id].vote=door;game.players[user.id].votedAt=Date.now();const total=experimentPlayers(game).length,voted=experimentPlayers(game).filter(p=>p.vote).length;await saveGuildState(env,interaction.guild_id,state);if(voted>=total){const counts=experimentChoiceCounts(game),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),chosen=leaders[0];return experimentFinish(env,interaction,game,chosen);}await experimentEditPublic(env,game,{content:experimentPublicText(game,`🗳️ **${voted}/${total}** votes locked.`),components:experimentActionComponents(game)});return sendEphemeralFollowup(env,interaction,`🔒 **Choice locked:** ${experimentDoorLabel(door)}\n\nYour choice is private. **${voted}/${total}** players have voted.`);}
+async function handleExperimentStatus(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment;if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(game.status==="lobby")return sendEphemeralFollowup(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));const counts=experimentChoiceCounts(game),voted=experimentPlayers(game).filter(p=>p.vote).length;return sendEphemeralFollowup(env,interaction,experimentPublicText(game,`🗳️ **${voted}/${experimentPlayers(game).length}** votes locked.`),experimentActionComponents(game));}
+async function handleExperimentCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"create";if(sub==="create")return handleExperimentCreate(env,interaction);const state=await getGuildState(env,interaction.guild_id),game=state.experiment;if(sub==="status"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now. Use `/experiment create` to start one.");return handleExperimentStatus(env,interaction,game.id);}if(sub==="leave"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentLeave(env,interaction,game.id);}if(sub==="end"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentEnd(env,interaction,game.id);}if(sub==="start"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentStart(env,interaction,game.id);}if(sub==="join"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentJoin(env,interaction,game.id);}return handleExperimentCreate(env,interaction);}
 
 /* =========================================================
    COMPONENT ROUTER
@@ -8736,6 +8573,8 @@ async function handleComponent(
     if(action==="start") { await handleExperimentStart(env,interaction,gameId); return; }
     if(action==="status") { await handleExperimentStatus(env,interaction,gameId); return; }
     if(action==="clue") { await experimentPrivateClue(env,interaction,gameId); return; }
+    if(action==="role") { await experimentRolePowerMenu(env,interaction,gameId); return; }
+    if(action==="rolepick") { await handleExperimentRolePower(env,interaction,gameId,parts[3]); return; }
     if(action==="vote") { await handleExperimentVote(env,interaction,gameId,parts[3]); return; }
     return;
   }
@@ -22270,7 +22109,7 @@ const COMMANDS = [
     name: "experiment",
     description: "Play The Experiment — social puzzle chaos",
     options: [
-      { type: 1, name: "create", description: "Create a Three Doors Experiment lobby" },
+      { type: 1, name: "create", description: "Create a randomized Experiment lobby" },
       { type: 1, name: "join", description: "Join the active Experiment lobby" },
       { type: 1, name: "leave", description: "Leave the active Experiment lobby" },
       { type: 1, name: "start", description: "Start the Experiment (host only)" },
