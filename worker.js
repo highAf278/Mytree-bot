@@ -3218,6 +3218,40 @@ function effectPixelBlend(frame,x,y,r,g,b,a=255){
 
 // Smooth filled ellipse with optional rotation. Used by the organic animated effects
 // so petals, wings, and the cosmic rift are rounded shapes instead of square sprites.
+// Helpers used by the finalized organic animated effects.
+// effectDisc renders a smooth circular glow rather than a square particle.
+function effectDisc(frame,cx,cy,radius,rgb,a=220){
+  cx=Math.round(cx); cy=Math.round(cy); radius=Math.max(1,Math.round(radius));
+  const r2=radius*radius;
+  const left=Math.max(0,cx-radius-1), right=Math.min(frame.width-1,cx+radius+1);
+  const top=Math.max(0,cy-radius-1), bottom=Math.min(frame.height-1,cy+radius+1);
+  for(let y=top;y<=bottom;y++) for(let x=left;x<=right;x++){
+    const dx=x-cx,dy=y-cy,d2=dx*dx+dy*dy;
+    if(d2>r2) continue;
+    const edge=1-Math.sqrt(d2)/radius;
+    const alpha=Math.round(a*(0.30+0.70*edge));
+    effectPixelBlend(frame,x,y,rgb[0],rgb[1],rgb[2],alpha);
+  }
+}
+
+// Draws a smooth anti-aliased-ish ribbon through a list of [x,y] points.
+// The segment interpolation keeps curved effects continuous instead of dotted.
+function effectRibbonPath(frame,points,width,rgb,a=200){
+  if(!Array.isArray(points)||points.length<2) return;
+  width=Math.max(1,Number(width)||1);
+  const step=Math.max(1,width*0.35);
+  for(let i=0;i<points.length-1;i++){
+    const x0=Number(points[i][0]), y0=Number(points[i][1]);
+    const x1=Number(points[i+1][0]), y1=Number(points[i+1][1]);
+    const dist=Math.hypot(x1-x0,y1-y0);
+    const count=Math.max(1,Math.ceil(dist/step));
+    for(let j=0;j<=count;j++){
+      const t=j/count, x=x0+(x1-x0)*t, y=y0+(y1-y0)*t;
+      effectDisc(frame,x,y,width*0.52,rgb,a);
+    }
+  }
+}
+
 function drawRotatedEllipse(frame,cx,cy,rx,ry,angle,rgb,a=220){
   const ca=Math.cos(angle),sa=Math.sin(angle),pad=2;
   const left=Math.floor(cx-Math.sqrt(rx*rx*ca*ca+ry*ry*sa*sa)-pad);
