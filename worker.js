@@ -5378,7 +5378,7 @@ async function showEffectShop(
   );
 }
 
-async function showAnimatedEffectShop(env, interaction) {
+async function showAnimatedEffectShop(env, interaction, page = 1) {
   const user = getUserFromInteraction(interaction);
   const player = await getPlayer(env, user.id);
   const items = [
@@ -5400,15 +5400,39 @@ async function showAnimatedEffectShop(env, interaction) {
     ["electric_storm_animated_effect", "⚡ Electric Storm", "buy_electric_storm_animated"],
     ["experimental_effect_animated_effect", "🧪 Experimental Effect", "buy_experimental_effect_animated"]
   ];
-  const buttons = items.map(([itemId, label, buttonId]) => {
+
+  const totalPages = 3;
+  const safePage = Math.max(1, Math.min(totalPages, Number(page) || 1));
+  const pageSize = 6;
+  const pageItems = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const buttons = pageItems.map(([itemId, label, buttonId]) => {
     const owned = player.inventory.includes(itemId);
-    return button(owned ? `${label} Owned` : `${label} — ${SHOP_ITEMS[itemId].price}`, buttonId, owned ? 2 : 1, owned);
+    return button(
+      owned ? `${label} Owned` : `${label} — ${SHOP_ITEMS[itemId].price}`,
+      buttonId,
+      owned ? 2 : 1,
+      owned
+    );
   });
-  const rows=[];
-  // Discord allows at most 5 action rows. With 11 animated effects, use 3 buttons per row so the shop fits in 5 rows total including Back.
-  for(let i=0;i<buttons.length;i+=3) rows.push(row(...buttons.slice(i,i+3)));
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 3) {
+    rows.push(row(...buttons.slice(i, i + 3)));
+  }
+
+  const nav = [];
+  if (safePage > 1) nav.push(button("⬅️ Previous", `shop_animated_effects:${safePage - 1}`, 2));
+  nav.push(button(`📄 Page ${safePage}/${totalPages}`, "shop_animated_effects:current", 2, true));
+  if (safePage < totalPages) nav.push(button("Next ➡️", `shop_animated_effects:${safePage + 1}`, 1));
+  rows.push(row(...nav));
   rows.push(row(button("⬅️ Back to Effects", "shop_effects", 2)));
-  await sendText(env, interaction, "🎞️ **ANIMATED EFFECTS**\n\n🌸 Petals swirl • 🦋 Butterflies flutter • 🌈 A full rainbow sweeps around your tree • 🔥 Little flames rise • ☄️ Meteors streak across the sky • 🌌 A cosmic rift opens", rows);
+
+  await sendText(
+    env,
+    interaction,
+    `🎞️ **ANIMATED EFFECTS — PAGE ${safePage}/${totalPages}**\n\nChoose an animated effect to purchase. ✨\n\n🌸 Petals • 🦋 Butterflies • 🌈 Rainbows • 🔥 Fire • ☄️ Meteors • 🌌 Cosmic • 🧚 Fairies • 🔮 Crystals • ⭐ Stars • 🦄 Unicorns • ❄️ Snow • 🌷 Blooms • 🫧 Bubbles • 🍬 Candy • 🐱 Kitties • ⚡ Electricity • 🧪 Experimental`,
+    rows
+  );
 }
 
 const REGULAR_SHOP_SETS = [
@@ -8967,7 +8991,19 @@ async function handleComponent(
   }
 
   if (id === "shop_animated_effects") {
-    await showAnimatedEffectShop(env, interaction);
+    await showAnimatedEffectShop(env, interaction, 1);
+    return;
+  }
+
+  if (id.startsWith("shop_animated_effects:")) {
+    const pagePart = id.slice("shop_animated_effects:".length);
+    if (pagePart !== "current") {
+      const page = Number(pagePart);
+      if (Number.isInteger(page) && page >= 1 && page <= 3) {
+        await showAnimatedEffectShop(env, interaction, page);
+        return;
+      }
+    }
     return;
   }
 
@@ -23017,6 +23053,7 @@ export default {
         customId === "shop_decorations" ||
         customId === "shop_effects" ||
         customId === "shop_animated_effects" ||
+        customId.startsWith("shop_animated_effects:") ||
         customId === "shop_limited" ||
         customId === "shop_limited_halloween" ||
         customId === "shop_special" ||
