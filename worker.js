@@ -1137,7 +1137,7 @@ async function handleProfile(env, interaction) {
   const targetId=getOption(interaction,"user")||user.id;
   const player=await getPlayer(env,targetId);
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
-  await savePlayer(env,player);
+  if (targetId===user.id) await savePlayer(env,player,user.id);
   try{
     const png=await renderProfileDirect(env,player);
     const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
@@ -1320,7 +1320,7 @@ async function refreshPunishmentState(env, player) {
     player.courtRaccoonPreviousTitle = "";
     changed = true;
   }
-  if (changed) await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+  if (changed) await savePlayer(env, player, player.userId);
   return activePunishment(player);
 }
 
@@ -1597,14 +1597,14 @@ async function handleCourt(env, interaction) {
   target.courtNotGuilty=Number(target.courtNotGuilty||0)+(guilty?0:1);
   let punishment="",punishmentName="";
   if(guilty){const chosen=COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)];punishmentName=chosen.name;if(chosen.id==="trash_release")target.courtTrashReleaseChannelId=String((await getGuildState(env,interaction.guild_id))?.announcementChannelId||interaction.channel_id||"");punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`;}
-  await env.TREE_DATA.put(accuser.userId,JSON.stringify(accuser)); await env.TREE_DATA.put(target.userId,JSON.stringify(target));
+  await savePlayer(env,accuser,user.id); await savePlayer(env,target,targetId);
   if(guilty && Number(target.courtGuilty||0)>0){
     try{
       const rows=await getCourtLeaderboard(env);
       const highest=rows.length?rows[0].guilty:0;
       if(Number(target.courtGuilty||0)>=highest){
         if(!Array.isArray(target.titles))target.titles=[];
-        if(!target.titles.includes("court_favorite")){target.titles.push("court_favorite");await savePlayer(env,target);}
+        if(!target.titles.includes("court_favorite")){target.titles.push("court_favorite");await savePlayer(env,target,targetId);}
       }
     }catch(error){console.error("Court champion title update failed:",error);}
   }
@@ -1642,7 +1642,7 @@ async function handlePickleJail(env, interaction) {
   const requestedFine = randomInt(100, 2000);
   const actualFine = Math.min(requestedFine, Math.max(0, Number(target.sparkles || 0)));
   target.sparkles = Math.max(0, Number(target.sparkles || 0) - actualFine);
-  await env.TREE_DATA.put(target.userId, JSON.stringify(target));
+  await savePlayer(env,target,targetId);
   const fineText = actualFine === requestedFine ? `${actualFine.toLocaleString()} sparkles` : `${actualFine.toLocaleString()} sparkles (they didn't have enough for the full fine 😭)`;
   await sendText(env, interaction, `🥒 **PICKLE JAIL SENTENCE!**\n\n<@${targetId}> has been locked up for **${punishmentTimeText(target.pickleJailUntil)}**.\n\n💸 **Guard Fine:** ${fineText}\n\n🚨 The guards searched their pockets and confiscated the sparkles.\n🥒 **THE PICKLES KNOW WHAT YOU DID🥒**`);
 }
@@ -1657,7 +1657,7 @@ async function handleCornerTimeout(env, interaction) {
   const target = await getPlayer(env, targetId);
   await refreshPunishmentState(env, target);
   target.timeoutCornerUntil = Date.now() + duration * 60000;
-  await env.TREE_DATA.put(target.userId, JSON.stringify(target));
+  await savePlayer(env,target,targetId);
   await sendText(env, interaction, `🪑 **CORNER TIME!**\n\n<@${targetId}> has been sentenced to the corner for **${punishmentTimeText(target.timeoutCornerUntil)}**. 😭\n\n🚫 No games until the sentence is over.\n\nPlease sit there quietly and reconsider your life choices.`);
 }
 
@@ -1676,11 +1676,11 @@ async function maybePickleJailReminder(env, interaction, player) {
   player.pickleJailInteractionCount = Number(player.pickleJailInteractionCount || 0) + 1;
   if (player.pickleJailInteractionCount >= 15) {
     player.pickleJailInteractionCount = 0;
-    await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+    await savePlayer(env, player, player.userId);
     await sendChannelMessage(env, interaction.channel_id, gamePunishmentMessage("pickle"));
     return;
   }
-  await env.TREE_DATA.put(player.userId, JSON.stringify(player));
+  await savePlayer(env, player, player.userId);
 }
 
 async function checkGamePunishment(env, interaction) {
@@ -1718,7 +1718,7 @@ async function maybeCourtWatch(env,interaction){
   const player=await getPlayer(env,user.id); await refreshPunishmentState(env,player);
   if(Number(player.courtWatchUntil||0)<=Date.now())return;
   const now=Date.now(); if(Number(player.courtWatchLastAt||0) && now-Number(player.courtWatchLastAt)<30*60000)return;
-  player.courtWatchLastAt=now; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+  player.courtWatchLastAt=now; await savePlayer(env,player,user.id);
   const msg=COURT_WATCH_MESSAGES[randomInt(0,COURT_WATCH_MESSAGES.length-1)].replaceAll("<@USER>",`<@${user.id}>`);
   await sendChannelMessage(env,interaction.channel_id,msg);
 }
@@ -1729,7 +1729,7 @@ async function maybePublicShame(env,interaction){
   if(Number(player.courtPublicShameUntil||0)<=Date.now())return;
   const now=Date.now();
   if(Number(player.courtPublicShameLastAt||0) && now-Number(player.courtPublicShameLastAt)<20*60000)return;
-  player.courtPublicShameLastAt=now; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+  player.courtPublicShameLastAt=now; await savePlayer(env,player,user.id);
   const msg=PUBLIC_SHAME_MESSAGES[randomInt(0,PUBLIC_SHAME_MESSAGES.length-1)].replaceAll("<@USER>",`<@${user.id}>`);
   await sendChannelMessage(env,interaction.channel_id,msg);
 }
@@ -1740,7 +1740,7 @@ async function maybeSpoonInvestigation(env,interaction){
   if(Number(player.courtSpoonInvestigationUntil||0)<=Date.now())return;
   const now=Date.now(); if(Number(player.courtSpoonInvestigationLastAt||0) && now-Number(player.courtSpoonInvestigationLastAt)<30*60000)return;
   if(Math.random()>0.45)return;
-  player.courtSpoonInvestigationLastAt=now; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+  player.courtSpoonInvestigationLastAt=now; await savePlayer(env,player,user.id);
   const msg=COURT_MESSAGES.spoon_investigation[randomInt(0,COURT_MESSAGES.spoon_investigation.length-1)];
   await sendChannelMessage(env,interaction.channel_id,`🥄🦝 **SPOON INVESTIGATION:** <@${user.id}> — ${msg}`);
 }
@@ -6525,7 +6525,7 @@ async function handleBirthdayGift(env,interaction){
   if(type==="ghost_box") sender.birthdayCandies-=150;
   recipient.birthdayGifts=Array.isArray(recipient.birthdayGifts)?recipient.birthdayGifts:[]; recipient.birthdayGifts.push({id:crypto.randomUUID(),type});
   sender.birthdayGiftSends=(sender.birthdayGiftSends||0)+1; const senderCandy=randomInt(gift.sender[0],gift.sender[1]); sender.birthdayCandies+=senderCandy;
-  await savePlayer(env,sender); await savePlayer(env,recipient);
+  await savePlayer(env,sender,user.id); await savePlayer(env,recipient,target);
   await markBingoAction(env,interaction.guild_id,sender.userId,"send_gift");
   await sendText(env,interaction,`🎁 **GIFT SENT!**\n\nYou sent ${gift.name} to <@${target}>.\n🎟️ You earned **${senderCandy} Birthday Candies** for gifting.\n🎁 Gifts sent: **${sender.birthdayGiftSends}/2**`);
   await sendUserDM(env,target,`🎂🎁 **A birthday gift arrived!**\n\n<@${user.id}> sent you **${gift.name}** (${gift.rarity}). ✨`);
@@ -7177,7 +7177,7 @@ async function birthdayRoulettePick(env,interaction,index){
         wp.birthdayCandies+=500;
         wp.titles=Array.isArray(wp.titles)?wp.titles:[];
         if(!wp.titles.includes("pumpkins_favorite"))wp.titles.push("pumpkins_favorite");
-        await savePlayer(env,wp);
+        await savePlayer(env,wp,winner.id);
       }
       return sendText(env,interaction,`💀🎃 **CURSED PUMPKIN!** <@${uid}> is eliminated!\n\n🏆 **Last survivor:** ${winner?`<@${winner.id}>`:"Nobody"}\n🎟️ Winner reward: **500 Birthday Candies** + **🎃 Pumpkin's Favorite**.`);
     }
@@ -18952,7 +18952,7 @@ async function handlePresentItem(env, interaction, targetId, rawItem) {
   if(sender.equipped?.theme && SHOP_ITEMS[itemId]?.type==="background" && SHOP_ITEMS[itemId].value===sender.equipped.theme) sender.equipped.theme="cherry";
   if(sender.equipped?.effect && SHOP_ITEMS[itemId]?.type==="effect" && SHOP_ITEMS[itemId].value===sender.equipped.effect) sender.equipped.effect=null;
   if(sender.equipped?.decoration && SHOP_ITEMS[itemId]?.type==="decoration" && SHOP_ITEMS[itemId].value===sender.equipped.decoration) sender.equipped.decoration=null;
-  await savePlayer(env,sender);await savePlayer(env,receiver);
+  await savePlayer(env,sender,user.id);await savePlayer(env,receiver,targetId);
   await sendText(env,interaction,`🎁 You gifted **${SHOP_ITEMS[itemId].name}** to <@${targetId}>! 💖`);
   await sendUserDM(env,targetId,`🎁 **You received a Werewives gift!**\n\n<@${user.id}> gifted you **${SHOP_ITEMS[itemId].name}**. ✨`);
 }
@@ -20104,7 +20104,7 @@ async function finishBattle(env, game, winnerId, loserId, reason) {
   winnerPlayer.battleSparklesEarned = Number(winnerPlayer.battleSparklesEarned || 0) + BATTLE_WIN_REWARD;
   game.log.push(`✨ **${winner?.name || "Winner"}** banked **+${BATTLE_WIN_REWARD} sparkles** for winning the Tree Battle!`);
   if (newlyUnlockedBattleTitles.length) game.log.push(`🏷️ **New title unlocked:** ${newlyUnlockedBattleTitles.map(id => SOLO_TITLES[id]?.name || id).join(", ")}`);
-  await savePlayer(env,winnerPlayer); await savePlayer(env,loserPlayer);
+  await savePlayer(env,winnerPlayer,winner.id); await savePlayer(env,loserPlayer,loser.id);
   const state = await getGuildState(env,game.guildId);
   if (state.battle?.id === game.id) { state.battle=null; await saveGuildState(env,game.guildId,state); }
   await sendBattleMessage(env,{token:game.interactionToken},game).catch(()=>null);
@@ -21298,7 +21298,7 @@ async function handlePastelQuit(env,interaction,gameId){
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp,winnerId);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,components:[]})});
@@ -21967,7 +21967,7 @@ async function processPastelTimers(env){
       player.pastelLosses=Number(player.pastelLosses||0)+1;
       player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
       player.pastelLevel=pastelRatingLevel(player.pastelRating);
-      await savePlayer(env,player);
+      await savePlayer(env,player,current.id);
       const alive=Object.values(game.players||{}).filter(p=>p.alive);
       if(alive.length<=1){
         const winner=alive[0];
@@ -21998,10 +21998,10 @@ async function processCourtTrashRelease(env){
       try{
         const player=await getPlayer(env,userId); const until=Number(player.courtTrashReleaseUntil||0);
         if(until<=0)continue;
-        if(until<=now){player.courtTrashReleaseUntil=0;player.courtTrashReleaseNextAt=0;player.courtTrashReleaseChannelId="";await env.TREE_DATA.put(player.userId,JSON.stringify(player));continue;}
+        if(until<=now){player.courtTrashReleaseUntil=0;player.courtTrashReleaseNextAt=0;player.courtTrashReleaseChannelId="";await savePlayer(env,player,userId);continue;}
         if(Number(player.courtTrashReleaseNextAt||0)>now)continue;
         const requested=randomInt(100,2000),balance=Math.max(0,Number(player.sparkles||0)),actual=Math.min(requested,balance);
-        player.sparkles=Math.max(0,balance-actual); player.courtTrashReleaseNextAt=now+30*60000; await env.TREE_DATA.put(player.userId,JSON.stringify(player));
+        player.sparkles=Math.max(0,balance-actual); player.courtTrashReleaseNextAt=now+30*60000; await savePlayer(env,player,userId);
         const messages=["The trash can is hungry again.","Payment accepted. Freedom denied.","The raccoons found your Sparkles. This is unfortunate for you.","Raccoon Finance has processed another completely unnecessary fee.","The trash can has reviewed your finances and would like another payment.","Your Sparkles have been legally converted into trash-can property.","The raccoons have returned for their regularly scheduled nonsense fee.","Judge Pickles says you still owe the trash can."];
         const channelId=String(player.courtTrashReleaseChannelId||"");
         if(channelId)await sendChannelMessage(env,channelId,`🗑️🦝 **TRASH CAN RELEASE FEE**\n\n<@${player.userId}> ${messages[randomInt(0,messages.length-1)]}\n\n💰 **${actual.toLocaleString()} Sparkles confiscated.**${actual<requested?`\n\n😭 They only had **${actual.toLocaleString()}**, so the raccoons took all of it.`:""}`);
