@@ -397,7 +397,13 @@ const SHOP_ITEMS = {
   golden_pickle_effect: { name: "🥒✨ Golden Pickle Effect", price: 0, type: "effect", value: "golden_pickle", freeOnly: true },
   midnight_rider_tree: { name: "🏍️🌙 Midnight Rider Tree", price: 0, type: "tree", value: "midnight_rider", freeOnly: true },
   midnight_rider_background: { name: "🏍️🌙 Midnight Rider Background", price: 0, type: "background", value: "midnight_rider", freeOnly: true },
-  midnight_rider_effect: { name: "🏍️✨ Midnight Rider Effect", price: 0, type: "effect", value: "midnight_rider", freeOnly: true }
+  midnight_rider_effect: { name: "🏍️✨ Midnight Rider Effect", price: 0, type: "effect", value: "midnight_rider", freeOnly: true },
+  petal_storm_animated_effect: { name: "🌸 Petal Storm", price: 20000, type: "effect", value: "petal_storm_animated" },
+  butterfly_garden_animated_effect: { name: "🦋 Butterfly Garden", price: 30000, type: "effect", value: "butterfly_garden_animated" },
+  rainbow_trail_animated_effect: { name: "🌈 Rainbow Trail", price: 40000, type: "effect", value: "rainbow_trail_animated" },
+  ember_glow_animated_effect: { name: "🔥 Ember Glow", price: 50000, type: "effect", value: "ember_glow_animated" },
+  meteor_shower_animated_effect: { name: "☄️ Meteor Shower", price: 60000, type: "effect", value: "meteor_shower_animated" },
+  cosmic_rift_animated_effect: { name: "🌌 Cosmic Rift", price: 70000, type: "effect", value: "cosmic_rift_animated" }
 };
 
 const RIDDLES = [
@@ -3192,6 +3198,94 @@ function drawBirthdayPumpkinSparkle(frame, phase=0) {
   }
 }
 
+function drawAnimatedPetalStorm(frame, phase=0) {
+  const petals=[[0.08,0.08,255,170,210],[0.20,0.26,255,205,225],[0.34,0.04,255,150,195],[0.48,0.31,255,220,235],[0.63,0.10,245,170,215],[0.78,0.28,255,195,220],[0.92,0.06,250,155,205],[0.14,0.60,255,185,220],[0.39,0.72,255,215,235],[0.68,0.58,245,165,215],[0.87,0.73,255,205,225]];
+  for(let i=0;i<petals.length;i++){
+    const [bx,by,r,g,b]=petals[i];
+    const x=(bx+Math.sin(phase*Math.PI*2.5+i*1.7)*0.035)*frame.width;
+    const y=((by+phase*0.34+(i%4)*0.025)%1.12-0.08)*frame.height;
+    const w=22+((i*7)%13),h=12+((i*5)%8);
+    profileFill(frame,Math.round(x),Math.round(y),w,h,r,g,b,235);
+    profileFill(frame,Math.round(x+w*0.25),Math.round(y+2),Math.max(3,Math.round(w*0.18)),Math.max(2,Math.round(h*0.18)),255,255,255,190);
+  }
+}
+
+function drawAnimatedButterflyGarden(frame, phase=0) {
+  const butterflies=[[0.14,0.20,0],[0.34,0.46,1],[0.56,0.18,2],[0.78,0.38,3],[0.88,0.68,4],[0.24,0.74,5]];
+  const colors=[[255,150,205],[170,130,255],[120,210,255],[255,205,80],[180,245,190]];
+  for(let i=0;i<butterflies.length;i++){
+    const [bx,by,k]=butterflies[i], t=phase*Math.PI*2+i*1.3;
+    const x=(bx+Math.sin(t*1.4)*0.045)*frame.width;
+    const y=(by+Math.cos(t*1.1)*0.055)*frame.height;
+    const c=colors[k%colors.length], flap=Math.sin(t*4)>0?1:0;
+    profileFill(frame,Math.round(x-18),Math.round(y-12),14,20,c[0],c[1],c[2],220);
+    profileFill(frame,Math.round(x+4),Math.round(y-12),14,20,c[0],c[1],c[2],220);
+    if(flap){profileFill(frame,Math.round(x-12),Math.round(y-18),9,11,c[0],c[1],c[2],220);profileFill(frame,Math.round(x+3),Math.round(y-18),9,11,c[0],c[1],c[2],220);}
+    profileFill(frame,Math.round(x-2),Math.round(y-8),5,22,80,60,75,240);
+    drawSparkle(frame,Math.round(x),Math.round(y-22),'star');
+  }
+}
+
+function drawAnimatedRainbowTrail(frame, phase=0) {
+  const colors=[[255,90,120],[255,180,70],[255,235,80],[100,220,130],[90,190,255],[165,125,255]];
+  const cx=0.50+Math.sin(phase*Math.PI*2)*0.03, cy=0.52+Math.cos(phase*Math.PI*2)*0.025;
+  for(let i=0;i<32;i++){
+    const t=i/31, ang=phase*Math.PI*2+t*Math.PI*2.6;
+    const radius=(0.10+0.42*t);
+    const x=(cx+Math.cos(ang)*radius)*frame.width, y=(cy+Math.sin(ang)*radius*0.70)*frame.height;
+    const c=colors[i%colors.length];
+    profileFill(frame,Math.round(x),Math.round(y),12,12,c[0],c[1],c[2],225);
+    if(i%4===0) drawSparkle(frame,Math.round(x+6),Math.round(y-5),'star');
+  }
+}
+
+function drawAnimatedEmberGlow(frame, phase=0) {
+  for(let i=0;i<28;i++){
+    const t=(phase*1.15+i/28)%1;
+    const x=(0.08+((i*37)%84)/100 + Math.sin(t*8+i)*0.018)*frame.width;
+    const y=(1.08-t*1.12)*frame.height;
+    const size=5+(i%4)*2;
+    profileFill(frame,Math.round(x),Math.round(y),size,size+3,255,90+(i%4)*25,35,220);
+    if(i%5===0) drawSparkle(frame,Math.round(x+5),Math.round(y-8),'star');
+  }
+}
+
+function drawAnimatedMeteorShower(frame, phase=0) {
+  const meteors=[[0.02,0.02,0],[0.28,0.10,1],[0.54,0.02,2],[0.76,0.16,3],[0.96,0.05,4],[0.18,0.42,5],[0.64,0.36,6]];
+  for(let i=0;i<meteors.length;i++){
+    const [bx,by,seed]=meteors[i];
+    const t=(phase*1.7+i*0.17)%1;
+    const x=(bx+t*0.30)*frame.width, y=(by+t*0.78)*frame.height;
+    for(let k=1;k<=5;k++){
+      const tx=x-k*18,ty=y-k*30;
+      profileFill(frame,Math.round(tx),Math.round(ty),Math.max(2,10-k),Math.max(2,10-k),255,180,70,Math.max(50,210-k*28));
+    }
+    profileFill(frame,Math.round(x),Math.round(y),13,13,255,240,150,245);
+    drawSparkle(frame,Math.round(x+7),Math.round(y+5),'star');
+  }
+}
+
+function drawAnimatedCosmicRift(frame, phase=0) {
+  const cx=0.50*frame.width, cy=0.48*frame.height;
+  const pulse=0.82+0.18*Math.sin(phase*Math.PI*2);
+  for(let ring=0;ring<5;ring++){
+    const rx=(150+ring*28)*pulse, ry=(70+ring*14)*pulse;
+    const points=48;
+    for(let i=0;i<points;i++){
+      const a=(i/points)*Math.PI*2+phase*Math.PI*(1.2+ring*0.12);
+      const x=cx+Math.cos(a)*rx, y=cy+Math.sin(a)*ry;
+      const c=ring%3===0?[120,180,255]:ring%3===1?[190,110,255]:[90,230,220];
+      profileFill(frame,Math.round(x),Math.round(y),7,7,c[0],c[1],c[2],190);
+    }
+  }
+  for(let i=0;i<18;i++){
+    const a=i*2.7+phase*Math.PI*2, radius=95+((i*31)%190);
+    const x=cx+Math.cos(a)*radius, y=cy+Math.sin(a)*radius*0.65;
+    drawSparkle(frame,Math.round(x),Math.round(y),'star');
+  }
+  profileFill(frame,Math.round(cx-35),Math.round(cy-12),70,24,45,25,85,150);
+}
+
 function drawBeansBurst(frame, phase=0) {
   // A private gift effect for Beans: real bean-shaped sprites fall from above,
   // then pop into bright sparkle bursts. Everything is rendered directly into
@@ -3326,6 +3420,21 @@ async function renderTreeDirectFallback(env, player) {
   }
 
   const birthdayAnimatedEffect = player.equipped?.effect;
+  const animatedShopEffect = birthdayAnimatedEffect;
+  if (["petal_storm_animated","butterfly_garden_animated","rainbow_trail_animated","ember_glow_animated","meteor_shower_animated","cosmic_rift_animated"].includes(animatedShopEffect)) {
+    const frames=[]; const frameCount=12; const baseData=scene.data.slice();
+    for(let i=0;i<frameCount;i++){
+      const frame={width,height,data:new Uint8Array(baseData)}; const phase=i/frameCount;
+      if(animatedShopEffect==="petal_storm_animated") drawAnimatedPetalStorm(frame,phase);
+      else if(animatedShopEffect==="butterfly_garden_animated") drawAnimatedButterflyGarden(frame,phase);
+      else if(animatedShopEffect==="rainbow_trail_animated") drawAnimatedRainbowTrail(frame,phase);
+      else if(animatedShopEffect==="ember_glow_animated") drawAnimatedEmberGlow(frame,phase);
+      else if(animatedShopEffect==="meteor_shower_animated") drawAnimatedMeteorShower(frame,phase);
+      else drawAnimatedCosmicRift(frame,phase);
+      frames.push(rgbaToRgbPng(frame));
+    }
+    return { bytes: await encodePNGFramesToGIF(frames,width,height,7), animated:true };
+  }
   if (birthdayAnimatedEffect === "beans") {
     const frames=[];
     const frameCount=12;
@@ -4722,46 +4831,43 @@ async function showEffectShop(
   env,
   interaction
 ) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
   const items = [
     ["butterflies_effect", "🦋 Butterflies", "buy_butterflies"],
     ["hearts_effect", "💕 Hearts", "buy_hearts"],
     ["halloween_effect", "👻 Halloween Effect", "buy_halloween_effect"]
   ];
+  const buttons = items.map(([itemId, label, buttonId]) => {
+    const owned = player.inventory.includes(itemId);
+    return button(owned ? `${label} Owned` : `${label} — ${SHOP_ITEMS[itemId].price}`, buttonId, owned ? 2 : 1, owned);
+  });
+  await sendText(env, interaction, "✨ **Tree Effects**\n\nStatic effects are layered on top of your tree. ✨", [
+    row(...buttons),
+    row(button("🎞️ Animated Effects", "shop_animated_effects", 1)),
+    row(button("⬅️ Back", "shop", 2))
+  ]);
+}
 
-  const buttons = items.map(
-    ([itemId, label, buttonId]) => {
-      const owned = player.inventory.includes(itemId);
-      return button(
-        owned
-          ? `${label} Owned`
-          : `${label} — ${SHOP_ITEMS[itemId].price}`,
-        buttonId,
-        owned ? 2 : 1,
-        owned
-      );
-    }
-  );
-
-  await sendText(
-    env,
-    interaction,
-    "✨ **Tree Effects**\n\nEffects are layered on top of your tree. ✨",
-    [
-      row(...buttons),
-      row(button("⬅️ Back", "shop", 2))
-    ]
-  );
+async function showAnimatedEffectShop(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
+  const items = [
+    ["petal_storm_animated_effect", "🌸 Petal Storm", "buy_petal_storm_animated"],
+    ["butterfly_garden_animated_effect", "🦋 Butterfly Garden", "buy_butterfly_garden_animated"],
+    ["rainbow_trail_animated_effect", "🌈 Rainbow Trail", "buy_rainbow_trail_animated"],
+    ["ember_glow_animated_effect", "🔥 Ember Glow", "buy_ember_glow_animated"],
+    ["meteor_shower_animated_effect", "☄️ Meteor Shower", "buy_meteor_shower_animated"],
+    ["cosmic_rift_animated_effect", "🌌 Cosmic Rift", "buy_cosmic_rift_animated"]
+  ];
+  const buttons = items.map(([itemId, label, buttonId]) => {
+    const owned = player.inventory.includes(itemId);
+    return button(owned ? `${label} Owned` : `${label} — ${SHOP_ITEMS[itemId].price}`, buttonId, owned ? 2 : 1, owned);
+  });
+  const rows = [];
+  for (let i=0;i<buttons.length;i+=2) rows.push(row(...buttons.slice(i,i+2)));
+  rows.push(row(button("⬅️ Back to Effects", "shop_effects", 2)));
+  await sendText(env, interaction, "🎞️ **ANIMATED EFFECTS**\n\nBring your tree to life! ✨\n\n🌸 Petals swirl • 🦋 Butterflies flutter • 🌈 Color trails sweep • 🔥 Embers rise • ☄️ Meteors streak • 🌌 A cosmic rift opens", rows);
 }
 
 const REGULAR_SHOP_SETS = [
@@ -4782,7 +4888,7 @@ async function showRegularShop(env, interaction) {
   const buttons = REGULAR_SHOP_SETS.map(set => button(set.label, `regular_set:${set.id}`, 1));
   const rows=[]; for(let i=0;i<buttons.length;i+=2) rows.push(row(...buttons.slice(i,i+2)));
   rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
-  rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2)));
+  rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2),button("🎞️ Animated","shop_animated_effects",1)));
   rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
   await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle in the Regular Shop. Forest and nature cosmetics are sold in their proper individual categories. Candyland items are bundle-only here. ✨",rows);
 }
@@ -5398,6 +5504,12 @@ async function showCustomEffects(
   if (player.inventory.includes("birthday_raccoon_party_effect")) buttons.push(button("🦝 Raccoon Party", "equip_effect_birthday_raccoon_party", player.equipped.effect === "birthday_raccoon_party" ? 3 : 2));
   if (player.inventory.includes("birthday_balloon_float_effect")) buttons.push(button("🎈 Balloon Float", "equip_effect_birthday_balloon_float", player.equipped.effect === "birthday_balloon_float" ? 3 : 2));
   if (player.inventory.includes("birthday_pumpkin_sparkle_effect")) buttons.push(button("🎃 Pumpkin Sparkle", "equip_effect_birthday_pumpkin_sparkle", player.equipped.effect === "birthday_pumpkin_sparkle" ? 3 : 2));
+  if (player.inventory.includes("petal_storm_animated_effect")) buttons.push(button("🌸 Petal Storm", "equip_effect_petal_storm_animated", player.equipped.effect === "petal_storm_animated" ? 3 : 2));
+  if (player.inventory.includes("butterfly_garden_animated_effect")) buttons.push(button("🦋 Butterfly Garden", "equip_effect_butterfly_garden_animated", player.equipped.effect === "butterfly_garden_animated" ? 3 : 2));
+  if (player.inventory.includes("rainbow_trail_animated_effect")) buttons.push(button("🌈 Rainbow Trail", "equip_effect_rainbow_trail_animated", player.equipped.effect === "rainbow_trail_animated" ? 3 : 2));
+  if (player.inventory.includes("ember_glow_animated_effect")) buttons.push(button("🔥 Ember Glow", "equip_effect_ember_glow_animated", player.equipped.effect === "ember_glow_animated" ? 3 : 2));
+  if (player.inventory.includes("meteor_shower_animated_effect")) buttons.push(button("☄️ Meteor Shower", "equip_effect_meteor_shower_animated", player.equipped.effect === "meteor_shower_animated" ? 3 : 2));
+  if (player.inventory.includes("cosmic_rift_animated_effect")) buttons.push(button("🌌 Cosmic Rift", "equip_effect_cosmic_rift_animated", player.equipped.effect === "cosmic_rift_animated" ? 3 : 2));
   if (player.inventory.includes("beans_effect")) buttons.push(button("🫘💥 Bean Burst", "equip_effect_beans", player.equipped.effect === "beans" ? 3 : 2));
   if (player.inventory.includes("halloween_effect")) {
     buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
@@ -8378,6 +8490,11 @@ async function handleComponent(
     return;
   }
 
+  if (id === "shop_animated_effects") {
+    await showAnimatedEffectShop(env, interaction);
+    return;
+  }
+
   if (
     id === "shop_limited"
   ) {
@@ -8452,6 +8569,24 @@ async function handleComponent(
 
     buy_hearts:
       "hearts_effect",
+
+    buy_petal_storm_animated:
+      "petal_storm_animated_effect",
+
+    buy_butterfly_garden_animated:
+      "butterfly_garden_animated_effect",
+
+    buy_rainbow_trail_animated:
+      "rainbow_trail_animated_effect",
+
+    buy_ember_glow_animated:
+      "ember_glow_animated_effect",
+
+    buy_meteor_shower_animated:
+      "meteor_shower_animated_effect",
+
+    buy_cosmic_rift_animated:
+      "cosmic_rift_animated_effect",
 
     buy_candy_effect:
       "candy_effect",
@@ -22176,6 +22311,7 @@ export default {
         customId === "shop_trees" ||
         customId === "shop_decorations" ||
         customId === "shop_effects" ||
+        customId === "shop_animated_effects" ||
         customId === "shop_limited" ||
         customId === "shop_limited_halloween" ||
         customId === "shop_special" ||
