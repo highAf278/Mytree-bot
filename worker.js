@@ -8952,7 +8952,7 @@ async function handleComponent(
     if(action==="attack"||action==="defend"||action==="special") { await handleBattleAction(env,interaction,action,gameId); return; }
     if(action==="items") { await handleBattleItems(env,interaction,gameId); return; }
     if(action==="forfeit") { await handleBattleForfeit(env,interaction,gameId); return; }
-    if(action==="back") { const state=await getGuildState(env,interaction.guild_id); if(state.battle) await sendText(env,interaction,battleText(state.battle),battleComponents(state.battle)); return; }
+    if(action==="back") { const game=await getBattleGame(env,interaction.guild_id,gameId); if(game) await sendText(env,interaction,battleText(game),battleComponents(game)); return; }
     return;
   }
 
@@ -20289,7 +20289,7 @@ async function handleBlame(env, interaction) {
     return;
   }
   const state = await getGuildState(env, interaction.guild_id);
-  const game = state.pastel;
+  const game = await findPastelGameForUser(env,interaction.guild_id,getUserFromInteraction(interaction)?.id);
   if (!game || game.status !== "playing") {
     await sendText(env, interaction, "🌈 There isn't an active Color Chaos game to blame anyone in. 😭");
     return;
@@ -21071,6 +21071,108 @@ function battleNewPlayerState(player) {
   };
 }
 
+
+/* =========================================================
+   MULTI-GAME STORAGE
+   Color Chaos and Tree Battle each get their own KV record so
+   multiple matches can run in the same server without overwriting
+   one another. Legacy single-game records are still readable.
+========================================================= */
+function pastelGameKey(guildId,gameId){return `pastel-game:${guildId}:${gameId}`;}
+function battleGameKey(guildId,gameId){return `tree-battle:${guildId}:${gameId}`;}
+
+async function getPastelGame(env,guildId,gameId){
+  if(!guildId||!gameId)return null;
+  const raw=await env.TREE_DATA.get(pastelGameKey(guildId,gameId));
+  if(raw){try{return JSON.parse(raw);}catch(error){console.error("Color Chaos game parse failed:",error);}}
+  const state=await getGuildState(env,guildId);
+  if(state.pastel?.id===gameId)return state.pastel;
+  return null;
+}
+
+async function listPastelGames(env,guildId){
+  const games=[];const seen=new Set();let cursor;
+  do{
+    const result=await env.TREE_DATA.list({prefix:`pastel-game:${guildId}:`,cursor});
+    for(const key of result.keys){
+      const raw=await env.TREE_DATA.get(key.name);
+      if(!raw)continue;
+      try{const game=JSON.parse(raw);if(game?.id&&!seen.has(game.id)){seen.add(game.id);games.push(game);}}catch(error){console.error("Color Chaos game list parse failed:",error);}
+    }
+    cursor=result.list_complete?undefined:result.cursor;
+  }while(cursor);
+  const state=await getGuildState(env,guildId);
+  if(state.pastel?.id&&!seen.has(state.pastel.id)){seen.add(state.pastel.id);games.push(state.pastel);}
+  return games;
+}
+
+async function savePastelGame(env,game){
+  if(!game?.guildId||!game?.id)return false;
+  const existing=await getPastelGame(env,game.guildId,game.id);
+  if(existing?.status==="lobby"&&game.status==="lobby")game.players={...(existing.players||{}),...(game.players||{})};
+  await env.TREE_DATA.put(pastelGameKey(game.guildId,game.id),JSON.stringify(game));
+  const state=await getGuildState(env,game.guildId);
+  if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}
+  return true;
+}
+
+async function deletePastelGame(env,game){
+  if(!game?.guildId||!game?.id)return;
+  await env.TREE_DATA.delete(pastelGameKey(game.guildId,game.id));
+  const state=await getGuildState(env,game.guildId);
+  if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}
+}
+
+async function findPastelGameForUser(env,guildId,userId){
+  const games=await listPastelGames(env,guildId);
+  return games.find(g=>g?.status!=="ended"&&g.players?.[userId]?.alive!==false&&g.players?.[userId])||null;
+}
+
+async function getBattleGame(env,guildId,gameId){
+  if(!guildId||!gameId)return null;
+  const raw=await env.TREE_DATA.get(battleGameKey(guildId,gameId));
+  if(raw){try{return JSON.parse(raw);}catch(error){console.error("Tree Battle game parse failed:",error);}}
+  const state=await getGuildState(env,guildId);
+  if(state.battle?.id===gameId)return state.battle;
+  return null;
+}
+
+async function listBattleGames(env,guildId){
+  const games=[];const seen=new Set();let cursor;
+  do{
+    const result=await env.TREE_DATA.list({prefix:`tree-battle:${guildId}:`,cursor});
+    for(const key of result.keys){
+      const raw=await env.TREE_DATA.get(key.name);
+      if(!raw)continue;
+      try{const game=JSON.parse(raw);if(game?.id&&!seen.has(game.id)){seen.add(game.id);games.push(game);}}catch(error){console.error("Tree Battle game list parse failed:",error);}
+    }
+    cursor=result.list_complete?undefined:result.cursor;
+  }while(cursor);
+  const state=await getGuildState(env,guildId);
+  if(state.battle?.id&&!seen.has(state.battle.id)){seen.add(state.battle.id);games.push(state.battle);}
+  return games;
+}
+
+async function saveBattleGame(env,game){
+  if(!game?.guildId||!game?.id)return false;
+  await env.TREE_DATA.put(battleGameKey(game.guildId,game.id),JSON.stringify(game));
+  const state=await getGuildState(env,game.guildId);
+  if(state.battle?.id===game.id){state.battle=null;await saveGuildState(env,game.guildId,state);}
+  return true;
+}
+
+async function deleteBattleGame(env,game){
+  if(!game?.guildId||!game?.id)return;
+  await env.TREE_DATA.delete(battleGameKey(game.guildId,game.id));
+  const state=await getGuildState(env,game.guildId);
+  if(state.battle?.id===game.id){state.battle=null;await saveGuildState(env,game.guildId,state);}
+}
+
+async function findBattleForUser(env,guildId,userId){
+  const games=await listBattleGames(env,guildId);
+  return games.find(g=>g?.status==="playing"&&g.players?.[userId])||null;
+}
+
 function makeBattleGame(guildId, challenger, opponent) {
   return {
     id: `battle-${Date.now()}-${randomInt(1000,9999)}`,
@@ -21174,8 +21276,9 @@ async function handleBattleStart(env, interaction) {
   if (!interaction.guild_id) return sendText(env,interaction,"❌ Tree Battle can only be played inside a server.");
   const target = getOption(interaction,"user");
   if (!target || target === user.id) return sendText(env,interaction,"❌ Choose another player to battle.");
+  const activeBattles=await listBattleGames(env,interaction.guild_id);
+  if(activeBattles.some(g=>g.status==="playing"&&(g.players?.[user.id]||g.players?.[target])))return sendText(env,interaction,"❌ One of those players is already in an active Tree Battle.");
   const state = await getGuildState(env,interaction.guild_id);
-  if (state.battle && state.battle.status === "playing") return sendText(env,interaction,"❌ There is already an active Tree Battle in this server.");
   const challenger = await getPlayer(env,user.id); updatePlayerIdentity(challenger,interaction); await savePlayer(env,challenger);
   const opponent = await getPlayer(env,target);
   if (!opponent.userId) opponent.userId = target;
@@ -21191,8 +21294,7 @@ async function handleBattleStart(env, interaction) {
     }
   }
   game.interactionToken = interaction.token;
-  state.battle = game;
-  await saveGuildState(env,interaction.guild_id,state);
+  await saveBattleGame(env,game);
   try { await sendBattleMessage(env,interaction,game); } catch(error) { await editOriginalResponse(env,interaction,{content:`🌳⚔️ Battle started, but I couldn't render the battle image.\n\n${error?.message||"Unknown error"}`,components:battleComponents(game)}); }
 }
 
@@ -21235,23 +21337,22 @@ async function finishBattle(env, game, winnerId, loserId, reason) {
   game.log.push(`✨ **${winner?.name || "Winner"}** banked **+${BATTLE_WIN_REWARD} sparkles** for winning the Tree Battle!`);
   if (newlyUnlockedBattleTitles.length) game.log.push(`🏷️ **New title unlocked:** ${newlyUnlockedBattleTitles.map(id => SOLO_TITLES[id]?.name || id).join(", ")}`);
   await savePlayer(env,winnerPlayer,winner.id); await savePlayer(env,loserPlayer,loser.id);
-  const state = await getGuildState(env,game.guildId);
-  if (state.battle?.id === game.id) { state.battle=null; await saveGuildState(env,game.guildId,state); }
+  await deleteBattleGame(env,game);
   await sendBattleMessage(env,{token:game.interactionToken},game).catch(()=>null);
 }
 
 async function handleBattleAction(env, interaction, action, gameId) {
   const state = await getGuildState(env,interaction.guild_id);
-  const game = state.battle;
+  const game = await getBattleGame(env,interaction.guild_id,gameId);
   const user = getUserFromInteraction(interaction);
   if (!game || game.id !== gameId || game.status !== "playing") return sendEphemeralFollowup(env,interaction,"❌ That Tree Battle is over or no longer exists.");
   if (!user || !game.players[user.id]) return sendEphemeralFollowup(env,interaction,"❌ You aren't in this Tree Battle.");
   if (game.turn !== user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   game.interactionToken = interaction.token;
   const me = battlePlayer(game,user.id), foe = battleOpponent(game,user.id);
-  if (Number(me.stunnedTurns||0)>0) { me.stunnedTurns=Math.max(0,Number(me.stunnedTurns)-1); game.turn=foe.userId; game.log.push(`😵 **${me.name}** is stunned and lost this turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
-  if (me.stunned) { me.stunned=false; game.turn=foe.userId; game.log.push(`😵 **${me.name}** was stunned and lost their turn!`); await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
-  if (me.confused && Math.random()<0.5) { me.confused=false; game.log.push(`🤪 **${me.name}** got confused and did absolutely nothing.`); game.turn=foe.userId; await saveGuildState(env,game.guildId,{...state,battle:game}); return sendBattleMessage(env,interaction,game); }
+  if (Number(me.stunnedTurns||0)>0) { me.stunnedTurns=Math.max(0,Number(me.stunnedTurns)-1); game.turn=foe.userId; game.log.push(`😵 **${me.name}** is stunned and lost this turn!`); await saveBattleGame(env,game); return sendBattleMessage(env,interaction,game); }
+  if (me.stunned) { me.stunned=false; game.turn=foe.userId; game.log.push(`😵 **${me.name}** was stunned and lost their turn!`); await saveBattleGame(env,game); return sendBattleMessage(env,interaction,game); }
+  if (me.confused && Math.random()<0.5) { me.confused=false; game.log.push(`🤪 **${me.name}** got confused and did absolutely nothing.`); game.turn=foe.userId; await saveBattleGame(env,game); return sendBattleMessage(env,interaction,game); }
   me.defending = false;
   const ability = me.cosmeticAbility || {};
   if (action === "attack") {
@@ -21305,12 +21406,12 @@ async function handleBattleAction(env, interaction, action, gameId) {
   } else return sendEphemeralFollowup(env,interaction,"❌ Invalid battle action.");
   game.round++;
   game.turn=foe.userId;
-  await saveGuildState(env,game.guildId,{...state,battle:game});
+  await saveBattleGame(env,game);
   try { await sendBattleMessage(env,interaction,game); } catch(error) { await editOriginalResponse(env,interaction,{content:`${battleText(game)}\n\n⚠️ Battle image couldn't be refreshed: ${error?.message||"Unknown error"}`,components:battleComponents(game)}); }
 }
 
 async function handleBattleForfeit(env, interaction, gameId) {
-  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id); const game=await getBattleGame(env,interaction.guild_id,gameId); const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||!user||!game.players[user.id]) return sendEphemeralFollowup(env,interaction,"❌ That battle is no longer active.");
   const foe=battleOpponent(game,user.id); if(!foe) return sendEphemeralFollowup(env,interaction,"❌ Battle opponent not found.");
   game.interactionToken = interaction.token;
@@ -21318,7 +21419,7 @@ async function handleBattleForfeit(env, interaction, gameId) {
 }
 
 async function handleBattleItems(env, interaction, gameId) {
-  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id); const game=await getBattleGame(env,interaction.guild_id,gameId); const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing") return sendEphemeralFollowup(env,interaction,"❌ That battle is no longer active.");
   if(game.turn!==user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   const player=await getPlayer(env,user.id); const owned=battleShopItems(player);
@@ -21330,7 +21431,7 @@ async function handleBattleItems(env, interaction, gameId) {
 }
 
 async function useBattleItem(env,interaction,gameId,itemId) {
-  const state=await getGuildState(env,interaction.guild_id); const game=state.battle; const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id); const game=await getBattleGame(env,interaction.guild_id,gameId); const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing") return sendEphemeralFollowup(env,interaction,"❌ Battle is no longer active.");
   if(game.turn!==user.id) return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn. The battle buttons stay available for the player whose turn it is.");
   const def=BATTLE_SHOP_ITEMS[itemId]; if(!def) return sendEphemeralFollowup(env,interaction,"❌ Unknown battle item.");
@@ -21355,16 +21456,22 @@ async function useBattleItem(env,interaction,gameId,itemId) {
   if(itemId==="rainbow_heart"){me.hp=Math.min(me.maxHp,me.hp+20);me.dodgeBonus+=0.20;me.special=100;msg="🌈 Rainbow Heart healed **20 HP**, added dodge, and charged Special!";}
   if(itemId==="ultimate_tree_relic"){me.hp=Math.min(me.maxHp,me.hp+40);me.guaranteedNextHit=true;me.nextAttackBonus+=25;msg="💎 Ultimate Tree Relic healed **40 HP** and supercharged your next attack!";}
   game.log.push(`${msg}`); if(foe.hp<=0){await finishBattle(env,game,me.userId,foe.userId,`🏆 **${me.name} WINS!** A battle item finished the fight.`);return;}
-  game.turn=foe.userId; game.round++; await saveGuildState(env,game.guildId,{...state,battle:game});
+  game.turn=foe.userId; game.round++; await saveBattleGame(env,game);
   try{await sendBattleMessage(env,interaction,game);}catch(error){await editOriginalResponse(env,interaction,{content:`${battleText(game)}\n\n⚠️ ${error?.message||"Battle image error"}`,components:battleComponents(game)});}
 }
 
 async function handleBattleEnd(env,interaction){
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Tree Battle is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);const game=state.battle;const user=getUserFromInteraction(interaction);
-  if(!game||game.status!=="playing")return sendText(env,interaction,"❌ There is no active Tree Battle.");
+  const user=getUserFromInteraction(interaction);
+  let game=await findBattleForUser(env,interaction.guild_id,user?.id);
+  if(!game&&user?.id===env.OWNER_ID){
+    const active=(await listBattleGames(env,interaction.guild_id)).filter(g=>g.status==="playing");
+    if(active.length===1)game=active[0];
+    else if(active.length>1)return sendText(env,interaction,"❌ Multiple Tree Battles are active. Use the **Forfeit**/battle controls on the specific battle you want to manage.");
+  }
+  if(!game||game.status!=="playing")return sendText(env,interaction,"❌ There is no active Tree Battle involving you.");
   if(!user||(!game.players?.[user.id]&&user.id!==env.OWNER_ID))return sendText(env,interaction,"❌ Only a battle participant or the bot owner can end this battle.");
-  state.battle=null;await saveGuildState(env,interaction.guild_id,state);
+  await deleteBattleGame(env,game);
   if(game.interactionToken)await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${game.interactionToken}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"🛑 **TREE BATTLE ENDED**\n\nThe battle was manually ended. No winner was recorded.",components:[]})}).catch(()=>null);
   await sendText(env,interaction,"🛑 Tree Battle ended and its saved state was cleared.");
 }
@@ -21861,16 +21968,7 @@ function pastelRegenerate(game){
 }
 
 async function pastelSave(env,game){
-  const state=await getGuildState(env,game.guildId);
-  if(state.pastel?.id!==game.id)return false;
-  if(state.pastel.publicMessageId&&!game.publicMessageId)game.publicMessageId=state.pastel.publicMessageId;
-  if(state.pastel.turnMessageId&&!game.turnMessageId)game.turnMessageId=state.pastel.turnMessageId;
-  /* Never discard players that appeared in the freshly-read state while this
-     request was working. The join path verifies the saved result afterward. */
-  if(state.pastel.players&&game.status==="lobby")game.players={...state.pastel.players,...(game.players||{})};
-  state.pastel=game;
-  await saveGuildState(env,game.guildId,state);
-  return true;
+  return await savePastelGame(env,game);
 }
 function boardFill(frame,x,y,w,h,r,g,b,a=255){
   const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
@@ -22125,7 +22223,7 @@ async function sendPastelBoard(env,interaction,game){
 }
 async function handlePastelEndCommand(env,interaction){
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id);const game=await getPastelGame(env,interaction.guild_id,gameId);const user=getUserFromInteraction(interaction);
   if(!game||game.status==="ended")return sendText(env,interaction,"❌ There is no active Color Chaos game.");
   if(user?.id===env.OWNER_ID){await pastelForceEnd(env,game,interaction,"👑 The Werewives bot owner force-ended Color Chaos.");return sendText(env,interaction,"👑 Color Chaos was force-ended and its saved state was cleared.");}
   if(!user||!game.players?.[user.id]||game.players[user.id].alive===false)return sendText(env,interaction,"❌ Only an active player can request to end Color Chaos.");
@@ -22147,17 +22245,18 @@ async function handleColorChecker(env,interaction){
 async function handlePastelStart(env,interaction){
   if (await checkGamePunishment(env, interaction)) return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);
-  const active=state.pastel;
-  if(active&&active.status!=="ended"){
-    return sendText(env,interaction,`🌈 **COLOR CHAOS GAME ALREADY ACTIVE**\n\nA Color Chaos game is already running in this server. If the public game message lost its buttons, restore the board and controls below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Palette",`pastel:palette:menu:${active.id}`,2))]);
+  const user=getUserFromInteraction(interaction);if(!user)return;
+  const games=await listPastelGames(env,interaction.guild_id);
+  const active=games.find(g=>g.status!=="ended"&&g.players?.[user.id]);
+  if(active){
+    return sendText(env,interaction,`🌈 **YOU ALREADY HAVE A COLOR CHAOS GAME**\n\nYou're already in a Color Chaos game. Restore your current game below.`,[row(button("🔄 Restore Game Controls",`pastel:resume:${active.id}`,1)),row(button("📖 How to Play","pastel:rules:menu",2)),row(button("🎨 Palette",`pastel:palette:menu:${active.id}`,2))]);
   }
-  const selected=state.colorChaosPalette||"pastel_dreams";
+  const state=await getGuildState(env,interaction.guild_id);const selected=state.colorChaosPalette||"pastel_dreams";
   await sendText(env,interaction,`🌈 **COLOR CHAOS**\n\n🎨 Palette: **${COLOR_CHAOS_PALETTES[selected]?.name||"Pastel Dreams"}**\n\nChoose your game mode!`,pastelModeComponents(selected));
 }
 async function handlePastelPalette(env,interaction,palette,gameId=""){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id),active=state?.pastel;
+  const state=await getGuildState(env,interaction.guild_id),active=gameId?await getPastelGame(env,interaction.guild_id,gameId):null;
   if(gameId){
     if(!active||active.id!==gameId)return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game no longer exists.");
     const user=getUserFromInteraction(interaction);
@@ -22181,7 +22280,7 @@ async function handlePastelPalette(env,interaction,palette,gameId=""){
 async function handlePastelRefresh(env,interaction,gameId){
   await deferInteraction(env,interaction,{update:true});
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id);const game=await getPastelGame(env,interaction.guild_id,gameId);const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is no longer active.");
   if(!user||!game.players?.[user.id]||game.players[user.id].alive===false)return sendEphemeralFollowup(env,interaction,"❌ Only an active Color Chaos player can refresh the game.");
   try{
@@ -22197,7 +22296,7 @@ async function handlePastelRefresh(env,interaction,gameId){
 async function handlePastelResume(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
   await deferInteraction(env,interaction,{update:true});
-  const state=await getGuildState(env,interaction.guild_id),game=state.pastel,user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id),game=await getPastelGame(env,interaction.guild_id,gameId),user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to restore.");
   if(!user||user.id!==game.hostId)return sendEphemeralFollowup(env,interaction,"❌ Only the Color Chaos host can restore the game.");
   if(game.status==="lobby"){
@@ -22218,35 +22317,21 @@ async function handlePastelMode(env,interaction,mode){
   if(await checkGamePunishment(env,interaction))return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
   await deferInteraction(env,interaction,{update:true});
-  let state=await getGuildState(env,interaction.guild_id);
-  /*
-     Color Chaos uses KV for its guild state. A just-finished game can briefly
-     be visible to a new request while the clear propagates. Re-read a few
-     times before declaring the server busy, so an immediately restarted game
-     does not get blocked by stale state.
-  */
-  if(state.pastel&&state.pastel.status!=="ended"){
-    for(let attempt=0;attempt<5;attempt++){
-      await new Promise(resolve=>setTimeout(resolve,500));
-      state=await getGuildState(env,interaction.guild_id);
-      if(!state.pastel||state.pastel.status==="ended")break;
-    }
-  }
-  if(state.pastel&&state.pastel.status!=="ended")return sendEphemeralFollowup(env,interaction,"❌ A Color Chaos game is already active in this server.");
-  if(state.pastel?.status==="ended"){
-    state.pastel=null;
-    await saveGuildState(env,interaction.guild_id,state);
-  }
-  const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";
+  const user=getUserFromInteraction(interaction);if(!user)return;
+  const games=await listPastelGames(env,interaction.guild_id);
+  const existing=games.find(g=>g.status!=="ended"&&g.players?.[user.id]);
+  if(existing)return sendEphemeralFollowup(env,interaction,"❌ You're already in an active Color Chaos game. Finish or leave that game before starting another.");
+  const state=await getGuildState(env,interaction.guild_id);
+  const selected=state.colorChaosPalette||"pastel_dreams";
+  const info=pastelModeInfo(Number(mode));const palette=COLOR_CHAOS_PALETTES[selected]?selected:"pastel_dreams";
   const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
   const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};
-  state.pastel=game;await saveGuildState(env,interaction.guild_id,state);
+  await pastelSave(env,game);
   const response=await sendPublicText(env,interaction,pastelLobbyText(game),pastelLobbyComponents(game));
   if(!response?.ok)return sendEphemeralFollowup(env,interaction,"⚠️ I couldn't create the Color Chaos lobby yet. Please try again.");
   const messageId=await getPastelPublicMessageId(env,game,interaction);if(messageId)game.publicMessageId=messageId;
   await pastelSave(env,game);
 }
-
 async function pastelStartGame(env,game,interaction){
   const players=pastelStartingPlayers(game);
   game.status="playing";game.round=1;game.turnId=players[0].id;game.turnStartedAt=Date.now();game.endVotes={};game.interactionToken=interaction.token;game.board=pastelGenerateBoard(game.mode,players,game.palette);
@@ -22273,10 +22358,12 @@ async function handlePastelJoin(env,interaction,gameId){
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
   await deferInteraction(env,interaction,{update:true});
   const user=getUserFromInteraction(interaction);if(!user)return sendEphemeralFollowup(env,interaction,"❌ Player not found.");
+  const existingGame=await findPastelGameForUser(env,interaction.guild_id,user.id);
+  if(existingGame&&existingGame.id!==gameId)return sendEphemeralFollowup(env,interaction,"❌ You're already in another active Color Chaos game.");
   const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
   let game=null;
   for(let attempt=0;attempt<3;attempt++){
-    const state=await getGuildState(env,interaction.guild_id);const current=state.pastel;
+    const current=await getPastelGame(env,interaction.guild_id,gameId);
     if(!current||current.id!==gameId||current.status!=="lobby")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos lobby is no longer open.");
     const count=Object.keys(current.players||{}).length;
     if(current.players?.[user.id]){
@@ -22287,7 +22374,7 @@ async function handlePastelJoin(env,interaction,gameId){
     const next={...current,players:{...(current.players||{})}};
     next.players[user.id]={id:user.id,username:user.username,displayName:getDisplayName(player),slot:count,alive:true,choiceLocked:false,pendingPastelTurns:0};next.interactionToken=interaction.token;
     const saved=await pastelSave(env,next);if(!saved)continue;
-    const verify=(await getGuildState(env,interaction.guild_id)).pastel;
+    const verify=await getPastelGame(env,interaction.guild_id,gameId);
     if(verify?.id===gameId&&verify.status==="lobby"&&verify.players?.[user.id]){game=verify;break;}
   }
   if(!game)return sendEphemeralFollowup(env,interaction,"⚠️ Color Chaos is busy updating the lobby. Please press Join Game once more in a moment.");
@@ -22297,13 +22384,12 @@ async function handlePastelJoin(env,interaction,gameId){
 
 async function handlePastelCancel(env,interaction,gameId){
   const state=await getGuildState(env,interaction.guild_id);
-  const game=state.pastel;
+  const game=await getPastelGame(env,interaction.guild_id,gameId);
   const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Color Chaos game no longer exists.");
   if(game.status!=="lobby")return sendText(env,interaction,"❌ The game has already started. Use Quit Game instead.");
   if(!user||user.id!==game.hostId)return sendText(env,interaction,"❌ Only the Color Chaos host can use this lobby button.");
-  state.pastel=null;
-  await saveGuildState(env,interaction.guild_id,state);
+  await deletePastelGame(env,game);
   await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");
 }
 async function pastelFinish(env,game,winnerId,reason){
@@ -22314,13 +22400,7 @@ async function pastelFinish(env,game,winnerId,reason){
      in state.pastel during that work can let a near-simultaneous request see
      it as active and block the next game.
   */
-  {
-    const finishState=await getGuildState(env,game.guildId);
-    if(finishState.pastel?.id===game.id){
-      finishState.pastel=null;
-      await saveGuildState(env,game.guildId,finishState);
-    }
-  }
+  await deletePastelGame(env,game);
   const winner=pastelFindOwned(game,winnerId);
   for(const p of pastelStartingPlayers(game)){
     const player=await getPlayer(env,p.id);
@@ -22366,7 +22446,7 @@ async function sendPastelTurnMessage(env,game,turnId){
 async function handlePastelChoose(env,interaction,gameId,colorIndex){
   /* Acknowledge immediately so board/state work cannot hit Discord's interaction timeout. */
   await deferInteraction(env,interaction,{update:true});
-  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id);const game=await getPastelGame(env,interaction.guild_id,gameId);const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is over or missing.");
   if(game.turnId!==user.id)return sendEphemeralFollowup(env,interaction,"⏳ It isn't your turn.");
   const player=pastelFindOwned(game,user.id);if(!player?.alive)return sendEphemeralFollowup(env,interaction,"💀 You're out of the game.");
@@ -22437,7 +22517,7 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   }
 }
 async function handlePastelQuit(env,interaction,gameId){
-  const state=await getGuildState(env,interaction.guild_id); const game=state.pastel; const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id); const game=await getPastelGame(env,interaction.guild_id,gameId); const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is over or missing.");
   const quitter=pastelFindOwned(game,user.id); if(!quitter?.alive)return sendEphemeralFollowup(env,interaction,"❌ You're already out of this game.");
   quitter.alive=false; quitter.lossRecorded=true;
@@ -22461,11 +22541,7 @@ async function pastelFinishRemaining(env,game,winnerId,loserId,reason){
      Release the active-game slot immediately. Reward/stat writes happen after
      this so a new Color Chaos game cannot be blocked by the old finished game.
   */
-  const finishState=await getGuildState(env,game.guildId);
-  if(finishState.pastel?.id===game.id){
-    finishState.pastel=null;
-    await saveGuildState(env,game.guildId,finishState);
-  }
+  await deletePastelGame(env,game);
   const winner=winnerId?pastelFindOwned(game,winnerId):null;
   if(winner){
     const wp=await getPlayer(env,winnerId);
@@ -22488,13 +22564,12 @@ async function pastelDisablePublicMessage(env,game,interaction,content){
 }
 async function pastelForceEnd(env,game,interaction,reason="🛑 Color Chaos was ended."){
   game.status="ended";game.endReason=reason;game.endedAt=Date.now();
-  const state=await getGuildState(env,game.guildId);
-  if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}
+  await deletePastelGame(env,game);
   await pastelDisablePublicMessage(env,game,interaction,`${reason}\n\n🌈 **COLOR CHAOS CLOSED**\nNo winner was recorded and the saved game has been cleared.`).catch(()=>null);
 }
 async function handlePastelEndVote(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);const game=state.pastel;const user=getUserFromInteraction(interaction);
+  const state=await getGuildState(env,interaction.guild_id);const game=await getPastelGame(env,interaction.guild_id,gameId);const user=getUserFromInteraction(interaction);
   if(!game||game.id!==gameId||game.status==="ended")return sendEphemeralFollowup(env,interaction,"❌ There is no active Color Chaos game to end.");
   if(!user)return sendEphemeralFollowup(env,interaction,"❌ Player not found.");
   if(user.id===env.OWNER_ID){await pastelForceEnd(env,game,interaction,"👑 The Werewives bot owner force-ended Color Chaos.");return;}
@@ -23155,17 +23230,16 @@ async function processPastelTimers(env){
   const now=Date.now();
   for(const guildId of guildIds){
     try{
-      const state=await getGuildState(env,guildId);
-      let game=state.pastel;
-      if(!game||game.status!=="playing")continue;
+      const games=await listPastelGames(env,guildId);
+      for(let game of games){
+        if(!game||game.status!=="playing")continue;
       if(!Number(game.turnStartedAt)){game.turnStartedAt=now;await pastelSave(env,game);continue;}
       if(now-Number(game.turnStartedAt)<=2*60*1000)continue;
       const snapshotTurnId=game.turnId;
       const snapshotTurnStartedAt=Number(game.turnStartedAt);
       /* A scheduled timer can overlap a player's button click. Re-read KV immediately
          before applying an AFK loss so an older timer can never overwrite a newer move. */
-      const latestState=await getGuildState(env,guildId);
-      const latestGame=latestState.pastel;
+      const latestGame=await getPastelGame(env,guildId,game.id);
       if(!latestGame||latestGame.id!==game.id||latestGame.status!=="playing")continue;
       if(latestGame.turnId!==snapshotTurnId||Number(latestGame.turnStartedAt)!==snapshotTurnStartedAt)continue;
       const current=pastelFindOwned(latestGame,latestGame.turnId);
@@ -23200,6 +23274,7 @@ async function processPastelTimers(env){
       await pastelSave(env,game);
       await sendPastelBoard(env,{token:game.interactionToken},game).catch(error=>console.error("Pastel AFK board update failed:",error));
       await sendPastelTurnMessage(env,game,game.turnId).catch(error=>console.error("Pastel AFK turn ping failed:",error));
+      }
     }catch(error){console.error(`Pastel timer failed for guild ${guildId}:`,error);}
   }
 }
@@ -23444,7 +23519,7 @@ export default {
       try {
         const gameId=customId.split(":")[2];
         const state=await getGuildState(env,interaction.guild_id);
-        const game=state.pastel;
+        const game=await getPastelGame(env,interaction.guild_id,gameId);
         const user=getUserFromInteraction(interaction);
         if (!game || game.id!==gameId || game.status!=="playing") {
           return new Response(JSON.stringify({type:4,data:{content:"❌ That Color Chaos game is no longer active.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
