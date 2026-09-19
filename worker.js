@@ -22218,8 +22218,25 @@ async function handlePastelMode(env,interaction,mode){
   if(await checkGamePunishment(env,interaction))return;
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
   await deferInteraction(env,interaction,{update:true});
-  const state=await getGuildState(env,interaction.guild_id);
+  let state=await getGuildState(env,interaction.guild_id);
+  /*
+     Color Chaos uses KV for its guild state. A just-finished game can briefly
+     be visible to a new request while the clear propagates. Re-read a few
+     times before declaring the server busy, so an immediately restarted game
+     does not get blocked by stale state.
+  */
+  if(state.pastel&&state.pastel.status!=="ended"){
+    for(let attempt=0;attempt<5;attempt++){
+      await new Promise(resolve=>setTimeout(resolve,500));
+      state=await getGuildState(env,interaction.guild_id);
+      if(!state.pastel||state.pastel.status==="ended")break;
+    }
+  }
   if(state.pastel&&state.pastel.status!=="ended")return sendEphemeralFollowup(env,interaction,"❌ A Color Chaos game is already active in this server.");
+  if(state.pastel?.status==="ended"){
+    state.pastel=null;
+    await saveGuildState(env,interaction.guild_id,state);
+  }
   const user=getUserFromInteraction(interaction);const info=pastelModeInfo(Number(mode));const palette=state.colorChaosPalette||"pastel_dreams";
   const player=await getPlayer(env,user.id);updatePlayerIdentity(player,interaction);await savePlayer(env,player);
   const game={id:`pastel-${Date.now()}-${randomInt(1000,9999)}`,guildId:interaction.guild_id,channelId:interaction.channel_id,hostId:user.id,status:"lobby",interactionToken:interaction.token,publicMessageId:"",mode:info.mode,modeLabel:info.modeLabel,needed:info.needed,palette,round:0,turnId:user.id,turnStartedAt:Date.now(),turnsSinceRefresh:0,refreshEvery:PASTEL_REGEN[Number(mode)],refreshCount:0,endVotes:{},players:{[user.id]:{id:user.id,username:user.username,displayName:getDisplayName(player),slot:0,alive:true,choiceLocked:false,pendingPastelTurns:0}},board:null,createdAt:Date.now(),lastRefresh:""};
@@ -22290,7 +22307,20 @@ async function handlePastelCancel(env,interaction,gameId){
   await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");
 }
 async function pastelFinish(env,game,winnerId,reason){
-  game.status="ended"; game.winnerId=winnerId; game.endReason=reason;
+  game.status="ended"; game.winnerId=winnerId; game.endReason=reason; game.endedAt=Date.now();
+  /*
+     Clear the guild's active Color Chaos slot BEFORE doing player reward work.
+     Finishing a game can take several KV/player writes; leaving the old game
+     in state.pastel during that work can let a near-simultaneous request see
+     it as active and block the next game.
+  */
+  {
+    const finishState=await getGuildState(env,game.guildId);
+    if(finishState.pastel?.id===game.id){
+      finishState.pastel=null;
+      await saveGuildState(env,game.guildId,finishState);
+    }
+  }
   const winner=pastelFindOwned(game,winnerId);
   for(const p of pastelStartingPlayers(game)){
     const player=await getPlayer(env,p.id);
@@ -22307,7 +22337,7 @@ async function pastelFinish(env,game,winnerId,reason){
     else if(!p.alive||p.id!==winnerId){if(!p.lossRecorded){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}}
     player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
   }
-  const state=await getGuildState(env,game.guildId); if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);} return winner;
+  return winner;
 }
 async function sendPastelTurnMessage(env,game,turnId){
   const payload={content:`🌈 **COLOR CHAOS** — <@${turnId}> **it's your turn!**`,allowed_mentions:{users:[turnId]}};
@@ -22425,7 +22455,31 @@ async function handlePastelQuit(env,interaction,gameId){
   await pastelSave(env,game);
   try{await sendPastelBoard(env,interaction,game);await sendPastelTurnMessage(env,game,game.turnId);}catch(error){await editOriginalResponse(env,interaction,{content:`${pastelGameText(game)}\n\n${game.lastMove}\n\n⚠️ ${error?.message||"Board image error"}`,components:pastelChoiceComponents(game)});}
 }
-async function pastelFinishRemaining(env,game,winnerId,loserId,reason){game.status="ended";game.winnerId=winnerId;game.endReason=reason;const winner=winnerId?pastelFindOwned(game,winnerId):null;if(winner){const wp=await getPlayer(env,winnerId);wp.pastelWins=Number(wp.pastelWins||0)+1;wp.pastelRating=Number(wp.pastelRating||0)+100;wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");const leveledUp=applyLevelUps(wp);wp.pastelLevel=pastelRatingLevel(wp.pastelRating);wp.pastelLastXpEarned=PASTEL_WIN_XP;wp.pastelLastLeveledUp=leveledUp;await savePlayer(env,wp,winnerId);}const state=await getGuildState(env,game.guildId);if(state.pastel?.id===game.id){state.pastel=null;await saveGuildState(env,game.guildId,state);}}
+async function pastelFinishRemaining(env,game,winnerId,loserId,reason){
+  game.status="ended";game.winnerId=winnerId;game.endReason=reason;game.endedAt=Date.now();
+  /*
+     Release the active-game slot immediately. Reward/stat writes happen after
+     this so a new Color Chaos game cannot be blocked by the old finished game.
+  */
+  const finishState=await getGuildState(env,game.guildId);
+  if(finishState.pastel?.id===game.id){
+    finishState.pastel=null;
+    await saveGuildState(env,game.guildId,finishState);
+  }
+  const winner=winnerId?pastelFindOwned(game,winnerId):null;
+  if(winner){
+    const wp=await getPlayer(env,winnerId);
+    wp.pastelWins=Number(wp.pastelWins||0)+1;
+    wp.pastelRating=Number(wp.pastelRating||0)+100;
+    wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;
+    if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");
+    const leveledUp=applyLevelUps(wp);
+    wp.pastelLevel=pastelRatingLevel(wp.pastelRating);
+    wp.pastelLastXpEarned=PASTEL_WIN_XP;
+    wp.pastelLastLeveledUp=leveledUp;
+    await savePlayer(env,wp,winnerId);
+  }
+}
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
   const response=await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${token}/messages/@original`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,components:[]})});
