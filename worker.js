@@ -21826,9 +21826,8 @@ function pastelAnyLegalMoves(game){
 async function pastelFinishNoMoves(env,game){
   const winner=pastelWinner(game);
   if(!winner)return false;
-  await pastelFinish(env,game,winner.id,"🏁 No legal moves remained for the active players.");
-  const wp=await getPlayer(env,winner.id);
-  await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`🏁 **COLOR CHAOS OVER!**\n\n🚫 No legal moves remained for the active players.\n🏆 <@${winner.id}> wins with the largest territory!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`).catch(()=>null);
+  const results=await pastelFinish(env,game,winner.id,"🏁 No legal moves remained for the active players.");
+  await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`🏁 **COLOR CHAOS OVER!**\n\n🚫 No legal moves remained for the active players.\n🏆 <@${winner.id}> wins with the largest territory!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`).catch(()=>null);
   return true;
 }
 
@@ -22393,6 +22392,22 @@ async function handlePastelCancel(env,interaction,gameId){
   await deletePastelGame(env,game);
   await sendText(env,interaction,"🚪 Color Chaos lobby cancelled.");
 }
+function pastelResultsText(results,winnerId){
+  const lines=results.map(result=>{
+    const delta=result.delta>0?`+${result.delta}`:`${result.delta}`;
+    let levelLine=`⭐ **Lv. ${result.afterLevel}**`;
+    if(result.afterLevel>result.beforeLevel){
+      levelLine=`⭐ **Lv. ${result.beforeLevel} → ${result.afterLevel}** ⬆️ **LEVEL UP!**`;
+    }else if(result.afterLevel<result.beforeLevel){
+      levelLine=`⭐ **Lv. ${result.beforeLevel} → ${result.afterLevel}** ⬇️ **LEVEL DOWN!**`;
+    }else{
+      levelLine+=` — level unchanged`;
+    }
+    return `${result.id===winnerId?"🏆":"💥"} <@${result.id}>\n   🌈 **${delta} Color Chaos rating**\n   ${levelLine}`;
+  }).join("\n\n");
+  return `🎨 **COLOR CHAOS RESULTS**\n\n${lines}`;
+}
+
 async function pastelFinish(env,game,winnerId,reason){
   game.status="ended"; game.winnerId=winnerId; game.endReason=reason; game.endedAt=Date.now();
   /*
@@ -22402,23 +22417,51 @@ async function pastelFinish(env,game,winnerId,reason){
      it as active and block the next game.
   */
   await deletePastelGame(env,game);
-  const winner=pastelFindOwned(game,winnerId);
+
+  const snapshots={};
   for(const p of pastelStartingPlayers(game)){
     const player=await getPlayer(env,p.id);
+    const beforeRating=Object.prototype.hasOwnProperty.call(p,"resultBeforeRating")
+      ?Number(p.resultBeforeRating)
+      :Number(player.pastelRating||0);
+    const beforeLevel=Object.prototype.hasOwnProperty.call(p,"resultBeforeLevel")
+      ?Number(p.resultBeforeLevel)
+      :pastelRatingLevel(beforeRating);
+    snapshots[p.id]={beforeRating,beforeLevel};
+  }
+
+  const results=[];
+  for(const p of pastelStartingPlayers(game)){
+    const player=await getPlayer(env,p.id);
+    let delta=0;
     if(p.id===winnerId){
       player.pastelWins=Number(player.pastelWins||0)+1;
       player.pastelRating=Number(player.pastelRating||0)+100;
       player.exp=Number(player.exp||0)+PASTEL_WIN_XP;
-      if(!player.titles.includes("pastel_winner")) player.titles.push("pastel_winner");
+      if(!player.titles.includes("pastel_winner"))player.titles.push("pastel_winner");
       const leveledUp=applyLevelUps(player);
-      player.pastelLevel=pastelRatingLevel(player.pastelRating);
       player.pastelLastXpEarned=PASTEL_WIN_XP;
       player.pastelLastLeveledUp=leveledUp;
+      delta=100;
+    }else if(!p.lossRecorded){
+      player.pastelLosses=Number(player.pastelLosses||0)+1;
+      player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
+      delta=-50;
+    }else{
+      delta=-50;
     }
-    else if(!p.alive||p.id!==winnerId){if(!p.lossRecorded){player.pastelLosses=Number(player.pastelLosses||0)+1;player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);}}
-    player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
+    player.pastelLevel=pastelRatingLevel(player.pastelRating);
+    await savePlayer(env,player,p.id);
+    results.push({
+      id:p.id,
+      delta,
+      beforeRating:snapshots[p.id].beforeRating,
+      beforeLevel:snapshots[p.id].beforeLevel,
+      afterRating:Number(player.pastelRating||0),
+      afterLevel:Number(player.pastelLevel||0)
+    });
   }
-  return winner;
+  return results;
 }
 async function sendPastelTurnMessage(env,game,turnId){
   const payload={content:`🌈 **COLOR CHAOS** — <@${turnId}> **it's your turn!**`,allowed_mentions:{users:[turnId]}};
@@ -22485,9 +22528,9 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   const extra=Number(player.pendingPastelTurns||0)>0;
   game.round++;game.turnsSinceRefresh++;
   game.lastMove=`🎨 <@${user.id}> chose **${pastelColors(game)[color].name}** and gained **${gained} cells**.${heartsCaptured?` ${pastelPalette(game).powerCell} **${heartsCaptured} POWER CELL${heartsCaptured===1?"":"S"} CAPTURED — EXTRA TURN${heartsCaptured===1?"":"S"} STACKED!**`:""}`;
-  if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
+  if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);const results=await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`,components:[]});return;}
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];await pastelFinish(env,game,w.id,"🏆 Only one player remained.");const wp=await getPlayer(env,w.id);await editOriginalResponse(env,interaction,{content:`🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}**!`:""}`,components:[]});return;}
+  if(alive.length<=1){const w=alive[0];const results=await pastelFinish(env,game,w.id,"🏆 Only one player remained.");await editOriginalResponse(env,interaction,{content:`🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`,components:[]});return;}
   if(!pastelAnyLegalMoves(game)){
     await pastelFinishNoMoves(env,game);
     return;
@@ -22522,11 +22565,18 @@ async function handlePastelQuit(env,interaction,gameId){
   if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Color Chaos game is over or missing.");
   const quitter=pastelFindOwned(game,user.id); if(!quitter?.alive)return sendEphemeralFollowup(env,interaction,"❌ You're already out of this game.");
   quitter.alive=false; quitter.lossRecorded=true;
-  const player=await getPlayer(env,user.id); player.pastelLosses=Number(player.pastelLosses||0)+1; player.pastelQuits=Number(player.pastelQuits||0)+1; player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50); player.pastelLevel=pastelRatingLevel(player.pastelRating); await savePlayer(env,player);
-  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.`);}
+  const player=await getPlayer(env,user.id);
+  quitter.resultBeforeRating=Number(player.pastelRating||0);
+  quitter.resultBeforeLevel=pastelRatingLevel(player.pastelRating);
+  player.pastelLosses=Number(player.pastelLosses||0)+1;
+  player.pastelQuits=Number(player.pastelQuits||0)+1;
+  player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
+  player.pastelLevel=pastelRatingLevel(player.pastelRating);
+  await savePlayer(env,player);
+  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);const results=await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.\n\n${pastelResultsText(results,foe?.id)}`);}
   for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;c.start=false;}
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];if(w)await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!`);}
+  if(alive.length<=1){const w=alive[0];if(w){const results=await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!\n\n${pastelResultsText(results,w.id)}`);}return sendText(env,interaction,`🚪 You quit. Your territory is blacked out.`);}
   if(game.turnId===user.id){game.turnId=alive[0].id;game.turnStartedAt=Date.now();}
   game.lastMove=`🚪 **<@${user.id}> rage quit!** Their territory is now blacked out. The game continues with **${alive.length} players**.`;
   if(!pastelAnyLegalMoves(game)){
@@ -22543,19 +22593,51 @@ async function pastelFinishRemaining(env,game,winnerId,loserId,reason){
      this so a new Color Chaos game cannot be blocked by the old finished game.
   */
   await deletePastelGame(env,game);
-  const winner=winnerId?pastelFindOwned(game,winnerId):null;
-  if(winner){
-    const wp=await getPlayer(env,winnerId);
-    wp.pastelWins=Number(wp.pastelWins||0)+1;
-    wp.pastelRating=Number(wp.pastelRating||0)+100;
-    wp.exp=Number(wp.exp||0)+PASTEL_WIN_XP;
-    if(!wp.titles.includes("pastel_winner"))wp.titles.push("pastel_winner");
-    const leveledUp=applyLevelUps(wp);
-    wp.pastelLevel=pastelRatingLevel(wp.pastelRating);
-    wp.pastelLastXpEarned=PASTEL_WIN_XP;
-    wp.pastelLastLeveledUp=leveledUp;
-    await savePlayer(env,wp,winnerId);
+
+  const snapshots={};
+  for(const p of pastelStartingPlayers(game)){
+    const player=await getPlayer(env,p.id);
+    const beforeRating=Object.prototype.hasOwnProperty.call(p,"resultBeforeRating")
+      ?Number(p.resultBeforeRating)
+      :Number(player.pastelRating||0);
+    const beforeLevel=Object.prototype.hasOwnProperty.call(p,"resultBeforeLevel")
+      ?Number(p.resultBeforeLevel)
+      :pastelRatingLevel(beforeRating);
+    snapshots[p.id]={beforeRating,beforeLevel};
   }
+
+  const results=[];
+  for(const p of pastelStartingPlayers(game)){
+    const player=await getPlayer(env,p.id);
+    let delta=0;
+    if(p.id===winnerId){
+      player.pastelWins=Number(player.pastelWins||0)+1;
+      player.pastelRating=Number(player.pastelRating||0)+100;
+      player.exp=Number(player.exp||0)+PASTEL_WIN_XP;
+      if(!player.titles.includes("pastel_winner"))player.titles.push("pastel_winner");
+      const leveledUp=applyLevelUps(player);
+      player.pastelLastXpEarned=PASTEL_WIN_XP;
+      player.pastelLastLeveledUp=leveledUp;
+      delta=100;
+    }else if(!p.lossRecorded){
+      player.pastelLosses=Number(player.pastelLosses||0)+1;
+      player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
+      delta=-50;
+    }else{
+      delta=-50;
+    }
+    player.pastelLevel=pastelRatingLevel(player.pastelRating);
+    await savePlayer(env,player,p.id);
+    results.push({
+      id:p.id,
+      delta,
+      beforeRating:snapshots[p.id].beforeRating,
+      beforeLevel:snapshots[p.id].beforeLevel,
+      afterRating:Number(player.pastelRating||0),
+      afterLevel:Number(player.pastelLevel||0)
+    });
+  }
+  return results;
 }
 async function pastelDisablePublicMessage(env,game,interaction,content){
   const token=game?.interactionToken||interaction?.token;if(!token)return false;
@@ -23251,6 +23333,8 @@ async function processPastelTimers(env){
       current.afkForfeited=true;
       for(const row of game.board||[])for(const cell of row){if(cell.owner===current.id){cell.owner="blackout";cell.color=0;cell.heart=false;cell.wild=false;cell.start=false;}}
       const player=await getPlayer(env,current.id);
+      current.resultBeforeRating=Number(player.pastelRating||0);
+      current.resultBeforeLevel=pastelRatingLevel(player.pastelRating);
       player.pastelLosses=Number(player.pastelLosses||0)+1;
       player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
       player.pastelLevel=pastelRatingLevel(player.pastelRating);
@@ -23259,9 +23343,8 @@ async function processPastelTimers(env){
       if(alive.length<=1){
         const winner=alive[0];
         if(winner){
-          await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
-          const wp=await getPlayer(env,winner.id);
-          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Color Chaos!\n✨ **+${PASTEL_WIN_XP} EXP earned!**${wp.pastelLastLeveledUp?`\n🎉 **LEVEL UP!** You are now **Level ${wp.level}!**`:""}`).catch(()=>null);
+          const results=await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
+          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Color Chaos!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`).catch(()=>null);
         }
         continue;
       }
