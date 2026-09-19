@@ -22223,7 +22223,8 @@ async function sendPastelBoard(env,interaction,game){
 }
 async function handlePastelEndCommand(env,interaction){
   if(!interaction.guild_id)return sendText(env,interaction,"❌ Color Chaos is server-only.");
-  const state=await getGuildState(env,interaction.guild_id);const game=await getPastelGame(env,interaction.guild_id,gameId);const user=getUserFromInteraction(interaction);
+  const user=getUserFromInteraction(interaction);
+  const game=await findPastelGameForUser(env,interaction.guild_id,user?.id);
   if(!game||game.status==="ended")return sendText(env,interaction,"❌ There is no active Color Chaos game.");
   if(user?.id===env.OWNER_ID){await pastelForceEnd(env,game,interaction,"👑 The Werewives bot owner force-ended Color Chaos.");return sendText(env,interaction,"👑 Color Chaos was force-ended and its saved state was cleared.");}
   if(!user||!game.players?.[user.id]||game.players[user.id].alive===false)return sendText(env,interaction,"❌ Only an active player can request to end Color Chaos.");
