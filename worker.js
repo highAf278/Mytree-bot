@@ -19882,6 +19882,9 @@ function helpText(){return [
   "`/tree` `/water` `/catch` `/sparkle` `/fortune` `/rename`",
   "`/shop` `/inventory` `/customize`",
   "",
+  "🔮 **WEREWIVES FUN**",
+  "`/oracle` • `/curse @player` • `/lore @player` • `/timeline @player`",
+  "",
   "🎮 **GAMES**",
   "`/games` — Main games menu",
   "`/solo start|status|leaderboard|end`",
@@ -19916,6 +19919,220 @@ function helpText(){return [
   "",
   "💗 Owner/admin-only commands are intentionally not listed here."
 ].join("\n");}
+/* =========================================================
+   WEREWIVES MINI-FUN COMMANDS
+   Oracle • Curse • Lore • Timeline
+   Purely silly/social. No gameplay, balances, or player data changes.
+========================================================= */
+
+const ORACLE_RESPONSES = [
+  '🔮 The future contains a suspiciously convenient snack.',
+  "🔮 You will soon hear 'wait, what?' and nobody will explain.",
+  '🔮 A tiny victory approaches. Celebrate it dramatically.',
+  '🔮 Your destiny contains glitter. An irresponsible amount.',
+  '🔮 The moon has reviewed your plans. It has concerns.',
+  '🔮 You will make an excellent decision immediately after a questionable one.',
+  '🔮 A mysterious opportunity approaches. It is probably a button.',
+  '🔮 Something you thought was lost will reappear somewhere obvious.',
+  '🔮 You will become emotionally invested in something completely ridiculous.',
+  '🔮 A raccoon has selected you for reasons known only to the raccoon.',
+  "🔮 Your next adventure begins with 'Okay, this should be fine.'",
+  '🔮 You will soon win an argument you never actually have.',
+  '🔮 The stars recommend choosing the option that makes the better story.',
+  '🔮 A small problem will solve itself after you stop staring at it.',
+  '🔮 You are destined to open an app and forget why.',
+  '🔮 Someone will underestimate you today. Let them.',
+  '🔮 The future smells faintly like popcorn.',
+  '🔮 A random thought will become your entire personality for seven minutes.',
+  '🔮 Something pink will improve your day. The Oracle refuses to elaborate.',
+  '🔮 You will witness nonsense and decide it is somehow your problem.',
+  '🔮 A suspiciously good idea is approaching. Investigate carefully.',
+  "🔮 You will say 'I'm just checking one thing' and immediately get distracted.",
+  '🔮 Your luck today is shaped like a slightly crooked star.',
+  '🔮 A completely ordinary moment will somehow become a story.',
+  '🔮 Your next tiny inconvenience will be defeated by stubbornness.',
+  '🔮 A door will open. It may be metaphorical. It may just be a door.',
+  '🔮 You will soon discover you were right about something extremely unimportant.',
+  '🔮 The Oracle predicts one dramatic sigh.',
+  '🔮 A mysterious little treat is spiritually approaching you.',
+  '🔮 Your future is bright, sparkly, and mildly chaotic.',
+  '🔮 Fate has assigned you a side quest. The reward is bragging rights.',
+  '🔮 You will encounter an object and wonder why anyone owns it.',
+  '🔮 A notification will appear. It will probably be less exciting than hoped.',
+  '🔮 The next thing that makes you laugh will be completely unexpected.',
+  '🔮 Your brain is about to produce one wildly unnecessary fact.',
+  "🔮 Someone will say 'hear me out.' The Oracle advises listening.",
+  '🔮 You are entering a period of extremely specific luck.',
+  '🔮 A tiny mystery will appear and you will absolutely investigate it.',
+  '🔮 The universe has prepared a mildly inconvenient coincidence.',
+  '🔮 You will find something useful exactly when you stop looking for it.',
+  '🔮 A raccoon somewhere thinks you have potential.',
+  '🔮 You will have a surprisingly satisfying little win.',
+  '🔮 The future has been located. It is doing something suspicious over there.',
+  '🔮 Your destiny is currently buffering. Please try again later.',
+  '🔮 The stars have no useful information, but they are very confident.',
+  "🔮 Something mildly magical is about to happen. Don't ask for science.",
+];
+
+const CURSE_RESPONSES = [
+  '🪄 **CURSE OF THE DRAMATIC ENTRANCE** — Everything feels 12% more cinematic.',
+  '🪄 **CURSE OF THE MISSING WORD** — The perfect word arrives three seconds late.',
+  '🪄 **CURSE OF THE EXTRA STEP** — Every simple task gains one unnecessary step.',
+  '🪄 **CURSE OF THE SUSPICIOUS SPOON** — Spoons are now mildly questionable.',
+  '🪄 **CURSE OF THE RACCOON COUNCIL** — Invisible raccoons are judging your decisions.',
+  "🪄 **CURSE OF THE PHANTOM NOTIFICATION** — You will check for a notification that isn't there.",
+  '🪄 **CURSE OF THE PICKLE** — Somewhere nearby, a pickle is disappointed in you.',
+  '🪄 **CURSE OF THE DRAMATIC PAUSE** — Every decision deserves a theatrical pause.',
+  '🪄 **CURSE OF THE ALMOST REMEMBERED THING** — You know you forgot something. Not what.',
+  '🪄 **CURSE OF THE TINY BOSS MUSIC** — Ordinary tasks now feel extremely important.',
+  '🪄 **CURSE OF THE MYSTERIOUS CRUMB** — One crumb will demand an explanation.',
+  '🪄 **CURSE OF THE SIDE QUEST** — You may become distracted by something unrelated.',
+  '🪄 **CURSE OF THE UNNECESSARY GOOGLE** — Curiosity has chosen a useless topic.',
+  '🪄 **CURSE OF THE WOBBLY VIBE** — Everything is fine, but slightly crooked.',
+  '🪄 **CURSE OF NUMBER 37** — The number 37 is now suspiciously important.',
+  '🪄 **CURSE OF THE LOST TRAIN OF THOUGHT** — Your thought has left without you.',
+  '🪄 **CURSE OF THE RANDOM SONG** — One song may become inexplicably stuck in your head.',
+  '🪄 **CURSE OF THE MYSTERIOUS BUTTON** — You will become curious about a button that does nothing.',
+  "🪄 **CURSE OF THE UNFINISHED SENTENCE** — A thought may end with '...actually, never mind.'",
+  '🪄 **CURSE OF THE OVERTHINKING RACCOON** — Somewhere, a raccoon is thinking very hard about your choices.',
+  '🪄 **CURSE OF THE ONE SOCK** — The matching sock has vanished into another dimension.',
+  '🪄 **CURSE OF THE FAKE CONFIDENCE** — You will confidently enter a room and forget why.',
+  '🪄 **CURSE OF THE RANDOM FACT** — An unnecessary fact will arrive at the worst time.',
+  '🪄 **CURSE OF THE TINY VICTORY LAP** — A mundane accomplishment must receive championship energy.',
+  '🪄 **CURSE OF THE ORANGE PEEL** — You may briefly consider whether an orange is a hat.',
+  '🪄 **CURSE OF THE GREAT SIGH** — One situation deserves a legendary sigh.',
+  '🪄 **CURSE OF THE SUSPICIOUS SILENCE** — Quiet now feels like somebody is plotting.',
+  '🪄 **CURSE OF THE ALMOST TEXT** — The perfect joke arrives after the conversation moves on.',
+  '🪄 **CURSE OF THE BACKUP PLAN** — Your brain invents a plan for something needing no plan.',
+  '🪄 **CURSE OF THE TINY DETOUR** — Your next simple plan gains a pointless side quest.',
+  "🪄 **CURSE OF THE MYSTERY NOISE** — A random noise will be declared 'probably fine.'",
+  '🪄 **CURSE OF THE POCKET ROCK** — You now spiritually own one tiny rock.',
+  '🪄 **CURSE OF THE RACCOON DIPLOMAT** — Your invisible ambassador has filed a complaint.',
+  '🪄 **CURSE OF THE VERY IMPORTANT NAPKIN** — One ordinary object becomes weirdly important.',
+  '🪄 **CURSE OF THE DOUBLE CHECK** — You will check something twice despite already checking.',
+  '🪄 **CURSE OF THE DRAMATIC WINDOW LOOK** — One ordinary moment deserves a movie scene.',
+  '🪄 **CURSE OF THE TINY CONFUSION** — You will briefly forget something you definitely know.',
+  '🪄 **CURSE OF THE UNNECESSARY CELEBRATION** — One mundane success must be celebrated wildly.',
+  '🪄 **CURSE OF THE SNEAKY SNACK** — A snack will become 40% more appealing.',
+  '🪄 **CURSE OF THE WRONG NAME** — Your brain may rename an object incorrectly.',
+  '🪄 **CURSE OF THE CHAOTIC AUTOCORRECT** — Your imagination has temporary autocorrect privileges.',
+  '🪄 **CURSE OF THE INVISIBLE AUDIENCE** — Every mundane action deserves applause.',
+  '🪄 **CURSE OF THE RARE RACCOON** — A very specific raccoon has heard your name.',
+  '🪄 **CURSE OF THE ONE-MINUTE PHILOSOPHER** — You will briefly ponder a question nobody asked.',
+  '🪄 **CURSE OF THE TINY GLITCH** — Reality has experienced harmless buffering.',
+  '🪄 **CURSE OF THE PINK CLOUD** — A normal thought gets lightly dusted with glitter.',
+  '🪄 **CURSE OF THE ROLLING CHAIR** — Somewhere, a chair has just rolled away dramatically.',
+];
+
+const LORE_RESPONSES = [
+  '📜 It is written that {u} once entered a room, forgot why, and left with a different mission.',
+  '📜 Ancient records claim {u} was offered infinite wisdom and asked for snacks instead.',
+  '📜 The oldest tree remembers {u} staring at a loading screen and somehow winning.',
+  '📜 Legend says {u} can sense when someone opens the fridge without taking anything.',
+  "📜 The archives contain a document titled 'The Incident Involving {u} and One Suspicious Spoon.'",
+  '📜 It is rumored that {u} once defeated a raccoon in an argument. The raccoon appealed.',
+  '📜 {u} has honorary membership in an imaginary raccoon kingdom.',
+  "📜 A secret map marks one location: 'Probably where {u} left that thing.'",
+  '📜 The moon remembers {u}. The moon refuses to explain why.',
+  "📜 One prophecy describes {u} as 'the person who should not press that button.'",
+  '📜 Werewives historians still debate why {u} was once followed by three ducks.',
+  '📜 {u} once found a mysterious object and immediately decided it belonged to them.',
+  '📜 The garden gnomes reportedly recognize {u} on sight.',
+  '📜 A historian wrote that {u} can turn a simple plan into a side quest.',
+  '📜 The trees whisper that {u} has excellent dramatic timing.',
+  "📜 A raccoon once described {u} as 'surprisingly trustworthy.' It was investigated.",
+  "📜 The forbidden library has a shelf labeled 'Things {u} Probably Shouldn't Know.'",
+  '📜 {u} once walked into a room with a plan and walked out with a snack.',
+  '📜 Werewives folklore claims {u} can accidentally turn Tuesday into an event.',
+  "📜 An ancient inscription reads: '{u} was here. Nobody knows why.'",
+  '📜 The Council once considered naming a constellation after {u}. They got distracted.',
+  '📜 Legend says {u} has an invisible raccoon assigned to them. Its job is classified.',
+  "📜 One scroll predicts {u} will someday say 'okay, hear me out' before chaos.",
+  '📜 A mysterious historian called {u} a recurring plot device.',
+  '📜 It is whispered that {u} once made a tree proud. The tree still talks about it.',
+  "📜 An old diary contains one sentence about {u}: 'They knew too much about pickles.'",
+  "📜 The archives say {u} has never met a normal situation they couldn't make stranger.",
+  '📜 A tiny ceremonial bell rings whenever {u} makes a questionable decision.',
+  '📜 The ancient records say {u} was definitely involved. Nobody knows in what.',
+  '📜 A forgotten cookbook has a page dedicated to {u}. It is just a drawing of a pickle.',
+  "📜 Somewhere beneath the server is a plaque commemorating 'The {u} Situation.'",
+  '📜 {u} once asked a raccoon for directions. The raccoon charged an acorn.',
+  '📜 A classified drawing of {u} looks suspiciously like a potato.',
+  '📜 The trees claim {u} has excellent taste in chaos.',
+  '📜 One prophecy says {u} will discover the true purpose of a useless button.',
+  '📜 {u} can apparently detect a suspiciously quiet group chat from several rooms away.',
+  '📜 The garden has a secret path named after {u}. It leads nowhere useful.',
+  '📜 A raccoon historian insists {u} invented a new kind of nonsense.',
+  '📜 The oldest surviving Werewives meme allegedly featured {u}. Nobody has the original.',
+  "📜 {u} has been classified as 'Important For Reasons We Will Not Explain.'",
+  "📜 Legend says {u} once looked directly at nonsense and said, 'Sure.'",
+  '📜 Somewhere, a tiny bell rings whenever someone mentions {u} and pickles together.',
+  "📜 The lore keepers describe {u} as 'chaotic, but workable.'",
+  '📜 Ancient records say {u} once won an argument against a mirror.',
+  "📜 A secret file says: '{u}. Enough said.'",
+];
+
+const TIMELINE_RESPONSES = [
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a professional raccoon consultant.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} runs a bakery where every pastry is shaped like a tree.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} invented a Wi-Fi spoon.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is mayor of a town full of garden gnomes.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a detective whose only clue is a warm waffle.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is ambassador to the Moon.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} sells invisible furniture and is wildly successful.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} can tell when a fridge has nothing new inside.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} uses a portal exclusively to avoid stairs.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} won a staring contest against a statue and became famous.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} guards a magical library of raccoon books.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} founded a religion dedicated to the sacred potato.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a professional nap consultant.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} discovered that plants gossip and started taking notes.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is the only person who understands ducks.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} owns a castle but keeps losing the carriage.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} hunts treasure and keeps finding spoons.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} runs a detective agency for missing snacks.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a wizard whose only spell is making toast.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} invented a machine that detects raccoon theft.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a fashion designer famous for unnecessary capes.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} opened a five-star hotel for ghosts.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} captains a spaceship powered by glitter.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} discovered the ancient civilization of Extremely Tiny Chairs.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is world champion at a sport nobody has heard of.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} owns a greenhouse where every plant has an attitude.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} became a detective because their cat knew more than police.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} rules a kingdom where Tuesdays are illegal.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} found a hidden dimension behind a vending machine.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a professional cloud critic.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} opened a museum for things found behind furniture.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} trains raccoons for dramatic entrances.',
+  "🕰️ **ALTERNATE TIMELINE #{n}** — {u} is the world's first licensed button presser.",
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} lives in a treehouse with suspiciously advanced security.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is a time traveler who fixes tiny inconveniences.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} founded a school for avoiding unnecessary drama.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} invented glitter soup and somehow became famous.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} guards a door that leads to another door.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} runs a newspaper reporting only oddly specific good news.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} protects treasure they have never seen.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} is best friends with a ghost named Gary.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} invented teleportation to skip one boring meeting.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} proved scientifically that raccoons have opinions.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} owns a bookstore where books choose customers.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} advises a kingdom of judgmental cats.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} discovered a secret island and forgot the map.',
+  "🕰️ **ALTERNATE TIMELINE #{n}** — {u} solved 'Who Ate The Last Cookie?' and became a legend.",
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} became famous after a raccoon photobomb.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} invented a self-watering tree that gives advice.',
+  '🕰️ **ALTERNATE TIMELINE #{n}** — {u} owns a spaceship, three capes, and no idea how it works.',
+  "🕰️ **ALTERNATE TIMELINE #{n}** — {u} is the guardian of the server's imaginary moon.",
+];
+
+function funTargetId(interaction){return getOption(interaction,"user")||getUserFromInteraction(interaction)?.id||"";}
+function funTargetMention(interaction){const id=funTargetId(interaction);return id?`<@${id}>`:"you";}
+function randomFunResponse(list){return list[randomInt(0,list.length-1)];}
+async function handleOracle(env,interaction){const target=funTargetMention(interaction);await sendText(env,interaction,`🔮 **THE WEREWIVES ORACLE**\n\n${target}, ${randomFunResponse(ORACLE_RESPONSES).replace(/^🔮\s*/,"")}`);}
+async function handleCurse(env,interaction){const target=funTargetMention(interaction);await sendText(env,interaction,`${randomFunResponse(CURSE_RESPONSES)}\n\n🎯 Target: ${target}\n✨ *Harmless Werewives nonsense — no actual player effect is applied.*`);}
+async function handleLore(env,interaction){const target=funTargetMention(interaction);await sendText(env,interaction,randomFunResponse(LORE_RESPONSES).replaceAll("{u}",target));}
+async function handleTimeline(env,interaction){const target=funTargetMention(interaction);await sendText(env,interaction,randomFunResponse(TIMELINE_RESPONSES).replaceAll("{u}",target).replaceAll("{n}",String(randomInt(12,999))));}
 async function handleHelp(env,interaction){await sendText(env,interaction,helpText());}
 
 /* =========================================================
@@ -20557,6 +20774,10 @@ async function handleCommand(
   if (name === "delete") { await handleDeleteItem(env, interaction, getOption(interaction,"item")); return; }
   if (name === "suggest") { await handleSuggestion(env, interaction, getOption(interaction,"message")); return; }
   if (name === "help") { await handleHelp(env, interaction); return; }
+  if (name === "oracle") { await handleOracle(env, interaction); return; }
+  if (name === "curse") { await handleCurse(env, interaction); return; }
+  if (name === "lore") { await handleLore(env, interaction); return; }
+  if (name === "timeline") { await handleTimeline(env, interaction); return; }
 
   if (name === "island") {
     await handleIslandCommand(env, interaction);
@@ -23092,6 +23313,11 @@ const COMMANDS = [
     description: "Ask the Fortune Tree for a silly fortune"
   },
 
+  { name: "oracle", description: "Ask the Werewives Oracle for a strange prediction", options: [{ type: 6, name: "user", description: "Optional player", required: false }] },
+  { name: "curse", description: "Give someone a harmless silly curse", options: [{ type: 6, name: "user", description: "Player to curse", required: true }] },
+  { name: "lore", description: "Reveal a strange piece of Werewives lore", options: [{ type: 6, name: "user", description: "Optional player", required: false }] },
+  { name: "timeline", description: "Peek at a ridiculous alternate timeline", options: [{ type: 6, name: "user", description: "Optional player", required: false }] },
+
   {
     name: "achievements",
     description: "View your achievements"
@@ -23949,3 +24175,4 @@ export default {
     );
   }
 };
+
