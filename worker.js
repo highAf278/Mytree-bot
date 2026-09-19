@@ -21820,14 +21820,41 @@ function pastelPlayerHasLegalMove(game,player){
   if(!player?.alive)return false;
   return pastelAvailableColors(game,player).some(color=>pastelColorCanCapture(game,player,color));
 }
-function pastelAnyLegalMoves(game){
-  return pastelStartingPlayers(game).some(p=>pastelPlayerHasLegalMove(game,p));
+function pastelPlayersWithLegalMoves(game){
+  return pastelStartingPlayers(game).filter(p=>pastelPlayerHasLegalMove(game,p));
 }
-async function pastelFinishNoMoves(env,game){
+function pastelAnyLegalMoves(game){
+  return pastelPlayersWithLegalMoves(game).length>0;
+}
+async function pastelPublishEndMessage(env,game,content){
+  const oldMessageId=game?.publicMessageId||"";
+  if(!game?.channelId)return false;
+  const payload={content,components:[],attachments:[]};
+  if(oldMessageId){
+    const updated=await discordRequest(env,`/channels/${game.channelId}/messages/${oldMessageId}`,{
+      method:"PATCH",
+      body:JSON.stringify(payload)
+    });
+    if(updated.ok)return true;
+    if(updated.status!==404)console.error("Color Chaos end message update failed:",updated.status,await updated.text());
+  }
+  try{
+    const created=await sendChannelMessage(env,game.channelId,content,[]);
+    if(created?.id&&oldMessageId&&created.id!==oldMessageId){
+      const removed=await discordRequest(env,`/channels/${game.channelId}/messages/${oldMessageId}`,{method:"DELETE"});
+      if(!removed.ok&&removed.status!==404)console.error("Old Color Chaos end message could not be removed:",removed.status,await removed.text());
+    }
+    return Boolean(created?.id);
+  }catch(error){
+    console.error("Color Chaos end message publish failed:",error);
+    return false;
+  }
+}
+async function pastelFinishNoMoves(env,game,reason="🏁 No legal moves remained for the active players."){
   const winner=pastelWinner(game);
   if(!winner)return false;
-  const results=await pastelFinish(env,game,winner.id,"🏁 No legal moves remained for the active players.");
-  await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`🏁 **COLOR CHAOS OVER!**\n\n🚫 No legal moves remained for the active players.\n🏆 <@${winner.id}> wins with the largest territory!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`).catch(()=>null);
+  const results=await pastelFinish(env,game,winner.id,reason);
+  await pastelPublishEndMessage(env,game,`🏁 **COLOR CHAOS OVER!**\n\n${reason}\n🏆 <@${winner.id}> wins with the largest territory!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`);
   return true;
 }
 
@@ -22528,11 +22555,32 @@ async function handlePastelChoose(env,interaction,gameId,colorIndex){
   const extra=Number(player.pendingPastelTurns||0)>0;
   game.round++;game.turnsSinceRefresh++;
   game.lastMove=`🎨 <@${user.id}> chose **${pastelColors(game)[color].name}** and gained **${gained} cells**.${heartsCaptured?` ${pastelPalette(game).powerCell} **${heartsCaptured} POWER CELL${heartsCaptured===1?"":"S"} CAPTURED — EXTRA TURN${heartsCaptured===1?"":"S"} STACKED!**`:""}`;
-  if(pastelGameIsUnbeatable(game)){const w=pastelWinner(game);const results=await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");await editOriginalResponse(env,interaction,{content:`${game.lastMove}\n\n🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`,components:[]});return;}
+  if(pastelGameIsUnbeatable(game)){
+    const w=pastelWinner(game);
+    const results=await pastelFinish(env,game,w.id,"🏆 An unbeatable territory lead was reached!");
+    await pastelPublishEndMessage(env,game,`${game.lastMove}\n\n🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`);
+    return;
+  }
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];const results=await pastelFinish(env,game,w.id,"🏆 Only one player remained.");await editOriginalResponse(env,interaction,{content:`🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`,components:[]});return;}
-  if(!pastelAnyLegalMoves(game)){
+  if(alive.length<=1){
+    const w=alive[0];
+    if(w){
+      const results=await pastelFinish(env,game,w.id,"🏆 Only one player remained.");
+      await pastelPublishEndMessage(env,game,`🏆 **COLOR CHAOS OVER!** <@${w.id}> wins!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`);
+    }
+    return;
+  }
+  const legalPlayers=pastelPlayersWithLegalMoves(game);
+  if(legalPlayers.length===0){
     await pastelFinishNoMoves(env,game);
+    return;
+  }
+  if(legalPlayers.length===1){
+    const w=pastelWinner(game);
+    if(w){
+      const results=await pastelFinish(env,game,w.id,"🏁 Only one active player had a legal move remaining.");
+      await pastelPublishEndMessage(env,game,`${game.lastMove}\n\n🏁 **COLOR CHAOS OVER!** <@${w.id}> wins — no other active player had a legal move remaining!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`);
+    }
     return;
   }
   if(game.turnsSinceRefresh>=game.refreshEvery)pastelRegenerate(game);
@@ -22573,14 +22621,36 @@ async function handlePastelQuit(env,interaction,gameId){
   player.pastelRating=Math.max(0,Number(player.pastelRating||0)-50);
   player.pastelLevel=pastelRatingLevel(player.pastelRating);
   await savePlayer(env,player);
-  if(game.mode==="square"&&game.needed===2){const foe=pastelStartingPlayers(game).find(p=>p.alive);const results=await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.\n\n${pastelResultsText(results,foe?.id)}`);}
+  if(game.mode==="square"&&game.needed===2){
+    const foe=pastelStartingPlayers(game).find(p=>p.alive);
+    const results=await pastelFinishRemaining(env,game,foe?.id,user.id,"🚪 A player rage quit. The opponent wins automatically!");
+    await pastelPublishEndMessage(env,game,`🚪 <@${user.id}> quit. It counts as a loss, and the opponent wins.\n\n${pastelResultsText(results,foe?.id)}`);
+    return sendText(env,interaction,`🚪 You quit. It counts as a loss, and your opponent wins.\n\n${pastelResultsText(results,foe?.id)}`);
+  }
   for(const row of game.board)for(const c of row)if(c.owner===user.id){c.owner="blackout";c.color=0;c.heart=false;c.wild=false;c.start=false;}
   const alive=Object.values(game.players).filter(p=>p.alive);
-  if(alive.length<=1){const w=alive[0];if(w){const results=await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!\n\n${pastelResultsText(results,w.id)}`);}return sendText(env,interaction,`🚪 You quit. Your territory is blacked out.`);}
+  if(alive.length<=1){
+    const w=alive[0];
+    if(w){
+      const results=await pastelFinishRemaining(env,game,w.id,user.id,"🚪 A player rage quit. The remaining player wins!");
+      await pastelPublishEndMessage(env,game,`🚪 <@${user.id}> quit. Their territory was blacked out and the remaining player wins!\n\n${pastelResultsText(results,w.id)}`);
+      return sendText(env,interaction,`🚪 You quit. Your territory is blacked out and the remaining player wins!\n\n${pastelResultsText(results,w.id)}`);
+    }
+    return sendText(env,interaction,`🚪 You quit. Your territory is blacked out.`);
+  }
   if(game.turnId===user.id){game.turnId=alive[0].id;game.turnStartedAt=Date.now();}
   game.lastMove=`🚪 **<@${user.id}> rage quit!** Their territory is now blacked out. The game continues with **${alive.length} players**.`;
-  if(!pastelAnyLegalMoves(game)){
-    await pastelFinishNoMoves(env,game);
+  const legalPlayersAfterQuit=pastelPlayersWithLegalMoves(game);
+  if(legalPlayersAfterQuit.length===0){
+    await pastelFinishNoMoves(env,game,"🏁 No legal moves remained after a player rage quit.");
+    return;
+  }
+  if(legalPlayersAfterQuit.length===1){
+    const w=pastelWinner(game);
+    if(w){
+      const results=await pastelFinishRemaining(env,game,w.id,user.id,"🏁 Only one active player had a legal move remaining after a rage quit.");
+      await pastelPublishEndMessage(env,game,`${game.lastMove}\n\n🏁 **COLOR CHAOS OVER!** <@${w.id}> wins — no other active player had a legal move remaining!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,w.id)}`);
+    }
     return;
   }
   await pastelSave(env,game);
@@ -22648,7 +22718,7 @@ async function pastelDisablePublicMessage(env,game,interaction,content){
 async function pastelForceEnd(env,game,interaction,reason="🛑 Color Chaos was ended."){
   game.status="ended";game.endReason=reason;game.endedAt=Date.now();
   await deletePastelGame(env,game);
-  await pastelDisablePublicMessage(env,game,interaction,`${reason}\n\n🌈 **COLOR CHAOS CLOSED**\nNo winner was recorded and the saved game has been cleared.`).catch(()=>null);
+  await pastelPublishEndMessage(env,game,`${reason}\n\n🌈 **COLOR CHAOS CLOSED**\nNo winner was recorded and the saved game has been cleared.`).catch(()=>null);
 }
 async function handlePastelEndVote(env,interaction,gameId){
   if(!interaction.guild_id)return sendEphemeralFollowup(env,interaction,"❌ Color Chaos is server-only.");
@@ -23344,15 +23414,24 @@ async function processPastelTimers(env){
         const winner=alive[0];
         if(winner){
           const results=await pastelFinish(env,game,winner.id,`⏰ <@${current.id}> was AFK for more than 2 minutes and forfeited.`);
-          await pastelDisablePublicMessage(env,game,{token:game.interactionToken},`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Color Chaos!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`).catch(()=>null);
+          await pastelPublishEndMessage(env,game,`⏰ **AFK TIMEOUT!** <@${current.id}> was inactive for more than **2 minutes** and forfeited.\n\n🏆 <@${winner.id}> wins Color Chaos!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`).catch(()=>null);
         }
         continue;
       }
       game.turnId=alive[0].id;
       game.turnStartedAt=now;
       game.lastMove=`⏰ **<@${current.id}> timed out!** They were AFK for more than 2 minutes and forfeited. Their territory is blacked out.`;
-      if(!pastelAnyLegalMoves(game)){
-        await pastelFinishNoMoves(env,game);
+      const legalPlayersAfterAFK=pastelPlayersWithLegalMoves(game);
+      if(legalPlayersAfterAFK.length===0){
+        await pastelFinishNoMoves(env,game,"🏁 No legal moves remained after an AFK forfeit.");
+        continue;
+      }
+      if(legalPlayersAfterAFK.length===1){
+        const winner=pastelWinner(game);
+        if(winner){
+          const results=await pastelFinish(env,game,winner.id,"🏁 Only one active player had a legal move remaining after an AFK forfeit.");
+          await pastelPublishEndMessage(env,game,`${game.lastMove}\n\n🏁 **COLOR CHAOS OVER!** <@${winner.id}> wins — no other active player had a legal move remaining!\n✨ **+${PASTEL_WIN_XP} EXP earned!**\n\n${pastelResultsText(results,winner.id)}`);
+        }
         continue;
       }
       await pastelSave(env,game);
