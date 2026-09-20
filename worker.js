@@ -3131,34 +3131,34 @@ function profileEffectColorAt(id,index,phase){
   return colors[(index+shift)%colors.length];
 }
 function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=null){
-  let str=profileSafeText(text).toUpperCase();
-  const glyphW=5*scale, gap=scale;
+  const str=profileSafeText(text).toUpperCase();
+  let drawScale=scale;
   if(maxWidth){
-    const maxChars=Math.max(1,Math.floor((maxWidth+gap)/(glyphW+gap)));
-    if(str.length>maxChars)str=str.slice(0,maxChars-1)+"?";
+    while(drawScale>1 && profileTextWidth(str,drawScale)>maxWidth) drawScale--;
   }
+  const glyphW=5*drawScale, gap=drawScale;
   let px=Math.round(x), charIndex=0;
   for(const ch of str){
-    if(ch===" "){px+=3*scale;charIndex++;continue;}
+    if(ch===" "){px+=3*drawScale;charIndex++;continue;}
     const color=profileEffectColorAt(effectId,charIndex,phase);
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
     if(effectId!=="shadow"){
       const glow=Math.max(1,Math.round(scale*0.55));
-      profileBlendFill(frame,px-glow,y-glow,5*scale+glow*2,7*scale+glow*2,color[0],color[1],color[2],45);
+      profileBlendFill(frame,px-glow,y-glow,5*drawScale+glow*2,7*drawScale+glow*2,color[0],color[1],color[2],45);
     }
     for(let ry=0;ry<7;ry++){
       const row=rows[ry];
       for(let rx=0;rx<5;rx++) if(row[rx]==="1"){
-        profileFill(frame,px+rx*scale,y+ry*scale,scale,scale,color[0],color[1],color[2],255);
+        profileFill(frame,px+rx*drawScale,y+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
       }
     }
     if(["starlight","golden","firework","frostbite","candy_rush","rainbow"].includes(effectId)){
       const shimmer=Math.sin((phase*6.28318)+(charIndex*0.8));
       if(shimmer>0.55){
-        profileBlendFill(frame,px,y,5*scale,2,255,255,255,110);
+        profileBlendFill(frame,px,y,5*drawScale,Math.max(1,Math.round(drawScale*0.65)),255,255,255,110);
       }
     }
-    px+=(5*scale+gap); charIndex++;
+    px+=(5*drawScale+gap); charIndex++;
   }
 }
 function drawProfileEffectParticles(frame,effectId,phase){
@@ -3221,8 +3221,9 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
   profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
   drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
-  drawAnimatedProfileTitle(scene,title,372,158,3,effectId,phase,345);
+  /* Draw particles first so they never erase or cover title letters. */
   drawProfileEffectParticles(scene,effectId,phase);
+  drawAnimatedProfileTitle(scene,title,372,158,3,effectId,phase,345);
   drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
   drawBitmapText(scene,effect,372,212,2,accent,350);
 
