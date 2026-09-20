@@ -1144,6 +1144,16 @@ async function encodeStaticPlusTransparentGIF(staticPng,overlayPngs,width,height
   return new Uint8Array(out);
 }
 
+async function renderProfileDirectAnimated(env,player){
+  const frames=[];
+  const frameCount=8;
+  for(let i=0;i<frameCount;i++) frames.push(await renderProfileDirectFrame(env,player,i/frameCount));
+  return await encodePNGFramesToGIF(frames,800,500,12);
+}
+async function renderProfileDirect(env,player){
+  return await renderProfileDirectFrame(env,player,0);
+}
+
 async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif") {
   const form = new FormData();
   form.append("payload_json", JSON.stringify({ content, attachments: [{ id: 0, filename }] }));
@@ -1159,33 +1169,31 @@ async function handleProfile(env, interaction) {
   const targetId=getOption(interaction,"user")||user.id;
   const player=await getPlayer(env,targetId);
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
-  if (targetId===user.id) await savePlayer(env,player,user.id);
+  if(targetId===user.id) await savePlayer(env,player,user.id);
+  const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
+  const effect=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None";
   try{
-    // Name/title effects are animated in the browser-rendered profile card.
-    // The direct PNG renderer only applied a static accent color, which made
-    // effects such as Candy Rush, Rainbow, Starlight, etc. appear broken.
-    // Browser Rendering can hang in Cloudflare and leave Discord stuck on “thinking”.
-    // Give the animated profile renderer a hard deadline, then fall back to the
-    // direct PNG renderer instead of waiting forever.
-    const gif=await Promise.race([
-      renderAnimatedProfile(env,player),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error("Animated profile render timed out after 12000ms")),12000))
-    ]);
-    const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
-    const effect=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None";
-    const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,"werewives-profile.gif",gif,"image/gif");
+    // Direct Worker-side GIF rendering: no Browser Rendering/WebSocket dependency.
+    const gif=await renderProfileDirectAnimated(env,player);
+    const response=await editOriginalResponseWithFile(
+      env,interaction,
+      `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,
+      "werewives-profile.gif",gif,"image/gif"
+    );
     if(!response.ok)throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
-    console.error("Profile animated render failed",error);
-    // Keep the direct renderer as a safe fallback if Puppeteer is unavailable.
+    console.error("Profile animated direct render failed",error);
     try{
       const png=await renderProfileDirect(env,player);
-      const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
-      const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}`,"werewives-profile.png",png,"image/png");
+      const response=await editOriginalResponseWithFile(
+        env,interaction,
+        `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,
+        "werewives-profile.png",png,"image/png"
+      );
       if(!response.ok)throw new Error(`Profile fallback upload failed: ${response.status} ${await response.text()}`);
     }catch(fallbackError){
       console.error("Profile direct fallback failed",fallbackError);
-      await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
+      await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${title}\n✨ Name Effect: ${effect}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
     }
   }
 }
@@ -3097,7 +3105,89 @@ function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(
 function profileEffectColor(id){
   const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
 }
-async function renderProfileDirect(env,player){
+function profileEffectColors(id){
+  return {
+    rainbow:[[255,95,190],[255,185,80],[255,240,90],[90,225,170],[95,190,255],[175,120,255]],
+    starlight:[[255,255,255],[205,220,255],[150,190,255]],
+    petals:[[255,150,210],[245,105,180],[255,195,230],[215,120,245]],
+    inferno:[[255,245,120],[255,170,55],[255,75,35],[210,35,25]],
+    green_glow:[[210,255,210],[100,245,115],[45,210,80],[170,255,120]],
+    candy_rush:[[255,105,180],[120,205,255],[190,125,255],[255,220,90]],
+    cosmic:[[185,155,255],[115,130,255],[80,220,255],[205,110,255]],
+    firework:[[255,120,200],[100,220,255],[255,225,90],[195,145,255]],
+    royal_blood:[[255,80,100],[190,20,50],[255,210,100]],
+    enchanted:[[255,170,235],[195,135,255],[130,115,255],[255,220,255]],
+    royal_purple:[[235,185,255],[150,80,255],[255,215,120]],
+    butterflies:[[255,185,240],[155,235,255],[215,165,255],[255,255,255]],
+    shadow:[[245,245,245],[145,145,155],[65,65,75]],
+    frostbite:[[255,255,255],[190,240,255],[105,210,255],[220,250,255]],
+    golden:[[255,255,230],[255,220,85],[255,245,150],[220,165,35]],
+    spooky:[[255,255,255],[215,165,255],[255,160,90],[155,110,255]]
+  }[id] || [profileEffectColor(id)];
+}
+function profileEffectColorAt(id,index,phase){
+  const colors=profileEffectColors(id);
+  const shift=Math.floor((phase%1)*colors.length*2);
+  return colors[(index+shift)%colors.length];
+}
+function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=null){
+  let str=profileSafeText(text).toUpperCase();
+  const glyphW=5*scale, gap=scale;
+  if(maxWidth){
+    const maxChars=Math.max(1,Math.floor((maxWidth+gap)/(glyphW+gap)));
+    if(str.length>maxChars)str=str.slice(0,maxChars-1)+"?";
+  }
+  let px=Math.round(x), charIndex=0;
+  for(const ch of str){
+    if(ch===" "){px+=3*scale;charIndex++;continue;}
+    const color=profileEffectColorAt(effectId,charIndex,phase);
+    const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
+    if(effectId!=="shadow"){
+      const glow=Math.max(1,Math.round(scale*0.55));
+      profileBlendFill(frame,px-glow,y-glow,5*scale+glow*2,7*scale+glow*2,color[0],color[1],color[2],45);
+    }
+    for(let ry=0;ry<7;ry++){
+      const row=rows[ry];
+      for(let rx=0;rx<5;rx++) if(row[rx]==="1"){
+        profileFill(frame,px+rx*scale,y+ry*scale,scale,scale,color[0],color[1],color[2],255);
+      }
+    }
+    if(["starlight","golden","firework","frostbite","candy_rush","rainbow"].includes(effectId)){
+      const shimmer=Math.sin((phase*6.28318)+(charIndex*0.8));
+      if(shimmer>0.55){
+        profileBlendFill(frame,px,y,5*scale,2,255,255,255,110);
+      }
+    }
+    px+=(5*scale+gap); charIndex++;
+  }
+}
+function drawProfileEffectParticles(frame,effectId,phase){
+  if(!effectId)return;
+  const palettes=profileEffectColors(effectId);
+  const specs=[[700,145,6,0.0],[735,195,5,0.17],[690,230,4,0.31],[742,260,6,0.46],[682,275,4,0.62],[728,305,5,0.79]];
+  for(let i=0;i<specs.length;i++){
+    const [bx,by,size,offset]=specs[i];
+    const t=(phase+offset)%1;
+    const color=palettes[i%palettes.length];
+    const bob=Math.round(Math.sin(t*Math.PI*2)*7);
+    const x=bx+Math.round(Math.cos(t*Math.PI*2)*5);
+    const y=by+bob;
+    if(effectId==="inferno"){
+      profileFill(frame,x,y,size,size*2,color[0],color[1],color[2],230);
+      profileFill(frame,x+Math.floor(size/2),y-size,size,size,color[0],Math.max(40,color[1]-50),20,210);
+    } else if(effectId==="petals"||effectId==="butterflies"||effectId==="spooky"||effectId==="enchanted"){
+      profileFill(frame,x,y,size,size,color[0],color[1],color[2],230);
+      profileFill(frame,x+size,y-size,size,size,color[0],color[1],color[2],190);
+    } else if(effectId==="shadow"){
+      profileFill(frame,x,y,size,size,35,35,45,220);
+    } else {
+      profileFill(frame,x,y,size,size,color[0],color[1],color[2],225);
+      if(size>=5) profileFill(frame,x+Math.floor(size/2),y-2,2,6,255,255,255,180);
+    }
+  }
+}
+
+async function renderProfileDirectFrame(env,player,phase=0){
   const width=800,height=500;
   const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
   const [br,bgG,bb]=hexRgb(bg);
@@ -3131,7 +3221,8 @@ async function renderProfileDirect(env,player){
   drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
   profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
   drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
-  drawBitmapText(scene,title,372,158,3,accent,345);
+  drawAnimatedProfileTitle(scene,title,372,158,3,effectId,phase,345);
+  drawProfileEffectParticles(scene,effectId,phase);
   drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
   drawBitmapText(scene,effect,372,212,2,accent,350);
 
