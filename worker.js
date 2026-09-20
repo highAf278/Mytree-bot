@@ -16114,6 +16114,8 @@ const SOLO_SCENARIOS = [
     ]
   },
 
+  }
+];
 
 const SOLO_TITLES = {
   rabid_raccoon: { name: "the Rabid Raccoon", description: "Finish a Solo Mission after making a raccoon-related choice." },
