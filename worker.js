@@ -3130,59 +3130,94 @@ function profileEffectColorAt(id,index,phase){
   const shift=Math.floor((phase%1)*colors.length*2);
   return colors[(index+shift)%colors.length];
 }
+function profilePixelLine(frame,x0,y0,x1,y1,w,r,g,b,a=255){
+  x0=Math.round(x0); y0=Math.round(y0); x1=Math.round(x1); y1=Math.round(y1);
+  const dx=Math.abs(x1-x0), sx=x0<x1?1:-1, dy=-Math.abs(y1-y0), sy=y0<y1?1:-1;
+  let err=dx+dy;
+  while(true){profileFill(frame,x0-Math.floor(w/2),y0-Math.floor(w/2),w,w,r,g,b,a);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>=dy){err+=dy;x0+=sx;}if(e2<=dx){err+=dx;y0+=sy;}}
+}
+function profileDiamond(frame,x,y,s,c,a=255){
+  for(let yy=-s;yy<=s;yy++){const half=s-Math.abs(yy);profileFill(frame,x-half,y+yy,half*2+1,1,c[0],c[1],c[2],a);}
+}
+function profileStar(frame,x,y,s,c,a=255){
+  profileFill(frame,x-s,y,2*s+1,1,c[0],c[1],c[2],a);profileFill(frame,x,y-s,1,2*s+1,c[0],c[1],c[2],a);
+  if(s>2){profilePixelLine(frame,x-s+1,y-s+1,x+s-1,y+s-1,1,...c,a);profilePixelLine(frame,x+s-1,y-s+1,x-s+1,y+s-1,1,...c,a);}
+  profileFill(frame,x,y,2,2,255,255,255,Math.min(255,a));
+}
+function profilePetal(frame,x,y,s,c,flip=1){
+  profileDiamond(frame,x,y,s,c,230);profileFill(frame,x+flip*s,y-1,Math.max(2,s),2,c[0],c[1],c[2],180);
+}
+function profileButterfly(frame,x,y,s,c){
+  profileDiamond(frame,x-s,y,s,c,220);profileDiamond(frame,x+s,y,s,c,220);profileFill(frame,x-1,y-s,2,s*2+1,65,45,70,255);profileFill(frame,x,y-s-2,1,2,65,45,70,255);
+}
+function profileCandy(frame,x,y,s,c,alt){
+  const dark=[Math.max(0,c[0]-55),Math.max(0,c[1]-55),Math.max(0,c[2]-55)];
+  profileDiamond(frame,x-s-4,y,s-2,c,220);profileDiamond(frame,x+s+4,y,s-2,c,220);
+  profileFill(frame,x-s-3,y-s,s*2+7,s*2+1,dark[0],dark[1],dark[2],255);
+  profileFill(frame,x-s-2,y-s+1,s*2+5,s*2-1,c[0],c[1],c[2],255);
+  if(alt) profileFill(frame,x-1,y-s+1,3,s*2-1,255,255,255,185); else profileFill(frame,x-s,y-1,s*2+1,3,255,255,255,170);
+}
+function profileGhost(frame,x,y,s,c){
+  profileFill(frame,x-s,y-s,s*2+1,s*2,c[0],c[1],c[2],220);profileDiamond(frame,x,y-s,s,c,220);
+  profileFill(frame,x-s,y+s-1,Math.max(2,s-1),s,c[0],c[1],c[2],220);profileFill(frame,x+2,y+s-1,Math.max(2,s-1),s,c[0],c[1],c[2],220);
+  profileFill(frame,x-Math.max(2,s/2),y-2,2,2,45,35,55,255);profileFill(frame,x+Math.max(1,s/2),y-2,2,2,45,35,55,255);
+}
+function profileSnowflake(frame,x,y,s,c){
+  profilePixelLine(frame,x-s,y,x+s,y,1,...c,230);profilePixelLine(frame,x,y-s,x,y+s,1,...c,230);profilePixelLine(frame,x-s+1,y-s+1,x+s-1,y+s-1,1,...c,210);profilePixelLine(frame,x+s-1,y-s+1,x-s+1,y+s-1,1,...c,210);profileFill(frame,x-1,y-1,3,3,255,255,255,245);
+}
+function profileFlame(frame,x,y,s,c){
+  profileDiamond(frame,x,y,s,c,235);profileDiamond(frame,x,y-s,s-1,[255,90,30],220);profileDiamond(frame,x,y+1,Math.max(2,s-2),[255,235,90],245);
+}
+function profileFirework(frame,x,y,s,c){
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]) profilePixelLine(frame,x+dx*2,y+dy*2,x+dx*s,y+dy*s,1,...c,220);
+  profileFill(frame,x-1,y-1,3,3,255,255,255,255);
+}
 function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=null){
   const str=profileSafeText(text).toUpperCase();
   let drawScale=scale;
-  if(maxWidth){
-    while(drawScale>1 && profileTextWidth(str,drawScale)>maxWidth) drawScale--;
-  }
-  const glyphW=5*drawScale, gap=drawScale;
-  let px=Math.round(x), charIndex=0;
+  if(maxWidth){while(drawScale>1&&profileTextWidth(str,drawScale)>maxWidth)drawScale--;}
+  const gap=drawScale; let px=Math.round(x),charIndex=0;
   for(const ch of str){
     if(ch===" "){px+=3*drawScale;charIndex++;continue;}
-    const color=profileEffectColorAt(effectId,charIndex,phase);
+    let color=profileEffectColorAt(effectId,charIndex,phase);
+    /* Keep pale effects readable: particles carry the effect, letters stay saturated. */
+    if(effectId==="starlight") color=[115,125,175];
+    if(effectId==="petals") color=[225,70,155];
+    if(effectId==="butterflies") color=[190,75,190];
+    if(effectId==="frostbite") color=[45,145,210];
+    if(effectId==="golden") color=[190,135,15];
+    if(effectId==="spooky") color=[130,75,185];
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
-    if(effectId!=="shadow"){
-      const glow=Math.max(1,Math.round(scale*0.55));
-      profileBlendFill(frame,px-glow,y-glow,5*drawScale+glow*2,7*drawScale+glow*2,color[0],color[1],color[2],45);
-    }
-    for(let ry=0;ry<7;ry++){
-      const row=rows[ry];
-      for(let rx=0;rx<5;rx++) if(row[rx]==="1"){
-        profileFill(frame,px+rx*drawScale,y+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
-      }
-    }
-    if(["starlight","golden","firework","frostbite","candy_rush","rainbow"].includes(effectId)){
-      const shimmer=Math.sin((phase*6.28318)+(charIndex*0.8));
-      if(shimmer>0.55){
-        profileBlendFill(frame,px,y,5*drawScale,Math.max(1,Math.round(drawScale*0.65)),255,255,255,110);
-      }
-    }
-    px+=(5*drawScale+gap); charIndex++;
+    for(let ry=0;ry<7;ry++){const row=rows[ry];for(let rx=0;rx<5;rx++)if(row[rx]==="1")profileFill(frame,px+rx*drawScale,y+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);}
+    px+=5*drawScale+gap;charIndex++;
   }
 }
 function drawProfileEffectParticles(frame,effectId,phase){
   if(!effectId)return;
-  const palettes=profileEffectColors(effectId);
-  const specs=[[700,145,6,0.0],[735,195,5,0.17],[690,230,4,0.31],[742,260,6,0.46],[682,275,4,0.62],[728,305,5,0.79]];
-  for(let i=0;i<specs.length;i++){
-    const [bx,by,size,offset]=specs[i];
-    const t=(phase+offset)%1;
-    const color=palettes[i%palettes.length];
-    const bob=Math.round(Math.sin(t*Math.PI*2)*7);
-    const x=bx+Math.round(Math.cos(t*Math.PI*2)*5);
-    const y=by+bob;
-    if(effectId==="inferno"){
-      profileFill(frame,x,y,size,size*2,color[0],color[1],color[2],230);
-      profileFill(frame,x+Math.floor(size/2),y-size,size,size,color[0],Math.max(40,color[1]-50),20,210);
-    } else if(effectId==="petals"||effectId==="butterflies"||effectId==="spooky"||effectId==="enchanted"){
-      profileFill(frame,x,y,size,size,color[0],color[1],color[2],230);
-      profileFill(frame,x+size,y-size,size,size,color[0],color[1],color[2],190);
-    } else if(effectId==="shadow"){
-      profileFill(frame,x,y,size,size,35,35,45,220);
-    } else {
-      profileFill(frame,x,y,size,size,color[0],color[1],color[2],225);
-      if(size>=5) profileFill(frame,x+Math.floor(size/2),y-2,2,6,255,255,255,180);
+  const pal=profileEffectColors(effectId), tau=Math.PI*2;
+  /* Effects orbit the title/card edges so the words stay clean and readable. */
+  const pts=[[704,145,0],[736,174,.14],[710,208,.29],[682,224,.43],[738,244,.58],[696,268,.73],[730,302,.88]];
+  for(let i=0;i<pts.length;i++){
+    const [bx,by,o]=pts[i],t=(phase+o)%1,c=pal[i%pal.length];
+    const x=Math.round(bx+Math.sin(t*tau)*7), y=Math.round(by+Math.cos(t*tau)*6), s=4+(i%3);
+    switch(effectId){
+      case "petals": profilePetal(frame,x,y,Math.max(3,s-1),c,i%2?1:-1); break;
+      case "candy_rush": profileCandy(frame,x,y,Math.max(4,s-1),c,i%2); break;
+      case "butterflies": profileButterfly(frame,x,y,Math.max(3,s-2),c); break;
+      case "inferno": profileFlame(frame,x,y,Math.max(4,s-1),c); break;
+      case "firework": profileFirework(frame,x,y,Math.max(5,s+1),c); break;
+      case "frostbite": profileSnowflake(frame,x,y,Math.max(4,s),c); break;
+      case "spooky": profileGhost(frame,x,y,Math.max(4,s-1),c); break;
+      case "starlight": profileStar(frame,x,y,Math.max(3,s-1),c,235); break;
+      case "golden": profileStar(frame,x,y,Math.max(3,s-1),c,235); if(i%3===0)profileFill(frame,x-2,y+7,5,3,220,165,35,220); break;
+      case "green_glow": profileDiamond(frame,x,y,Math.max(3,s-1),c,210); profileStar(frame,x+4,y-4,2,[220,255,220],210); break;
+      case "cosmic": profileStar(frame,x,y,Math.max(3,s-1),c,225); profilePixelLine(frame,x-7,y+5,x+6,y-5,2,...pal[(i+1)%pal.length],130); break;
+      case "royal_blood": profileDiamond(frame,x,y,Math.max(3,s-1),c,235); profileFill(frame,x-1,y+s,3,4,c[0],c[1],c[2],190); break;
+      case "enchanted": profileStar(frame,x,y,Math.max(3,s-1),c,235); profileDiamond(frame,x+7,y+3,2,pal[(i+1)%pal.length],190); break;
+      case "royal_purple": profileDiamond(frame,x,y,Math.max(3,s-1),c,230); if(i%2===0)profileStar(frame,x+5,y-5,2,[255,215,120],220); break;
+      case "shadow": profilePixelLine(frame,x-7,y+4,x+7,y-4,3,45,45,58,120); profileDiamond(frame,x,y,3,[80,80,95],160); break;
+      case "rainbow": profileStar(frame,x,y,Math.max(3,s-1),c,230); break;
+      default: profileStar(frame,x,y,Math.max(3,s-1),c,220); break;
     }
   }
 }
