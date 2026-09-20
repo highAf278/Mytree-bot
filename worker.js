@@ -689,6 +689,11 @@ function defaultPlayer() {
     equippedTitle: "",
     unlockedNameEffects: [],
     equippedNameEffect: "",
+    equippedFrame: "",
+    equippedBadge: "",
+    storeTestFrame: "",
+    storeTestBadge: "",
+    storeTestNameEffect: "",
     pickleJailUntil: 0,
     pickleJailPreviousTitle: "",
     pickleJailFinePaid: false,
@@ -840,6 +845,47 @@ async function getPlayer(env, userId) {
 /* =========================================================
    TITLES + NAME EFFECTS + PROFILE CARDS
 ========================================================= */
+
+const PROFILE_FRAMES = {
+  rhinestone_princess: { name: "💎 Rhinestone Princess", label: "RHINESTONE PRINCESS", style: "rhinestone" },
+  pink_glitter_bomb: { name: "💗 Pink Glitter Bomb", label: "PINK GLITTER BOMB", style: "pink_glitter" },
+  candyland: { name: "🍬 Candyland", label: "CANDYLAND", style: "candyland" },
+  butterfly_swarm: { name: "🦋 Butterfly Swarm", label: "BUTTERFLY SWARM", style: "butterfly" },
+  rainbow_dream: { name: "🌈 Rainbow Dream", label: "RAINBOW DREAM", style: "rainbow" },
+  starfall: { name: "⭐ Starfall", label: "STARFALL", style: "starfall" },
+  spiderweb: { name: "🕸️ Spiderweb", label: "SPIDERWEB", style: "spiderweb" },
+  gothic_lace: { name: "🖤 Gothic Lace", label: "GOTHIC LACE", style: "gothic" },
+  crimson_velvet: { name: "🥀 Crimson Velvet", label: "CRIMSON VELVET", style: "crimson" },
+  royal_gold: { name: "👑 Royal Gold", label: "ROYAL GOLD", style: "royal_gold" },
+  diamond_palace: { name: "💠 Diamond Palace", label: "DIAMOND PALACE", style: "diamond" },
+  champagne: { name: "🥂 Champagne", label: "CHAMPAGNE", style: "champagne" },
+  purple_royalty: { name: "💜 Purple Royalty", label: "PURPLE ROYALTY", style: "purple" },
+  toxic_green: { name: "☢️ Toxic Green", label: "TOXIC GREEN", style: "toxic" },
+  midnight_chrome: { name: "🖤 Midnight Chrome", label: "MIDNIGHT CHROME", style: "chrome" },
+  black_ice: { name: "🧊 Black Ice", label: "BLACK ICE", style: "black_ice" },
+  haunted_manor: { name: "🎃 Haunted Manor", label: "HAUNTED MANOR", style: "haunted" }
+};
+
+const PROFILE_BADGES = {
+  vip: { name: "💎 VIP", label: "VIP", icon: "VIP", style: "diamond" },
+  big_spender: { name: "💳 Big Spender", label: "BIG SPENDER", icon: "$", style: "gold" },
+  color_chaos_champion: { name: "🌈 Color Chaos Champion", label: "COLOR CHAOS CHAMPION", icon: "CC", style: "rainbow" },
+  sparkle_hoarder: { name: "✨ Sparkle Hoarder", label: "SPARKLE HOARDER", icon: "✦", style: "sparkle" },
+  tree_keeper: { name: "🌳 Tree Keeper", label: "TREE KEEPER", icon: "TK", style: "green" },
+  royalty: { name: "👑 Royalty", label: "ROYALTY", icon: "R", style: "royal" },
+  diva: { name: "💅 Diva", label: "DIVA", icon: "D", style: "pink" },
+  butterfly_baby: { name: "🦋 Butterfly Baby", label: "BUTTERFLY BABY", icon: "B", style: "butterfly" },
+  raccoon_royalty: { name: "🦝 Raccoon Royalty", label: "RACCOON ROYALTY", icon: "RR", style: "raccoon" },
+  toxic: { name: "☢️ Toxic", label: "TOXIC", icon: "X", style: "toxic" },
+  money_magnet: { name: "💰 Money Magnet", label: "MONEY MAGNET", icon: "$", style: "money" },
+  main_character: { name: "⭐ Main Character", label: "MAIN CHARACTER", icon: "★", style: "star" },
+  king: { name: "👑 King", label: "KING", icon: "K", style: "king" },
+  alpha: { name: "🐺 Alpha", label: "ALPHA", icon: "A", style: "alpha" },
+  cool_guy: { name: "😎 Cool Guy", label: "COOL GUY", icon: "CG", style: "cool" },
+  bad_influence: { name: "😈 Bad Influence", label: "BAD INFLUENCE", icon: "BI", style: "danger" },
+  speed_demon: { name: "⚡ Speed Demon", label: "SPEED DEMON", icon: "SD", style: "speed" },
+  raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon" }
+};
 
 const NAME_EFFECTS = {
   rainbow: { name: "🌈 Rainbow", requirement: "Own 10 or more shop items." },
@@ -1164,6 +1210,46 @@ async function editOriginalResponseWithFile(env, interaction, content, filename,
   );
 }
 
+async function handleStoreTest(env, interaction){
+  if(!(await requireOwner(env,interaction))) return;
+  const user=getUserFromInteraction(interaction);
+  if(!user)return;
+  const player=await getPlayer(env,user.id);
+  const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";
+  const item=String(getOption(interaction,"item")||"").trim();
+
+  if(sub==="clear"){
+    player.storeTestFrame="";
+    player.storeTestBadge="";
+    player.storeTestNameEffect="";
+    await savePlayer(env,player,user.id);
+    return sendText(env,interaction,"🧪 **Store Test cleared!**\nYour profile is back to your real equipped cosmetics.");
+  }
+
+  if(sub==="frame"){
+    if(!PROFILE_FRAMES[item])return sendText(env,interaction,"❌ Unknown frame test item.");
+    player.storeTestFrame=item;
+    await savePlayer(env,player,user.id);
+    return sendText(env,interaction,`🧪 **Frame Test:** ${PROFILE_FRAMES[item].name}\nUse **/profile** to see it. 💎`);
+  }
+
+  if(sub==="badge"){
+    if(!PROFILE_BADGES[item])return sendText(env,interaction,"❌ Unknown badge test item.");
+    player.storeTestBadge=item;
+    await savePlayer(env,player,user.id);
+    return sendText(env,interaction,`🧪 **Badge Test:** ${PROFILE_BADGES[item].name}\nUse **/profile** to see it. 🏷️`);
+  }
+
+  if(sub==="effect"){
+    if(!NAME_EFFECTS[item])return sendText(env,interaction,"❌ Unknown Name Effect test item.");
+    player.storeTestNameEffect=item;
+    await savePlayer(env,player,user.id);
+    return sendText(env,interaction,`🧪 **Animated Effect Test:** ${NAME_EFFECTS[item].name}\nUse **/profile** to see the actual animation. ✨`);
+  }
+
+  return sendText(env,interaction,"🧪 Use `/storetest frame`, `/storetest badge`, `/storetest effect`, or `/storetest clear`.");
+}
+
 async function handleProfile(env, interaction) {
   const user=getUserFromInteraction(interaction); if(!user)return;
   const targetId=getOption(interaction,"user")||user.id;
@@ -1171,7 +1257,8 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   if(targetId===user.id) await savePlayer(env,player,user.id);
   const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
-  const effect=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None";
+  const testEffectId=profileEffectKey(player);
+  const effect=testEffectId&&NAME_EFFECTS[testEffectId]?NAME_EFFECTS[testEffectId].name:"None";
   try{
     // Direct Worker-side GIF rendering: no Browser Rendering/WebSocket dependency.
     const gif=await renderProfileDirectAnimated(env,player);
@@ -3540,6 +3627,161 @@ function drawProfileEffectParticles(frame,effectId,phase){
   }
 }
 
+function profileFrameKey(player){
+  return String(player.storeTestFrame||player.equippedFrame||"").trim();
+}
+function profileBadgeKey(player){
+  return String(player.storeTestBadge||player.equippedBadge||"").trim();
+}
+function profileEffectKey(player){
+  return String(player.storeTestNameEffect||player.equippedNameEffect||"").trim();
+}
+
+function drawProfileFrame(frame, frameId, phase=0){
+  if(!frameId || !PROFILE_FRAMES[frameId]) return;
+  const s=PROFILE_FRAMES[frameId].style;
+  const p=phase*Math.PI*2;
+  const W=frame.width,H=frame.height;
+  const rect=(x,y,w,h,c,a=255)=>profilePixelLine(frame,x,y,x+w,y,Math.max(2,h),...c,a);
+  // Outer frame always stays outside the content-safe center.
+  switch(s){
+    case "rhinestone": {
+      const c=[255,205,235], hi=[255,255,255];
+      rect(12,12,W-24,3,c,245); rect(12,H-15,W-24,3,c,245);
+      rect(12,12,3,H-24,c,245); rect(W-15,12,3,H-24,c,245);
+      const pts=[[25,25],[70,18],[130,26],[W-130,26],[W-70,18],[W-25,25],[25,H-25],[75,H-18],[W-75,H-18],[W-25,H-25]];
+      pts.forEach(([x,y],i)=>profileDiamond(frame,x,y,3,i%2?hi:c,230));
+      break;
+    }
+    case "pink_glitter": {
+      const c=[255,105,190], hi=[255,220,245];
+      rect(10,10,W-20,5,c,245); rect(10,H-15,W-20,5,c,245);
+      rect(10,10,5,H-20,c,245); rect(W-15,10,5,H-20,c,245);
+      for(let i=0;i<18;i++){const x=18+((i*97)%760), y=18+((i*61)%464); const xx=x+Math.sin(p+i)*3, yy=y+Math.cos(p*1.2+i)*3; profileStar(frame,Math.round(xx),Math.round(yy),i%3===0?3:2,i%2?hi:c,180);}
+      break;
+    }
+    case "candyland": {
+      const cols=[[255,120,190],[255,210,90],[125,210,255],[190,130,255],[125,235,180]];
+      for(let i=0;i<20;i++){const c=cols[i%cols.length]; const x=i*42; profileFill(frame,x,8,42,7,...c,245); profileFill(frame,x,H-15,42,7,...c,245);}
+      for(let i=0;i<12;i++){const c=cols[i%cols.length]; profileFill(frame,8,i*40,7,40,...c,245); profileFill(frame,W-15,i*40,7,40,...c,245);}
+      break;
+    }
+    case "butterfly": {
+      const cols=[[255,150,220],[140,215,255],[200,150,255],[255,235,120]];
+      for(let i=0;i<10;i++){const x=30+i*82, y=i%2?H-28:25; profileButterfly(frame,Math.round(x+Math.sin(p+i)*4),y,4+i%2,cols[i%cols.length]);}
+      break;
+    }
+    case "rainbow": {
+      const cols=profileEffectColors("rainbow");
+      for(let i=0;i<cols.length;i++){const y=10+i*4; profileFill(frame,10,y,W-20,4,...cols[i],235); profileFill(frame,10,H-14-y,W-20,4,...cols[i],235);}
+      for(let i=0;i<4;i++){const x=10+i*4; profileFill(frame,x,10,4,H-20,...cols[i],220); profileFill(frame,W-14-x,10,4,H-20,...cols[(i+2)%cols.length],220);}
+      break;
+    }
+    case "starfall": {
+      const c=[255,230,95], hi=[255,255,255];
+      rect(10,10,W-20,3,c,230); rect(10,H-13,W-20,3,c,230); rect(10,10,3,H-20,c,230); rect(W-13,10,3,H-20,c,230);
+      for(let i=0;i<18;i++){const x=22+((i*83)%750), y=18+((i*47)%460); const yy=((y+(phase*45*(i%3+1)))%475)+12; profileStar(frame,x,Math.round(yy),i%4===0?3:2,i%2?hi:c,190);}
+      break;
+    }
+    case "spiderweb": {
+      const c=[220,220,230];
+      for(const [cx,cy] of [[35,35],[W-35,35],[35,H-35],[W-35,H-35]]){
+        for(let r=10;r<=45;r+=9){for(let a=0;a<Math.PI*2;a+=Math.PI/12){const x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);profileFill(frame,x,y,2,2,...c,210);}}
+        for(let a=0;a<Math.PI*2;a+=Math.PI/6) profilePixelLine(frame,cx,cy,cx+Math.cos(a)*48,cy+Math.sin(a)*48,1,...c,210);
+      }
+      break;
+    }
+    case "gothic": {
+      const c=[35,28,45], hi=[170,120,190];
+      rect(10,10,W-20,7,c,245); rect(10,H-17,W-20,7,c,245); rect(10,10,7,H-20,c,245); rect(W-17,10,7,H-20,c,245);
+      for(let x=25;x<W-20;x+=28){profileDiamond(frame,x,17,3,hi,180);profileDiamond(frame,x,H-17,3,hi,180);}
+      break;
+    }
+    case "crimson": {
+      const c=[150,20,40], hi=[255,190,160];
+      rect(9,9,W-18,8,c,245); rect(9,H-17,W-18,8,c,245); rect(9,9,8,H-18,c,245); rect(W-17,9,8,H-18,c,245);
+      rect(18,18,W-36,2,hi,190); rect(18,H-20,W-36,2,hi,190);
+      break;
+    }
+    case "royal_gold": {
+      const c=[255,205,70], hi=[255,245,160];
+      rect(8,8,W-16,6,c,250); rect(8,H-14,W-16,6,c,250); rect(8,8,6,H-16,c,250); rect(W-14,8,6,H-16,c,250);
+      rect(19,19,W-38,2,hi,220); rect(19,H-21,W-38,2,hi,220); rect(19,19,2,H-40,hi,220); rect(W-21,19,2,H-40,hi,220);
+      profileCrown(frame,40,32,6,c); profileCrown(frame,W-40,32,6,c);
+      break;
+    }
+    case "diamond": {
+      const c=[170,220,255], hi=[255,255,255];
+      rect(10,10,W-20,4,c,230); rect(10,H-14,W-20,4,c,230); rect(10,10,4,H-20,c,230); rect(W-14,10,4,H-20,c,230);
+      for(const [x,y] of [[28,28],[W-28,28],[28,H-28],[W-28,H-28]]){profileDiamond(frame,x,y,7,c,220);profileDiamond(frame,x,y,3,hi,240);}
+      break;
+    }
+    case "champagne": {
+      const c=[235,190,90], hi=[255,240,160];
+      rect(10,10,W-20,4,c,235); rect(10,H-14,W-20,4,c,235); rect(10,10,4,H-20,c,235); rect(W-14,10,4,H-20,c,235);
+      for(let i=0;i<16;i++){const x=20+((i*67)%750), y=20+((i*31)%450); const yy=y-((phase*35+i*5)%28); profileFill(frame,x,Math.round(yy),3,3,...(i%2?hi:c),190);}
+      break;
+    }
+    case "purple": {
+      const c=[150,75,255], hi=[235,190,255];
+      rect(9,9,W-18,7,c,245); rect(9,H-16,W-18,7,c,245); rect(9,9,7,H-18,c,245); rect(W-16,9,7,H-18,c,245);
+      profileCrown(frame,42,34,7,hi); profileCrown(frame,W-42,34,7,hi);
+      break;
+    }
+    case "toxic": {
+      const c=[90,255,70], hi=[210,255,100];
+      rect(8,8,W-16,6,c,250); rect(8,H-14,W-16,6,c,250); rect(8,8,6,H-16,c,250); rect(W-14,8,6,H-16,c,250);
+      for(let i=0;i<14;i++){const x=20+((i*59)%755), y=20+((i*43)%455); profileStar(frame,x,y,2,i%3?c:hi,210);}
+      break;
+    }
+    case "chrome": {
+      const c=[180,190,205], hi=[245,250,255], dark=[55,60,70];
+      rect(8,8,W-16,5,dark,245); rect(8,H-13,W-16,5,dark,245); rect(8,8,5,H-16,dark,245); rect(W-13,8,5,H-16,dark,245);
+      rect(16,16,W-32,2,hi,230); rect(16,H-18,W-32,2,c,230);
+      break;
+    }
+    case "black_ice": {
+      const dark=[18,24,35], ice=[130,225,255], hi=[225,250,255];
+      rect(8,8,W-16,7,dark,250); rect(8,H-15,W-16,7,dark,250); rect(8,8,7,H-16,dark,250); rect(W-15,8,7,H-16,dark,250);
+      for(let i=0;i<10;i++){const x=25+i*78; profileSnowflake(frame,x,22,4, i%2?ice:hi); profileSnowflake(frame,x,H-22,4, i%2?hi:ice);}
+      break;
+    }
+    case "haunted": {
+      const orange=[245,125,25], dark=[45,20,25], purple=[135,75,180];
+      rect(8,8,W-16,7,dark,250); rect(8,H-15,W-16,7,dark,250); rect(8,8,7,H-16,dark,250); rect(W-15,8,7,H-16,dark,250);
+      for(let i=0;i<7;i++){const x=35+i*115; profilePumpkin(frame,x,20,5,orange,phase+i*.1);}
+      for(let i=0;i<5;i++){const x=70+i*150; profileGhost(frame,x,H-27,4,i%2?purple:[230,230,240]);}
+      break;
+    }
+  }
+}
+
+function drawProfileBadge(frame,badgeId){
+  if(!badgeId || !PROFILE_BADGES[badgeId]) return;
+  const b=PROFILE_BADGES[badgeId];
+  const colors={
+    diamond:[[125,205,255],[245,255,255]],gold:[[245,190,55],[255,240,150]],
+    rainbow:[[255,110,190],[100,210,255]],sparkle:[[255,225,90],[255,255,255]],
+    green:[[80,205,95],[185,255,170]],royal:[[160,95,255],[255,220,110]],
+    pink:[[255,100,190],[255,210,240]],butterfly:[[170,120,255],[180,235,255]],
+    raccoon:[[125,95,75],[220,180,140]],toxic:[[80,255,75],[205,255,110]],
+    money:[[70,190,95],[255,225,80]],star:[[255,190,55],[255,240,140]],
+    king:[[60,70,90],[255,215,80]],alpha:[[90,100,115],[220,235,255]],
+    cool:[[50,160,230],[180,240,255]],danger:[[220,55,65],[255,150,120]],
+    speed:[[80,210,255],[240,255,255]]
+  };
+  const [base,hi]=colors[b.style]||[[150,150,160],[255,255,255]];
+  const x=350,y=404,w=394,h=25;
+  profileBlendFill(frame,x,y,w,h,base[0],base[1],base[2],220);
+  profileFill(frame,x,y,w,2,hi[0],hi[1],hi[2],220);
+  profileFill(frame,x,y+h-2,w,2,hi[0],hi[1],hi[2],180);
+  drawBitmapText(frame,b.label,370,411,1,hi,350);
+  // small badge emblem at the left, rendered as shapes rather than emoji.
+  if(["diamond","royal"].includes(b.style)) profileDiamond(frame,358,416,4,hi,240);
+  else if(["star","sparkle","speed"].includes(b.style)) profileStar(frame,358,416,4,hi,240);
+  else profileFill(frame,354,412,8,8,hi[0],hi[1],hi[2],230);
+}
+
 async function renderProfileDirectFrame(env,player,phase=0){
   const width=800,height=500;
   const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
@@ -3562,7 +3804,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   if(decorFile){
     try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
-  const effectId=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?player.equippedNameEffect:"";
+  const effectId=profileEffectKey(player)&&NAME_EFFECTS[profileEffectKey(player)]?profileEffectKey(player):"";
   const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
   const title=titleId?SOLO_TITLES[titleId].name:"No Title";
   const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
@@ -3590,6 +3832,8 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
   drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
   drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,435,2,[100,88,110],390);
+  drawProfileBadge(scene,profileBadgeKey(player));
+  drawProfileFrame(scene,profileFrameKey(player),phase);
   return rgbaToRgbPng(scene);
 }
 
@@ -21554,6 +21798,7 @@ async function handleCommand(
   if (name === "court-leaderboard") { await handleCourtLeaderboard(env, interaction); return; }
 
   if (name === "profile") { await handleProfile(env, interaction); return; }
+  if (name === "storetest") { await handleStoreTest(env, interaction); return; }
   if (name === "panel") { const sub = interaction.data?.options?.find(option => option.type === 1)?.name; if (sub === "color") await handleProfileColor(env, interaction, (interaction.data?.options?.find(option => option.type === 1)?.options?.find(option => option.name === "hex")?.value ?? null)); return; }
   if (name === "present") { await handlePresentItem(env, interaction, getOption(interaction,"user"), getOption(interaction,"item")); return; }
   if (name === "delete") { await handleDeleteItem(env, interaction, getOption(interaction,"item")); return; }
@@ -23928,6 +24173,90 @@ const COMMANDS = [
   {
     name: "court-leaderboard",
     description: "View the Raccoon Court leaderboard"
+  },
+
+  {
+    name: "storetest",
+    description: "Owner-only preview of future profile shop cosmetics",
+    options: [
+      {
+        type: 1,
+        name: "frame",
+        description: "Preview a profile frame without buying it",
+        options: [
+          { name: '💎 Rhinestone Princess', value: "rhinestone_princess" },
+          { name: '💗 Pink Glitter Bomb', value: "pink_glitter_bomb" },
+          { name: '🍬 Candyland', value: "candyland" },
+          { name: '🦋 Butterfly Swarm', value: "butterfly_swarm" },
+          { name: '🌈 Rainbow Dream', value: "rainbow_dream" },
+          { name: '⭐ Starfall', value: "starfall" },
+          { name: '🕸️ Spiderweb', value: "spiderweb" },
+          { name: '🖤 Gothic Lace', value: "gothic_lace" },
+          { name: '🥀 Crimson Velvet', value: "crimson_velvet" },
+          { name: '👑 Royal Gold', value: "royal_gold" },
+          { name: '💠 Diamond Palace', value: "diamond_palace" },
+          { name: '🥂 Champagne', value: "champagne" },
+          { name: '💜 Purple Royalty', value: "purple_royalty" },
+          { name: '☢️ Toxic Green', value: "toxic_green" },
+          { name: '🖤 Midnight Chrome', value: "midnight_chrome" },
+          { name: '🧊 Black Ice', value: "black_ice" },
+          { name: '🎃 Haunted Manor', value: "haunted_manor" }
+        ]
+      },
+      {
+        type: 1,
+        name: "badge",
+        description: "Preview a profile badge without buying it",
+        options: [
+          { name: '💎 VIP', value: "vip" },
+          { name: '💳 Big Spender', value: "big_spender" },
+          { name: '🌈 Color Chaos Champion', value: "color_chaos_champion" },
+          { name: '✨ Sparkle Hoarder', value: "sparkle_hoarder" },
+          { name: '🌳 Tree Keeper', value: "tree_keeper" },
+          { name: '👑 Royalty', value: "royalty" },
+          { name: '💅 Diva', value: "diva" },
+          { name: '🦋 Butterfly Baby', value: "butterfly_baby" },
+          { name: '🦝 Raccoon Royalty', value: "raccoon_royalty" },
+          { name: '☢️ Toxic', value: "toxic" },
+          { name: '💰 Money Magnet', value: "money_magnet" },
+          { name: '⭐ Main Character', value: "main_character" },
+          { name: '👑 King', value: "king" },
+          { name: '🐺 Alpha', value: "alpha" },
+          { name: '😎 Cool Guy', value: "cool_guy" },
+          { name: '😈 Bad Influence', value: "bad_influence" },
+          { name: '⚡ Speed Demon', value: "speed_demon" },
+          { name: '🦝 Raccoon Boss', value: "raccoon_boss" }
+        ]
+      },
+      {
+        type: 1,
+        name: "effect",
+        description: "Preview a Name Effect without unlocking it",
+        options: [
+          { name: '🌈 Rainbow', value: "rainbow" },
+          { name: '✨ Starlight', value: "starlight" },
+          { name: '🌸 Petals', value: "petals" },
+          { name: '🔥 Inferno', value: "inferno" },
+          { name: '💚 Green Glow', value: "green_glow" },
+          { name: '🍭 Candy Rush', value: "candy_rush" },
+          { name: '🌌 Cosmic', value: "cosmic" },
+          { name: '🎆 Firework', value: "firework" },
+          { name: '🩸 Royal Blood', value: "royal_blood" },
+          { name: '🪄 Enchanted', value: "enchanted" },
+          { name: '👑 Royal Purple', value: "royal_purple" },
+          { name: '🦋 Butterflies', value: "butterflies" },
+          { name: '🖤 Shadow', value: "shadow" },
+          { name: '❄️ Frostbite', value: "frostbite" },
+          { name: '💛✨ Golden', value: "golden" },
+          { name: '👻 Spooky', value: "spooky" }
+        ]
+      },
+      {
+        type: 1,
+        name: "clear",
+        description: "Clear all Store Test cosmetics"
+      }
+    ]
   },
 
   {
