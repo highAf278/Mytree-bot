@@ -3771,15 +3771,36 @@ function drawProfileBadge(frame,badgeId){
     speed:[[80,210,255],[240,255,255]]
   };
   const [base,hi]=colors[b.style]||[[150,150,160],[255,255,255]];
-  const x=350,y=404,w=394,h=25;
-  profileBlendFill(frame,x,y,w,h,base[0],base[1],base[2],220);
-  profileFill(frame,x,y,w,2,hi[0],hi[1],hi[2],220);
-  profileFill(frame,x,y+h-2,w,2,hi[0],hi[1],hi[2],180);
-  drawBitmapText(frame,b.label,370,411,1,hi,350);
-  // small badge emblem at the left, rendered as shapes rather than emoji.
-  if(["diamond","royal"].includes(b.style)) profileDiamond(frame,358,416,4,hi,240);
-  else if(["star","sparkle","speed"].includes(b.style)) profileStar(frame,358,416,4,hi,240);
-  else profileFill(frame,354,412,8,8,hi[0],hi[1],hi[2],230);
+
+  /* Compact collectible-style badge plaque. It sits beneath the stats instead
+     of looking like another full-width profile information bar. */
+  const x=438,y=402,w=218,h=34;
+  profileBlendFill(frame,x+2,y+2,w-4,h-4,20,16,28,70);
+  profileFill(frame,x,y,w,2,hi[0],hi[1],hi[2],240);
+  profileFill(frame,x,y+h-2,w,2,base[0],base[1],base[2],240);
+  profileFill(frame,x,y+2,2,h-4,base[0],base[1],base[2],220);
+  profileFill(frame,x+w-2,y+2,2,h-4,hi[0],hi[1],hi[2],220);
+
+  /* Small emblem tile. */
+  const ex=x+7, ey=y+5;
+  profileFill(frame,ex,ey,24,24,base[0],base[1],base[2],235);
+  profileFill(frame,ex+2,ey+2,20,20,20,16,28,180);
+  if(["diamond","royal"].includes(b.style)) profileDiamond(frame,ex+12,ey+12,6,hi,255);
+  else if(["star","sparkle","speed"].includes(b.style)) profileStar(frame,ex+12,ey+12,6,hi,255);
+  else if(b.style==="rainbow"){
+    profileFill(frame,ex+4,ey+6,16,3,255,90,160,255);
+    profileFill(frame,ex+4,ey+10,16,3,120,210,255,255);
+    profileFill(frame,ex+4,ey+14,16,3,180,130,255,255);
+  } else if(b.style==="money"){
+    profileFill(frame,ex+8,ey+5,8,14,hi[0],hi[1],hi[2],255);
+    profileFill(frame,ex+6,ey+8,12,8,hi[0],hi[1],hi[2],255);
+  } else {
+    profileFill(frame,ex+7,ey+7,10,10,hi[0],hi[1],hi[2],245);
+    profileFill(frame,ex+9,ey+5,6,14,hi[0],hi[1],hi[2],245);
+  }
+
+  drawBitmapText(frame,"BADGE",ex+31,y+4,1,[135,125,145],145);
+  drawBitmapText(frame,b.label,ex+31,y+15,1,hi,160);
 }
 
 async function renderProfileDirectFrame(env,player,phase=0){
@@ -3822,7 +3843,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
   drawBitmapText(scene,effect,372,212,2,accent,350);
 
-  profileBlendFill(scene,350,250,394,155,255,255,255,100);
+  profileBlendFill(scene,350,250,394,145,255,255,255,100);
   drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
   drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
   drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
@@ -3831,7 +3852,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
   drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
   drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
-  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,435,2,[100,88,110],390);
+  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,444,2,[100,88,110],390);
   drawProfileBadge(scene,profileBadgeKey(player));
   drawProfileFrame(scene,profileFrameKey(player),phase);
   return rgbaToRgbPng(scene);
