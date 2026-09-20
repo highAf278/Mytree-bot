@@ -24184,6 +24184,12 @@ const COMMANDS = [
         name: "frame",
         description: "Preview a profile frame without buying it",
         options: [
+          {
+            type: 3,
+            name: "item",
+            description: "Choose a frame to preview",
+            required: true,
+            choices: [
           { type: 3, name: '💎 Rhinestone Princess', value: "rhinestone_princess" },
           { type: 3, name: '💗 Pink Glitter Bomb', value: "pink_glitter_bomb" },
           { type: 3, name: '🍬 Candyland', value: "candyland" },
@@ -24201,6 +24207,8 @@ const COMMANDS = [
           { type: 3, name: '🖤 Midnight Chrome', value: "midnight_chrome" },
           { type: 3, name: '🧊 Black Ice', value: "black_ice" },
           { type: 3, name: '🎃 Haunted Manor', value: "haunted_manor" }
+            ]
+          }
         ]
       },
       {
@@ -24208,6 +24216,12 @@ const COMMANDS = [
         name: "badge",
         description: "Preview a profile badge without buying it",
         options: [
+          {
+            type: 3,
+            name: "item",
+            description: "Choose a badge to preview",
+            required: true,
+            choices: [
           { type: 3, name: '💎 VIP', value: "vip" },
           { type: 3, name: '💳 Big Spender', value: "big_spender" },
           { type: 3, name: '🌈 Color Chaos Champion', value: "color_chaos_champion" },
@@ -24226,6 +24240,8 @@ const COMMANDS = [
           { type: 3, name: '😈 Bad Influence', value: "bad_influence" },
           { type: 3, name: '⚡ Speed Demon', value: "speed_demon" },
           { type: 3, name: '🦝 Raccoon Boss', value: "raccoon_boss" }
+            ]
+          }
         ]
       },
       {
@@ -24233,6 +24249,12 @@ const COMMANDS = [
         name: "effect",
         description: "Preview a Name Effect without unlocking it",
         options: [
+          {
+            type: 3,
+            name: "item",
+            description: "Choose a effect to preview",
+            required: true,
+            choices: [
           { type: 3, name: '🌈 Rainbow', value: "rainbow" },
           { type: 3, name: '✨ Starlight', value: "starlight" },
           { type: 3, name: '🌸 Petals', value: "petals" },
@@ -24249,6 +24271,8 @@ const COMMANDS = [
           { type: 3, name: '❄️ Frostbite', value: "frostbite" },
           { type: 3, name: '💛✨ Golden', value: "golden" },
           { type: 3, name: '👻 Spooky', value: "spooky" }
+            ]
+          }
         ]
       },
       {
@@ -24257,7 +24281,7 @@ const COMMANDS = [
         description: "Clear all Store Test cosmetics"
       }
     ]
-  },
+  }
 
   {
     name: "profile",
