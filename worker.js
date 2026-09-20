@@ -1164,7 +1164,13 @@ async function handleProfile(env, interaction) {
     // Name/title effects are animated in the browser-rendered profile card.
     // The direct PNG renderer only applied a static accent color, which made
     // effects such as Candy Rush, Rainbow, Starlight, etc. appear broken.
-    const gif=await renderAnimatedProfile(env,player);
+    // Browser Rendering can hang in Cloudflare and leave Discord stuck on “thinking”.
+    // Give the animated profile renderer a hard deadline, then fall back to the
+    // direct PNG renderer instead of waiting forever.
+    const gif=await Promise.race([
+      renderAnimatedProfile(env,player),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error("Animated profile render timed out after 12000ms")),12000))
+    ]);
     const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
     const effect=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None";
     const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,"werewives-profile.gif",gif,"image/gif");
