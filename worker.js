@@ -3275,6 +3275,130 @@ function profileCrown(frame,x,y,s,c){
   for(const dx of [-w+2,-2,w-2]) profileDiamond(frame,x+dx,y-7,2,c,240);
   profileFill(frame,x-1,y-4,2,4,255,245,150,220);
 }
+function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=null){
+  const str=profileSafeText(text).toUpperCase();
+  let drawScale=scale;
+  if(maxWidth){while(drawScale>1&&profileTextWidth(str,drawScale)>maxWidth)drawScale--;}
+  const gap=drawScale;
+  const colors=profileEffectColors(effectId);
+  const t=phase*Math.PI*2;
+  let px=Math.round(x),charIndex=0;
+
+  /* The title itself is animated, but NEVER with the old left-to-right color
+     sweep. Each Name Effect gets a different, small motion/color behavior so
+     the title stays readable while still feeling alive. */
+  let baseY=Math.round(y);
+  if(effectId==="rainbow") baseY+=Math.round(Math.sin(t)*1.5);
+  else if(effectId==="candy_rush") baseY+=Math.round(Math.sin(t*2)*1.5);
+  else if(effectId==="petals") baseY+=Math.round(Math.sin(t)*1.2);
+  else if(effectId==="butterflies") baseY+=Math.round(Math.sin(t*1.5)*1.2);
+  else if(effectId==="inferno") baseY+=Math.round(Math.sin(t*2.5)*1.5);
+  else if(effectId==="starlight") baseY+=Math.round(Math.sin(t*0.8)*1);
+  else if(effectId==="cosmic") baseY+=Math.round(Math.sin(t*1.2)*1.5);
+  else if(effectId==="firework") baseY+=Math.round(Math.sin(t*2)*1);
+  else if(effectId==="royal_blood") baseY+=Math.round(Math.sin(t*1.1)*1);
+  else if(effectId==="enchanted") baseY+=Math.round(Math.sin(t*1.4)*1.2);
+  else if(effectId==="royal_purple") baseY+=Math.round(Math.sin(t)*1);
+  else if(effectId==="shadow") baseY+=Math.round(Math.sin(t*0.7)*1.5);
+  else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
+  else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
+  else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
+
+  for(const ch of str){
+    if(ch===" "){px+=3*drawScale;charIndex++;continue;}
+    let color=colors[charIndex%Math.max(1,colors.length)] || [42,32,48];
+    let yy=baseY;
+    let xx=px;
+    let bright=1;
+
+    if(effectId==="rainbow"){
+      /* Rainbow keeps its recognizable per-letter rainbow, while a soft pulse
+         makes the word visibly animate without sweeping colors across it. */
+      const pulse=0.82+0.18*(0.5+0.5*Math.sin(t+charIndex*0.22));
+      color=color.map(v=>Math.round(v*pulse));
+      yy+=Math.round(Math.sin(t*1.5+charIndex*0.45));
+    } else if(effectId==="candy_rush"){
+      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*2);
+      xx+=Math.round(Math.sin(t+charIndex*0.55));
+    } else if(effectId==="petals"){
+      yy+=Math.round(Math.sin(t+charIndex*0.35));
+      color=charIndex%2?[235,85,170]:[255,135,205];
+    } else if(effectId==="butterflies"){
+      yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
+      xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
+    } else if(effectId==="inferno"){
+      yy+=Math.round(Math.sin(t*3+charIndex*0.7));
+      color=(Math.sin(t*2+charIndex)>0)?[255,165,45]:[255,85,35];
+    } else if(effectId==="starlight"){
+      const tw=0.65+0.35*(0.5+0.5*Math.sin(t*2+charIndex*1.3));
+      color=[Math.round(75+120*tw),Math.round(90+125*tw),Math.round(145+110*tw)];
+    } else if(effectId==="green_glow"){
+      const pulse=0.75+0.25*(0.5+0.5*Math.sin(t*1.3+charIndex*0.25));
+      color=[Math.round(45*pulse),Math.round(205*pulse+30),Math.round(80*pulse)];
+      yy+=Math.round(Math.sin(t+charIndex*0.3));
+    } else if(effectId==="cosmic"){
+      yy+=Math.round(Math.sin(t*1.3+charIndex*0.5));
+      color=colors[(charIndex+Math.round(Math.sin(t)*0.5))%colors.length];
+    } else if(effectId==="firework"){
+      const flash=(Math.sin(t*3+charIndex*0.45)>0.72)?1.15:0.9;
+      color=color.map(v=>Math.min(255,Math.round(v*flash)));
+      yy+=Math.round(Math.sin(t*2+charIndex*0.3));
+    } else if(effectId==="royal_blood"){
+      yy+=Math.round(Math.sin(t*1.1+charIndex*0.25));
+      color=(charIndex%3===0)?[255,80,100]:[190,20,50];
+    } else if(effectId==="enchanted"){
+      yy+=Math.round(Math.sin(t*1.5+charIndex*0.4));
+      color=colors[charIndex%colors.length];
+    } else if(effectId==="royal_purple"){
+      const pulse=0.8+0.2*(0.5+0.5*Math.sin(t+charIndex*0.2));
+      color=[Math.min(255,Math.round(150*pulse)),Math.min(255,Math.round(80*pulse)),Math.min(255,Math.round(255*pulse))];
+    } else if(effectId==="shadow"){
+      yy+=Math.round(Math.sin(t*0.8+charIndex*0.5));
+      xx+=Math.round(Math.sin(t*0.5+charIndex*0.2));
+      color=charIndex%2?[180,180,190]:[75,75,85];
+    } else if(effectId==="frostbite"){
+      const shimmer=(Math.sin(t*2.2+charIndex*0.7)>0.65);
+      color=shimmer?[255,255,255]:[55,165,220];
+      yy+=Math.round(Math.sin(t+charIndex*0.25));
+    } else if(effectId==="golden"){
+      const glint=(Math.sin(t*2+charIndex*0.9)>0.72);
+      color=glint?[255,255,225]:[210,150,20];
+      yy+=Math.round(Math.sin(t*1.2+charIndex*0.25));
+    } else if(effectId==="spooky"){
+      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
+      xx+=Math.round(Math.sin(t+charIndex*0.35));
+      color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
+    }
+
+    const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
+    for(let ry=0;ry<7;ry++){
+      const row=rows[ry];
+      for(let rx=0;rx<5;rx++){
+        if(row[rx]==="1") profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
+      }
+    }
+    px+=5*drawScale+gap;
+    charIndex++;
+  }
+}
+function profileRainbowBand(frame,x,y,radius,thickness,c,phase,side=1){
+  /* Pixel-friendly rainbow arc. The arc itself stays recognizable instead of
+     becoming a row of colored blocks. */
+  const steps=34;
+  const start=side>0?Math.PI*1.05:Math.PI*0.05;
+  const end=side>0?Math.PI*1.95:Math.PI*0.95;
+  for(let band=0;band<6;band++){
+    const rr=radius-band*thickness*0.95;
+    const col=profileEffectColors("rainbow")[band];
+    for(let i=0;i<steps;i++){
+      const t=i/(steps-1);
+      const a=start+(end-start)*t + Math.sin((phase+t)*Math.PI*2)*0.012;
+      const px=Math.round(x+Math.cos(a)*rr);
+      const py=Math.round(y+Math.sin(a)*rr);
+      profileFill(frame,px,py,Math.max(2,thickness),Math.max(2,thickness),col[0],col[1],col[2],245);
+    }
+  }
+}
 function drawProfileEffectParticles(frame,effectId,phase){
   if(!effectId)return;
   const pal=profileEffectColors(effectId), p=phase*Math.PI*2;
