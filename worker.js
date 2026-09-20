@@ -16112,8 +16112,6 @@ const SOLO_SCENARIOS = [
       { label: "⭐ First-class ticket", cash: 850, heat: 30, score: 950, risky: true, message: "⭐ First class includes a surprise prize." },
       { label: "🦝 Give ticket to raccoon", cash: 950, heat: 40, health: -1, score: 1100, risky: true, message: "🦝 The raccoon returns with luggage full of mystery rewards." }
     ]
-  },
-
   }
 ];
 
