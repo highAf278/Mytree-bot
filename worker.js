@@ -3177,20 +3177,106 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   const str=profileSafeText(text).toUpperCase();
   let drawScale=scale;
   if(maxWidth){while(drawScale>1&&profileTextWidth(str,drawScale)>maxWidth)drawScale--;}
-  const gap=drawScale; let px=Math.round(x),charIndex=0;
+  const gap=drawScale;
+  const colors=profileEffectColors(effectId);
+  const t=phase*Math.PI*2;
+  let px=Math.round(x),charIndex=0;
+
+  /* The title itself is animated, but NEVER with the old left-to-right color
+     sweep. Each Name Effect gets a different, small motion/color behavior so
+     the title stays readable while still feeling alive. */
+  let baseY=Math.round(y);
+  if(effectId==="rainbow") baseY+=Math.round(Math.sin(t)*1.5);
+  else if(effectId==="candy_rush") baseY+=Math.round(Math.sin(t*2)*1.5);
+  else if(effectId==="petals") baseY+=Math.round(Math.sin(t)*1.2);
+  else if(effectId==="butterflies") baseY+=Math.round(Math.sin(t*1.5)*1.2);
+  else if(effectId==="inferno") baseY+=Math.round(Math.sin(t*2.5)*1.5);
+  else if(effectId==="starlight") baseY+=Math.round(Math.sin(t*0.8)*1);
+  else if(effectId==="cosmic") baseY+=Math.round(Math.sin(t*1.2)*1.5);
+  else if(effectId==="firework") baseY+=Math.round(Math.sin(t*2)*1);
+  else if(effectId==="royal_blood") baseY+=Math.round(Math.sin(t*1.1)*1);
+  else if(effectId==="enchanted") baseY+=Math.round(Math.sin(t*1.4)*1.2);
+  else if(effectId==="royal_purple") baseY+=Math.round(Math.sin(t)*1);
+  else if(effectId==="shadow") baseY+=Math.round(Math.sin(t*0.7)*1.5);
+  else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
+  else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
+  else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
+
   for(const ch of str){
     if(ch===" "){px+=3*drawScale;charIndex++;continue;}
-    let color=profileEffectColorAt(effectId,charIndex,phase);
-    /* Keep pale effects readable: particles carry the effect, letters stay saturated. */
-    if(effectId==="starlight") color=[115,125,175];
-    if(effectId==="petals") color=[225,70,155];
-    if(effectId==="butterflies") color=[190,75,190];
-    if(effectId==="frostbite") color=[45,145,210];
-    if(effectId==="golden") color=[190,135,15];
-    if(effectId==="spooky") color=[130,75,185];
+    let color=colors[charIndex%Math.max(1,colors.length)] || [42,32,48];
+    let yy=baseY;
+    let xx=px;
+    let bright=1;
+
+    if(effectId==="rainbow"){
+      /* Rainbow keeps its recognizable per-letter rainbow, while a soft pulse
+         makes the word visibly animate without sweeping colors across it. */
+      const pulse=0.82+0.18*(0.5+0.5*Math.sin(t+charIndex*0.22));
+      color=color.map(v=>Math.round(v*pulse));
+      yy+=Math.round(Math.sin(t*1.5+charIndex*0.45));
+    } else if(effectId==="candy_rush"){
+      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*2);
+      xx+=Math.round(Math.sin(t+charIndex*0.55));
+    } else if(effectId==="petals"){
+      yy+=Math.round(Math.sin(t+charIndex*0.35));
+      color=charIndex%2?[235,85,170]:[255,135,205];
+    } else if(effectId==="butterflies"){
+      yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
+      xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
+    } else if(effectId==="inferno"){
+      yy+=Math.round(Math.sin(t*3+charIndex*0.7));
+      color=(Math.sin(t*2+charIndex)>0)?[255,165,45]:[255,85,35];
+    } else if(effectId==="starlight"){
+      const tw=0.65+0.35*(0.5+0.5*Math.sin(t*2+charIndex*1.3));
+      color=[Math.round(75+120*tw),Math.round(90+125*tw),Math.round(145+110*tw)];
+    } else if(effectId==="green_glow"){
+      const pulse=0.75+0.25*(0.5+0.5*Math.sin(t*1.3+charIndex*0.25));
+      color=[Math.round(45*pulse),Math.round(205*pulse+30),Math.round(80*pulse)];
+      yy+=Math.round(Math.sin(t+charIndex*0.3));
+    } else if(effectId==="cosmic"){
+      yy+=Math.round(Math.sin(t*1.3+charIndex*0.5));
+      color=colors[(charIndex+Math.round(Math.sin(t)*0.5))%colors.length];
+    } else if(effectId==="firework"){
+      const flash=(Math.sin(t*3+charIndex*0.45)>0.72)?1.15:0.9;
+      color=color.map(v=>Math.min(255,Math.round(v*flash)));
+      yy+=Math.round(Math.sin(t*2+charIndex*0.3));
+    } else if(effectId==="royal_blood"){
+      yy+=Math.round(Math.sin(t*1.1+charIndex*0.25));
+      color=(charIndex%3===0)?[255,80,100]:[190,20,50];
+    } else if(effectId==="enchanted"){
+      yy+=Math.round(Math.sin(t*1.5+charIndex*0.4));
+      color=colors[charIndex%colors.length];
+    } else if(effectId==="royal_purple"){
+      const pulse=0.8+0.2*(0.5+0.5*Math.sin(t+charIndex*0.2));
+      color=[Math.min(255,Math.round(150*pulse)),Math.min(255,Math.round(80*pulse)),Math.min(255,Math.round(255*pulse))];
+    } else if(effectId==="shadow"){
+      yy+=Math.round(Math.sin(t*0.8+charIndex*0.5));
+      xx+=Math.round(Math.sin(t*0.5+charIndex*0.2));
+      color=charIndex%2?[180,180,190]:[75,75,85];
+    } else if(effectId==="frostbite"){
+      const shimmer=(Math.sin(t*2.2+charIndex*0.7)>0.65);
+      color=shimmer?[255,255,255]:[55,165,220];
+      yy+=Math.round(Math.sin(t+charIndex*0.25));
+    } else if(effectId==="golden"){
+      const glint=(Math.sin(t*2+charIndex*0.9)>0.72);
+      color=glint?[255,255,225]:[210,150,20];
+      yy+=Math.round(Math.sin(t*1.2+charIndex*0.25));
+    } else if(effectId==="spooky"){
+      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
+      xx+=Math.round(Math.sin(t+charIndex*0.35));
+      color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
+    }
+
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
-    for(let ry=0;ry<7;ry++){const row=rows[ry];for(let rx=0;rx<5;rx++)if(row[rx]==="1")profileFill(frame,px+rx*drawScale,y+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);}
-    px+=5*drawScale+gap;charIndex++;
+    for(let ry=0;ry<7;ry++){
+      const row=rows[ry];
+      for(let rx=0;rx<5;rx++){
+        if(row[rx]==="1") profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
+      }
+    }
+    px+=5*drawScale+gap;
+    charIndex++;
   }
 }
 function profileRainbowBand(frame,x,y,radius,thickness,c,phase,side=1){
