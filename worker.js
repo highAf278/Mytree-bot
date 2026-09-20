@@ -1161,13 +1161,26 @@ async function handleProfile(env, interaction) {
   if(targetId===user.id) updatePlayerIdentity(player,interaction);
   if (targetId===user.id) await savePlayer(env,player,user.id);
   try{
-    const png=await renderProfileDirect(env,player);
+    // Name/title effects are animated in the browser-rendered profile card.
+    // The direct PNG renderer only applied a static accent color, which made
+    // effects such as Candy Rush, Rainbow, Starlight, etc. appear broken.
+    const gif=await renderAnimatedProfile(env,player);
     const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
-    const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}`,"werewives-profile.png",png,"image/png");
+    const effect=player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None";
+    const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,"werewives-profile.gif",gif,"image/gif");
     if(!response.ok)throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
-    console.error("Profile direct render failed",error);
-    await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
+    console.error("Profile animated render failed",error);
+    // Keep the direct renderer as a safe fallback if Puppeteer is unavailable.
+    try{
+      const png=await renderProfileDirect(env,player);
+      const title=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title";
+      const response=await editOriginalResponseWithFile(env,interaction,`🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}`,"werewives-profile.png",png,"image/png");
+      if(!response.ok)throw new Error(`Profile fallback upload failed: ${response.status} ${await response.text()}`);
+    }catch(fallbackError){
+      console.error("Profile direct fallback failed",fallbackError);
+      await editOriginalResponse(env,interaction,{content:`🌸 **${player.displayName||player.username||"Werewife"}**'s Profile\n\n🏷️ ${player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?SOLO_TITLES[player.equippedTitle].name:"No Title"}\n✨ Name Effect: ${player.equippedNameEffect&&NAME_EFFECTS[player.equippedNameEffect]?NAME_EFFECTS[player.equippedNameEffect].name:"None"}\n🎨 Background: ${player.profileColor||"#ffd9ef"}`});
+    }
   }
 }
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
