@@ -3146,267 +3146,206 @@ function profileStar(frame,x,y,s,c,a=255){
   profileFill(frame,x,y,2,2,255,255,255,Math.min(255,a));
 }
 function profilePetal(frame,x,y,s,c,flip=1){
-  profileDiamond(frame,x,y,s,c,230);profileFill(frame,x+flip*s,y-1,Math.max(2,s),2,c[0],c[1],c[2],180);
+  // Small, clearly leaf/petal-shaped form: tapered top/bottom with a curved belly.
+  const w=Math.max(3,Math.round(s*0.72));
+  const h=Math.max(5,Math.round(s*1.35));
+  for(let row=-h;row<=h;row++){
+    const yy=row/h;
+    const width=Math.max(1,Math.round(w*(1-Math.min(0.9,Math.abs(yy)*0.72))));
+    const xx=x+Math.round(Math.sin(yy*Math.PI)*flip*1.5);
+    profileFill(frame,xx-width,y+row,width*2+1,1,c[0],c[1],c[2],235);
+  }
+  profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
 }
 function profileButterfly(frame,x,y,s,c){
-  profileDiamond(frame,x-s,y,s,c,220);profileDiamond(frame,x+s,y,s,c,220);profileFill(frame,x-1,y-s,2,s*2+1,65,45,70,255);profileFill(frame,x,y-s-2,1,2,65,45,70,255);
+  // Four rounded wing lobes + body + tiny antennae, so it reads as a butterfly.
+  const wing=Math.max(3,s);
+  profilePetal(frame,x-wing-1,y-wing/2,wing,c,-1);
+  profilePetal(frame,x-wing-1,y+wing/2,wing,c,-1);
+  profilePetal(frame,x+wing+1,y-wing/2,wing,c,1);
+  profilePetal(frame,x+wing+1,y+wing/2,wing,c,1);
+  profileFill(frame,x-1,y-wing,3,wing*2+2,55,40,65,255);
+  profilePixelLine(frame,x,y-wing,x-3,y-wing-3,1,55,40,65,230);
+  profilePixelLine(frame,x+1,y-wing,x+4,y-wing-3,1,55,40,65,230);
+  profileFill(frame,x-1,y-1,3,3,255,255,255,220);
 }
 function profileCandy(frame,x,y,s,c,alt){
+  // Plump wrapped candy with unmistakable pinched/twisted ends.
+  const w=Math.max(7,Math.round(s*1.65));
+  const h=Math.max(5,Math.round(s*0.9));
   const dark=[Math.max(0,c[0]-55),Math.max(0,c[1]-55),Math.max(0,c[2]-55)];
-  profileDiamond(frame,x-s-4,y,s-2,c,220);profileDiamond(frame,x+s+4,y,s-2,c,220);
-  profileFill(frame,x-s-3,y-s,s*2+7,s*2+1,dark[0],dark[1],dark[2],255);
-  profileFill(frame,x-s-2,y-s+1,s*2+5,s*2-1,c[0],c[1],c[2],255);
-  if(alt) profileFill(frame,x-1,y-s+1,3,s*2-1,255,255,255,185); else profileFill(frame,x-s,y-1,s*2+1,3,255,255,255,170);
+  // wrapper tails
+  for(let row=-h;row<=h;row++){
+    const pinch=Math.max(1,Math.round((h-Math.abs(row))*0.72)+1);
+    profileFill(frame,x-w-pinch,y+row,pinch,1,dark[0],dark[1],dark[2],245);
+    profileFill(frame,x+w,y+row,pinch,1,dark[0],dark[1],dark[2],245);
+  }
+  // plump center
+  for(let row=-h;row<=h;row++){
+    const curve=Math.max(3,Math.round(w-(Math.abs(row)*0.8)));
+    profileFill(frame,x-curve,y+row,curve*2+1,1,c[0],c[1],c[2],255);
+  }
+  // wrapper crinkles
+  profilePixelLine(frame,x-w-2,y-h,x-w+1,y,1,255,255,255,150);
+  profilePixelLine(frame,x+w+2,y-h,x+w-1,y,1,255,255,255,150);
+  // glossy stripe
+  if(alt) profileFill(frame,x-Math.max(1,Math.round(w*0.42)),y-h+1,2,h*2,255,255,255,185);
+  else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
 function profileGhost(frame,x,y,s,c){
-  profileFill(frame,x-s,y-s,s*2+1,s*2,c[0],c[1],c[2],220);profileDiamond(frame,x,y-s,s,c,220);
-  profileFill(frame,x-s,y+s-1,Math.max(2,s-1),s,c[0],c[1],c[2],220);profileFill(frame,x+2,y+s-1,Math.max(2,s-1),s,c[0],c[1],c[2],220);
-  profileFill(frame,x-Math.max(2,s/2),y-2,2,2,45,35,55,255);profileFill(frame,x+Math.max(1,s/2),y-2,2,2,45,35,55,255);
+  const w=Math.max(4,s), h=Math.max(6,Math.round(s*1.45));
+  // rounded head/body with a three-lobed sheet at the bottom
+  for(let row=-h;row<=h;row++){
+    const t=(row+h)/(2*h);
+    const half=Math.max(2,Math.round(w*(0.72+0.28*Math.cos((t-0.5)*Math.PI))));
+    profileFill(frame,x-half,y+row,half*2+1,1,c[0],c[1],c[2],225);
+  }
+  for(let i=-1;i<=1;i++) profileFill(frame,x+i*w/2,y+h-1,Math.max(2,Math.round(w/2)),2,c[0],c[1],c[2],225);
+  profileFill(frame,x-Math.max(1,Math.round(w*0.38)),y-2,2,2,45,35,55,255);
+  profileFill(frame,x+Math.max(1,Math.round(w*0.22)),y-2,2,2,45,35,55,255);
+  profileFill(frame,x-1,y+2,2,2,45,35,55,220);
 }
 function profileSnowflake(frame,x,y,s,c){
-  profilePixelLine(frame,x-s,y,x+s,y,1,...c,230);profilePixelLine(frame,x,y-s,x,y+s,1,...c,230);profilePixelLine(frame,x-s+1,y-s+1,x+s-1,y+s-1,1,...c,210);profilePixelLine(frame,x+s-1,y-s+1,x-s+1,y+s-1,1,...c,210);profileFill(frame,x-1,y-1,3,3,255,255,255,245);
+  const a=235;
+  profilePixelLine(frame,x-s,y,x+s,y,1,...c,a);
+  profilePixelLine(frame,x,y-s,x,y+s,1,...c,a);
+  profilePixelLine(frame,x-s+1,y-s+1,x+s-1,y+s-1,1,...c,a);
+  profilePixelLine(frame,x+s-1,y-s+1,x-s+1,y+s-1,1,...c,a);
+  // branch tips make the snowflake read as a snowflake rather than a plus sign
+  for(const [dx,dy] of [[-s+1,-s+1],[s-1,s-1],[-s+1,s-1],[s-1,-s+1]]){
+    profileFill(frame,x+dx,y+dy,2,2,255,255,255,210);
+  }
+  profileFill(frame,x-1,y-1,3,3,255,255,255,245);
 }
 function profileFlame(frame,x,y,s,c){
-  profileDiamond(frame,x,y,s,c,235);profileDiamond(frame,x,y-s,s-1,[255,90,30],220);profileDiamond(frame,x,y+1,Math.max(2,s-2),[255,235,90],245);
+  const outer=c, inner=[255,225,75];
+  const h=Math.max(6,s+2);
+  for(let row=-h;row<=h;row++){
+    const t=(row+h)/(2*h);
+    const half=Math.max(1,Math.round((1-Math.abs(t-0.52))*s*0.9));
+    const sway=Math.round(Math.sin(t*Math.PI*2)*1.5);
+    profileFill(frame,x+sway-half,y+row,half*2+1,1,outer[0],outer[1],outer[2],235);
+  }
+  for(let row=-Math.round(h*0.45);row<=Math.round(h*0.75);row++){
+    const half=Math.max(1,Math.round((1-Math.abs(row/(h*1.4)))*Math.max(2,s*0.45)));
+    profileFill(frame,x-half,y+row,half*2+1,1,inner[0],inner[1],inner[2],245);
+  }
 }
 function profileFirework(frame,x,y,s,c){
-  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]) profilePixelLine(frame,x+dx*2,y+dy*2,x+dx*s,y+dy*s,1,...c,220);
+  const burst=Math.max(3,s);
+  for(let i=0;i<8;i++){
+    const a=(Math.PI*2*i)/8;
+    const ex=Math.round(x+Math.cos(a)*burst);
+    const ey=Math.round(y+Math.sin(a)*burst);
+    profilePixelLine(frame,x,y,ex,ey,1,...c,220);
+    profileDiamond(frame,ex,ey,1,c,235);
+  }
   profileFill(frame,x-1,y-1,3,3,255,255,255,255);
 }
-function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=null){
-  const str=profileSafeText(text).toUpperCase();
-  let drawScale=scale;
-  if(maxWidth){while(drawScale>1&&profileTextWidth(str,drawScale)>maxWidth)drawScale--;}
-  const gap=drawScale;
-  const colors=profileEffectColors(effectId);
-  const t=phase*Math.PI*2;
-  let px=Math.round(x),charIndex=0;
-
-  /* The title itself is animated, but NEVER with the old left-to-right color
-     sweep. Each Name Effect gets a different, small motion/color behavior so
-     the title stays readable while still feeling alive. */
-  let baseY=Math.round(y);
-  if(effectId==="rainbow") baseY+=Math.round(Math.sin(t)*1.5);
-  else if(effectId==="candy_rush") baseY+=Math.round(Math.sin(t*2)*1.5);
-  else if(effectId==="petals") baseY+=Math.round(Math.sin(t)*1.2);
-  else if(effectId==="butterflies") baseY+=Math.round(Math.sin(t*1.5)*1.2);
-  else if(effectId==="inferno") baseY+=Math.round(Math.sin(t*2.5)*1.5);
-  else if(effectId==="starlight") baseY+=Math.round(Math.sin(t*0.8)*1);
-  else if(effectId==="cosmic") baseY+=Math.round(Math.sin(t*1.2)*1.5);
-  else if(effectId==="firework") baseY+=Math.round(Math.sin(t*2)*1);
-  else if(effectId==="royal_blood") baseY+=Math.round(Math.sin(t*1.1)*1);
-  else if(effectId==="enchanted") baseY+=Math.round(Math.sin(t*1.4)*1.2);
-  else if(effectId==="royal_purple") baseY+=Math.round(Math.sin(t)*1);
-  else if(effectId==="shadow") baseY+=Math.round(Math.sin(t*0.7)*1.5);
-  else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
-  else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
-  else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
-
-  for(const ch of str){
-    if(ch===" "){px+=3*drawScale;charIndex++;continue;}
-    let color=colors[charIndex%Math.max(1,colors.length)] || [42,32,48];
-    let yy=baseY;
-    let xx=px;
-    let bright=1;
-
-    if(effectId==="rainbow"){
-      /* Rainbow keeps its recognizable per-letter rainbow, while a soft pulse
-         makes the word visibly animate without sweeping colors across it. */
-      const pulse=0.82+0.18*(0.5+0.5*Math.sin(t+charIndex*0.22));
-      color=color.map(v=>Math.round(v*pulse));
-      yy+=Math.round(Math.sin(t*1.5+charIndex*0.45));
-    } else if(effectId==="candy_rush"){
-      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*2);
-      xx+=Math.round(Math.sin(t+charIndex*0.55));
-    } else if(effectId==="petals"){
-      yy+=Math.round(Math.sin(t+charIndex*0.35));
-      color=charIndex%2?[235,85,170]:[255,135,205];
-    } else if(effectId==="butterflies"){
-      yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
-      xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
-    } else if(effectId==="inferno"){
-      yy+=Math.round(Math.sin(t*3+charIndex*0.7));
-      color=(Math.sin(t*2+charIndex)>0)?[255,165,45]:[255,85,35];
-    } else if(effectId==="starlight"){
-      const tw=0.65+0.35*(0.5+0.5*Math.sin(t*2+charIndex*1.3));
-      color=[Math.round(75+120*tw),Math.round(90+125*tw),Math.round(145+110*tw)];
-    } else if(effectId==="green_glow"){
-      const pulse=0.75+0.25*(0.5+0.5*Math.sin(t*1.3+charIndex*0.25));
-      color=[Math.round(45*pulse),Math.round(205*pulse+30),Math.round(80*pulse)];
-      yy+=Math.round(Math.sin(t+charIndex*0.3));
-    } else if(effectId==="cosmic"){
-      yy+=Math.round(Math.sin(t*1.3+charIndex*0.5));
-      color=colors[(charIndex+Math.round(Math.sin(t)*0.5))%colors.length];
-    } else if(effectId==="firework"){
-      const flash=(Math.sin(t*3+charIndex*0.45)>0.72)?1.15:0.9;
-      color=color.map(v=>Math.min(255,Math.round(v*flash)));
-      yy+=Math.round(Math.sin(t*2+charIndex*0.3));
-    } else if(effectId==="royal_blood"){
-      yy+=Math.round(Math.sin(t*1.1+charIndex*0.25));
-      color=(charIndex%3===0)?[255,80,100]:[190,20,50];
-    } else if(effectId==="enchanted"){
-      yy+=Math.round(Math.sin(t*1.5+charIndex*0.4));
-      color=colors[charIndex%colors.length];
-    } else if(effectId==="royal_purple"){
-      const pulse=0.8+0.2*(0.5+0.5*Math.sin(t+charIndex*0.2));
-      color=[Math.min(255,Math.round(150*pulse)),Math.min(255,Math.round(80*pulse)),Math.min(255,Math.round(255*pulse))];
-    } else if(effectId==="shadow"){
-      yy+=Math.round(Math.sin(t*0.8+charIndex*0.5));
-      xx+=Math.round(Math.sin(t*0.5+charIndex*0.2));
-      color=charIndex%2?[180,180,190]:[75,75,85];
-    } else if(effectId==="frostbite"){
-      const shimmer=(Math.sin(t*2.2+charIndex*0.7)>0.65);
-      color=shimmer?[255,255,255]:[55,165,220];
-      yy+=Math.round(Math.sin(t+charIndex*0.25));
-    } else if(effectId==="golden"){
-      const glint=(Math.sin(t*2+charIndex*0.9)>0.72);
-      color=glint?[255,255,225]:[210,150,20];
-      yy+=Math.round(Math.sin(t*1.2+charIndex*0.25));
-    } else if(effectId==="spooky"){
-      yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
-      xx+=Math.round(Math.sin(t+charIndex*0.35));
-      color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
-    }
-
-    const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
-    for(let ry=0;ry<7;ry++){
-      const row=rows[ry];
-      for(let rx=0;rx<5;rx++){
-        if(row[rx]==="1") profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
-      }
-    }
-    px+=5*drawScale+gap;
-    charIndex++;
+function profileDrop(frame,x,y,s,c){
+  const h=Math.max(5,s+1);
+  for(let row=-h;row<=h;row++){
+    const t=(row+h)/(2*h);
+    const half=Math.max(1,Math.round((1-t)*s*0.85 + 1));
+    profileFill(frame,x-half,y+row,half*2+1,1,c[0],c[1],c[2],235);
   }
-}
-function profileRainbowBand(frame,x,y,radius,thickness,c,phase,side=1){
-  /* Pixel-friendly rainbow arc. The arc itself stays recognizable instead of
-     becoming a row of colored blocks. */
-  const steps=34;
-  const start=side>0?Math.PI*1.05:Math.PI*0.05;
-  const end=side>0?Math.PI*1.95:Math.PI*0.95;
-  for(let band=0;band<6;band++){
-    const rr=radius-band*thickness*0.95;
-    const col=profileEffectColors("rainbow")[band];
-    for(let i=0;i<steps;i++){
-      const t=i/(steps-1);
-      const a=start+(end-start)*t + Math.sin((phase+t)*Math.PI*2)*0.012;
-      const px=Math.round(x+Math.cos(a)*rr);
-      const py=Math.round(y+Math.sin(a)*rr);
-      profileFill(frame,px,py,Math.max(2,thickness),Math.max(2,thickness),col[0],col[1],col[2],245);
-    }
-  }
+  profileFill(frame,x-1,y-h+1,2,2,255,170,180,180);
 }
 function profileWisp(frame,x,y,len,c,phase,flip=1){
-  const pts=12;
-  let px=x,py=y;
+  const pts=16; let px=x,py=y;
   for(let i=0;i<pts;i++){
     const t=i/(pts-1);
     const nx=x+flip*t*len;
-    const ny=y+Math.sin((phase+t*0.8)*Math.PI*2)*5 + Math.sin(t*Math.PI)*7;
-    profilePixelLine(frame,px,py,nx,ny,Math.max(1,Math.round(2-t)),c[0],c[1],c[2],Math.round(170-80*t));
-    px=nx;py=ny;
+    const ny=y+Math.sin((phase+t*1.2)*Math.PI*2)*5 + Math.sin(t*Math.PI)*8;
+    profilePixelLine(frame,px,py,nx,ny,Math.max(1,Math.round(2-t)),c[0],c[1],c[2],Math.round(180-95*t));
+    px=nx; py=ny;
   }
 }
 function profileCoin(frame,x,y,s,c){
-  profileFill(frame,x-s,y-s,s*2+1,s*2+1,c[0],c[1],c[2],245);
-  profileFill(frame,x-s+2,y-s+2,s*2-3,s*2-3,255,236,120,235);
-  profileFill(frame,x-1,y-s+2,2,s*2-3,190,130,25,220);
+  const r=Math.max(3,s);
+  profileFill(frame,x-r,y-r,r*2+1,r*2+1,c[0],c[1],c[2],245);
+  profileFill(frame,x-r+2,y-r+2,r*2-3,r*2-3,255,236,120,235);
+  profileFill(frame,x-1,y-r+2,2,r*2-3,190,130,25,220);
+  profilePixelLine(frame,x-r+2,y-r+2,x+r-2,y+r-2,1,255,255,255,130);
+}
+function profileCrown(frame,x,y,s,c){
+  const w=Math.max(8,s*2+4);
+  profileFill(frame,x-w,y,w*2+1,2,c[0],c[1],c[2],240);
+  profileFill(frame,x-w+2,y-5,w*2-3,5,c[0],c[1],c[2],240);
+  for(const dx of [-w+2,-2,w-2]) profileDiamond(frame,x+dx,y-7,2,c,240);
+  profileFill(frame,x-1,y-4,2,4,255,245,150,220);
 }
 function drawProfileEffectParticles(frame,effectId,phase){
   if(!effectId)return;
-  const pal=profileEffectColors(effectId);
-  const p=phase*Math.PI*2;
-  /* Keep the title itself clean. The animation lives around the title box, and
-     every effect has its own recognizable motion instead of a shared particle. */
+  const pal=profileEffectColors(effectId), p=phase*Math.PI*2;
+  // Keep particles around the title, but make each effect unmistakable.
   switch(effectId){
     case "rainbow": {
-      profileRainbowBand(frame,382,169,42,3,pal[0],phase,1);
-      profileRainbowBand(frame,724,169,42,3,pal[0],phase,-1);
-      profileStar(frame,362,136,3,[255,255,255],220);
-      profileStar(frame,742,136,3,[255,255,255],220);
-      break;
+      profileRainbowBand(frame,382,170,45,3,pal[0],phase,1);
+      profileRainbowBand(frame,724,170,45,3,pal[0],phase,-1);
+      profileStar(frame,360,136,3,[255,255,255],220); profileStar(frame,744,136,3,[255,255,255],220); break;
     }
     case "starlight": {
-      const pts=[[360,142,0],[742,143,.2],[356,230,.45],[742,228,.7],[700,138,.9]];
-      pts.forEach(([x,y,o],i)=>{const tw=0.65+0.35*(0.5+0.5*Math.sin(p+o*6));profileStar(frame,x,y,3+(i%2),pal[i%pal.length],Math.round(150+100*tw));});
-      break;
+      const pts=[[360,140,0],[744,140,.2],[356,230,.45],[744,230,.7],[700,136,.9]];
+      pts.forEach(([x,y,o],i)=>{const tw=0.55+0.45*(0.5+0.5*Math.sin(p*2+o*7));profileStar(frame,x,y,3+(i%2),pal[i%pal.length],Math.round(145+110*tw));}); break;
     }
     case "petals": {
-      const pts=[[360,140,0],[742,142,.18],[354,190,.38],[746,196,.55],[720,232,.76]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*5, yy=y+((phase+o)%1)*12;profilePetal(frame,Math.round(xx),Math.round(yy),4+(i%2),pal[i%pal.length],i%2?-1:1);});
-      break;
+      const pts=[[360,140,0],[744,142,.18],[356,188,.38],[746,196,.55],[720,230,.76],[690,142,.92]];
+      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*0.8+o*7)*8, yy=y+((phase+o)%1)*18;profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length],i%2?-1:1);}); break;
     }
     case "inferno": {
-      const pts=[[360,225,0],[742,225,.2],[368,140,.45],[734,141,.68]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*1.2+o*6)*3, yy=y-Math.abs(Math.sin(p+o*6))*9;profileFlame(frame,Math.round(xx),Math.round(yy),4+(i%2),pal[i%pal.length]);});
-      break;
+      const pts=[[360,232,0],[744,232,.2],[366,140,.45],[734,140,.68]];
+      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*1.2+o*7)*4, yy=y-Math.abs(Math.sin(p+o*7))*11;profileFlame(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "green_glow": {
-      profileWisp(frame,355,210,28,pal[1],phase,1);
-      profileWisp(frame,742,150,28,pal[2],phase,-1);
-      profileStar(frame,370,140,3,pal[0],190); profileStar(frame,728,228,3,pal[3],190);
-      break;
+      profileWisp(frame,355,218,36,pal[1],phase,1); profileWisp(frame,744,150,36,pal[2],phase,-1);
+      profileStar(frame,370,140,3,pal[0],190); profileStar(frame,730,230,3,pal[3],190); break;
     }
     case "candy_rush": {
-      const pts=[[360,141,0],[742,141,.22],[355,230,.45],[744,230,.68]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*5,yy=y+Math.cos(p*0.8+o*6)*4;profileCandy(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length],i%2===0);});
-      break;
+      const pts=[[360,140,0],[744,140,.22],[356,230,.45],[744,230,.68],[700,137,.82]];
+      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*0.8+o*7)*8, yy=y+Math.cos(p*0.65+o*7)*5;profileCandy(frame,Math.round(xx),Math.round(yy),7+(i%2),pal[i%pal.length],i%2===0);}); break;
     }
     case "cosmic": {
-      profileWisp(frame,355,144,32,pal[0],phase,1);
-      profileWisp(frame,742,220,32,pal[2],phase,-1);
-      profileStar(frame,370,228,3,pal[1],210); profileStar(frame,725,143,3,pal[3],210);
-      break;
+      profileWisp(frame,355,145,40,pal[0],phase,1); profileWisp(frame,744,220,40,pal[2],phase,-1);
+      profileStar(frame,370,228,3,pal[1],210); profileStar(frame,725,143,3,pal[3],210); break;
     }
     case "firework": {
-      const pts=[[360,140,0],[742,142,.28],[360,228,.55],[742,228,.78]];
-      pts.forEach(([x,y,o],i)=>{const burst=2+Math.round(4*(0.5+0.5*Math.sin(p+o*6)));profileFirework(frame,x,y,burst,pal[i%pal.length]);});
-      break;
+      const pts=[[360,140,0],[744,142,.28],[360,230,.55],[744,230,.78]];
+      pts.forEach(([x,y,o],i)=>{const burst=3+Math.round(5*(0.5+0.5*Math.sin(p+o*6)));profileFirework(frame,x,y,burst,pal[i%pal.length]);}); break;
     }
     case "royal_blood": {
-      const pts=[[360,143,0],[742,143,.22],[360,228,.47],[742,228,.7]];
-      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*3;profileDiamond(frame,x,Math.round(yy),4+(i%2),pal[i%pal.length],230);profileFill(frame,x-1,Math.round(yy)+5,3,5,pal[i%pal.length][0],pal[i%pal.length][1],pal[i%pal.length][2],180);});
-      break;
+      const pts=[[360,143,0],[744,143,.22],[360,228,.47],[744,228,.7]];
+      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*4;profileDrop(frame,x,Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "enchanted": {
-      const pts=[[360,141,0],[742,142,.2],[357,228,.45],[744,228,.7]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*5,yy=y+Math.cos(p+o*6)*4;profileStar(frame,Math.round(xx),Math.round(yy),3+(i%2),pal[i%pal.length],225);profileDiamond(frame,Math.round(xx+7),Math.round(yy+2),2,pal[(i+1)%pal.length],190);});
-      break;
+      const pts=[[360,141,0],[744,142,.2],[357,228,.45],[744,228,.7]];
+      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*6,yy=y+Math.cos(p+o*6)*5;profileStar(frame,Math.round(xx),Math.round(yy),3+(i%2),pal[i%pal.length],225);profileDiamond(frame,Math.round(xx+8),Math.round(yy+2),2,pal[(i+1)%pal.length],190);}); break;
     }
     case "royal_purple": {
-      profileStar(frame,360,142,4,pal[2],235); profileStar(frame,742,142,4,pal[2],235);
-      profileDiamond(frame,360,228,4,pal[1],220); profileDiamond(frame,742,228,4,pal[1],220);
-      break;
+      profileCrown(frame,360,143,5,pal[2]); profileCrown(frame,744,143,5,pal[2]);
+      profileStar(frame,360,230,4,pal[1],220); profileStar(frame,744,230,4,pal[1],220); break;
     }
     case "butterflies": {
-      const pts=[[360,143,0],[742,143,.24],[358,226,.5],[742,226,.76]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*7,yy=y+Math.cos(p*0.8+o*6)*5;profileButterfly(frame,Math.round(xx),Math.round(yy),4+(i%2),pal[i%pal.length]);});
-      break;
+      const pts=[[360,143,0],[744,143,.24],[358,226,.5],[742,226,.76]];
+      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p+o*6)*8,yy=y+Math.cos(p*0.8+o*6)*6;profileButterfly(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "shadow": {
-      profileWisp(frame,355,150,38,pal[1],phase,1); profileWisp(frame,742,220,38,pal[2],phase,-1);
-      profileDiamond(frame,360,228,4,pal[1],150); profileDiamond(frame,740,142,4,pal[2],150);
-      break;
+      profileWisp(frame,355,150,42,pal[1],phase,1); profileWisp(frame,744,220,42,pal[2],phase,-1);
+      profileWisp(frame,360,225,28,pal[1],phase+0.4,1); break;
     }
     case "frostbite": {
-      const pts=[[360,142,0],[742,142,.22],[358,228,.48],[742,228,.7]];
-      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*3;profileSnowflake(frame,x,Math.round(yy),4+(i%2),pal[i%pal.length]);});
-      break;
+      const pts=[[360,142,0],[744,142,.22],[358,228,.48],[742,228,.7]];
+      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*4;profileSnowflake(frame,x,Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "golden": {
-      profileCoin(frame,360,142,5,pal[1]); profileCoin(frame,742,142,5,pal[2]);
-      profileStar(frame,360,228,4,pal[0],225); profileStar(frame,742,228,4,pal[1],225);
-      break;
+      profileCoin(frame,360,142,6,pal[1]); profileCoin(frame,744,142,6,pal[2]);
+      profileStar(frame,360,228,4,pal[0],225); profileStar(frame,744,228,4,pal[1],225); break;
     }
     case "spooky": {
-      const pts=[[360,143,0],[742,143,.24],[358,228,.5],[742,228,.76]];
-      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*5;profileGhost(frame,x,Math.round(yy),4+(i%2),pal[i%pal.length]);});
-      break;
+      const pts=[[360,143,0],[744,143,.24],[358,228,.5],[742,226,.76]];
+      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*6;profileGhost(frame,x,Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
-    default:
-      profileStar(frame,360,142,3,pal[0],210); profileStar(frame,742,228,3,pal[0],210);
-      break;
+    default: profileStar(frame,360,142,3,pal[0],210); profileStar(frame,744,228,3,pal[0],210); break;
   }
 }
 
