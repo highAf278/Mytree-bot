@@ -15792,7 +15792,328 @@ const SOLO_SCENARIOS = [
       { label: "🦝 Send a raccoon aboard", cash: 900, heat: 45, score: 1000, risky: true, message: "🦝 The raccoon returns before the train leaves with an entire suitcase." }
     ]
   },
-];
+
+  {
+    title: "The Locked Bakery",
+    prompt: "🥐 A bakery is closed, but a note on the door says: 'ONE PERSON MAY ENTER. PLEASE DO NOT ASK WHY.'",
+    choices: [
+      { label: "🥐 Knock politely", cash: 250, heat: -5, score: 350, message: "🥐 The baker opens the door and gives you a mystery pastry." },
+      { label: "🔐 Inspect the lock", cash: 450, heat: 20, score: 550, risky: true, message: "🔐 You notice a hidden delivery hatch and collect an abandoned tip jar." },
+      { label: "🍰 Leave a nice note", cash: 100, heat: -15, score: 220, message: "🍰 The baker later finds your note and sends you a thank-you box." },
+      { label: "🦝 Send the raccoon", cash: 650, heat: 35, score: 750, risky: true, message: "🦝 The raccoon returns carrying an entire cake. Nobody asks questions." }
+    ]
+  },
+  {
+    title: "The Four-Way Elevator",
+    prompt: "🛗 An elevator has four buttons: UP, DOWN, SECRET, and 'ABSOLUTELY NOT.'",
+    choices: [
+      { label: "⬆️ UP", cash: 350, heat: 5, score: 450, message: "⬆️ You arrive at a rooftop lounge with a generous tip jar." },
+      { label: "⬇️ DOWN", cash: 200, heat: -10, score: 300, message: "⬇️ You find a forgotten storage room full of coupons." },
+      { label: "✨ SECRET", cash: 850, heat: 30, score: 950, risky: true, message: "✨ The secret floor contains a tiny sparkle vault." },
+      { label: "🚫 ABSOLUTELY NOT", cash: 500, heat: 45, health: -1, score: 700, risky: true, message: "🚫 Naturally, you pressed it. The elevator plays a dramatic fanfare." }
+    ]
+  },
+  {
+    title: "The Mystery Package Counter",
+    prompt: "📦 A counter holds four unclaimed packages. Each has a completely different warning label.",
+    choices: [
+      { label: "🎁 'Probably Fine'", cash: 300, heat: 0, score: 400, message: "🎁 It contains a surprisingly valuable gift card." },
+      { label: "👀 'Open Carefully'", cash: 550, heat: 20, score: 650, risky: true, message: "👀 Inside is a stack of rare collectibles." },
+      { label: "🧼 'Definitely Soap'", cash: 150, heat: -10, score: 250, message: "🧼 It is, in fact, soap. Fancy soap." },
+      { label: "☁️ 'Do Not Shake'", cash: 900, heat: 50, health: -1, score: 1050, risky: true, message: "☁️ You shook it. A cloud of glitter followed you home." }
+    ]
+  },
+  {
+    title: "The Tiny Museum",
+    prompt: "🏛️ A museum displays one priceless object: a spoon wearing a crown.",
+    choices: [
+      { label: "🔎 Study the exhibit", cash: 250, heat: -5, score: 400, message: "🔎 You spot a hidden compartment in the display." },
+      { label: "👑 Compliment the spoon", cash: 350, heat: 0, score: 450, message: "👑 The curator appreciates your respect for royalty." },
+      { label: "📸 Take a picture", cash: 100, heat: -10, score: 220, message: "📸 The picture goes viral and earns a small payout." },
+      { label: "🦝 Ask the raccoon to steal it", cash: 1000, heat: 60, health: -1, score: 1200, risky: true, message: "🦝 The raccoon refuses the spoon but steals the gift shop register." }
+    ]
+  },
+  {
+    title: "The Suspicious Picnic",
+    prompt: "🧺 A perfect picnic is set up in a park with no owner anywhere nearby.",
+    choices: [
+      { label: "🍓 Eat one snack", cash: 100, heat: 0, score: 200, message: "🍓 One snack later, you find a thank-you envelope under the basket." },
+      { label: "🕵️ Search the basket", cash: 500, heat: 25, score: 650, risky: true, message: "🕵️ A hidden envelope contains a generous reward." },
+      { label: "🧺 Guard it", cash: 250, heat: -15, score: 350, message: "🧺 The owner returns and tips you for being trustworthy." },
+      { label: "🦝 Invite raccoons", cash: 700, heat: 40, score: 800, risky: true, message: "🦝 The picnic becomes a raccoon banquet. You somehow get paid." }
+    ]
+  },
+  {
+    title: "The Broken Fortune Teller",
+    prompt: "🔮 A fortune teller machine gives you four possible fortunes, but it is clearly malfunctioning.",
+    choices: [
+      { label: "🍀 Pick lucky", cash: 450, heat: 0, score: 550, message: "🍀 The machine spits out a lucky coin." },
+      { label: "👑 Pick rich", cash: 800, heat: 20, score: 850, message: "👑 A hidden drawer opens with a stack of old coins." },
+      { label: "🌪️ Pick chaos", cash: 1100, heat: 50, health: -1, score: 1300, risky: true, message: "🌪️ The machine rains coupons and sparkles everywhere." },
+      { label: "🤖 Unplug it", cash: 200, heat: -20, score: 300, message: "🤖 You discover someone left a reward envelope behind it." }
+    ]
+  },
+  {
+    title: "The Rooftop Garden",
+    prompt: "🌿 A rooftop garden has a sign: 'Take ONE flower. Please choose wisely.'",
+    choices: [
+      { label: "🌷 Pink flower", cash: 200, heat: -5, score: 300, message: "🌷 The flower leads you to a hidden donation box." },
+      { label: "🌹 Rare flower", cash: 650, heat: 20, score: 750, risky: true, message: "🌹 The rare flower comes with a reward from the gardener." },
+      { label: "🌱 Tiny sprout", cash: 100, heat: -15, health: 1, score: 250, message: "🌱 You take the sprout and somehow feel refreshed." },
+      { label: "🦝 Let the raccoon choose", cash: 800, heat: 30, score: 900, risky: true, message: "🦝 The raccoon chooses a flower AND finds a stash underneath it." }
+    ]
+  },
+  {
+    title: "The Fake Treasure Chest",
+    prompt: "🧰 A treasure chest sits in an alley with a sign reading: 'Definitely Real Treasure.'",
+    choices: [
+      { label: "🔑 Find the key", cash: 300, heat: 0, score: 450, message: "🔑 The key is hidden nearby. Inside: actual coins." },
+      { label: "💥 Force it open", cash: 750, heat: 35, health: -1, score: 900, risky: true, message: "💥 The chest opens. The lock was more dramatic than necessary." },
+      { label: "👀 Look underneath", cash: 450, heat: 5, score: 600, message: "👀 You find the real treasure taped underneath." },
+      { label: "🚶 Ignore it", cash: 150, heat: -20, score: 250, message: "🚶 You leave it alone and find a reward around the corner." }
+    ]
+  },
+  {
+    title: "The Midnight Diner",
+    prompt: "🌙 A diner offers one mysterious special. The menu simply says: 'TRUST US.'",
+    choices: [
+      { label: "🍜 Order the special", cash: 350, heat: 0, score: 450, message: "🍜 Delicious. Also, a coupon falls out of the bowl." },
+      { label: "🥞 Order pancakes", cash: 150, heat: -5, score: 250, message: "🥞 Safe, fluffy, and surprisingly profitable." },
+      { label: "🕵️ Inspect the kitchen", cash: 500, heat: 25, score: 650, risky: true, message: "🕵️ You discover the diner has a secret catering business." },
+      { label: "🦝 Let the raccoon order", cash: 750, heat: 35, score: 850, risky: true, message: "🦝 The raccoon orders twelve meals and somehow gets a loyalty bonus." }
+    ]
+  },
+  {
+    title: "The Lost Trophy",
+    prompt: "🏆 You find a trophy labeled 'World's Most Questionable Decision.' It has a cash prize attached.",
+    choices: [
+      { label: "🏆 Claim it", cash: 400, heat: 5, score: 500, message: "🏆 Apparently the trophy was looking for you." },
+      { label: "🔎 Find its owner", cash: 250, heat: -15, score: 400, message: "🔎 The owner rewards your honesty." },
+      { label: "🎭 Enter the contest", cash: 700, heat: 30, score: 900, risky: true, message: "🎭 You make one questionable decision and win the contest." },
+      { label: "🦝 Give it to raccoons", cash: 850, heat: 20, score: 950, message: "🦝 The raccoons immediately declare themselves champions." }
+    ]
+  },
+  {
+    title: "The Secret Garden Gate",
+    prompt: "🌙 A tiny gate appears between two buildings. It has no handle and glows softly.",
+    choices: [
+      { label: "🌸 Knock three times", cash: 300, heat: -5, score: 450, message: "🌸 The gate opens and gives you a flower-shaped coin." },
+      { label: "✨ Touch the glow", cash: 700, heat: 25, score: 850, risky: true, message: "✨ The gate opens to a hidden sparkle garden." },
+      { label: "🧠 Study the symbols", cash: 450, heat: 0, score: 650, message: "🧠 You decode the symbols and find the safe entrance." },
+      { label: "🚪 Walk away", cash: 100, heat: -20, score: 200, message: "🚪 You leave. The gate follows you three blocks. Eventually it pays you to stop." }
+    ]
+  },
+  {
+    title: "The Raccoon Talent Show",
+    prompt: "🎤 A raccoon talent show is underway. The prize is a suspiciously large bag of sparkles.",
+    choices: [
+      { label: "🎤 Perform", cash: 600, heat: 10, score: 800, message: "🎤 The crowd loves your performance." },
+      { label: "👏 Be the audience", cash: 200, heat: -5, score: 350, message: "👏 You clap at exactly the right moments and get paid." },
+      { label: "🕺 Dance battle", cash: 900, heat: 35, score: 1100, risky: true, message: "🕺 You accidentally become the raccoon dance champion." },
+      { label: "🦝 Coach a raccoon", cash: 750, heat: 15, score: 950, message: "🦝 Your raccoon wins first place and shares the prize." }
+    ]
+  },
+  {
+    title: "The Clock Shop",
+    prompt: "⏰ Every clock in the shop shows a different time. One has a tiny envelope taped to it.",
+    choices: [
+      { label: "🕰️ Follow the oldest clock", cash: 350, heat: 0, score: 500, message: "🕰️ The oldest clock points to a hidden drawer." },
+      { label: "✉️ Take the envelope", cash: 600, heat: 20, score: 750, risky: true, message: "✉️ The envelope contains a generous mystery reward." },
+      { label: "🧠 Find the matching times", cash: 450, heat: -5, score: 650, message: "🧠 The matching clocks reveal a secret compartment." },
+      { label: "🦝 Ask the raccoon", cash: 800, heat: 25, score: 900, message: "🦝 The raccoon somehow knows the correct clock immediately." }
+    ]
+  },
+  {
+    title: "The Giant Vending Wall",
+    prompt: "🎁 A wall of 20 vending slots offers prizes. One slot says 'NOTHING.'",
+    choices: [
+      { label: "🎁 Pick randomly", cash: 350, heat: 5, score: 450, message: "🎁 You get a decent mystery prize." },
+      { label: "🔎 Inspect the labels", cash: 500, heat: 0, score: 650, message: "🔎 You spot a hidden premium slot." },
+      { label: "💎 Pick the fanciest", cash: 900, heat: 30, score: 1050, risky: true, message: "💎 The fanciest slot actually contains something valuable." },
+      { label: "🦝 Let a raccoon choose", cash: 1100, heat: 40, score: 1250, risky: true, message: "🦝 The raccoon chooses a slot with absurdly good loot." }
+    ]
+  },
+  {
+    title: "The Wrong Delivery",
+    prompt: "📬 A courier hands you a box and says, 'This definitely belongs to someone else.'",
+    choices: [
+      { label: "📦 Return it", cash: 250, heat: -20, score: 350, message: "📦 The courier rewards your honesty." },
+      { label: "🔎 Check the label", cash: 350, heat: 0, score: 500, message: "🔎 You discover it actually belongs to you." },
+      { label: "👀 Peek inside", cash: 650, heat: 25, score: 800, risky: true, message: "👀 You find a reward coupon and immediately reseal the box." },
+      { label: "🦝 Give it to the raccoon", cash: 850, heat: 35, score: 950, risky: true, message: "🦝 The raccoon returns with the correct package and a tip." }
+    ]
+  },
+  {
+    title: "The Glitter Fountain",
+    prompt: "⛲ A fountain sprays tiny sparkles instead of water. A sign says: 'MAKE A WISH.'",
+    choices: [
+      { label: "🌟 Make a tiny wish", cash: 250, heat: -5, score: 350, message: "🌟 Your tiny wish gets a tiny reward." },
+      { label: "💰 Make a money wish", cash: 700, heat: 20, score: 800, message: "💰 A pouch appears beside the fountain." },
+      { label: "✨ Grab the sparkles", cash: 950, heat: 45, health: -1, score: 1100, risky: true, message: "✨ You scoop up a fortune before the fountain notices." },
+      { label: "🦝 Let the raccoon wish", cash: 800, heat: 10, score: 900, message: "🦝 The raccoon wishes for snacks and gets paid instead." }
+    ]
+  },
+  {
+    title: "The Puzzle Room",
+    prompt: "🧩 A room has four doors marked SUN, MOON, STAR, and CHEESE. A sign says: 'Only one is boring.'",
+    choices: [
+      { label: "☀️ SUN", cash: 350, heat: 0, score: 500, message: "☀️ The sun door opens to a bright reward room." },
+      { label: "🌙 MOON", cash: 500, heat: -5, score: 650, message: "🌙 The moon door reveals a hidden stash." },
+      { label: "⭐ STAR", cash: 750, heat: 15, score: 850, message: "⭐ The star door leads to a rare prize." },
+      { label: "🧀 CHEESE", cash: 1000, heat: 35, score: 1150, risky: true, message: "🧀 Obviously the cheese door was the correct one." }
+    ]
+  },
+  {
+    title: "The Empty Theater",
+    prompt: "🎭 A theater is completely empty except for one spotlight and a suitcase of prizes.",
+    choices: [
+      { label: "🎤 Take the stage", cash: 450, heat: 5, score: 600, message: "🎤 The empty theater gives you a standing ovation anyway." },
+      { label: "🧳 Take the suitcase", cash: 850, heat: 35, score: 950, risky: true, message: "🧳 The suitcase is legitimately full of prizes." },
+      { label: "🔎 Search the seats", cash: 300, heat: 0, score: 450, message: "🔎 You find a forgotten envelope under a seat." },
+      { label: "🦝 Send a raccoon on stage", cash: 700, heat: 20, score: 850, message: "🦝 The raccoon receives a standing ovation and a paycheck." }
+    ]
+  },
+  {
+    title: "The Suspicious Weather Report",
+    prompt: "🌦️ A weather machine offers four forecasts: SUN, RAIN, GLITTER, and PICKLES.",
+    choices: [
+      { label: "☀️ SUN", cash: 250, heat: -5, score: 350, message: "☀️ A sunny day reveals coins on the ground." },
+      { label: "🌧️ RAIN", cash: 400, heat: 0, score: 500, message: "🌧️ The rain washes a valuable token toward you." },
+      { label: "✨ GLITTER", cash: 800, heat: 30, score: 950, risky: true, message: "✨ Glitter falls from the sky and sticks to everything." },
+      { label: "🥒 PICKLES", cash: 1000, heat: 45, health: -1, score: 1200, risky: true, message: "🥒 Nobody knows why pickles started falling. You profit somehow." }
+    ]
+  },
+  {
+    title: "The Secret Library",
+    prompt: "📚 A library has one forbidden shelf labeled: 'Books That Know Things.'",
+    choices: [
+      { label: "📖 Read a safe book", cash: 250, heat: -5, score: 400, message: "📖 The book reveals a useful shortcut." },
+      { label: "🔮 Read the forbidden book", cash: 700, heat: 30, score: 900, risky: true, message: "🔮 The book reveals where a hidden reward is buried." },
+      { label: "🧠 Search the catalog", cash: 400, heat: 0, score: 600, message: "🧠 The catalog contains a clue to a secret drawer." },
+      { label: "🦝 Send a raccoon librarian", cash: 850, heat: 20, score: 1000, message: "🦝 The raccoon finds the rarest book and negotiates a reward." }
+    ]
+  },
+  {
+    title: "The Giant Plush Machine",
+    prompt: "🧸 A giant claw machine contains one enormous plushie with a suspiciously heavy pocket.",
+    choices: [
+      { label: "🪙 Try once", cash: 300, heat: 0, score: 400, message: "🪙 You win a small plush and a coin inside it." },
+      { label: "🎯 Aim carefully", cash: 550, heat: 5, score: 700, message: "🎯 Perfect grab. The plush has a hidden reward." },
+      { label: "💸 Keep trying", cash: 800, heat: 25, score: 850, risky: true, message: "💸 You empty the machine but finally get the giant plush." },
+      { label: "🦝 Give the controls to raccoon", cash: 950, heat: 35, score: 1100, risky: true, message: "🦝 The raccoon gets the giant plush on the first try." }
+    ]
+  },
+  {
+    title: "The Moonlight Market",
+    prompt: "🌙 A secret market appears for ten minutes and accepts only strange trades.",
+    choices: [
+      { label: "🪙 Trade a coin", cash: 300, heat: 0, score: 400, message: "🪙 The vendor gives you a useful little charm." },
+      { label: "✨ Trade your luck", cash: 750, heat: 25, score: 900, risky: true, message: "✨ You receive a huge reward and immediately regret the wording." },
+      { label: "🧀 Trade cheese", cash: 450, heat: -5, score: 600, message: "🧀 Cheese is apparently a respected currency." },
+      { label: "🦝 Trade a raccoon", cash: 1000, heat: 45, score: 1200, risky: true, message: "🦝 The raccoon negotiates its own contract and somehow you get paid." }
+    ]
+  },
+  {
+    title: "The Impossible Parking Spot",
+    prompt: "🚗 You find a parking spot with a sign reading: 'PARK HERE FOR A SURPRISE.'",
+    choices: [
+      { label: "🅿️ Park normally", cash: 250, heat: 0, score: 350, message: "🅿️ A parking attendant hands you a reward." },
+      { label: "🔎 Inspect the sign", cash: 450, heat: -5, score: 600, message: "🔎 The sign hides a coupon for a big prize." },
+      { label: "🎉 Park dramatically", cash: 700, heat: 25, score: 850, risky: true, message: "🎉 The dramatic entrance wins a ridiculous parking contest." },
+      { label: "🦝 Let the raccoon park", cash: 900, heat: 35, score: 1050, risky: true, message: "🦝 The raccoon parks perfectly and collects your reward." }
+    ]
+  },
+  {
+    title: "The Haunted Gift Shop",
+    prompt: "👻 A gift shop is open after hours. Every item has a tiny price tag and a tiny ghost attached.",
+    choices: [
+      { label: "🕯️ Buy a candle", cash: 200, heat: -5, score: 300, message: "🕯️ The ghost approves of your purchase." },
+      { label: "👻 Buy the haunted box", cash: 650, heat: 25, score: 800, risky: true, message: "👻 The box contains a valuable surprise." },
+      { label: "🔎 Inspect the shelves", cash: 400, heat: 0, score: 550, message: "🔎 You find an old reward envelope." },
+      { label: "🦝 Send raccoon shopping", cash: 850, heat: 30, score: 1000, risky: true, message: "🦝 The raccoon returns with the most expensive item and a discount." }
+    ]
+  },
+  {
+    title: "The Riddle Kiosk",
+    prompt: "🧠 A kiosk asks one question: 'What gets bigger the more you take away?'",
+    choices: [
+      { label: "🕳️ A hole", cash: 500, heat: 0, score: 700, message: "🧠 Correct! The kiosk rewards your brain." },
+      { label: "🧀 Cheese", cash: 250, heat: 5, score: 350, message: "🧀 Wrong, but the kiosk respects the cheese answer." },
+      { label: "💰 Ask for a hint", cash: 350, heat: -5, score: 500, message: "💰 The hint costs nothing and the kiosk gives you a reward." },
+      { label: "🦝 Ask the raccoon", cash: 800, heat: 20, score: 900, message: "🦝 The raccoon somehow gets it immediately." }
+    ]
+  },
+  {
+    title: "The Endless Staircase",
+    prompt: "🪜 A staircase has a sign: 'The prize is at the top. Probably.'",
+    choices: [
+      { label: "🪜 Climb steadily", cash: 350, heat: 0, score: 500, message: "🪜 You reach the top and find a modest prize." },
+      { label: "🏃 Sprint upward", cash: 650, heat: 30, health: -1, score: 800, risky: true, message: "🏃 You reach the top before the staircase can change its mind." },
+      { label: "🔎 Search the stairs", cash: 500, heat: -5, score: 650, message: "🔎 You find hidden coins along the way." },
+      { label: "🦝 Send raccoon first", cash: 900, heat: 25, score: 1050, message: "🦝 The raccoon reaches the top and rolls the prize back down." }
+    ]
+  },
+  {
+    title: "The Mystery Parade",
+    prompt: "🎈 A parade passes by and nobody knows what it is celebrating. One float is throwing prizes.",
+    choices: [
+      { label: "🎈 Join the parade", cash: 450, heat: 5, score: 600, message: "🎈 You are handed a prize for participating." },
+      { label: "🎁 Catch prizes", cash: 700, heat: 20, score: 850, message: "🎁 You catch several prize bags." },
+      { label: "🕵️ Find the organizer", cash: 550, heat: 0, score: 700, message: "🕵️ The organizer gives you a special prize." },
+      { label: "🦝 Put raccoon on a float", cash: 1000, heat: 35, score: 1200, risky: true, message: "🦝 The raccoon becomes the unexpected parade star." }
+    ]
+  },
+  {
+    title: "The Four Mysterious Doors",
+    prompt: "🚪 Four doors stand in a hallway: COZY, RICH, WEIRD, and RACCOON.",
+    choices: [
+      { label: "🛋️ COZY", cash: 300, heat: -10, score: 400, message: "🛋️ You find a cozy room and a thank-you envelope." },
+      { label: "💰 RICH", cash: 900, heat: 30, score: 1000, risky: true, message: "💰 The rich door opens to a glittering reward room." },
+      { label: "🌀 WEIRD", cash: 750, heat: 40, health: -1, score: 1000, risky: true, message: "🌀 Weird is an understatement. You leave with a valuable souvenir." },
+      { label: "🦝 RACCOON", cash: 1100, heat: 45, score: 1250, risky: true, message: "🦝 The door opens into a raccoon office. They hand you a bonus." }
+    ]
+  },
+  {
+    title: "The Last Cookie",
+    prompt: "🍪 One cookie remains on a plate. Beside it is a note: 'The choice is yours.'",
+    choices: [
+      { label: "🍪 Eat it", cash: 200, heat: 0, score: 300, message: "🍪 Delicious. The cookie contains a tiny reward." },
+      { label: "🤝 Share it", cash: 350, heat: -10, score: 500, message: "🤝 Sharing somehow unlocks a bigger reward." },
+      { label: "🔎 Inspect it", cash: 450, heat: 5, score: 650, message: "🔎 You find a prize hidden under the plate." },
+      { label: "🦝 Give it to raccoon", cash: 800, heat: 15, score: 900, message: "🦝 The raccoon gives you its entire snack budget in return." }
+    ]
+  },
+  {
+    title: "The Glitter Hotel",
+    prompt: "🏨 A hotel offers you four rooms. The room numbers are 101, 202, 303, and 404.",
+    choices: [
+      { label: "🛏️ Room 101", cash: 300, heat: -5, score: 400, message: "🛏️ A welcome basket contains a small reward." },
+      { label: "🛎️ Room 202", cash: 500, heat: 5, score: 650, message: "🛎️ You discover a hidden hotel loyalty bonus." },
+      { label: "✨ Room 303", cash: 800, heat: 25, score: 950, risky: true, message: "✨ The room is made entirely of glitter and contains a treasure chest." },
+      { label: "🦝 Room 404", cash: 1000, heat: 40, health: -1, score: 1200, risky: true, message: "🦝 Room 404 is a raccoon conference. They pay you to leave." }
+    ]
+  },
+  {
+    title: "The Unclaimed Crown",
+    prompt: "👑 A jeweled crown sits on a velvet cushion with a sign: 'TRY ME.'",
+    choices: [
+      { label: "👑 Try it", cash: 550, heat: 10, score: 700, message: "👑 The crown declares you honorary royalty and pays you." },
+      { label: "🔎 Inspect it", cash: 400, heat: 0, score: 600, message: "🔎 You find a hidden prize beneath the cushion." },
+      { label: "🙅 Leave it", cash: 250, heat: -15, score: 350, message: "🙅 You resist temptation and find a reward nearby." },
+      { label: "🦝 Put it on the raccoon", cash: 1000, heat: 35, score: 1200, risky: true, message: "🦝 The raccoon becomes king and grants you a royal payout." }
+    ]
+  },
+  {
+    title: "The Strange Train Station",
+    prompt: "🚉 A train arrives with no destination listed. The conductor offers four tickets.",
+    choices: [
+      { label: "🎟️ Local ticket", cash: 300, heat: -5, score: 400, message: "🎟️ You take a short ride and receive a station reward." },
+      { label: "🌙 Midnight ticket", cash: 600, heat: 20, score: 750, risky: true, message: "🌙 The midnight train leads to a hidden market." },
+      { label: "⭐ First-class ticket", cash: 850, heat: 30, score: 950, risky: true, message: "⭐ First class includes a surprise prize." },
+      { label: "🦝 Give ticket to raccoon", cash: 950, heat: 40, health: -1, score: 1100, risky: true, message: "🦝 The raccoon returns with luggage full of mystery rewards." }
+    ]
+  },
+
 
 const SOLO_TITLES = {
   rabid_raccoon: { name: "the Rabid Raccoon", description: "Finish a Solo Mission after making a raccoon-related choice." },
@@ -24175,4 +24496,3 @@ export default {
     );
   }
 };
-
