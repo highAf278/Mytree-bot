@@ -3192,6 +3192,33 @@ function profileCandy(frame,x,y,s,c,alt){
   if(alt) profileFill(frame,x-Math.max(1,Math.round(w*0.42)),y-h+1,2,h*2,255,255,255,185);
   else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
+function profileFlower(frame,x,y,s,c,phase=0){
+  const r=Math.max(2,Math.round(s*0.72));
+  const petalColors=[c,[255,210,235],[255,240,120]];
+  for(let i=0;i<5;i++){
+    const a=(Math.PI*2*i)/5 + Math.sin(phase*Math.PI*2)*0.08;
+    const px=Math.round(x+Math.cos(a)*r*0.72), py=Math.round(y+Math.sin(a)*r*0.72);
+    profilePetal(frame,px,py,Math.max(3,Math.round(s*0.62)),petalColors[i%petalColors.length],i%2?-1:1);
+  }
+  profileFill(frame,x-2,y-2,5,5,255,205,65,245);
+  profileFill(frame,x-1,y-1,3,3,255,245,145,255);
+}
+function profilePumpkin(frame,x,y,s,c,phase=0){
+  const w=Math.max(5,Math.round(s*1.25)), h=Math.max(4,Math.round(s*0.9));
+  const orange=c||[245,125,25];
+  for(let row=-h;row<=h;row++){
+    const q=Math.abs(row)/Math.max(1,h);
+    const half=Math.max(2,Math.round(w*(1-0.34*q)));
+    profileFill(frame,x-half,y+row,half*2+1,1,orange[0],orange[1],orange[2],245);
+  }
+  // pumpkin ribs
+  profilePixelLine(frame,x-3,y-h+1,x-4,y+h-1,1,190,75,15,180);
+  profilePixelLine(frame,x+3,y-h+1,x+4,y+h-1,1,190,75,15,180);
+  profileFill(frame,x-2,y-h-2,5,3,90,150,55,245);
+  // tiny carved face
+  profileFill(frame,x-3,y-1,2,2,55,30,20,235); profileFill(frame,x+2,y-1,2,2,55,30,20,235);
+  profileFill(frame,x-2,y+3,5,1,55,30,20,220);
+}
 function profileGhost(frame,x,y,s,c){
   const w=Math.max(4,s), h=Math.max(6,Math.round(s*1.45));
   // rounded head/body with a three-lobed sheet at the bottom
@@ -3410,28 +3437,53 @@ function drawProfileEffectParticles(frame,effectId,phase){
       profileStar(frame,360,136,3,[255,255,255],220); profileStar(frame,744,136,3,[255,255,255],220); break;
     }
     case "starlight": {
-      const pts=[[360,140,0],[744,140,.2],[356,230,.45],[744,230,.7],[700,136,.9]];
-      pts.forEach(([x,y,o],i)=>{const tw=0.55+0.45*(0.5+0.5*Math.sin(p*2+o*7));profileStar(frame,x,y,3+(i%2),pal[i%pal.length],Math.round(145+110*tw));}); break;
+      const pts=[[350,132,0],[385,224,.13],[425,138,.27],[470,231,.41],[520,132,.55],[570,226,.69],[620,140,.82],[690,224,.95],[735,132,.38]];
+      pts.forEach(([x,y,o],i)=>{
+        const tw=0.45+0.55*(0.5+0.5*Math.sin(p*2.4+o*11));
+        const xx=x+Math.round(Math.sin(p*0.45+o*8)*3), yy=y+Math.round(Math.cos(p*0.6+o*7)*3);
+        profileStar(frame,xx,yy,2+(i%3),pal[i%pal.length],Math.round(125+130*tw));
+        if(i%2===0) profileStar(frame,xx+5,yy-4,1,pal[(i+1)%pal.length],Math.round(100+120*tw));
+      });
+      break;
     }
     case "petals": {
-      const pts=[[360,140,0],[744,142,.18],[356,188,.38],[746,196,.55],[720,230,.76],[690,142,.92]];
-      pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*0.8+o*7)*8, yy=y+((phase+o)%1)*18;profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length],i%2?-1:1);}); break;
+      const pts=[[350,136,0],[385,226,.12],[430,145,.25],[480,232,.38],[530,137,.51],[580,228,.64],[630,145,.77],[690,231,.89],[735,140,.31]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.75+o*9)*10, yy=y+((phase+o)%1)*20;
+        profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%3),pal[i%pal.length],i%2?-1:1);
+      });
+      // Two recognizable little flowers among the drifting petals.
+      profileFlower(frame,405,143,8,[245,105,190],phase*0.7);
+      profileFlower(frame,690,222,8,[255,145,200],phase*0.7+0.4);
+      break;
     }
     case "inferno": {
       const pts=[[360,232,0],[744,232,.2],[366,140,.45],[734,140,.68]];
       pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*1.2+o*7)*4, yy=y-Math.abs(Math.sin(p+o*7))*11;profileFlame(frame,Math.round(xx),Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "green_glow": {
-      profileWisp(frame,355,218,36,pal[1],phase,1); profileWisp(frame,744,150,36,pal[2],phase,-1);
-      profileStar(frame,370,140,3,pal[0],190); profileStar(frame,730,230,3,pal[3],190); break;
+      const pts=[[350,138,0],[382,220,.11],[420,150,.22],[465,230,.33],[515,140,.45],[560,225,.57],[610,148,.68],[660,228,.79],[710,140,.9],[744,218,.98]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.9+o*9)*8, yy=y+Math.cos(p*0.7+o*8)*7;
+        profileWisp(frame,Math.round(xx),Math.round(yy),16+(i%3)*5,pal[i%pal.length],phase+o,i%2?1:-1);
+        if(i%2===0) profileStar(frame,Math.round(xx+4),Math.round(yy-5),2,pal[(i+1)%pal.length],185);
+      });
+      break;
     }
     case "candy_rush": {
       const pts=[[360,140,0],[744,140,.22],[356,230,.45],[744,230,.68],[700,137,.82]];
       pts.forEach(([x,y,o],i)=>{const xx=x+Math.sin(p*0.8+o*7)*8, yy=y+Math.cos(p*0.65+o*7)*5;profileCandy(frame,Math.round(xx),Math.round(yy),7+(i%2),pal[i%pal.length],i%2===0);}); break;
     }
     case "cosmic": {
-      profileWisp(frame,355,145,40,pal[0],phase,1); profileWisp(frame,744,220,40,pal[2],phase,-1);
-      profileStar(frame,370,228,3,pal[1],210); profileStar(frame,725,143,3,pal[3],210); break;
+      const pts=[[350,138,0],[390,225,.12],[430,145,.24],[475,230,.36],[520,136,.48],[565,226,.6],[615,145,.72],[665,230,.84],[735,140,.96]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.55+o*8)*9, yy=y+Math.cos(p*0.7+o*7)*7;
+        profileStar(frame,Math.round(xx),Math.round(yy),2+(i%3),pal[i%pal.length],190+Math.round(55*Math.sin(p*1.5+o*6)**2));
+        if(i%2===0) profileWisp(frame,Math.round(xx-8),Math.round(yy+4),18,pal[(i+1)%pal.length],phase+o,1);
+      });
+      profileWisp(frame,355,215,48,pal[1],phase,1);
+      profileWisp(frame,745,145,48,pal[2],phase+0.35,-1);
+      break;
     }
     case "firework": {
       const pts=[[360,140,0],[744,142,.28],[360,230,.55],[744,230,.78]];
@@ -3462,12 +3514,27 @@ function drawProfileEffectParticles(frame,effectId,phase){
       pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*4;profileSnowflake(frame,x,Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
     }
     case "golden": {
-      profileCoin(frame,360,142,6,pal[1]); profileCoin(frame,744,142,6,pal[2]);
-      profileStar(frame,360,228,4,pal[0],225); profileStar(frame,744,228,4,pal[1],225); break;
+      const pts=[[350,137,0],[390,226,.12],[430,145,.24],[475,231,.36],[520,137,.48],[565,226,.6],[615,145,.72],[665,230,.84],[735,138,.96]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.65+o*8)*7, yy=y+Math.cos(p*0.55+o*7)*6;
+        if(i%3===0) profileCoin(frame,Math.round(xx),Math.round(yy),5+(i%2),[245,185,45]);
+        else profileStar(frame,Math.round(xx),Math.round(yy),2+(i%2),[255,215,70],220);
+        if(i%2===0) profileDiamond(frame,Math.round(xx+5),Math.round(yy-4),2,[255,245,170],180);
+      });
+      break;
     }
     case "spooky": {
-      const pts=[[360,143,0],[744,143,.24],[358,228,.5],[742,226,.76]];
-      pts.forEach(([x,y,o],i)=>{const yy=y+Math.sin(p+o*6)*6;profileGhost(frame,x,Math.round(yy),5+(i%2),pal[i%pal.length]);}); break;
+      const ghosts=[[350,142,0],[430,225,.22],[520,138,.45],[610,228,.68],[735,142,.9]];
+      ghosts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.8+o*8)*7, yy=y+Math.cos(p*0.65+o*7)*6;
+        profileGhost(frame,Math.round(xx),Math.round(yy),5+(i%2),i%2?[205,155,255]:[235,235,255]);
+      });
+      const pumpkins=[[390,140,.1],[480,226,.3],[570,142,.52],[675,225,.76]];
+      pumpkins.forEach(([x,y,o],i)=>{
+        const xx=x+Math.sin(p*0.6+o*8)*5, yy=y+Math.cos(p*0.55+o*7)*5;
+        profilePumpkin(frame,Math.round(xx),Math.round(yy),5+(i%2),[245,125+(i%2)*20,25],phase+o);
+      });
+      break;
     }
     default: profileStar(frame,360,142,3,pal[0],210); profileStar(frame,744,228,3,pal[0],210); break;
   }
