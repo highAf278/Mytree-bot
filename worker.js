@@ -24281,7 +24281,7 @@ const COMMANDS = [
         description: "Clear all Store Test cosmetics"
       }
     ]
-  }
+  },
 
   {
     name: "profile",
