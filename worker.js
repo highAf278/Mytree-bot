@@ -3314,25 +3314,48 @@ function profilePetal(frame,x,y,s,c,flip=1){
   }
   profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
 }
-function profileButterfly(frame,x,y,s,c,variant=0){
-  // Smooth, clearly colored butterfly ornament. The previous version used the
-  // single frame highlight color for every butterfly, which made the whole
-  // swarm turn pink after GIF quantization.
-  const wing=Math.max(3,s);
-  const colors=[
-    [255,105,190],[120,205,255],[255,205,75],[165,110,245],
-    [95,220,170],[255,145,90]
+function profileButterfly(frame,x,y,s,variant=0,phase=0){
+  // Premium smooth butterfly ornament: larger, recognizable wings with an
+  // actual wing-flap animation. Keep the body/antennae dark so the butterfly
+  // remains readable after GIF palette conversion.
+  const palettes=[
+    [[255,105,190],[255,190,235]],
+    [[95,190,255],[180,235,255]],
+    [[255,195,55],[255,235,135]],
+    [[165,105,245],[220,180,255]],
+    [[70,215,165],[165,255,220]],
+    [[255,125,95],[255,195,150]]
   ];
-  const wc=colors[variant%colors.length];
-  const wc2=colors[(variant+2)%colors.length];
-  profileSmoothPetal(frame,x-wing-1,y-wing/2,wing*1.05,wing*.78,wc,245,-0.28);
-  profileSmoothPetal(frame,x-wing-1,y+wing/2,wing*1.05,wing*.78,wc2,230,0.28);
-  profileSmoothPetal(frame,x+wing+1,y-wing/2,wing*1.05,wing*.78,wc,245,0.28);
-  profileSmoothPetal(frame,x+wing+1,y+wing/2,wing*1.05,wing*.78,wc2,230,-0.28);
-  profileSmoothLine(frame,x,y-wing*.75,x,y+wing*.9,1.6,[55,40,65],245);
-  profileSmoothLine(frame,x,y-wing*.75,x-3,y-wing*1.2,1,[55,40,65],220);
-  profileSmoothLine(frame,x,y-wing*.75,x+3,y-wing*1.2,1,[55,40,65],220);
-  profileSmoothCircle(frame,x,y-wing*.7,1.1,[255,255,255],240,true);
+  const [upper,lower]=palettes[variant%palettes.length];
+  const t=phase*Math.PI*2;
+  const flap=0.78+0.22*(0.5+0.5*Math.sin(t*2+variant*0.8));
+  const swayX=Math.sin(t+variant*1.3)*1.8;
+  const swayY=Math.cos(t*0.8+variant)*1.6;
+  const cx=x+swayX, cy=y+swayY;
+  const wingW=Math.max(4.8,s*1.35);
+  const upperH=Math.max(3.8,s*1.05*flap);
+  const lowerH=Math.max(2.8,s*.72*(1.15-flap*.25));
+  const tilt=Math.sin(t*2+variant)*0.16;
+
+  // Upper wings: broad rounded teardrops.
+  profileSmoothPetal(frame,cx-wingW*.72,cy-upperH*.34,wingW,upperH,upper,238,-0.28-tilt);
+  profileSmoothPetal(frame,cx+wingW*.72,cy-upperH*.34,wingW,upperH,upper,238,0.28+tilt);
+  // Lower wings: smaller and slightly lighter.
+  profileSmoothPetal(frame,cx-wingW*.60,cy+lowerH*.62,wingW*.72,lowerH,lower,232,0.38-tilt);
+  profileSmoothPetal(frame,cx+wingW*.60,cy+lowerH*.62,wingW*.72,lowerH,lower,232,-0.38+tilt);
+
+  // Soft wing highlights.
+  profileSmoothPetal(frame,cx-wingW*.72,cy-upperH*.34,wingW*.48,upperH*.30,[255,255,255],105,-0.28-tilt);
+  profileSmoothPetal(frame,cx+wingW*.72,cy-upperH*.34,wingW*.48,upperH*.30,[255,255,255],105,0.28+tilt);
+
+  // Body, head, and antennae.
+  const body=[55,42,70];
+  profileSmoothCircle(frame,cx,cy,Math.max(1.4,s*.20),body,245,true);
+  profileSmoothCircle(frame,cx,cy-s*.34,Math.max(1.2,s*.16),body,245,true);
+  profileSmoothLine(frame,cx,cy-s*.42,cx-s*.52,cy-s*.86,0.9,body,225);
+  profileSmoothLine(frame,cx,cy-s*.42,cx+s*.52,cy-s*.86,0.9,body,225);
+  profileSmoothCircle(frame,cx-s*.52,cy-s*.86,0.75,[255,255,255],210,true);
+  profileSmoothCircle(frame,cx+s*.52,cy-s*.86,0.75,[255,255,255],210,true);
 }
 function profileCandy(frame,x,y,s,c,alt){
   // Plump wrapped candy with unmistakable pinched/twisted ends.
@@ -3755,16 +3778,28 @@ function profileSmoothCircle(frame,cx,cy,r,c,a=255,fill=true,width=1){
     if(edge>0) profileSmoothBlendPixel(frame,x,y,c[0],c[1],c[2],a*edge);
   }
 }
-function profileSmoothRoundedRect(frame,x,y,w,h,r,c,a=255,width=4){
-  const rr=Math.max(2,Math.min(r,Math.min(w,h)/2));
-  profileSmoothLine(frame,x+rr,y,x+w-rr,y,width,c,a);
-  profileSmoothLine(frame,x+rr,y+h,x+w-rr,y+h,width,c,a);
-  profileSmoothLine(frame,x,y+rr,x,y+h-rr,width,c,a);
-  profileSmoothLine(frame,x+w,y+rr,x+w,y+h-rr,width,c,a);
-  profileSmoothCircle(frame,x+rr,y+rr,rr,c,a,false,width);
-  profileSmoothCircle(frame,x+w-rr,y+rr,rr,c,a,false,width);
-  profileSmoothCircle(frame,x+rr,y+h-rr,rr,c,a,false,width);
-  profileSmoothCircle(frame,x+w-rr,y+h-rr,rr,c,a,false,width);
+function profileSmoothRoundedRect(frame,x,y,w,h,r,c,a=255,width=2){
+  // True rounded-rectangle stroke. The old helper drew FULL circles at each
+  // corner, which is why Discord showed giant circular blobs instead of clean
+  // rounded corners. This computes distance to the actual rounded rectangle
+  // perimeter, so only the correct quarter-arcs are rendered.
+  const rr=Math.max(1,Math.min(r,Math.min(w,h)/2));
+  const minX=Math.max(0,Math.floor(x-width-2)),maxX=Math.min(frame.width-1,Math.ceil(x+w+width+2));
+  const minY=Math.max(0,Math.floor(y-width-2)),maxY=Math.min(frame.height-1,Math.ceil(y+h+width+2));
+  const cx=x+w/2,cy=y+h/2;
+  const hx=w/2,hy=h/2;
+  const innerX=Math.max(0,hx-rr),innerY=Math.max(0,hy-rr);
+  const half=Math.max(0.5,width/2);
+  for(let py=minY;py<=maxY;py++) for(let px=minX;px<=maxX;px++){
+    const ax=Math.abs(px-cx), ay=Math.abs(py-cy);
+    const qx=ax-innerX, qy=ay-innerY;
+    const ox=Math.max(qx,0), oy=Math.max(qy,0);
+    const outside=Math.hypot(ox,oy);
+    const inside=Math.min(Math.max(qx,qy),0);
+    const dist=outside+inside;
+    const edge=Math.max(0,Math.min(1,half+0.85-Math.abs(dist-rr)));
+    if(edge>0) profileSmoothBlendPixel(frame,px,py,c[0],c[1],c[2],a*edge);
+  }
 }
 function profileSmoothRing(frame,cx,cy,r,c,a=255,width=3){ profileSmoothCircle(frame,cx,cy,r,c,a,false,width); }
 function profileSmoothPetal(frame,cx,cy,rx,ry,c,a=255,rot=0){
@@ -3803,7 +3838,7 @@ function drawProfileFrame(frame, frameId, phase=0){
   const x=324,y=24,w=446,h=452;
   const palette={
     rhinestone:[[204,102,153],[255,235,250]], pink_glitter:[[255,102,204],[255,225,250]],
-    candyland:[[255,102,153],[255,210,100]], butterfly:[[126,76,178],[235,190,255]],
+    candyland:[[255,102,153],[255,210,100]], butterfly:[[115,125,155],[245,235,255]],
     rainbow:[[120,70,190],[100,210,255]], starfall:[[190,135,20],[255,240,130]],
     spiderweb:[[105,105,115],[235,235,245]], gothic:[[65,35,75],[190,145,205]],
     crimson:[[125,25,40],[255,155,165]], royal_gold:[[175,120,15],[255,235,135]],
@@ -3816,24 +3851,24 @@ function drawProfileFrame(frame, frameId, phase=0){
 
   // Clean double-line frame. The tiny gap between lines preserves the rounded
   // profile card underneath and gives the cosmetic a polished, purchased look.
-  profileSmoothRoundedRect(frame,x,y,w,h,22,base,245,3);
-  profileSmoothRoundedRect(frame,x+5,y+5,w-10,h-10,18,hi,185,1.2);
+  profileSmoothRoundedRect(frame,x,y,w,h,18,base,230,1.8);
+  profileSmoothRoundedRect(frame,x+3,y+3,w-6,h-6,15,hi,170,0.9);
 
   const sparkle=(cx,cy,r=3)=>{
     const pulse=0.8+0.35*Math.max(0,Math.sin(p+cx*.017));
     profileSmoothStar(frame,cx,cy,r*pulse,hi,235);
     profileSmoothCircle(frame,cx-0.7,cy-0.7,0.8,[255,255,255],210,true);
   };
-  const butterfly=(cx,cy,sc)=>profileButterfly(frame,cx,cy,sc,hi);
+  const butterfly=(cx,cy,sc,variant)=>profileButterfly(frame,cx,cy,sc,variant,phase);
 
   if(style==='butterfly'){
     // Actual butterflies, spaced like jewelry around the border.
     const pts=[[x+30,y+30],[x+w-30,y+30],[x+30,y+h-30],[x+w-30,y+h-30],
-               [x+w/2,y+9],[x+w/2,y+h-9]];
+               [x+w/2,y+10],[x+w/2,y+h-10]];
     for(let i=0;i<pts.length;i++){
       const [cx,cy]=pts[i];
-      butterfly(cx,cy,4.5+(i%2)*.7,i);
-      sparkle(cx+(i%2?7:-7),cy+(i<2?6:-6),2);
+      butterfly(cx,cy,7.2+(i%2)*.8,i);
+      sparkle(cx+(i%2?9:-9),cy+(i<2?8:-8),1.8);
     }
   } else if(style==='rhinestone'||style==='diamond'){
     const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
