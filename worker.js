@@ -3892,46 +3892,50 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess: premium jewelwork rather than plain dots.
-    // Keep the full-profile frame architecture, but make the decorations read
-    // as faceted rhinestones at Discord's final display size.
+    // Rhinestone Princess V2: fewer, larger, unmistakable gemstones.
+    // The previous tiny gems collapsed into white/pink specks at Discord size.
+    // These stones are intentionally oversized so their facets survive GIF conversion.
     const gem=(cx,cy,scale=1,phaseOffset=0)=>{
-      const shimmer=0.82+0.28*Math.max(0,Math.sin(p+phaseOffset));
-      const outer=[255,205,235], inner=[255,250,255], facet=[214,125,205];
-      // Smooth four-point gem silhouette.
-      profileSmoothPetal(frame,cx,cy,5.0*scale,2.7*scale,outer,235,Math.PI/4);
-      profileSmoothPetal(frame,cx,cy,3.6*scale,1.9*scale,inner,245,Math.PI/4);
-      // Facet lines make the stone read as a jewel instead of a dot.
-      profileSmoothLine(frame,cx-3.2*scale,cy,cx,cy-2.0*scale,0.8,facet,210);
-      profileSmoothLine(frame,cx,cy-2.0*scale,cx+3.2*scale,cy,0.8,facet,210);
-      profileSmoothLine(frame,cx-3.2*scale,cy,cx,cy+2.0*scale,0.8,facet,190);
-      profileSmoothLine(frame,cx,cy+2.0*scale,cx+3.2*scale,cy,0.8,facet,190);
-      if(shimmer>0.95) profileSmoothStar(frame,cx-1.0*scale,cy-1.0*scale,1.35*scale,[255,255,255],220);
+      const shimmer=0.78+0.32*Math.max(0,Math.sin(p+phaseOffset));
+      const outer=style==='diamond'?[170,235,255]:[255,185,235];
+      const mid=style==='diamond'?[220,250,255]:[255,220,248];
+      const facet=style==='diamond'?[75,160,220]:[210,105,185];
+      const white=[255,255,255];
+      // Large rotated jewel body: deliberately much bigger than the old dots.
+      profileSmoothPetal(frame,cx,cy,8.2*scale,4.9*scale,outer,245,Math.PI/4);
+      profileSmoothPetal(frame,cx,cy,5.9*scale,3.5*scale,mid,250,Math.PI/4);
+      // Strong four-facet construction so it reads as a gemstone at a glance.
+      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy-4.0*scale,1.15,facet,225);
+      profileSmoothLine(frame,cx,cy-4.0*scale,cx+5.0*scale,cy,1.15,facet,225);
+      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy+4.0*scale,1.15,facet,205);
+      profileSmoothLine(frame,cx,cy+4.0*scale,cx+5.0*scale,cy,1.15,facet,205);
+      // Bright upper facet + animated star glint.
+      profileSmoothPetal(frame,cx-1.5*scale,cy-1.6*scale,2.4*scale,1.15*scale,white,185,Math.PI/4);
+      if(shimmer>0.94) profileSmoothStar(frame,cx-2.8*scale,cy-2.8*scale,2.1*scale,white,235);
     };
-    const gemRows=[
-      [x+52,y+8,1.0],[x+112,y+7,.78],[x+180,y+8,1.15],[x+258,y+7,.82],
-      [x+338,y+8,1.0],[x+420,y+7,.8],[x+505,y+8,1.12],[x+590,y+7,.82],[x+670,y+8,1.0],[x+730,y+9,.72],
-      [x+52,y+h-8,.82],[x+130,y+h-7,1.08],[x+210,y+h-8,.78],[x+292,y+h-7,1.12],
-      [x+378,y+h-8,.8],[x+462,y+h-7,1.0],[x+548,y+h-8,.78],[x+632,y+h-7,1.12],[x+710,y+h-8,.82]
+    // A restrained number of large stones. They are spaced out so each one reads.
+    const top=[
+      [x+48,y+10,1.05],[x+145,y+10,.82],[x+255,y+10,1.18],[x+390,y+10,.9],
+      [x+525,y+10,1.15],[x+650,y+10,.86],[x+744,y+11,1.02]
     ];
-    for(let i=0;i<gemRows.length;i++){
-      const [cx,cy,sc]=gemRows[i]; gem(cx,cy,sc,i*.31);
-    }
-    // Corner jewel clusters: elegant, not oversized circles.
-    const clusters=[[x+25,y+25],[x+w-25,y+25],[x+25,y+h-25],[x+w-25,y+h-25]];
-    for(let i=0;i<clusters.length;i++){
-      const [cx,cy]=clusters[i];
-      gem(cx,cy,1.45,i*.7);
-      gem(cx+(i%2? -8:8),cy+(i<2? 8:-8),.58,i*.7+.2);
-      profileSmoothStar(frame,cx,cy,4.4,[255,220,245],150);
-    }
-    // A few hanging accent stones on the sides make the frame feel like
-    // jewelry rather than a plain outline.
-    for(let i=0;i<3;i++){
-      const yy=y+110+i*130;
-      gem(x+8,yy,.72,i+.4); gem(x+w-8,yy,.72,i+.8);
-    }
+    const bottom=[
+      [x+48,y+h-10,.88],[x+165,y+h-10,1.12],[x+295,y+h-10,.82],
+      [x+430,y+h-10,1.18],[x+560,y+h-10,.86],[x+690,y+h-10,1.08]
+    ];
+    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.47));
+    // Four larger princess-jewel corner clusters, kept elegant rather than circular.
+    const corners=[
+      [x+27,y+27,1.55],[x+w-27,y+27,1.55],[x+27,y+h-27,1.55],[x+w-27,y+h-27,1.55]
+    ];
+    corners.forEach((g,i)=>{
+      gem(g[0],g[1],g[2],i*.8+.2);
+      profileSmoothStar(frame,g[0]-2,g[1]-3,3.0,[255,255,255],150);
+    });
+    // One small hanging gem on each side gives it a jewelry-chain feel.
+    gem(x+10,y+h*.50,.72,.6);
+    gem(x+w-10,y+h*.50,.72,1.4);
   } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
+
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
       sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
