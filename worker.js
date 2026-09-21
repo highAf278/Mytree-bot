@@ -9604,80 +9604,60 @@ async function handleTree(
   env,
   interaction
 ) {
-  // The top-level interaction router already acknowledges /tree before
-  // entering ctx.waitUntil(). A second acknowledge here causes Discord to
-  // reject the interaction callback, leaving the original "thinking..."
-  // response stuck forever. Continue directly into the tree work.
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
-
-  if (!user) return;
-
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
-  updatePlayerIdentity(
-    player,
-    interaction
-  );
-
-  await refreshPunishmentState(env, player);
-  if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
-    return sendText(env, interaction, `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`);
-  }
-
-  cleanSparkles(
-    player
-  );
-
-  if (!player.sparklesOnTree.length) {
-    maybeSpawnSparkles(player);
-  }
-
-  await rememberGuild(
-    env,
-    interaction.guild_id
-  );
-
-  player.sceneMessage =
-    "";
-  player.treeChecks =
-    Number(player.treeChecks || 0) + 1;
-
-  await savePlayer(
-    env,
-    player
-  );
+  // Diagnostic version: track the exact stage so intermittent /tree hangs
+  // cannot leave Discord stuck on "MyTree is thinking..." with no clue.
+  let treeStage = "starting";
+  const stageTimeout = async (label, promise, ms = 10000) => {
+    treeStage = label;
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Tree timed out during ${label} after ${ms / 1000}s`)), ms)
+      )
+    ]);
+  };
 
   try {
-    // Never leave Discord's loading state hanging forever. The renderer gets
-    // a bounded 20-second window; if it stalls, the catch below replaces the
-    // loading response with the actual failure point.
-    await Promise.race([
-      sendTree(env, interaction, player),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Tree renderer timed out after 20 seconds")), 20000))
-    ]);
-  } catch (error) {
-    console.error(
-      "Tree render error:",
-      error
-    );
+    treeStage = "getting your Discord user";
+    const user = getUserFromInteraction(interaction);
+    if (!user) return;
 
-    await editOriginalResponse(
-      env,
-      interaction,
-      {
-        content:
-          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
-        components:
-          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
-      }
-    );
+    const player = await stageTimeout("loading player data", getPlayer(env, user.id));
+
+    treeStage = "updating player identity";
+    updatePlayerIdentity(player, interaction);
+
+    await stageTimeout("refreshing punishment state", refreshPunishmentState(env, player));
+    if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
+      return await sendText(env, interaction, `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`);
+    }
+
+    treeStage = "cleaning sparkles";
+    cleanSparkles(player);
+    if (!player.sparklesOnTree.length) {
+      treeStage = "spawning sparkles";
+      maybeSpawnSparkles(player);
+    }
+
+    await stageTimeout("remembering server", rememberGuild(env, interaction.guild_id));
+
+    player.sceneMessage = "";
+    player.treeChecks = Number(player.treeChecks || 0) + 1;
+
+    await stageTimeout("saving player data", savePlayer(env, player));
+
+    await stageTimeout("rendering and sending tree", sendTree(env, interaction, player), 20000);
+  } catch (error) {
+    console.error("Tree diagnostic failure at stage:", treeStage, error);
+
+    try {
+      await editOriginalResponse(env, interaction, {
+        content: `🌳❌ **MyTree got stuck.**\n\n**Step:** ${treeStage}\n**Error:** ${error?.message || "Unknown error"}`,
+        components: []
+      });
+    } catch (editError) {
+      console.error("Could not replace stuck tree response:", editError);
+    }
   }
 }
 
