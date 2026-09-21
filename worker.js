@@ -3991,11 +3991,11 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothStar(frame,cx-3*sc,cy-3*sc,3.0*sc,[255,255,255],185);
     });
   } else if(style==='pink_glitter'){
-    // Pink Glitter Bomb V3: a controlled glitter explosion. The glitter is
+    // Pink Glitter Bomb V4: a controlled glitter explosion. The glitter is
     // concentrated around the actual frame so the profile stays readable.
     const glitterPalette=[
-      [255,72,185],[255,98,202],[255,125,218],[255,158,230],
-      [255,190,240],[255,220,248],[235,55,170],[255,105,225]
+      [255,45,175],[255,70,195],[255,95,215],[255,130,228],
+      [255,165,238],[255,205,248],[235,35,155],[255,90,225]
     ];
     const seed=(i,axis)=>{
       const v=Math.sin(i*91.731+axis*17.113)*43758.5453;
@@ -4048,28 +4048,35 @@ function drawProfileFrame(frame, frameId, phase=0){
 
     // Four unmistakable glitter-bomb explosions. These are the visual anchors.
     const cornerBursts=[
-      [x+27,y+27,9.0],[x+w-27,y+27,9.0],
-      [x+27,y+h-27,9.0],[x+w-27,y+h-27,9.0]
+      [x+27,y+27,11.5],[x+w-27,y+27,11.5],
+      [x+27,y+h-27,11.5],[x+w-27,y+h-27,11.5]
     ];
     cornerBursts.forEach((g,i)=>{
       burst(g[0],g[1],g[2],glitterPalette[(i+1)%glitterPalette.length],i*.8);
-      for(let k=0;k<10;k++){
+      for(let k=0;k<14;k++){
         const a=(Math.PI*2*k/10)+i*.23;
-        const d=12+seed(i*10+k,40)*18;
+        const d=13+seed(i*10+k,40)*22;
         glitterDot(g[0]+Math.cos(a)*d,g[1]+Math.sin(a)*d,
-          .65+seed(i*10+k,41)*1.65,glitterPalette[(k+i+2)%glitterPalette.length],195);
+          .75+seed(i*10+k,41)*1.9,glitterPalette[(k+i+2)%glitterPalette.length],205);
       }
     });
 
     // A handful of larger flash stars along the edge make the frame read as
     // GLITTER rather than a field of tiny dots.
     const flashes=[
-      [x+105,y+10,4.4],[x+285,y+11,3.8],[x+470,y+10,4.6],[x+650,y+11,3.9],
-      [x+10,y+125,3.7],[x+11,y+265,4.2],[x+12,y+390,3.6],
-      [x+w-10,y+125,3.9],[x+w-11,y+270,4.2],[x+w-12,y+390,3.7],
-      [x+145,y+h-10,4.0],[x+355,y+h-11,4.6],[x+570,y+h-10,3.9]
+      [x+105,y+10,5.0],[x+285,y+11,4.4],[x+470,y+10,5.2],[x+650,y+11,4.5],
+      [x+10,y+125,4.2],[x+11,y+265,4.8],[x+12,y+390,4.1],
+      [x+w-10,y+125,4.4],[x+w-11,y+270,4.8],[x+w-12,y+390,4.2],
+      [x+145,y+h-10,4.6],[x+355,y+h-11,5.2],[x+570,y+h-10,4.5]
     ];
     flashes.forEach((g,i)=>glitterStar(g[0],g[1],g[2],glitterPalette[(i+4)%glitterPalette.length],i*.67));
+    // A few larger mid-edge bursts give the frame its final GLITTER-BOMB punch
+    // without throwing particles across the readable profile content.
+    const edgeBursts=[
+      [x+190,y+9,5.0],[x+570,y+9,4.6],[x+210,y+h-9,4.8],[x+625,y+h-9,5.1],
+      [x+8,y+205,4.6],[x+w-8,y+210,4.9]
+    ];
+    edgeBursts.forEach((g,i)=>burst(g[0],g[1],g[2],glitterPalette[(i+1)%glitterPalette.length],i*.55));
 
     // Controlled inward spill: only near the edges/corners, leaving the actual
     // profile information clean enough to read.
