@@ -1074,12 +1074,68 @@ async function decodePNG(pngBytes) {
   return {width:w,height:h,data:out};
 }
 
-function gifPalette(){const p=[];for(let r=0;r<6;r++)for(let g=0;g<6;g++)for(let b=0;b<6;b++)p.push([r*51,g*51,b*51]);for(let i=0;i<40;i++){const v=Math.round(i*255/39);p.push([v,v,v]);}return p;}
-function nearestPaletteIndex(r,g,b,p){
-  const rr=Math.max(0,Math.min(5,Math.round(r/51)));
-  const gg=Math.max(0,Math.min(5,Math.round(g/51)));
-  const bb=Math.max(0,Math.min(5,Math.round(b/51)));
-  return rr*36+gg*6+bb;
+function gifPaletteFromFrames(frames,width,height){
+  // Build a palette from the actual profile frames instead of forcing the image
+  // through a fixed 6x6x6 color cube. That fixed cube was the main reason
+  // smooth frame colors collapsed into purple/pink blobs in Discord.
+  const samples=[];
+  const step=4;
+  for(const f of frames){
+    for(let y=0;y<height;y+=step){
+      for(let x=0;x<width;x+=step){
+        const o=(y*width+x)*4;
+        samples.push([f.data[o],f.data[o+1],f.data[o+2]]);
+      }
+    }
+  }
+  if(!samples.length)return Array.from({length:256},()=>[0,0,0]);
+  const boxes=[samples];
+  while(boxes.length<256){
+    let bi=-1,bRange=-1,bAxis=0;
+    for(let i=0;i<boxes.length;i++){
+      const box=boxes[i];
+      if(box.length<2)continue;
+      let mins=[255,255,255],maxs=[0,0,0];
+      for(const c of box){
+        for(let k=0;k<3;k++){if(c[k]<mins[k])mins[k]=c[k];if(c[k]>maxs[k])maxs[k]=c[k];}
+      }
+      const ranges=[maxs[0]-mins[0],maxs[1]-mins[1],maxs[2]-mins[2]];
+      const axis=ranges[0]>=ranges[1]&&ranges[0]>=ranges[2]?0:(ranges[1]>=ranges[2]?1:2);
+      if(ranges[axis]>bRange){bRange=ranges[axis];bi=i;bAxis=axis;}
+    }
+    if(bi<0)break;
+    const box=boxes[bi].slice().sort((a,b)=>a[bAxis]-b[bAxis]);
+    const mid=Math.floor(box.length/2);
+    if(mid<=0||mid>=box.length)break;
+    boxes.splice(bi,1,box.slice(0,mid),box.slice(mid));
+  }
+  const palette=boxes.map(box=>{
+    let r=0,g=0,b=0;for(const c of box){r+=c[0];g+=c[1];b+=c[2];}
+    return [Math.round(r/box.length),Math.round(g/box.length),Math.round(b/box.length)];
+  });
+  while(palette.length<256)palette.push(palette[palette.length%Math.max(1,palette.length)]||[0,0,0]);
+  return palette.slice(0,256);
+}
+function buildPaletteLookup(p){
+  const size=16,lookup=new Uint8Array(size*size*size);
+  for(let r=0;r<size;r++)for(let g=0;g<size;g++)for(let b=0;b<size;b++){
+    const rr=r*17+8,gg=g*17+8,bb=b*17+8;
+    let best=0,bestD=Infinity;
+    for(let i=0;i<p.length;i++){const dr=rr-p[i][0],dg=gg-p[i][1],db=bb-p[i][2];const d=dr*dr+dg*dg+db*db;if(d<bestD){bestD=d;best=i;}}
+    lookup[(r*size+g)*size+b]=best;
+  }
+  return lookup;
+}
+function nearestPaletteIndex(r,g,b,p,lookup){
+  if(lookup){
+    const rr=Math.max(0,Math.min(15,Math.floor(r/16)));
+    const gg=Math.max(0,Math.min(15,Math.floor(g/16)));
+    const bb=Math.max(0,Math.min(15,Math.floor(b/16)));
+    return lookup[(rr*16+gg)*16+bb];
+  }
+  let best=0,bestD=Infinity;
+  for(let i=0;i<p.length;i++){const dr=r-p[i][0],dg=g-p[i][1],db=b-p[i][2];const d=dr*dr+dg*dg+db*db;if(d<bestD){bestD=d;best=i;}}
+  return best;
 }
 function gifLZW(indices){
   const clear=256,end=257,codeSize=9,blockSize=240;
@@ -1106,7 +1162,9 @@ function gifLZW(indices){
 }
 function u16(n){return [n&255,(n>>8)&255];}
 async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){
-  const palette=gifPalette(),out=[];
+  const decoded=[];
+  for(const png of pngFrames)decoded.push(await decodePNG(png));
+  const palette=gifPaletteFromFrames(decoded,width,height),lookup=buildPaletteLookup(palette),out=[];
   const push=(...xs)=>out.push(...xs);
 
   push(...new TextEncoder().encode("GIF89a"));
@@ -1119,8 +1177,7 @@ async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){
     0x03,0x01,0x00,0x00,0x00
   );
 
-  for(const png of pngFrames){
-    const f=await decodePNG(png);
+  for(const f of decoded){
     const idx=new Uint8Array(width*height);
 
     for(let i=0;i<idx.length;i++){
@@ -1128,7 +1185,7 @@ async function encodePNGFramesToGIF(pngFrames,width,height,delayCs=10){
         f.data[i*4],
         f.data[i*4+1],
         f.data[i*4+2],
-        palette
+        palette,lookup
       );
     }
 
@@ -3257,17 +3314,25 @@ function profilePetal(frame,x,y,s,c,flip=1){
   }
   profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
 }
-function profileButterfly(frame,x,y,s,c){
-  // Four rounded wing lobes + body + tiny antennae, so it reads as a butterfly.
+function profileButterfly(frame,x,y,s,c,variant=0){
+  // Smooth, clearly colored butterfly ornament. The previous version used the
+  // single frame highlight color for every butterfly, which made the whole
+  // swarm turn pink after GIF quantization.
   const wing=Math.max(3,s);
-  profilePetal(frame,x-wing-1,y-wing/2,wing,c,-1);
-  profilePetal(frame,x-wing-1,y+wing/2,wing,c,-1);
-  profilePetal(frame,x+wing+1,y-wing/2,wing,c,1);
-  profilePetal(frame,x+wing+1,y+wing/2,wing,c,1);
-  profileFill(frame,x-1,y-wing,3,wing*2+2,55,40,65,255);
-  profilePixelLine(frame,x,y-wing,x-3,y-wing-3,1,55,40,65,230);
-  profilePixelLine(frame,x+1,y-wing,x+4,y-wing-3,1,55,40,65,230);
-  profileFill(frame,x-1,y-1,3,3,255,255,255,220);
+  const colors=[
+    [255,105,190],[120,205,255],[255,205,75],[165,110,245],
+    [95,220,170],[255,145,90]
+  ];
+  const wc=colors[variant%colors.length];
+  const wc2=colors[(variant+2)%colors.length];
+  profileSmoothPetal(frame,x-wing-1,y-wing/2,wing*1.05,wing*.78,wc,245,-0.28);
+  profileSmoothPetal(frame,x-wing-1,y+wing/2,wing*1.05,wing*.78,wc2,230,0.28);
+  profileSmoothPetal(frame,x+wing+1,y-wing/2,wing*1.05,wing*.78,wc,245,0.28);
+  profileSmoothPetal(frame,x+wing+1,y+wing/2,wing*1.05,wing*.78,wc2,230,-0.28);
+  profileSmoothLine(frame,x,y-wing*.75,x,y+wing*.9,1.6,[55,40,65],245);
+  profileSmoothLine(frame,x,y-wing*.75,x-3,y-wing*1.2,1,[55,40,65],220);
+  profileSmoothLine(frame,x,y-wing*.75,x+3,y-wing*1.2,1,[55,40,65],220);
+  profileSmoothCircle(frame,x,y-wing*.7,1.1,[255,255,255],240,true);
 }
 function profileCandy(frame,x,y,s,c,alt){
   // Plump wrapped candy with unmistakable pinched/twisted ends.
@@ -3767,7 +3832,7 @@ function drawProfileFrame(frame, frameId, phase=0){
                [x+w/2,y+9],[x+w/2,y+h-9]];
     for(let i=0;i<pts.length;i++){
       const [cx,cy]=pts[i];
-      butterfly(cx,cy,4.5+(i%2)*.7);
+      butterfly(cx,cy,4.5+(i%2)*.7,i);
       sparkle(cx+(i%2?7:-7),cy+(i<2?6:-6),2);
     }
   } else if(style==='rhinestone'||style==='diamond'){
