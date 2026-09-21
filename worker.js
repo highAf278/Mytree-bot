@@ -4155,9 +4155,9 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileCrown(frame,x+w-31,y+12,5,hi);
     sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
   } else if(style==='candyland'){
-    // Candyland FINAL: premium confectionery frame built for Discord-size readability.
+    // Candyland FINAL V12: premium confectionery frame built for Discord-size readability.
     // Large recognizable candy forms do the visual work; small sprinkles are accents only.
-    const cream=[255,248,251], icing=[255,170,214], icingLight=[255,224,241];
+    const cream=[255,246,250], icing=[255,157,207], icingLight=[255,218,237];
     const cocoa=[126,68,58], cocoaLight=[205,142,128], cocoaDark=[86,43,40];
     const pink=[255,78,166], hotPink=[216,35,122], rose=[242,112,184];
     const lavender=[171,126,235], mint=[82,205,177], lemon=[255,207,74], peach=[255,137,105], sky=[94,181,240];
@@ -4204,18 +4204,23 @@ function drawProfileFrame(frame, frameId, phase=0){
 
     // Piped chocolate frosting swirls. Curves + cream highlights prevent any poop-looking blobs.
     const chocolateSwirl=(cx,cy,s,flip=1)=>{
-      // Chocolate frosting is piped as a small bakery swirl with a cream highlight.
-      const pts=22; let px=cx-s*.92, py=cy+flip*s*.10;
-      for(let i=1;i<=pts;i++){
-        const t=i/pts, a=t*Math.PI*2.15;
-        const nx=cx + flip*Math.cos(a)*(s*(.92-.60*t));
-        const ny=cy + Math.sin(a)*(s*(.52-.24*t));
-        profileSmoothLine(frame,px,py,nx,ny,3.8,cocoa,245);
+      // Clearly piped chocolate frosting: a dimensional rosette, not a brown dot.
+      const rr=Math.max(5,s);
+      profileSmoothCircle(frame,cx,cy+2,rr+2,cocoaDark,220,true);
+      profileSmoothCircle(frame,cx,cy,rr,cocoa,250,true);
+      profileSmoothCircle(frame,cx-1.5,cy-1.5,rr*.66,cocoaLight,235,true);
+      profileSmoothCircle(frame,cx-1.5,cy-2.5,rr*.38,cocoa,250,true);
+      // Pixel-friendly spiral strokes make the frosting read immediately.
+      let px=cx-rr*.72, py=cy+flip*rr*.12;
+      for(let i=1;i<=16;i++){
+        const t=i/16, a=flip*t*Math.PI*2.15;
+        const nx=cx+Math.cos(a)*(rr*(.78-.52*t));
+        const ny=cy+Math.sin(a)*(rr*(.48-.30*t));
+        profileSmoothLine(frame,px,py,nx,ny,1.8,cocoaDark,235);
         px=nx; py=ny;
       }
-      profileSmoothLine(frame,cx-s*.48,cy-s*.18,cx+s*.16,cy+s*.05,1.5,cocoaLight,210);
-      profileSmoothCircle(frame,cx-s*.18,cy-s*.32,1.5,[255,230,220],185,true);
-      profileSmoothStar(frame,cx+s*.34,cy-s*.32,1.15,lemon,215);
+      profileSmoothLine(frame,cx-rr*.48,cy-rr*.42,cx+rr*.10,cy-rr*.55,1.5,[255,226,215],220);
+      profileSmoothStar(frame,cx+rr*.48,cy-rr*.48,1.0,lemon,215);
     };
 
     // Side candy-cane pillars: broad stripes, glossy center highlight, and icing caps.
@@ -4227,11 +4232,12 @@ function drawProfileFrame(frame, frameId, phase=0){
         profileSmoothLine(frame,xx-flip*5.2,cy-11,xx+flip*5.2,cy+11,5.6,c,248);
       }
       profileSmoothLine(frame,xx+flip*2.5,y+55,xx+flip*2.5,y+h-55,1.3,[255,255,255],180);
-      // Small frosting caps at two intentional positions.
+      // Little piped icing rosettes break up the rails without becoming tiny dots.
       [y+122,y+h-122].forEach((cy,i)=>{
-        profileSmoothCircle(frame,xx+flip*1.2,cy,6.0,icing,245,true);
-        profileSmoothCircle(frame,xx+flip*.0,cy-2,2.0,icingLight,200,true);
-        if(i===0) profileSmoothStar(frame,xx+flip*1.2,cy-6.5,1.5,lemon,215);
+        profileSmoothCircle(frame,xx+flip*1.2,cy,7.5,icing,245,true);
+        profileSmoothCircle(frame,xx+flip*1.2,cy-3,4.2,icingLight,225,true);
+        profileSmoothCircle(frame,xx+flip*1.2,cy-5,2.1,icing,245,true);
+        if(i===0) profileSmoothStar(frame,xx+flip*1.2,cy-8.5,1.5,lemon,215);
       });
     };
     candyCaneRail(x+14,1);
