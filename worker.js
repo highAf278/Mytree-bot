@@ -25598,16 +25598,29 @@ export default {
             else await sendText(env, interaction, "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot. If you believe this was a mistake, contact the bot owner.");
             return;
           }
-          if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
-          await maybeCourtWatch(env, interaction);
-          await maybePublicShame(env, interaction);
-          await maybeSpoonInvestigation(env, interaction);
-          if (interaction.type === 2) {
-            await handleCommand(env, interaction);
+          // /tree must not wait behind optional community middleware. These
+          // checks can perform their own KV/Discord work, and an intermittent
+          // stall there leaves Discord showing the original "thinking..." state
+          // even though the tree handler itself is healthy. Run the tree first.
+          const isTreeInteraction = isTreeCommand || isTreeComponent;
+          if (isTreeInteraction) {
+            if (interaction.type === 2) {
+              await handleCommand(env, interaction);
+            } else {
+              await handleComponent(env, interaction);
+            }
           } else {
-            await handleComponent(env, interaction);
+            if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
+            await maybeCourtWatch(env, interaction);
+            await maybePublicShame(env, interaction);
+            await maybeSpoonInvestigation(env, interaction);
+            if (interaction.type === 2) {
+              await handleCommand(env, interaction);
+            } else {
+              await handleComponent(env, interaction);
+            }
           }
-          if (!isNewsAcknowledgement) await maybeShowNews(env, interaction);
+          if (!isNewsAcknowledgement && !isTreeInteraction) await maybeShowNews(env, interaction);
         } catch (error) {
           console.error("Interaction error:", error);
           try {
