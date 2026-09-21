@@ -3991,9 +3991,8 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothStar(frame,cx-3*sc,cy-3*sc,3.0*sc,[255,255,255],185);
     });
   } else if(style==='pink_glitter'){
-    // Pink Glitter Bomb V2: this is an EXPLOSION, not glitter dust.
-    // Keep the frame identity distinct from Rhinestone Princess: no orderly gems,
-    // just dense pink sparkle clusters, oversized flashes, and messy glitter fallout.
+    // Pink Glitter Bomb V3: a controlled glitter explosion. The glitter is
+    // concentrated around the actual frame so the profile stays readable.
     const glitterPalette=[
       [255,72,185],[255,98,202],[255,125,218],[255,158,230],
       [255,190,240],[255,220,248],[235,55,170],[255,105,225]
@@ -4003,81 +4002,97 @@ function drawProfileFrame(frame, frameId, phase=0){
       return v-Math.floor(v);
     };
     const glitterDot=(cx,cy,r,col,alpha=235)=>{
-      profileSmoothCircle(frame,cx,cy,r+1.0,[255,60,180],Math.min(150,alpha*.62),true);
+      profileSmoothCircle(frame,cx,cy,r+0.8,[255,60,180],Math.min(125,alpha*.55),true);
       profileSmoothCircle(frame,cx,cy,r,col,alpha,true);
-      profileSmoothCircle(frame,cx-r*.32,cy-r*.38,Math.max(.55,r*.20),[255,255,255],250,true);
+      profileSmoothCircle(frame,cx-r*.32,cy-r*.38,Math.max(.5,r*.20),[255,255,255],245,true);
     };
     const glitterStar=(cx,cy,r,col,offset=0)=>{
-      const pulse=.78+.42*Math.max(0,Math.sin(p+offset));
+      const pulse=.82+.32*Math.max(0,Math.sin(p+offset));
       profileSmoothStar(frame,cx,cy,r*pulse,col,242);
-      profileSmoothCircle(frame,cx-r*.25,cy-r*.32,Math.max(.65,r*.18),[255,255,255],250,true);
+      profileSmoothCircle(frame,cx-r*.25,cy-r*.32,Math.max(.55,r*.18),[255,255,255],250,true);
     };
     const burst=(cx,cy,r,col,offset=0)=>{
-      glitterStar(cx,cy,r*1.15,col,offset);
-      profileSmoothCircle(frame,cx,cy,r*.34,[255,255,255],235,true);
-      for(let k=0;k<6;k++){
-        const a=(Math.PI*2*k/6)+offset*.13;
-        const d=r*(1.55+(k%2)*.28);
-        glitterDot(cx+Math.cos(a)*d,cy+Math.sin(a)*d,.72+(k%3)*.24,col,225);
+      glitterStar(cx,cy,r*1.08,col,offset);
+      profileSmoothCircle(frame,cx,cy,r*.30,[255,255,255],235,true);
+      for(let k=0;k<8;k++){
+        const a=(Math.PI*2*k/8)+offset*.11;
+        const d=r*(1.35+(k%3)*.22);
+        glitterDot(cx+Math.cos(a)*d,cy+Math.sin(a)*d,.62+(k%3)*.22,col,220);
       }
     };
 
-    // HEAVY top/bottom glitter bands: much denser than V1, with larger pieces.
-    for(let i=0;i<112;i++){
+    // Heavy top/bottom glitter ribbons. Dense, but kept within the frame zone.
+    for(let i=0;i<86;i++){
       const top=i%2===0;
-      const edgeY=top ? y+4+seed(i,2)*42 : y+h-4-seed(i,3)*42;
+      const edgeY=top ? y+5+seed(i,2)*27 : y+h-5-seed(i,3)*27;
       const cx=x+12+seed(i,4)*(w-24);
-      const size=1.0+seed(i,5)*3.15;
+      const size=.85+seed(i,5)*2.65;
       const col=glitterPalette[i%glitterPalette.length];
-      if(i%13===0) burst(cx,edgeY,size*1.35,col,i*.31);
-      else if(i%7===0) glitterStar(cx,edgeY,size*1.25,col,i*.37);
-      else glitterDot(cx,edgeY,size,col,215+Math.round(seed(i,6)*40));
+      if(i%17===0) burst(cx,edgeY,size*1.45,col,i*.29);
+      else if(i%8===0) glitterStar(cx,edgeY,size*1.18,col,i*.37);
+      else glitterDot(cx,edgeY,size,col,215+Math.round(seed(i,6)*35));
     }
 
-    // Thick side glitter clouds. These deliberately spill farther inward so the
-    // frame feels packed with glitter rather than having a sparse dotted outline.
-    for(let i=0;i<64;i++){
+    // Side glitter ribbons: thick enough to look explosive, but not enough to
+    // invade the title/stats area.
+    for(let i=0;i<48;i++){
       const left=i%2===0;
-      const edgeX=left ? x+5+seed(i,7)*38 : x+w-5-seed(i,8)*38;
-      const cy=y+15+seed(i,9)*(h-30);
-      const size=.95+seed(i,10)*2.75;
+      const edgeX=left ? x+5+seed(i,7)*24 : x+w-5-seed(i,8)*24;
+      const cy=y+18+seed(i,9)*(h-36);
+      const size=.8+seed(i,10)*2.45;
       const col=glitterPalette[(i+3)%glitterPalette.length];
-      if(i%11===0) burst(edgeX,cy,size*1.2,col,i*.47);
-      else if(i%6===0) glitterStar(edgeX,cy,size*1.2,col,i*.53);
-      else glitterDot(edgeX,cy,size,col,210+Math.round(seed(i,11)*45));
+      if(i%13===0) burst(edgeX,cy,size*1.35,col,i*.43);
+      else if(i%7===0) glitterStar(edgeX,cy,size*1.16,col,i*.51);
+      else glitterDot(edgeX,cy,size,col,210+Math.round(seed(i,11)*35));
     }
 
-    // BIG glitter explosions around the corners and along the frame. These are
-    // intentionally oversized so the cosmetic reads as a true "bomb".
-    const flashes=[
-      [x+29,y+27,8.0],[x+w-29,y+27,8.0],[x+29,y+h-27,8.0],[x+w-29,y+h-27,8.0],
-      [x+95,y+12,5.2],[x+205,y+10,4.3],[x+340,y+13,5.7],[x+485,y+10,4.8],[x+625,y+13,5.5],[x+730,y+10,4.2],
-      [x+12,y+105,4.7],[x+9,y+225,5.2],[x+13,y+355,4.6],
-      [x+w-12,y+105,5.0],[x+w-9,y+230,4.6],[x+w-13,y+365,5.3],
-      [x+110,y+h-11,5.0],[x+250,y+h-10,4.4],[x+405,y+h-12,5.6],[x+555,y+h-10,4.7],[x+690,y+h-12,5.2]
+    // Four unmistakable glitter-bomb explosions. These are the visual anchors.
+    const cornerBursts=[
+      [x+27,y+27,9.0],[x+w-27,y+27,9.0],
+      [x+27,y+h-27,9.0],[x+w-27,y+h-27,9.0]
     ];
-    for(let i=0;i<flashes.length;i++){
-      const [cx,cy,r]=flashes[i];
-      burst(cx,cy,r,glitterPalette[(i+1)%glitterPalette.length],i*.61);
+    cornerBursts.forEach((g,i)=>{
+      burst(g[0],g[1],g[2],glitterPalette[(i+1)%glitterPalette.length],i*.8);
+      for(let k=0;k<10;k++){
+        const a=(Math.PI*2*k/10)+i*.23;
+        const d=12+seed(i*10+k,40)*18;
+        glitterDot(g[0]+Math.cos(a)*d,g[1]+Math.sin(a)*d,
+          .65+seed(i*10+k,41)*1.65,glitterPalette[(k+i+2)%glitterPalette.length],195);
+      }
+    });
+
+    // A handful of larger flash stars along the edge make the frame read as
+    // GLITTER rather than a field of tiny dots.
+    const flashes=[
+      [x+105,y+10,4.4],[x+285,y+11,3.8],[x+470,y+10,4.6],[x+650,y+11,3.9],
+      [x+10,y+125,3.7],[x+11,y+265,4.2],[x+12,y+390,3.6],
+      [x+w-10,y+125,3.9],[x+w-11,y+270,4.2],[x+w-12,y+390,3.7],
+      [x+145,y+h-10,4.0],[x+355,y+h-11,4.6],[x+570,y+h-10,3.9]
+    ];
+    flashes.forEach((g,i)=>glitterStar(g[0],g[1],g[2],glitterPalette[(i+4)%glitterPalette.length],i*.67));
+
+    // Controlled inward spill: only near the edges/corners, leaving the actual
+    // profile information clean enough to read.
+    for(let i=0;i<24;i++){
+      const corner=i%4;
+      const cx=corner%2===0
+        ? x+30+seed(i,50)*105
+        : x+w-30-seed(i,51)*105;
+      const cy=corner<2
+        ? y+30+seed(i,52)*82
+        : y+h-30-seed(i,53)*82;
+      glitterDot(cx,cy,.65+seed(i,54)*1.5,glitterPalette[(i+2)%glitterPalette.length],185);
     }
 
-    // Dense loose glitter fallout just inside the frame. This is the part that
-    // makes it feel like glitter has actually exploded onto the profile.
-    for(let i=0;i<46;i++){
-      const side=i%2===0;
-      const cx=side
-        ? x+28+seed(i,20)*150
-        : x+w-28-seed(i,21)*150;
-      const cy=y+35+seed(i,22)*(h-70);
-      const r=.65+seed(i,23)*1.75;
-      glitterDot(cx,cy,r,glitterPalette[(i+5)%glitterPalette.length],185+Math.round(seed(i,24)*45));
-    }
-
-    // A few very bright white-pink flashes animate across the bomb.
-    for(let i=0;i<12;i++){
-      const cx=x+25+seed(i,30)*(w-50);
-      const cy=y+20+seed(i,31)*(h-40);
-      if(Math.sin(p+i*1.73)>.72) glitterStar(cx,cy,2.4+seed(i,32)*2.2,[255,245,252],i*.9);
+    // Animated highlight flashes stay on the frame zone instead of appearing
+    // randomly over the profile content.
+    for(let i=0;i<8;i++){
+      const onTop=i%2===0;
+      const cx=x+35+seed(i,60)*(w-70);
+      const cy=onTop ? y+8+seed(i,61)*22 : y+h-8-seed(i,62)*22;
+      if(Math.sin(p+i*1.73)>.70){
+        glitterStar(cx,cy,2.2+seed(i,63)*1.8,[255,245,252],i*.9);
+      }
     }
   } else if(style==='starfall'||style==='purple'){
     for(let i=0;i<8;i++){
