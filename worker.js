@@ -3657,120 +3657,192 @@ function profileEffectKey(player){
   return String(player.storeTestNameEffect||player.equippedNameEffect||"").trim();
 }
 
+function profileSmoothBlendPixel(frame,x,y,r,g,b,a){
+  if(x<0||y<0||x>=frame.width||y>=frame.height||a<=0) return;
+  const o=(Math.floor(y)*frame.width+Math.floor(x))*4;
+  const sa=Math.max(0,Math.min(255,a))/255;
+  frame.data[o]=Math.round(r*sa+frame.data[o]*(1-sa));
+  frame.data[o+1]=Math.round(g*sa+frame.data[o+1]*(1-sa));
+  frame.data[o+2]=Math.round(b*sa+frame.data[o+2]*(1-sa));
+  frame.data[o+3]=255;
+}
+function profileSmoothLine(frame,x1,y1,x2,y2,width,c,a=255){
+  const minX=Math.max(0,Math.floor(Math.min(x1,x2)-width/2-1)),maxX=Math.min(frame.width-1,Math.ceil(Math.max(x1,x2)+width/2+1));
+  const minY=Math.max(0,Math.floor(Math.min(y1,y2)-width/2-1)),maxY=Math.min(frame.height-1,Math.ceil(Math.max(y1,y2)+width/2+1));
+  const dx=x2-x1,dy=y2-y1,len2=dx*dx+dy*dy||1;
+  const half=width/2;
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+    const t=Math.max(0,Math.min(1,((x-x1)*dx+(y-y1)*dy)/len2));
+    const qx=x1+t*dx,qy=y1+t*dy,d=Math.hypot(x-qx,y-qy);
+    const edge=Math.max(0,Math.min(1,half+0.9-d));
+    if(edge>0) profileSmoothBlendPixel(frame,x,y,c[0],c[1],c[2],a*edge);
+  }
+}
+function profileSmoothCircle(frame,cx,cy,r,c,a=255,fill=true,width=1){
+  const pad=fill?1:width/2+1;
+  const minX=Math.max(0,Math.floor(cx-r-pad)),maxX=Math.min(frame.width-1,Math.ceil(cx+r+pad));
+  const minY=Math.max(0,Math.floor(cy-r-pad)),maxY=Math.min(frame.height-1,Math.ceil(cy+r+pad));
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+    const d=Math.hypot(x-cx,y-cy);
+    let edge;
+    if(fill) edge=Math.max(0,Math.min(1,r+0.8-d));
+    else edge=Math.max(0,Math.min(1,width/2+0.9-Math.abs(d-r)));
+    if(edge>0) profileSmoothBlendPixel(frame,x,y,c[0],c[1],c[2],a*edge);
+  }
+}
+function profileSmoothRoundedRect(frame,x,y,w,h,r,c,a=255,width=4){
+  const rr=Math.max(2,Math.min(r,Math.min(w,h)/2));
+  profileSmoothLine(frame,x+rr,y,x+w-rr,y,width,c,a);
+  profileSmoothLine(frame,x+rr,y+h,x+w-rr,y+h,width,c,a);
+  profileSmoothLine(frame,x,y+rr,x,y+h-rr,width,c,a);
+  profileSmoothLine(frame,x+w,y+rr,x+w,y+h-rr,width,c,a);
+  profileSmoothCircle(frame,x+rr,y+rr,rr,c,a,false,width);
+  profileSmoothCircle(frame,x+w-rr,y+rr,rr,c,a,false,width);
+  profileSmoothCircle(frame,x+rr,y+h-rr,rr,c,a,false,width);
+  profileSmoothCircle(frame,x+w-rr,y+h-rr,rr,c,a,false,width);
+}
+function profileSmoothRing(frame,cx,cy,r,c,a=255,width=3){ profileSmoothCircle(frame,cx,cy,r,c,a,false,width); }
+function profileSmoothPetal(frame,cx,cy,rx,ry,c,a=255,rot=0){
+  const cos=Math.cos(rot),sin=Math.sin(rot);
+  const minX=Math.max(0,Math.floor(cx-rx-2)),maxX=Math.min(frame.width-1,Math.ceil(cx+rx+2));
+  const minY=Math.max(0,Math.floor(cy-ry-2)),maxY=Math.min(frame.height-1,Math.ceil(cy+ry+2));
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+    const dx=x-cx,dy=y-cy; const u=dx*cos+dy*sin,v=-dx*sin+dy*cos;
+    const q=(u*u)/(rx*rx)+(v*v)/(ry*ry); const edge=Math.max(0,Math.min(1,(1-q)*2));
+    if(edge>0) profileSmoothBlendPixel(frame,x,y,c[0],c[1],c[2],a*edge);
+  }
+}
+function profileSmoothStar(frame,cx,cy,r,c,a=255){
+  for(let i=0;i<5;i++){
+    const a1=-Math.PI/2+i*2*Math.PI/5, a2=-Math.PI/2+(i+1)*2*Math.PI/5;
+    profileSmoothLine(frame,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,2,c,a);
+    const ai=(a1+a2)/2, ri=r*.38;
+    profileSmoothLine(frame,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(ai)*ri,cy+Math.sin(ai)*ri,2,c,a);
+  }
+}
+function profileFrameCornerJewel(frame,x,y,outer,inner,phase=0){
+  profileSmoothCircle(frame,x,y,outer,[255,255,255],230,true);
+  profileSmoothCircle(frame,x,y,inner,outer[0]===255?[255,190,230]:[255,235,150],245,true);
+  const gl=Math.max(0,Math.sin(phase*Math.PI*2+x*.03))*2;
+  profileSmoothCircle(frame,x-gl,y-gl,1.5,[255,255,255],230,true);
+}
+
 function drawProfileFrame(frame, frameId, phase=0){
   if(!frameId || !PROFILE_FRAMES[frameId]) return;
   const s=PROFILE_FRAMES[frameId].style;
-  const p=phase*Math.PI*2;
   const W=frame.width,H=frame.height;
-  const rect=(x,y,w,h,c,a=255)=>profilePixelLine(frame,x,y,x+w,y,Math.max(2,h),...c,a);
-  // Outer frame always stays outside the content-safe center.
+  const p=phase*Math.PI*2;
+  const inset=9;
+  // These are intentionally smooth ornamental overlays rather than pixel-art borders.
   switch(s){
     case "rhinestone": {
-      const c=[255,205,235], hi=[255,255,255];
-      rect(12,12,W-24,3,c,245); rect(12,H-15,W-24,3,c,245);
-      rect(12,12,3,H-24,c,245); rect(W-15,12,3,H-24,c,245);
-      const pts=[[25,25],[70,18],[130,26],[W-130,26],[W-70,18],[W-25,25],[25,H-25],[75,H-18],[W-75,H-18],[W-25,H-25]];
-      pts.forEach(([x,y],i)=>profileDiamond(frame,x,y,3,i%2?hi:c,230));
+      profileSmoothRoundedRect(frame,inset,inset,W-inset*2,H-inset*2,22,[235,150,205],235,5);
+      profileSmoothRoundedRect(frame,16,16,W-32,H-32,17,[255,245,255],220,2);
+      [[28,28],[W-28,28],[28,H-28],[W-28,H-28],[W/2,14],[W/2,H-14]].forEach((q,i)=>profileFrameCornerJewel(frame,q[0],q[1],7,4,i/6+phase));
+      for(let i=0;i<12;i++){const x=45+i*64; profileSmoothCircle(frame,x,12+Math.sin(p+i)*2,2,[255,255,255],190,true);}
       break;
     }
     case "pink_glitter": {
-      const c=[255,105,190], hi=[255,220,245];
-      rect(10,10,W-20,5,c,245); rect(10,H-15,W-20,5,c,245);
-      rect(10,10,5,H-20,c,245); rect(W-15,10,5,H-20,c,245);
-      for(let i=0;i<18;i++){const x=18+((i*97)%760), y=18+((i*61)%464); const xx=x+Math.sin(p+i)*3, yy=y+Math.cos(p*1.2+i)*3; profileStar(frame,Math.round(xx),Math.round(yy),i%3===0?3:2,i%2?hi:c,180);}
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,24,[255,75,175],245,7);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,18,[255,190,230],210,2);
+      for(let i=0;i<22;i++){const x=20+((i*83)%760), y=20+((i*47)%460); profileSmoothStar(frame,x+Math.sin(p+i)*2,y+Math.cos(p+i)*2,i%3===0?5:3,i%2?[255,255,255]:[255,130,205],170);}
       break;
     }
     case "candyland": {
-      const cols=[[255,120,190],[255,210,90],[125,210,255],[190,130,255],[125,235,180]];
-      for(let i=0;i<20;i++){const c=cols[i%cols.length]; const x=i*42; profileFill(frame,x,8,42,7,...c,245); profileFill(frame,x,H-15,42,7,...c,245);}
-      for(let i=0;i<12;i++){const c=cols[i%cols.length]; profileFill(frame,8,i*40,7,40,...c,245); profileFill(frame,W-15,i*40,7,40,...c,245);}
+      const cols=[[255,125,195],[255,210,90],[125,210,255],[190,135,255],[120,235,180]];
+      profileSmoothRoundedRect(frame,9,9,W-18,H-18,25,[255,175,220],225,4);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,18,[255,235,250],180,2);
+      for(let i=0;i<24;i++){const side=i%4;let x,y;if(side===0){x=28+i*31;y=10;}else if(side===1){x=W-10;y=25+i*19;}else if(side===2){x=W-28-i*31;y=H-10;}else{x=10;y=H-25-i*19;} profileSmoothCircle(frame,x,y,5,cols[i%cols.length],235,true); profileSmoothCircle(frame,x-1,y-1,2,[255,255,255],130,true);}
       break;
     }
     case "butterfly": {
-      const cols=[[255,150,220],[140,215,255],[200,150,255],[255,235,120]];
-      for(let i=0;i<10;i++){const x=30+i*82, y=i%2?H-28:25; profileButterfly(frame,Math.round(x+Math.sin(p+i)*4),y,4+i%2,cols[i%cols.length]);}
+      profileSmoothRoundedRect(frame,10,10,W-20,H-20,25,[175,105,235],230,4);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,18,[245,200,255],170,2);
+      const cols=[[255,140,215],[120,205,255],[195,135,255],[255,225,110]];
+      for(let i=0;i<10;i++){const x=30+i*82,y=i%2?H-28:28; profileButterfly(frame,Math.round(x+Math.sin(p+i)*3),y,4+i%2,cols[i%cols.length]);}
       break;
     }
     case "rainbow": {
       const cols=profileEffectColors("rainbow");
-      for(let i=0;i<cols.length;i++){const y=10+i*4; profileFill(frame,10,y,W-20,4,...cols[i],235); profileFill(frame,10,H-14-y,W-20,4,...cols[i],235);}
-      for(let i=0;i<4;i++){const x=10+i*4; profileFill(frame,x,10,4,H-20,...cols[i],220); profileFill(frame,W-14-x,10,4,H-20,...cols[(i+2)%cols.length],220);}
+      for(let i=0;i<cols.length;i++) profileSmoothRoundedRect(frame,9+i*3,9+i*3,W-18-i*6,H-18-i*6,28-i,[...cols[i]],205,3);
+      profileSmoothRoundedRect(frame,30,30,W-60,H-60,18,[255,255,255],110,2);
       break;
     }
     case "starfall": {
-      const c=[255,230,95], hi=[255,255,255];
-      rect(10,10,W-20,3,c,230); rect(10,H-13,W-20,3,c,230); rect(10,10,3,H-20,c,230); rect(W-13,10,3,H-20,c,230);
-      for(let i=0;i<18;i++){const x=22+((i*83)%750), y=18+((i*47)%460); const yy=((y+(phase*45*(i%3+1)))%475)+12; profileStar(frame,x,Math.round(yy),i%4===0?3:2,i%2?hi:c,190);}
+      profileSmoothRoundedRect(frame,9,9,W-18,H-18,22,[255,215,75],235,5);
+      profileSmoothRoundedRect(frame,18,18,W-36,H-36,17,[255,245,170],150,2);
+      for(let i=0;i<20;i++){const x=22+((i*83)%750), y=((18+(i*47)%455+phase*45*(i%3+1))%460)+20; profileSmoothStar(frame,x,y,i%4===0?6:4,i%2?[255,255,255]:[255,225,90],190);}
       break;
     }
     case "spiderweb": {
-      const c=[220,220,230];
-      for(const [cx,cy] of [[35,35],[W-35,35],[35,H-35],[W-35,H-35]]){
-        for(let r=10;r<=45;r+=9){for(let a=0;a<Math.PI*2;a+=Math.PI/12){const x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);profileFill(frame,x,y,2,2,...c,210);}}
-        for(let a=0;a<Math.PI*2;a+=Math.PI/6) profilePixelLine(frame,cx,cy,cx+Math.cos(a)*48,cy+Math.sin(a)*48,1,...c,210);
+      profileSmoothRoundedRect(frame,9,9,W-18,H-18,22,[210,210,225],220,3);
+      for(const [cx,cy] of [[34,34],[W-34,34],[34,H-34],[W-34,H-34]]){
+        for(let r=12;r<=55;r+=11) profileSmoothRing(frame,cx,cy,r,[220,220,235],145,1.6);
+        for(let a=0;a<Math.PI*2;a+=Math.PI/6) profileSmoothLine(frame,cx,cy,cx+Math.cos(a)*58,cy+Math.sin(a)*58,1.5,[220,220,235],170);
       }
       break;
     }
     case "gothic": {
-      const c=[35,28,45], hi=[170,120,190];
-      rect(10,10,W-20,7,c,245); rect(10,H-17,W-20,7,c,245); rect(10,10,7,H-20,c,245); rect(W-17,10,7,H-20,c,245);
-      for(let x=25;x<W-20;x+=28){profileDiamond(frame,x,17,3,hi,180);profileDiamond(frame,x,H-17,3,hi,180);}
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,20,[30,22,38],250,8);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,15,[150,95,170],190,2);
+      for(let x=28;x<W-25;x+=30){profileSmoothCircle(frame,x,14,4,[205,145,220],180,false,2);profileSmoothCircle(frame,x,H-14,4,[205,145,220],180,false,2);}
       break;
     }
     case "crimson": {
-      const c=[150,20,40], hi=[255,190,160];
-      rect(9,9,W-18,8,c,245); rect(9,H-17,W-18,8,c,245); rect(9,9,8,H-18,c,245); rect(W-17,9,8,H-18,c,245);
-      rect(18,18,W-36,2,hi,190); rect(18,H-20,W-36,2,hi,190);
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,21,[115,10,28],250,9);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,16,[225,80,95],175,2);
+      for(let i=0;i<10;i++){const x=35+i*80; profileSmoothPetal(frame,x,15,4,9,[255,160,165],170,0); profileSmoothPetal(frame,x+7,15,4,9,[190,35,55],180,0);}
       break;
     }
     case "royal_gold": {
-      const c=[255,205,70], hi=[255,245,160];
-      rect(8,8,W-16,6,c,250); rect(8,H-14,W-16,6,c,250); rect(8,8,6,H-16,c,250); rect(W-14,8,6,H-16,c,250);
-      rect(19,19,W-38,2,hi,220); rect(19,H-21,W-38,2,hi,220); rect(19,19,2,H-40,hi,220); rect(W-21,19,2,H-40,hi,220);
-      profileCrown(frame,40,32,6,c); profileCrown(frame,W-40,32,6,c);
+      profileSmoothRoundedRect(frame,7,7,W-14,H-14,24,[210,155,35],250,8);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[255,235,140],220,2);
+      for(const [x,y] of [[38,30],[W-38,30],[38,H-30],[W-38,H-30]]) profileCrown(frame,x,y,7,[255,215,80]);
+      for(let i=0;i<12;i++) profileSmoothCircle(frame,48+i*64,12,2,[255,245,175],180,true);
       break;
     }
     case "diamond": {
-      const c=[170,220,255], hi=[255,255,255];
-      rect(10,10,W-20,4,c,230); rect(10,H-14,W-20,4,c,230); rect(10,10,4,H-20,c,230); rect(W-14,10,4,H-20,c,230);
-      for(const [x,y] of [[28,28],[W-28,28],[28,H-28],[W-28,H-28]]){profileDiamond(frame,x,y,7,c,220);profileDiamond(frame,x,y,3,hi,240);}
+      profileSmoothRoundedRect(frame,9,9,W-18,H-18,23,[135,205,255],235,5);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[230,250,255],180,2);
+      for(const [x,y] of [[28,28],[W-28,28],[28,H-28],[W-28,H-28]]){profileSmoothCircle(frame,x,y,9,[120,205,255],210,true);profileSmoothCircle(frame,x-2,y-2,4,[255,255,255],230,true);}
       break;
     }
     case "champagne": {
-      const c=[235,190,90], hi=[255,240,160];
-      rect(10,10,W-20,4,c,235); rect(10,H-14,W-20,4,c,235); rect(10,10,4,H-20,c,235); rect(W-14,10,4,H-20,c,235);
-      for(let i=0;i<16;i++){const x=20+((i*67)%750), y=20+((i*31)%450); const yy=y-((phase*35+i*5)%28); profileFill(frame,x,Math.round(yy),3,3,...(i%2?hi:c),190);}
+      profileSmoothRoundedRect(frame,9,9,W-18,H-18,23,[225,175,65],235,5);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[255,235,155],170,2);
+      for(let i=0;i<18;i++){const x=24+((i*61)%750), y=25+((i*37)%440), yy=y-((phase*35+i*7)%25); profileSmoothCircle(frame,x,yy,2.5,[255,240,170],180,true);}
       break;
     }
     case "purple": {
-      const c=[150,75,255], hi=[235,190,255];
-      rect(9,9,W-18,7,c,245); rect(9,H-16,W-18,7,c,245); rect(9,9,7,H-18,c,245); rect(W-16,9,7,H-18,c,245);
-      profileCrown(frame,42,34,7,hi); profileCrown(frame,W-42,34,7,hi);
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[125,55,235],245,8);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[220,170,255],185,2);
+      profileCrown(frame,42,32,7,[245,210,255]); profileCrown(frame,W-42,32,7,[245,210,255]);
+      for(let i=0;i<10;i++) profileSmoothCircle(frame,45+i*70,12,2,[245,210,255],170,true);
       break;
     }
     case "toxic": {
-      const c=[90,255,70], hi=[210,255,100];
-      rect(8,8,W-16,6,c,250); rect(8,H-14,W-16,6,c,250); rect(8,8,6,H-16,c,250); rect(W-14,8,6,H-16,c,250);
-      for(let i=0;i<14;i++){const x=20+((i*59)%755), y=20+((i*43)%455); profileStar(frame,x,y,2,i%3?c:hi,210);}
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[55,225,60],250,7);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[190,255,105],175,2);
+      for(let i=0;i<16;i++){const x=20+((i*53)%760),y=20+((i*71)%450);profileSmoothCircle(frame,x,y,2.5,i%3?[100,255,80]:[220,255,120],185,true);}
       break;
     }
     case "chrome": {
-      const c=[180,190,205], hi=[245,250,255], dark=[55,60,70];
-      rect(8,8,W-16,5,dark,245); rect(8,H-13,W-16,5,dark,245); rect(8,8,5,H-16,dark,245); rect(W-13,8,5,H-16,dark,245);
-      rect(16,16,W-32,2,hi,230); rect(16,H-18,W-32,2,c,230);
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,22,[40,45,55],250,8);
+      profileSmoothRoundedRect(frame,19,19,W-38,H-38,16,[215,225,240],205,3);
+      profileSmoothLine(frame,25,25,W-25,25,2,[255,255,255],220); profileSmoothLine(frame,25,H-25,W-25,H-25,2,[100,110,125],180);
       break;
     }
     case "black_ice": {
-      const dark=[18,24,35], ice=[130,225,255], hi=[225,250,255];
-      rect(8,8,W-16,7,dark,250); rect(8,H-15,W-16,7,dark,250); rect(8,8,7,H-16,dark,250); rect(W-15,8,7,H-16,dark,250);
-      for(let i=0;i<10;i++){const x=25+i*78; profileSnowflake(frame,x,22,4, i%2?ice:hi); profileSnowflake(frame,x,H-22,4, i%2?hi:ice);}
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[15,23,38],250,8);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[110,205,245],205,2);
+      for(let i=0;i<10;i++){const x=28+i*78;profileSnowflake(frame,x,22,4,i%2?[145,225,255]:[235,250,255]);profileSnowflake(frame,x,H-22,4,i%2?[235,250,255]:[145,225,255]);}
       break;
     }
     case "haunted": {
-      const orange=[245,125,25], dark=[45,20,25], purple=[135,75,180];
-      rect(8,8,W-16,7,dark,250); rect(8,H-15,W-16,7,dark,250); rect(8,8,7,H-16,dark,250); rect(W-15,8,7,H-16,dark,250);
-      for(let i=0;i<7;i++){const x=35+i*115; profilePumpkin(frame,x,20,5,orange,phase+i*.1);}
-      for(let i=0;i<5;i++){const x=70+i*150; profileGhost(frame,x,H-27,4,i%2?purple:[230,230,240]);}
+      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[38,17,28],250,8);
+      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[125,65,170],185,2);
+      for(let i=0;i<7;i++){const x=35+i*115;profilePumpkin(frame,x,20,5,[245,125,25],phase+i*.1);}
+      for(let i=0;i<5;i++){const x=70+i*150;profileGhost(frame,x,H-27,4,i%2?[145,80,185]:[230,230,240]);}
       break;
     }
   }
