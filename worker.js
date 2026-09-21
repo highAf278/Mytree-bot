@@ -3848,11 +3848,12 @@ function drawProfileFrame(frame, frameId, phase=0){
   const style=PROFILE_FRAMES[frameId].style;
   const p=phase*Math.PI*2;
 
-  // Premium profile frame: rhinestones should read as actual jewelry at Discord size.
-  // The frame stays outside the content so it never competes with the profile card.
-  const x=7,y=7,w=786,h=486;
+  // Premium frame zone: the cosmetic frames the ENTIRE profile composition.
+  // Keep the stroke thin and elegant so the tree + profile card read as one
+  // collectible profile skin.
+  const x=9,y=9,w=782,h=482;
   const palette={
-    rhinestone:[[190,78,140],[255,238,250]], pink_glitter:[[255,102,204],[255,225,250]],
+    rhinestone:[[204,102,153],[255,235,250]], pink_glitter:[[255,102,204],[255,225,250]],
     candyland:[[255,102,153],[255,210,100]], butterfly:[[115,125,155],[245,235,255]],
     rainbow:[[120,70,190],[100,210,255]], starfall:[[190,135,20],[255,240,130]],
     spiderweb:[[105,105,115],[235,235,245]], gothic:[[65,35,75],[190,145,205]],
@@ -3864,81 +3865,137 @@ function drawProfileFrame(frame, frameId, phase=0){
   };
   const [base,hi]=palette[style]||[[110,110,125],[235,235,245]];
 
-  profileSmoothRoundedRect(frame,x,y,w,h,20,base,235,2.0);
-  profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,17,[255,255,255],150,1.0);
+  // Clean double-line frame. The tiny gap between lines preserves the rounded
+  // profile card underneath and gives the cosmetic a polished, purchased look.
+  profileSmoothRoundedRect(frame,x,y,w,h,18,base,230,1.8);
+  profileSmoothRoundedRect(frame,x+3,y+3,w-6,h-6,15,hi,170,0.9);
 
-  const sparkle=(cx,cy,r=2.5)=>{
-    const pulse=.85+.25*Math.max(0,Math.sin(p+cx*.018));
-    profileSmoothStar(frame,cx,cy,r*pulse,hi,220);
-    profileSmoothCircle(frame,cx-.7,cy-.7,.8,[255,255,255],225,true);
+  const sparkle=(cx,cy,r=3)=>{
+    const pulse=0.8+0.35*Math.max(0,Math.sin(p+cx*.017));
+    profileSmoothStar(frame,cx,cy,r*pulse,hi,235);
+    profileSmoothCircle(frame,cx-0.7,cy-0.7,0.8,[255,255,255],210,true);
   };
+  const butterfly=(cx,cy,sc,variant,offset=0)=>profileButterfly(frame,cx,cy,sc,variant,phase+offset);
 
-  if(style==='rhinestone'){
-    // A continuous princess rhinestone border: evenly spaced stones instead of
-    // scattered dots. Each stone has a bright center and one tiny facet line.
-    const gem=(cx,cy,scale=1,offset=0)=>{
-      const shimmer=.80+.30*Math.max(0,Math.sin(p+offset));
-      const r=3.15*scale;
-      profileSmoothCircle(frame,cx,cy,r,[255,190,232],240,true);
-      profileSmoothCircle(frame,cx,cy,r*.68,[255,238,250],245,true);
-      profileSmoothLine(frame,cx-r*.62,cy-r*.62,cx+r*.62,cy+r*.62,.65,[255,255,255],190);
-      if(shimmer>.96) profileSmoothStar(frame,cx-r*.65,cy-r*.65,1.5*scale,[255,255,255],235);
+  if(style==='butterfly'){
+    // Butterfly Swarm: a true full-profile swarm. Butterflies travel around
+    // the outside border with varied colors, sizes, and phases.
+    const pts=[
+      [74,y+18,12,0],[205,y+16,11,1],[350,y+18,12,2],[505,y+16,11,3],[650,y+18,12,4],
+      [x+w-28,y+105,11,5],[x+w-24,y+300,12,1],
+      [650,y+h-18,11,0],[510,y+h-16,12,2],[350,y+h-18,11,4],[205,y+h-16,12,5],[74,y+h-18,11,1],
+      [x+22,y+330,12,3],[x+24,y+155,11,5]
+    ];
+    for(let i=0;i<pts.length;i++){
+      const [cx,cy,sc,v]=pts[i];
+      butterfly(cx,cy,sc,v,i*0.055);
+      if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
+    }
+  } else if(style==='rhinestone'||style==='diamond'){
+    // Rhinestone Princess V3: true jewelry-like stones. Each stone is built as
+    // a faceted diamond rather than a tiny dot so the cosmetic survives Discord
+    // resizing and GIF palette conversion.
+    const gem=(cx,cy,scale=1,phaseOffset=0)=>{
+      const shimmer=0.75+0.35*Math.max(0,Math.sin(p+phaseOffset));
+      const pinkOuter=style==='diamond'?[170,235,255]:[245,145,205];
+      const pinkMid=style==='diamond'?[220,250,255]:[255,205,240];
+      const facet=style==='diamond'?[65,145,205]:[190,75,160];
+      const white=[255,255,255];
+      const r=6.2*scale;
+      // Soft jewel body.
+      profileSmoothCircle(frame,cx,cy,r,pinkOuter,235,true);
+      profileSmoothCircle(frame,cx,cy,r*.72,pinkMid,245,true);
+      // Four crisp facets make a diamond silhouette.
+      profileSmoothLine(frame,cx,cy-r*.88,cx+r*.88,cy,2.0*scale,white,210);
+      profileSmoothLine(frame,cx+r*.88,cy,cx,cy+r*.88,2.0*scale,facet,220);
+      profileSmoothLine(frame,cx,cy+r*.88,cx-r*.88,cy,2.0*scale,facet,210);
+      profileSmoothLine(frame,cx-r*.88,cy,cx,cy-r*.88,2.0*scale,white,225);
+      profileSmoothLine(frame,cx,cy,cx+r*.42,cy-r*.42,1.0*scale,facet,190);
+      profileSmoothCircle(frame,cx-r*.22,cy-r*.27,1.35*scale,white,225,true);
+      if(shimmer>0.96) profileSmoothStar(frame,cx-r*.55,cy-r*.62,2.3*scale,white,235);
     };
-    const step=22;
-    let n=0;
-    for(let cx=x+15;cx<=x+w-15;cx+=step) gem(cx,y+8,1,n++*.21);
-    for(let cx=x+15;cx<=x+w-15;cx+=step) gem(cx,y+h-8,1,n++*.21);
-    for(let cy=y+30;cy<=y+h-30;cy+=step) gem(x+8,cy,.95,n++*.21);
-    for(let cy=y+30;cy<=y+h-30;cy+=step) gem(x+w-8,cy,.95,n++*.21);
 
-    // Four larger heart-shaped corner jewels make the frame unmistakably premium.
-    const heart=(cx,cy,scale)=>{
-      profileSmoothCircle(frame,cx-3.2*scale,cy-1.4*scale,4.2*scale,[255,135,205],235,true);
-      profileSmoothCircle(frame,cx+3.2*scale,cy-1.4*scale,4.2*scale,[255,135,205],235,true);
-      profileSmoothPetal(frame,cx,cy+3*scale,7.2*scale,5.6*scale,[255,220,245],245,0);
-      profileSmoothStar(frame,cx-1.5*scale,cy-3*scale,1.8*scale,[255,255,255],230);
-    };
-    heart(x+18,y+18,1.15); heart(x+w-18,y+18,1.15);
-    heart(x+18,y+h-18,1.15); heart(x+w-18,y+h-18,1.15);
-    sparkle(x+38,y+25,2.2); sparkle(x+w-38,y+25,2.2);
-    sparkle(x+38,y+h-25,2.2); sparkle(x+w-38,y+h-25,2.2);
-  } else if(style==='diamond'){
-    const gem=(cx,cy,scale=1)=>{
-      profileSmoothPetal(frame,cx,cy,7*scale,4.2*scale,hi,240,Math.PI/4);
-      profileSmoothPetal(frame,cx,cy,4.7*scale,2.8*scale,[225,250,255],245,Math.PI/4);
-      profileSmoothLine(frame,cx-4*scale,cy,cx,cy-3*scale,1,[75,160,220],220);
-      profileSmoothLine(frame,cx,cy-3*scale,cx+4*scale,cy,1,[75,160,220],220);
-    };
-    for(let cx=x+28;cx<=x+w-28;cx+=48){gem(cx,y+9,.9);gem(cx,y+h-9,.9);}
-    for(let cy=y+35;cy<=y+h-35;cy+=48){gem(x+9,cy,.8);gem(x+w-9,cy,.8);}
-  } else if(style==='butterfly'){
-    const pts=[[75,y+17,12,0],[205,y+16,11,1],[350,y+18,12,2],[505,y+16,11,3],[650,y+18,12,4],
-      [x+w-24,y+115,11,5],[x+w-24,y+300,12,1],[650,y+h-18,11,0],[510,y+h-16,12,2],
-      [350,y+h-18,11,4],[205,y+h-16,12,5],[75,y+h-18,11,1],[x+23,y+330,12,3],[x+24,y+155,11,5]];
-    for(let i=0;i<pts.length;i++){const [cx,cy,sc,v]=pts[i];profileButterfly(frame,cx,cy,sc,v,phase+i*.055);if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);}
-  } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
-    for(let i=0;i<8;i++){const cx=x+55+i*((w-110)/7);sparkle(cx,y+7,2.4);sparkle(cx,y+h-7,2.4);}
-    sparkle(x+10,y+h/2,2.4);sparkle(x+w-10,y+h/2,2.4);
+    // Closely spaced enough to read as a continuous luxury rhinestone border,
+    // but with enough breathing room that it doesn't become a dotted stitch.
+    const top=[];
+    const bottom=[];
+    for(let i=0;i<13;i++){
+      top.push([x+24+i*((w-48)/12),y+11, i%3===0?1.08:.82]);
+      bottom.push([x+24+i*((w-48)/12),y+h-11, i%4===0?1.02:.78]);
+    }
+    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.37));
+
+    const sides=[
+      [x+11,y+74,0.78],[x+11,y+170,.88],[x+11,y+266,.78],[x+11,y+362,.9],
+      [x+w-11,y+74,.88],[x+w-11,y+170,.78],[x+w-11,y+266,.9],[x+w-11,y+362,.78]
+    ];
+    sides.forEach((g,i)=>gem(g[0],g[1],g[2],1.1+i*.43));
+
+    // Four unmistakable larger corner stones.
+    const corners=[
+      [x+24,y+24,1.55],[x+w-24,y+24,1.55],
+      [x+24,y+h-24,1.55],[x+w-24,y+h-24,1.55]
+    ];
+    corners.forEach((g,i)=>{
+      gem(g[0],g[1],g[2],2+i*.8);
+      profileSmoothStar(frame,g[0]-2.8,g[1]-3.0,3.4,[255,255,255],165);
+    });
+    } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
+
+    for(let i=0;i<8;i++){
+      const cx=x+55+i*((w-110)/7);
+      sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
+    }
+    sparkle(x+10,y+h/2,2.4); sparkle(x+w-10,y+h/2,2.4);
   } else if(style==='rainbow'){
     const cols=[[230,70,70],[245,150,45],[240,220,60],[70,190,90],[70,150,230],[150,80,210]];
-    for(let i=0;i<6;i++){profileSmoothLine(frame,x+38,y+5+i*.9,x+w-38,y+5+i*.9,1,cols[i],210);profileSmoothLine(frame,x+38,y+h-5-i*.9,x+w-38,y+h-5-i*.9,1,cols[i],210);}
-  } else if(style==='candyland'){
-    for(let i=0;i<8;i++){const cx=x+52+i*((w-104)/7);profileCandy(frame,cx,y+7,4,i%2?hi:base,i%2);profileCandy(frame,cx,y+h-7,4,i%2?base:hi,(i+1)%2);}
+    for(let i=0;i<6;i++){
+      const yy=y+6+i*.9;
+      profileSmoothLine(frame,x+38,y+6+i*.9,x+w-38,y+6+i*.9,1,cols[i],210);
+      profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
+    }
   } else if(style==='spiderweb'||style==='gothic'){
     const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
-    for(const [cx,cy] of pts)for(let r=8;r<=18;r+=5)profileSmoothRing(frame,cx,cy,r,hi,145,1);
-    profileSmoothLine(frame,x+34,y+34,x+w-34,y+h-34,1,hi,125);profileSmoothLine(frame,x+w-34,y+34,x+34,y+h-34,1,hi,125);
+    for(const [cx,cy] of pts){
+      for(let r=8;r<=18;r+=5) profileSmoothRing(frame,cx,cy,r,hi,145,1);
+    }
+    profileSmoothLine(frame,x+34,y+34,x+w-34,y+h-34,1,hi,125);
+    profileSmoothLine(frame,x+w-34,y+34,x+34,y+h-34,1,hi,125);
   } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
-    profileCrown(frame,x+31,y+12,5,hi);profileCrown(frame,x+w-31,y+12,5,hi);sparkle(x+31,y+h-12,2.5);sparkle(x+w-31,y+h-12,2.5);
-  } else if(style==='champagne'||style==='toxic'){
-    for(let i=0;i<7;i++){const cx=x+60+i*((w-120)/6);profileSmoothCircle(frame,cx,y+8,2.2,hi,190,true);profileSmoothCircle(frame,cx,y+h-8,2.2,hi,190,true);}
-    sparkle(x+31,y+31,2.3);sparkle(x+w-31,y+h-31,2.3);
+    profileCrown(frame,x+31,y+12,5,hi);
+    profileCrown(frame,x+w-31,y+12,5,hi);
+    sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
+  } else if(style==='candyland'){
+    for(let i=0;i<8;i++){
+      const cx=x+52+i*((w-104)/7);
+      profileCandy(frame,cx,y+7,4,i%2?hi:base,i%2);
+      profileCandy(frame,cx,y+h-7,4,i%2?base:hi,(i+1)%2);
+    }
+  } else if(style==='champagne'){
+    for(let i=0;i<7;i++){
+      const cx=x+60+i*((w-120)/6);
+      profileSmoothCircle(frame,cx,y+8,2.2,hi,190,true);
+      profileSmoothCircle(frame,cx,y+h-8,2.2,hi,190,true);
+    }
+    sparkle(x+31,y+31,2.3); sparkle(x+w-31,y+31,2.3);
+  } else if(style==='toxic'){
+    for(let i=0;i<7;i++){
+      const cx=x+58+i*((w-116)/6);
+      profileSmoothCircle(frame,cx,y+7,2.3,hi,210,true);
+      profileSmoothCircle(frame,cx,y+h-7,2.3,hi,210,true);
+    }
+    sparkle(x+30,y+30,2.5); sparkle(x+w-30,y+h-30,2.5);
   } else if(style==='chrome'||style==='black_ice'){
-    profileSmoothLine(frame,x+35,y+7,x+w-35,y+7,1.5,hi,220);profileSmoothLine(frame,x+35,y+h-7,x+w-35,y+h-7,1.5,hi,190);
-    profileSmoothLine(frame,x+7,y+35,x+7,y+h-35,1.2,hi,165);profileSmoothLine(frame,x+w-7,y+35,x+w-7,y+h-35,1.2,hi,165);
-    sparkle(x+30,y+30,2.2);sparkle(x+w-30,y+h-30,2.2);
+    profileSmoothLine(frame,x+35,y+7,x+w-35,y+7,1.5,hi,220);
+    profileSmoothLine(frame,x+35,y+h-7,x+w-35,y+h-7,1.5,hi,190);
+    profileSmoothLine(frame,x+7,y+35,x+7,y+h-35,1.2,hi,165);
+    profileSmoothLine(frame,x+w-7,y+35,x+w-7,y+h-35,1.2,hi,165);
+    sparkle(x+30,y+30,2.2); sparkle(x+w-30,y+h-30,2.2);
   } else {
-    for(let i=0;i<8;i++){const cx=x+55+i*((w-110)/7);sparkle(cx,y+7,2);sparkle(cx,y+h-7,2);}
+    for(let i=0;i<8;i++){
+      const cx=x+55+i*((w-110)/7);
+      sparkle(cx,y+7,2); sparkle(cx,y+h-7,2);
+    }
   }
 }
 
@@ -4021,74 +4078,90 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
   const [br,bgG,bb]=hexRgb(bg);
   const scene=solidRGBA(width,height,bg);
+  const ink=[48,35,55], muted=[112,92,120], white=[255,255,255];
 
-  // LEFT: featured tree showcase. The tree stays large and visually dominant,
-  // while the right side becomes a clean collectible profile information card.
-  profileBlendFill(scene,18,18,282,464,255,255,255,24);
-  profileSmoothRoundedRect(scene,18,18,282,464,22,[255,255,255],125,1.1);
-  profileBlendFill(scene,32,32,254,436,br,bgG,bb,36);
-  profileSmoothRoundedRect(scene,32,32,254,436,18,[255,255,255],70,.8);
-  profileSmoothCircle(scene,159,222,126,[255,255,255],30,true);
-  profileSmoothCircle(scene,159,222,98,[255,235,250],20,true);
+  // PROFILE REDESIGN V2:
+  // Keep the proven 800x500 direct renderer, but make the composition feel like
+  // a premium collectible card: dedicated tree showcase + structured cosmetic
+  // plaque + four real stat cards. No Browser Rendering is introduced here.
+
+  // Outer card and left showcase.
+  profileBlendFill(scene,16,16,768,468,255,255,255,34);
+  profileSmoothRoundedRect(scene,16,16,768,468,22,white,120,1.1);
+  profileSmoothRoundedRect(scene,28,28,278,444,18,white,72,1.0);
+  profileBlendFill(scene,40,40,254,420,br,bgG,bb,34);
+  profileSmoothRoundedRect(scene,40,40,254,420,16,white,62,0.8);
+
+  // Soft spotlight behind the tree. It gives the artwork a deliberate display
+  // area without changing the actual tree asset.
+  profileSmoothCircle(scene,167,223,128,white,34,true);
+  profileSmoothCircle(scene,167,223,101,[255,235,250],28,true);
 
   const treeFile=getTreeImage(player);
   const tree=await getPngAsset(env,treeFile);
-  const treeLayer=containRGBA(tree,330,420);
-  alphaComposite(scene,treeLayer,-2,68);
+  const treeLayer=containRGBA(tree,340,420);
+  alphaComposite(scene,treeLayer,6,58);
 
   const decorFile=getDecorationImage(player);
   if(decorFile){
-    try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,125,125);alphaComposite(scene,dl,158,322);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
+    try{
+      const decor=await getPngAsset(env,decorFile);
+      const dl=containRGBA(decor,125,125);
+      alphaComposite(scene,dl,170,322);
+    }catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
 
-  // Small pedestal keeps the featured artwork grounded without covering it.
-  profileSmoothRoundedRect(scene,62,425,190,24,12,[255,255,255],95,0.8);
-  profileBlendFill(scene,82,429,150,2,255,255,255,120);
-  drawBitmapText(scene,"FEATURED TREE",108,436,1,[110,88,112],240);
+  // Small, unobtrusive showcase label. The old wide pill was visually cramped.
+  profileBlendFill(scene,72,430,190,24,255,255,255,78);
+  profileSmoothRoundedRect(scene,72,430,190,24,12,white,82,0.7);
+  drawBitmapText(scene,"FEATURED TREE",118,437,1,[105,86,115],170);
 
   const effectId=profileEffectKey(player)&&NAME_EFFECTS[profileEffectKey(player)]?profileEffectKey(player):"";
   const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
   const title=titleId?SOLO_TITLES[titleId].name:"No Title";
   const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
-  const ink=[48,38,54], muted=[105,88,112], accent=profileEffectColor(effectId);
+  const accent=profileEffectColor(effectId);
 
-  // RIGHT: structured profile card. More breathing room and stronger hierarchy.
-  profileBlendFill(scene,318,18,464,464,255,255,255,210);
-  profileSmoothRoundedRect(scene,318,18,464,464,22,[255,255,255],155,1.1);
-  profileBlendFill(scene,332,30,436,52,br,bgG,bb,48);
-  profileSmoothRoundedRect(scene,332,30,436,52,16,[255,255,255],70,.8);
-  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),352,42,4,ink,395);
-  drawBitmapText(scene,"WEREWIVES PROFILE",352,72,2,muted,395);
+  // RIGHT SIDE: identity header.
+  profileSmoothRoundedRect(scene,326,28,446,66,18,white,115,1.0);
+  profileBlendFill(scene,340,40,418,2,255,255,255,135);
+  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),348,46,4,ink,400);
+  drawBitmapText(scene,"WEREWIVES PROFILE",348,80,2,muted,400);
+  profileSmoothStar(scene,748,52,10,[255,185,225],170);
+  profileSmoothStar(scene,724,78,4,[255,255,255],190);
 
-  // Title plaque.
-  profileSmoothRoundedRect(scene,342,96,416,126,17,[255,255,255],120,1.0);
-  profileBlendFill(scene,352,106,396,54,br,bgG,bb,58);
-  profileSmoothRoundedRect(scene,352,106,396,54,13,[255,255,255],65,.7);
-  drawBitmapText(scene,"TITLE",370,118,2,muted,340);
+  // TITLE / NAME EFFECT: one proper cosmetic plaque instead of floating text.
+  profileSmoothRoundedRect(scene,326,104,446,126,18,white,125,1.0);
+  profileBlendFill(scene,338,116,422,102,br,bgG,bb,50);
+  profileSmoothRoundedRect(scene,338,116,422,102,14,white,65,0.8);
+  drawBitmapText(scene,"TITLE",360,128,2,muted,390);
   drawProfileEffectParticles(scene,effectId,phase);
-  drawAnimatedProfileTitle(scene,title,370,138,3,effectId,phase,350);
-  profileBlendFill(scene,352,168,396,2,255,255,255,95);
-  drawBitmapText(scene,"NAME EFFECT",370,180,2,muted,340);
-  drawBitmapText(scene,effect,370,201,2,accent,340);
+  drawAnimatedProfileTitle(scene,title,360,151,3,effectId,phase,365);
+  profileBlendFill(scene,360,181,365,1,255,255,255,100);
+  drawBitmapText(scene,"NAME EFFECT",360,191,2,muted,180);
+  drawBitmapText(scene,effect,490,191,2,accent,240);
 
-  // Stats are four distinct collectible tiles rather than one flat block.
-  const statCard=(x,y,w,h,label,value)=>{
-    profileSmoothRoundedRect(scene,x,y,w,h,13,[255,255,255],105,.85);
-    profileBlendFill(scene,x+10,y+9,w-20,2,255,255,255,115);
-    drawBitmapText(scene,label,x+16,y+20,1.75,muted,Math.round(w*.78));
-    drawBitmapText(scene,value,x+16,y+43,3,ink,Math.round(w*.80));
+  // FOUR STAT JEWELS: each stat gets its own subtle card and strong number.
+  const statCard=(x,y,w,h,label,value,accentColor)=>{
+    profileBlendFill(scene,x,y,w,h,255,255,255,88);
+    profileSmoothRoundedRect(scene,x,y,w,h,14,white,92,0.8);
+    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,120);
+    profileSmoothCircle(scene,x+20,y+25,3.2,accentColor||[255,180,220],190,true);
+    drawBitmapText(scene,label,x+32,y+18,1.8,muted,Math.max(90,w-48));
+    drawBitmapText(scene,value,x+18,y+43,3,ink,Math.max(100,w-36));
   };
-  statCard(342,234,200,68,"LEVEL",String(Number(player.level||1)));
-  statCard(558,234,200,68,"SPARKLES",Number(player.sparkles||0).toLocaleString());
-  statCard(342,310,200,68,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT");
-  statCard(558,310,200,68,"SOLO WINS",String(Number(player.soloWins||0)));
+  statCard(326,242,214,70,"LEVEL",String(Number(player.level||1)),[205,125,190]);
+  statCard(558,242,214,70,"SPARKLES",Number(player.sparkles||0).toLocaleString(),[255,190,220]);
+  statCard(326,320,214,70,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT",[155,205,165]);
+  statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)),[230,175,85]);
 
-  // Achievement row.
-  profileSmoothRoundedRect(scene,342,388,416,48,20,[255,255,255],115,.9);
-  profileBlendFill(scene,354,399,38,26,br,bgG,bb,78);
-  profileSmoothRoundedRect(scene,354,399,38,26,11,[255,255,255],65,.7);
-  drawBitmapText(scene,String(Number(player.titles?.length||0)),364,406,2,ink,70);
-  drawBitmapText(scene,"TITLES OWNED",410,406,2,muted,235);
+  // Titles owned is an achievement ribbon, not an afterthought at the bottom.
+  profileSmoothRoundedRect(scene,326,400,446,44,18,white,112,0.9);
+  profileSmoothRoundedRect(scene,340,409,34,26,10,[br,bgG,bb],75,0.7);
+  profileSmoothStar(scene,357,422,7,[255,190,225],190);
+  drawBitmapText(scene,String(Number(player.titles?.length||0)),350,414,2,ink,55);
+  drawBitmapText(scene,"TITLES OWNED",388,411,2,muted,190);
+  drawBitmapText(scene,"ACHIEVEMENTS",388,430,1,[145,120,150],180);
 
   drawProfileBadges(scene,profileBadgeKeys(player),phase);
   drawProfileFrame(scene,profileFrameKey(player),phase);
