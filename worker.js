@@ -9592,11 +9592,10 @@ async function handleTree(
   env,
   interaction
 ) {
-  await acknowledge(
-    env,
-    interaction
-  );
-
+  // The top-level interaction router already acknowledges /tree before
+  // entering ctx.waitUntil(). A second acknowledge here causes Discord to
+  // reject the interaction callback, leaving the original "thinking..."
+  // response stuck forever. Continue directly into the tree work.
   const user =
     getUserFromInteraction(
       interaction
