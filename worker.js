@@ -3241,6 +3241,17 @@ function hexRgb(hex){
   const n=parseInt(String(hex||"#ffd9ef").replace(/^#/ , ""),16)>>>0;
   return [(n>>16)&255,(n>>8)&255,n&255];
 }
+function profilePanelColors(rgb){
+  const [r,g,b]=rgb;
+  const mix=(v,t)=>Math.round(v+(255-v)*t);
+  const lum=0.2126*r+0.7152*g+0.0722*b;
+  let panel=[mix(r,.46),mix(g,.46),mix(b,.46)];
+  if(lum>238) panel=[245,245,245];
+  const panelSoft=[mix(r,.62),mix(g,.62),mix(b,.62)];
+  const panelBorder=[mix(r,.78),mix(g,.78),mix(b,.78)];
+  const panelAccent=[Math.max(0,Math.round(r*.72)),Math.max(0,Math.round(g*.72)),Math.max(0,Math.round(b*.72))];
+  return {panel,panelSoft,panelBorder,panelAccent};
+}
 function profileFill(frame,x,y,w,h,r,g,b,a=255){
   const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
   for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const o=(yy*frame.width+xx)*4;frame.data[o]=r;frame.data[o+1]=g;frame.data[o+2]=b;frame.data[o+3]=a;}
@@ -3892,54 +3903,53 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess V3: true jewelry-like stones. Each stone is built as
+    // Rhinestone Princess V5: true jewelry-like stones. Each stone is built as
     // a faceted diamond rather than a tiny dot so the cosmetic survives Discord
     // resizing and GIF palette conversion.
     const gem=(cx,cy,scale=1,phaseOffset=0)=>{
       const shimmer=0.75+0.35*Math.max(0,Math.sin(p+phaseOffset));
-      const pinkOuter=style==='diamond'?[170,235,255]:[245,145,205];
-      const pinkMid=style==='diamond'?[220,250,255]:[255,205,240];
-      const facet=style==='diamond'?[65,145,205]:[190,75,160];
+      const bezel=style==='diamond'?[55,125,185]:[170,55,125];
+      const outer=style==='diamond'?[170,235,255]:[255,145,205];
+      const inner=style==='diamond'?[225,250,255]:[255,220,242];
+      const facet=style==='diamond'?[70,150,205]:[205,85,160];
       const white=[255,255,255];
-      const r=6.2*scale;
-      // Soft jewel body.
-      profileSmoothCircle(frame,cx,cy,r,pinkOuter,235,true);
-      profileSmoothCircle(frame,cx,cy,r*.72,pinkMid,245,true);
-      // Four crisp facets make a diamond silhouette.
-      profileSmoothLine(frame,cx,cy-r*.88,cx+r*.88,cy,2.0*scale,white,210);
-      profileSmoothLine(frame,cx+r*.88,cy,cx,cy+r*.88,2.0*scale,facet,220);
-      profileSmoothLine(frame,cx,cy+r*.88,cx-r*.88,cy,2.0*scale,facet,210);
-      profileSmoothLine(frame,cx-r*.88,cy,cx,cy-r*.88,2.0*scale,white,225);
-      profileSmoothLine(frame,cx,cy,cx+r*.42,cy-r*.42,1.0*scale,facet,190);
-      profileSmoothCircle(frame,cx-r*.22,cy-r*.27,1.35*scale,white,225,true);
-      if(shimmer>0.96) profileSmoothStar(frame,cx-r*.55,cy-r*.62,2.3*scale,white,235);
+      const r=Math.max(3,Math.round(5.0*scale));
+      // A real jewelry setting: dark bezel + faceted diamond + white table.
+      profileDiamond(frame,cx,cy,r+2,bezel,235);
+      profileDiamond(frame,cx,cy,r+1,outer,245);
+      profileDiamond(frame,cx,cy,Math.max(2,r-1),inner,255);
+      profileSmoothLine(frame,cx,cy-r*.72,cx+r*.72,cy,1.0*scale,white,225);
+      profileSmoothLine(frame,cx+r*.72,cy,cx,cy+r*.72,1.0*scale,facet,225);
+      profileSmoothLine(frame,cx,cy+r*.72,cx-r*.72,cy,1.0*scale,facet,215);
+      profileSmoothLine(frame,cx-r*.72,cy,cx,cy-r*.72,1.0*scale,white,235);
+      profileSmoothCircle(frame,cx-r*.28,cy-r*.32,Math.max(.7,.85*scale),white,235,true);
+      if(shimmer>0.96) profileSmoothStar(frame,cx-r*.55,cy-r*.62,1.9*scale,white,245);
     };
 
-    // Tighter jewelry-chain spacing: more stones, slightly smaller faces, and
-    // more consistent rhythm so the border reads as a real rhinestone trim
-    // instead of isolated floating diamonds.
+    // Dense, evenly spaced stones read as a purchased jewelry chain rather than
+    // a dotted outline. Alternate sizes keep it luxurious without becoming noisy.
     const top=[];
     const bottom=[];
-    for(let i=0;i<17;i++){
-      top.push([x+22+i*((w-44)/16),y+11, i%4===0?0.92:.68]);
-      bottom.push([x+22+i*((w-44)/16),y+h-11, i%5===0?0.88:.66]);
+    for(let i=0;i<19;i++){
+      top.push([x+18+i*((w-36)/18),y+11, i%4===0?1.08:(i%2?0.82:.94)]);
+      bottom.push([x+18+i*((w-36)/18),y+h-11, i%5===0?1.06:(i%2?.82:.92)]);
     }
-    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.31));
+    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.37));
 
     const sides=[
-      [x+11,y+58,.68],[x+11,y+126,.72],[x+11,y+194,.68],[x+11,y+262,.72],[x+11,y+330,.68],[x+11,y+398,.72],
-      [x+w-11,y+58,.72],[x+w-11,y+126,.68],[x+w-11,y+194,.72],[x+w-11,y+262,.68],[x+w-11,y+330,.72],[x+w-11,y+398,.68]
+      [x+11,y+74,0.78],[x+11,y+170,.88],[x+11,y+266,.78],[x+11,y+362,.9],
+      [x+w-11,y+74,.88],[x+w-11,y+170,.78],[x+w-11,y+266,.9],[x+w-11,y+362,.78]
     ];
     sides.forEach((g,i)=>gem(g[0],g[1],g[2],1.1+i*.43));
 
     // Four unmistakable larger corner stones.
     const corners=[
-      [x+23,y+23,1.38],[x+w-23,y+23,1.38],
-      [x+23,y+h-23,1.38],[x+w-23,y+h-23,1.38]
+      [x+24,y+24,1.55],[x+w-24,y+24,1.55],
+      [x+24,y+h-24,1.55],[x+w-24,y+h-24,1.55]
     ];
     corners.forEach((g,i)=>{
       gem(g[0],g[1],g[2],2+i*.8);
-      profileSmoothStar(frame,g[0]-2.5,g[1]-2.7,2.9,[255,255,255],175);
+      profileSmoothStar(frame,g[0]-2.8,g[1]-3.0,3.4,[255,255,255],165);
     });
     } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
 
@@ -4081,8 +4091,10 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const [br,bgG,bb]=hexRgb(bg);
   const scene=solidRGBA(width,height,bg);
   const ink=[48,35,55], muted=[112,92,120], white=[255,255,255];
+  const panel=profilePanelColors([br,bgG,bb]);
+  const panelBg=panel.panel, panelSoft=panel.panelSoft, panelBorder=panel.panelBorder, panelAccent=panel.panelAccent;
 
-  // PROFILE REDESIGN V3:
+  // PROFILE REDESIGN V5:
   // Keep the proven 800x500 direct renderer, but make the composition feel like
   // a premium collectible card: dedicated tree showcase + structured cosmetic
   // plaque + four real stat cards. No Browser Rendering is introduced here.
@@ -4131,31 +4143,25 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),348,46,4,ink,400);
   drawBitmapText(scene,"WEREWIVES PROFILE",348,80,2,muted,400);
 
-  // TITLE / NAME EFFECT: one proper cosmetic plaque instead of floating text.
-  profileSmoothRoundedRect(scene,326,104,446,116,18,white,125,1.0);
-  profileBlendFill(scene,338,116,422,92,br,bgG,bb,50);
-  profileSmoothRoundedRect(scene,338,116,422,92,14,white,65,0.8);
+  // TITLE / NAME EFFECT: every information bubble uses a lighter tint of the
+  // player's own profile color, so the card changes naturally with /panel color.
+  profileBlendFill(scene,326,104,446,116,panelBg[0],panelBg[1],panelBg[2],235);
+  profileSmoothRoundedRect(scene,326,104,446,116,18,panelBorder,220,1.0);
+  profileBlendFill(scene,338,116,422,92,panelSoft[0],panelSoft[1],panelSoft[2],225);
+  profileSmoothRoundedRect(scene,338,116,422,92,14,panelBorder,205,0.8);
   drawBitmapText(scene,"TITLE",360,128,2,muted,390);
   drawProfileEffectParticles(scene,effectId,phase);
   drawAnimatedProfileTitle(scene,title,360,151,3,effectId,phase,365);
-  profileBlendFill(scene,360,181,365,1,255,255,255,100);
+  profileBlendFill(scene,360,181,365,1,255,255,255,145);
   drawBitmapText(scene,"NAME EFFECT",360,191,2,muted,180);
   drawBitmapText(scene,effect,490,191,2,accent,240);
 
-  // FOUR STAT JEWELS: all four cards use the same lightened version of the
-  // player's chosen profile background. Nothing is hard-coded pink here.
-  // The result is always visibly lighter than the user's own profile color,
-  // while still belonging to that color family.
-  const statBubble=[
-    Math.round(br+(255-br)*0.38),
-    Math.round(bgG+(255-bgG)*0.38),
-    Math.round(bb+(255-bb)*0.38)
-  ];
-  const statCard=(x,y,w,h,label,value,accentColor)=>{
-    profileFill(scene,x,y,w,h,statBubble[0],statBubble[1],statBubble[2],255);
-    profileSmoothRoundedRect(scene,x,y,w,h,14,white,125,0.9);
-    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,115);
-    profileSmoothCircle(scene,x+20,y+25,3.2,statBubble,220,true);
+  // FOUR STAT JEWELS: all four use the same lighter profile-color bubble.
+  const statCard=(x,y,w,h,label,value)=>{
+    profileBlendFill(scene,x,y,w,h,panelBg[0],panelBg[1],panelBg[2],240);
+    profileSmoothRoundedRect(scene,x,y,w,h,14,panelBorder,220,0.9);
+    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,150);
+    profileSmoothCircle(scene,x+20,y+25,3.2,panelAccent,220,true);
     drawBitmapText(scene,label,x+32,y+18,1.8,muted,Math.max(90,w-48));
     drawBitmapText(scene,value,x+18,y+43,3,ink,Math.max(100,w-36));
   };
@@ -4164,13 +4170,16 @@ async function renderProfileDirectFrame(env,player,phase=0){
   statCard(326,320,214,70,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT");
   statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)));
 
-  // Titles owned is an achievement ribbon, not an afterthought at the bottom.
-  profileSmoothRoundedRect(scene,326,400,446,48,18,white,112,0.9);
-  profileSmoothRoundedRect(scene,340,409,34,26,10,[br,bgG,bb],75,0.7);
-  profileSmoothStar(scene,357,422,7,[255,190,225],190);
+  // Titles owned uses the same color family so it reads as part of the profile
+  // instead of disappearing into the card background.
+  profileBlendFill(scene,326,400,446,48,panelBg[0],panelBg[1],panelBg[2],240);
+  profileSmoothRoundedRect(scene,326,400,446,48,18,panelBorder,220,0.9);
+  profileBlendFill(scene,340,409,34,26,panelSoft[0],panelSoft[1],panelSoft[2],235);
+  profileSmoothRoundedRect(scene,340,409,34,26,10,panelBorder,200,0.7);
+  profileSmoothStar(scene,357,422,7,panelAccent,225);
   drawBitmapText(scene,String(Number(player.titles?.length||0)),350,414,2,ink,55);
   drawBitmapText(scene,"TITLES OWNED",388,409,2,muted,210);
-  drawBitmapText(scene,"ACHIEVEMENTS",388,428,1,[145,120,150],200);
+  drawBitmapText(scene,"ACHIEVEMENTS",388,428,1,muted,200);
 
   drawProfileBadges(scene,profileBadgeKeys(player),phase);
   drawProfileFrame(scene,profileFrameKey(player),phase);
