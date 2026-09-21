@@ -4155,48 +4155,62 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileCrown(frame,x+w-31,y+12,5,hi);
     sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
   } else if(style==='candyland'){
-    // Candyland V2: deliberately lightweight so the profile GIF remains reliable.
-    // Fewer, larger candy pieces read better at Discord size and avoid excessive
-    // per-pixel work in the direct Worker renderer.
+    // Candyland V3: fewer tiny repeated pieces, much larger recognizable candy,
+    // and big corner clusters so Discord reads this as a candy-themed cosmetic.
     const candyCols=[[255,105,175],[255,180,90],[155,105,230],[95,205,190],[255,225,95]];
-    const rail=[255,205,235];
-    profileSmoothLine(frame,x+30,y+6,x+w-30,y+6,2.0,rail,185);
-    profileSmoothLine(frame,x+30,y+h-6,x+w-30,y+h-6,2.0,rail,185);
-    profileSmoothLine(frame,x+6,y+30,x+6,y+h-30,1.8,rail,160);
-    profileSmoothLine(frame,x+w-6,y+30,x+w-6,y+h-30,1.8,rail,160);
+    const rail=[255,220,242];
 
-    // Four unmistakable candy-corner clusters.
-    const corners=[[x+30,y+29],[x+w-30,y+29],[x+30,y+h-29],[x+w-30,y+h-29]];
-    corners.forEach(([cx,cy],i)=>{
-      profileLollipop(frame,cx,cy+1,7,candyCols[i%5],phase+i*.13);
-      profileGumdrop(frame,cx+(i%2?-10:10),cy+11,3.8,candyCols[(i+1)%5],phase);
-      profileWrappedCandy(frame,cx+(i%2?10:-10),cy-8,3.8,candyCols[(i+2)%5],i%2? -1:1);
+    // Soft candy rails frame the composition without becoming a string-light look.
+    profileSmoothLine(frame,x+32,y+7,x+w-32,y+7,1.7,rail,185);
+    profileSmoothLine(frame,x+32,y+h-7,x+w-32,y+h-7,1.7,rail,185);
+    profileSmoothLine(frame,x+7,y+34,x+7,y+h-34,1.5,rail,145);
+    profileSmoothLine(frame,x+w-7,y+34,x+w-7,y+h-34,1.5,rail,145);
+
+    // BIG four-corner candy piles. These are intentionally oversized so the
+    // frame is identifiable at Discord's rendered size.
+    const corners=[
+      [x+39,y+35,0],[x+w-39,y+35,1],[x+39,y+h-35,2],[x+w-39,y+h-35,3]
+    ];
+    corners.forEach(([cx,cy,i])=>{
+      const a=candyCols[i%5], b=candyCols[(i+1)%5], c=candyCols[(i+3)%5];
+      profileLollipop(frame,cx,cy,10.5,a,phase+i*.18);
+      profileWrappedCandy(frame,cx+(i%2?-14:14),cy+8,7.0,b,i%2?-1:1);
+      profileGumdrop(frame,cx+(i%2?10:-10),cy+14,6.0,c,phase+i*.2);
+      profileFrosting(frame,cx+(i%2?-3:3),cy-12,5.4,b,phase+i*.15);
+      profileSmoothStar(frame,cx+(i%2?-17:17),cy-10,2.8,[255,255,255],175);
     });
 
-    // A restrained candy parade keeps the top and bottom unmistakably Candyland.
-    const slots=7;
+    // A small alternating candy parade sits along the top and bottom edges.
+    // Objects are spaced out and kept large enough to read as candy shapes.
+    const slots=6;
     for(let i=0;i<slots;i++){
-      const cx=x+70+i*((w-140)/(slots-1));
-      const c=candyCols[i%5];
-      if(i%3===0) profileLollipop(frame,cx,y+8,4.8,c,phase+i*.08);
-      else if(i%3===1) profileGumdrop(frame,cx,y+8,3.8,c,phase+i*.08);
-      else profileWrappedCandy(frame,cx,y+8,3.6,c,i%2?1:-1);
-      if(i%3===0) profileWrappedCandy(frame,cx,y+h-8,3.6,c,i%2?-1:1);
-      else if(i%3===1) profileLollipop(frame,cx,y+h-8,4.6,c,phase+i*.08);
-      else profileFrosting(frame,cx,y+h-8,4.0,c,phase+i*.08);
+      const cx=x+105+i*((w-210)/(slots-1));
+      const c=candyCols[(i+2)%5];
+      if(i%3===0){
+        profileLollipop(frame,cx,y+8.5,6.0,c,phase+i*.10);
+        profileWrappedCandy(frame,cx,y+h-8.5,5.0,c,i%2?-1:1);
+      } else if(i%3===1){
+        profileGumdrop(frame,cx,y+8.5,5.0,c,phase+i*.12);
+        profileFrosting(frame,cx,y+h-8.5,5.2,c,phase+i*.12);
+      } else {
+        profileWrappedCandy(frame,cx,y+8.5,5.2,c,i%2?1:-1);
+        profileLollipop(frame,cx,y+h-8.5,5.7,c,phase+i*.10);
+      }
     }
 
-    // Tiny side sprinkles and a few sugar flashes—kept sparse for readability.
-    for(let i=0;i<5;i++){
-      const cy=y+70+i*((h-140)/4);
-      profileSmoothCircle(frame,x+9,cy,1.5,candyCols[(i+1)%5],190,true);
-      profileSmoothCircle(frame,x+w-9,cy,1.5,candyCols[(i+3)%5],190,true);
-    }
-    for(let i=0;i<4;i++){
-      const cx=x+80+i*((w-160)/3);
-      if(Math.sin(p+i*1.7)>.25) profileSmoothStar(frame,cx,y+20,1.9,candyCols[(i+2)%5],195);
-      if(Math.sin(p+i*1.3)>.45) profileSmoothStar(frame,x+w-80-i*((w-160)/3),y+h-20,1.9,candyCols[(i+4)%5],195);
-    }
+    // Side candy accents: deliberately sparse so the profile text stays clear.
+    const sideYs=[y+105,y+205,y+h-105];
+    sideYs.forEach((cy,i)=>{
+      const c=candyCols[(i+1)%5];
+      profileGumdrop(frame,x+9,cy,4.2,c,phase+i*.1);
+      profileWrappedCandy(frame,x+w-9,cy,4.6,c,i%2?-1:1);
+    });
+
+    // A few sugar-star flashes make the frame sparkle without turning into glitter.
+    const flashes=[[x+83,y+24],[x+w-83,y+24],[x+83,y+h-24],[x+w-83,y+h-24]];
+    flashes.forEach(([cx,cy],i)=>{
+      if(Math.sin(p+i*1.4)>.05) profileSmoothStar(frame,cx,cy,2.4,candyCols[(i+4)%5],205);
+    });
   } else if(style==='champagne'){
     for(let i=0;i<7;i++){
       const cx=x+60+i*((w-120)/6);
