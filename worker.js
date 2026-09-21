@@ -3189,24 +3189,12 @@ function rgbaToRgbPng(frame) {
 async function getPngAsset(env, filename) {
   if (!filename) return null;
 
-  // TREE_DATA stores player/game state; artwork lives in the public R2 bucket.
-  // Keep this fetch bounded: a stalled asset request must never leave /tree
-  // permanently stuck on Discord's loading state.
+  // TREE_DATA stores player/game state; the artwork lives in the public R2 bucket.
+  // Fetch the same public R2 asset URL used by the original image pipeline.
   const url = imageUrl(filename);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  let response;
-  try {
-    response = await fetch(url, {
-      cf: { cacheEverything: true, cacheTtl: 86400 },
-      signal: controller.signal
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error(`Tree asset fetch timed out after 8s: ${filename}`);
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  const response = await fetch(url, {
+    cf: { cacheEverything: true, cacheTtl: 86400 }
+  });
 
   if (!response.ok) {
     throw new Error(`R2 asset fetch failed: ${filename} (HTTP ${response.status})`);
@@ -3904,84 +3892,49 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess V3: luxury jewelry frame.
-    // Smooth/non-pixel-art: a polished rail with larger faceted stones whose
-    // highlights travel around the frame.
+    // Rhinestone Princess V2: fewer, larger, unmistakable gemstones.
+    // The previous tiny gems collapsed into white/pink specks at Discord size.
+    // These stones are intentionally oversized so their facets survive GIF conversion.
     const gem=(cx,cy,scale=1,phaseOffset=0)=>{
-      const wave=Math.sin(p*1.15+phaseOffset);
-      const shimmer=0.82+0.18*Math.max(0,wave);
-      const outer=style==='diamond'?[170,235,255]:[255,174,228];
-      const mid=style==='diamond'?[220,250,255]:[255,218,246];
-      const facet=style==='diamond'?[65,145,210]:[205,88,177];
-      const deep=style==='diamond'?[90,175,225]:[225,115,194];
+      const shimmer=0.78+0.32*Math.max(0,Math.sin(p+phaseOffset));
+      const outer=style==='diamond'?[170,235,255]:[255,185,235];
+      const mid=style==='diamond'?[220,250,255]:[255,220,248];
+      const facet=style==='diamond'?[75,160,220]:[210,105,185];
       const white=[255,255,255];
-
-      // Faceted cushion-cut stone. Larger on purpose so Discord's reduced
-      // preview still reads it as an actual rhinestone.
-      profileSmoothPetal(frame,cx,cy,10.2*scale,6.7*scale,outer,Math.round(235+10*shimmer),Math.PI/4);
-      profileSmoothPetal(frame,cx,cy,7.5*scale,4.8*scale,mid,250,Math.PI/4);
-      profileSmoothLine(frame,cx-6.5*scale,cy,cx,cy-5.0*scale,1.15,facet,225);
-      profileSmoothLine(frame,cx,cy-5.0*scale,cx+6.5*scale,cy,1.15,facet,225);
-      profileSmoothLine(frame,cx-6.5*scale,cy,cx,cy+5.0*scale,1.15,deep,205);
-      profileSmoothLine(frame,cx,cy+5.0*scale,cx+6.5*scale,cy,1.15,deep,205);
-      profileSmoothLine(frame,cx-1.0*scale,cy-4.7*scale,cx+4.8*scale,cy+0.2*scale,0.8,white,115);
-      // Broad glossy highlight instead of a tiny white dot.
-      profileSmoothPetal(frame,cx-2.3*scale,cy-2.0*scale,3.0*scale,1.55*scale,white,Math.round(135+75*Math.max(0,wave)),Math.PI/4);
-      // Traveling star glint: only a few stones catch the light at once.
-      const glint=Math.sin(p*1.35+phaseOffset*1.7+cx*0.018);
-      if(glint>0.80){
-        const strength=Math.round(150+105*((glint-0.80)/0.20));
-        profileSmoothStar(frame,cx-3.4*scale,cy-3.0*scale,2.8*scale,white,strength);
-      }
+      // Large rotated jewel body: deliberately much bigger than the old dots.
+      profileSmoothPetal(frame,cx,cy,8.2*scale,4.9*scale,outer,245,Math.PI/4);
+      profileSmoothPetal(frame,cx,cy,5.9*scale,3.5*scale,mid,250,Math.PI/4);
+      // Strong four-facet construction so it reads as a gemstone at a glance.
+      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy-4.0*scale,1.15,facet,225);
+      profileSmoothLine(frame,cx,cy-4.0*scale,cx+5.0*scale,cy,1.15,facet,225);
+      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy+4.0*scale,1.15,facet,205);
+      profileSmoothLine(frame,cx,cy+4.0*scale,cx+5.0*scale,cy,1.15,facet,205);
+      // Bright upper facet + animated star glint.
+      profileSmoothPetal(frame,cx-1.5*scale,cy-1.6*scale,2.4*scale,1.15*scale,white,185,Math.PI/4);
+      if(shimmer>0.94) profileSmoothStar(frame,cx-2.8*scale,cy-2.8*scale,2.1*scale,white,235);
     };
-
-    // Polished jewelry rail under the stones. Three subtle passes give depth
-    // without turning the frame into a thick/cartoon border.
-    profileSmoothRoundedRect(frame,x,y,w,h,18,[190,72,139],245,2.8);
-    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,14,[255,238,250],220,1.25);
-    profileSmoothRoundedRect(frame,x+7,y+7,w-14,h-14,11,[225,122,190],135,0.75);
-
+    // A restrained number of large stones. They are spaced out so each one reads.
     const top=[
-      [x+48,y+10,1.00],[x+138,y+10,.84],[x+232,y+10,1.10],[x+335,y+10,.90],
-      [x+448,y+10,1.12],[x+552,y+10,.88],[x+650,y+10,1.08],[x+742,y+10,.92]
+      [x+48,y+10,1.05],[x+145,y+10,.82],[x+255,y+10,1.18],[x+390,y+10,.9],
+      [x+525,y+10,1.15],[x+650,y+10,.86],[x+744,y+11,1.02]
     ];
     const bottom=[
-      [x+48,y+h-10,.92],[x+150,y+h-10,1.10],[x+260,y+h-10,.84],[x+370,y+h-10,1.02],
-      [x+480,y+h-10,.88],[x+590,y+h-10,1.10],[x+690,y+h-10,.86],[x+748,y+h-10,1.00]
+      [x+48,y+h-10,.88],[x+165,y+h-10,1.12],[x+295,y+h-10,.82],
+      [x+430,y+h-10,1.18],[x+560,y+h-10,.86],[x+690,y+h-10,1.08]
     ];
-    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.53));
-
-    // Side stones are slightly smaller so the profile content stays open.
-    const sides=[
-      [x+10,y+92,.72],[x+10,y+205,.86],[x+10,y+318,.72],[x+10,y+410,.84],
-      [x+w-10,y+92,.84],[x+w-10,y+205,.72],[x+w-10,y+318,.86],[x+w-10,y+410,.72]
-    ];
-    sides.forEach((g,i)=>gem(g[0],g[1],g[2],2.1+i*.43));
-
-    // Four statement corner stones are the princess focal points.
+    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.47));
+    // Four larger princess-jewel corner clusters, kept elegant rather than circular.
     const corners=[
-      [x+25,y+25,1.55],[x+w-25,y+25,1.55],[x+25,y+h-25,1.55],[x+w-25,y+h-25,1.55]
+      [x+27,y+27,1.55],[x+w-27,y+27,1.55],[x+27,y+h-27,1.55],[x+w-27,y+h-27,1.55]
     ];
     corners.forEach((g,i)=>{
-      gem(g[0],g[1],g[2],i*.95+.35);
-      profileSmoothStar(frame,g[0]-3.5,g[1]-3.5,3.8,[255,255,255],145);
+      gem(g[0],g[1],g[2],i*.8+.2);
+      profileSmoothStar(frame,g[0]-2,g[1]-3,3.0,[255,255,255],150);
     });
-
-    // Small connector beads make the stones feel mounted into a real jewelry
-    // setting instead of floating independently.
-    for(let i=0;i<12;i++){
-      const t=i/11;
-      const bx=x+80+t*(w-160);
-      profileSmoothCircle(frame,bx,y+9.2,1.7,[255,205,238],205,true);
-      profileSmoothCircle(frame,bx,y+h-9.2,1.7,[255,205,238],190,true);
-    }
-    for(let i=0;i<5;i++){
-      const by=y+70+i*((h-140)/4);
-      profileSmoothCircle(frame,x+9.2,by,1.55,[255,205,238],190,true);
-      profileSmoothCircle(frame,x+w-9.2,by,1.55,[255,205,238],175,true);
-    }
+    // One small hanging gem on each side gives it a jewelry-chain feel.
+    gem(x+10,y+h*.50,.72,.6);
+    gem(x+w-10,y+h*.50,.72,1.4);
   } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
-
 
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
@@ -9604,60 +9557,79 @@ async function handleTree(
   env,
   interaction
 ) {
-  // Diagnostic version: track the exact stage so intermittent /tree hangs
-  // cannot leave Discord stuck on "MyTree is thinking..." with no clue.
-  let treeStage = "starting";
-  const stageTimeout = async (label, promise, ms = 10000) => {
-    treeStage = label;
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Tree timed out during ${label} after ${ms / 1000}s`)), ms)
-      )
-    ]);
-  };
+  await acknowledge(
+    env,
+    interaction
+  );
+
+  const user =
+    getUserFromInteraction(
+      interaction
+    );
+
+  if (!user) return;
+
+  const player =
+    await getPlayer(
+      env,
+      user.id
+    );
+
+  updatePlayerIdentity(
+    player,
+    interaction
+  );
+
+  await refreshPunishmentState(env, player);
+  if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
+    return sendText(env, interaction, `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`);
+  }
+
+  cleanSparkles(
+    player
+  );
+
+  if (!player.sparklesOnTree.length) {
+    maybeSpawnSparkles(player);
+  }
+
+  await rememberGuild(
+    env,
+    interaction.guild_id
+  );
+
+  player.sceneMessage =
+    "";
+  player.treeChecks =
+    Number(player.treeChecks || 0) + 1;
+
+  await savePlayer(
+    env,
+    player
+  );
 
   try {
-    treeStage = "getting your Discord user";
-    const user = getUserFromInteraction(interaction);
-    if (!user) return;
-
-    const player = await stageTimeout("loading player data", getPlayer(env, user.id));
-
-    treeStage = "updating player identity";
-    updatePlayerIdentity(player, interaction);
-
-    await stageTimeout("refreshing punishment state", refreshPunishmentState(env, player));
-    if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
-      return await sendText(env, interaction, `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`);
-    }
-
-    treeStage = "cleaning sparkles";
-    cleanSparkles(player);
-    if (!player.sparklesOnTree.length) {
-      treeStage = "spawning sparkles";
-      maybeSpawnSparkles(player);
-    }
-
-    await stageTimeout("remembering server", rememberGuild(env, interaction.guild_id));
-
-    player.sceneMessage = "";
-    player.treeChecks = Number(player.treeChecks || 0) + 1;
-
-    await stageTimeout("saving player data", savePlayer(env, player));
-
-    await stageTimeout("rendering and sending tree", sendTree(env, interaction, player), 20000);
+    await sendTree(
+      env,
+      interaction,
+      player
+    );
   } catch (error) {
-    console.error("Tree diagnostic failure at stage:", treeStage, error);
+    console.error(
+      "Tree render error:",
+      error
+    );
 
-    try {
-      await editOriginalResponse(env, interaction, {
-        content: `🌳❌ **MyTree got stuck.**\n\n**Step:** ${treeStage}\n**Error:** ${error?.message || "Unknown error"}`,
-        components: []
-      });
-    } catch (editError) {
-      console.error("Could not replace stuck tree response:", editError);
-    }
+    await editOriginalResponse(
+      env,
+      interaction,
+      {
+        content:
+          `🌳 Your tree is alive, but I couldn't render the picture right now.\n\n${error?.message || "Unknown error"}`,
+        components:
+          treeButtons(getUserFromInteraction(interaction)?.id || "", player)
+      }
+    );
   }
 }
 
@@ -25598,34 +25570,30 @@ export default {
             else await sendText(env, interaction, "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot. If you believe this was a mistake, contact the bot owner.");
             return;
           }
-          // /tree must not wait behind optional community middleware. These
-          // checks can perform their own KV/Discord work, and an intermittent
-          // stall there leaves Discord showing the original "thinking..." state
-          // even though the tree handler itself is healthy. Run the tree first.
-          const isTreeInteraction = isTreeCommand || isTreeComponent;
-          if (isTreeInteraction) {
-            // HARD WATCHDOG: tree work can hang before handleTree() reaches its
-            // renderer timeout (for example during a KV read/save). Keep the
-            // Discord interaction from sitting on “thinking...” forever.
-            const treeWork = interaction.type === 2
-              ? handleCommand(env, interaction)
-              : handleComponent(env, interaction);
-            await Promise.race([
-              treeWork,
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Tree interaction timed out after 15 seconds before completion.")), 15000))
-            ]);
-          } else {
-            if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
-            await maybeCourtWatch(env, interaction);
-            await maybePublicShame(env, interaction);
-            await maybeSpoonInvestigation(env, interaction);
+          // /tree should reach its actual handler before optional background
+          // alert/watch systems. Those systems are useful, but none of them
+          // should be able to leave the tree interaction stuck on Discord's
+          // "MyTree is thinking..." screen.
+          const isTreeCommand = interaction.type === 2 && interaction.data?.name === "tree";
+
+          if (isTreeCommand) {
+            await handleCommand(env, interaction);
+          }
+
+          if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
+          await maybeCourtWatch(env, interaction);
+          await maybePublicShame(env, interaction);
+          await maybeSpoonInvestigation(env, interaction);
+
+          if (!isTreeCommand) {
             if (interaction.type === 2) {
               await handleCommand(env, interaction);
             } else {
               await handleComponent(env, interaction);
             }
           }
-          if (!isNewsAcknowledgement && !isTreeInteraction) await maybeShowNews(env, interaction);
+
+          if (!isNewsAcknowledgement) await maybeShowNews(env, interaction);
         } catch (error) {
           console.error("Interaction error:", error);
           try {
