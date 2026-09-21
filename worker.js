@@ -3903,55 +3903,94 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess V5: true jewelry-like stones. Each stone is built as
-    // a faceted diamond rather than a tiny dot so the cosmetic survives Discord
-    // resizing and GIF palette conversion.
-    const gem=(cx,cy,scale=1,phaseOffset=0)=>{
-      const shimmer=0.75+0.35*Math.max(0,Math.sin(p+phaseOffset));
-      const bezel=style==='diamond'?[55,125,185]:[170,55,125];
-      const outer=style==='diamond'?[170,235,255]:[255,145,205];
-      const inner=style==='diamond'?[225,250,255]:[255,220,242];
-      const facet=style==='diamond'?[70,150,205]:[205,85,160];
+    // Rhinestone Princess V6: luxury jewelry treatment. The frame is built from
+    // individual bezel-set stones, tiny connector beads, layered facets, and
+    // statement corner clusters so it reads like a PREMIUM SHOP COSMETIC.
+    const gem=(cx,cy,scale=1,phaseOffset=0,variant=0)=>{
+      const shimmer=0.78+0.22*Math.max(0,Math.sin(p+phaseOffset));
+      const bezel=style==='diamond'?[45,105,160]:[145,42,105];
+      const outer=style==='diamond'?[145,220,250]:[238,112,188];
+      const mid=style==='diamond'?[205,245,255]:[255,178,220];
+      const table=style==='diamond'?[238,253,255]:[255,226,244];
+      const facetA=style==='diamond'?[75,155,205]:[190,65,140];
+      const facetB=style==='diamond'?[125,200,235]:[255,135,195];
       const white=[255,255,255];
-      const r=Math.max(3,Math.round(5.0*scale));
-      // A real jewelry setting: dark bezel + faceted diamond + white table.
-      profileDiamond(frame,cx,cy,r+2,bezel,235);
-      profileDiamond(frame,cx,cy,r+1,outer,245);
-      profileDiamond(frame,cx,cy,Math.max(2,r-1),inner,255);
-      profileSmoothLine(frame,cx,cy-r*.72,cx+r*.72,cy,1.0*scale,white,225);
-      profileSmoothLine(frame,cx+r*.72,cy,cx,cy+r*.72,1.0*scale,facet,225);
-      profileSmoothLine(frame,cx,cy+r*.72,cx-r*.72,cy,1.0*scale,facet,215);
-      profileSmoothLine(frame,cx-r*.72,cy,cx,cy-r*.72,1.0*scale,white,235);
-      profileSmoothCircle(frame,cx-r*.28,cy-r*.32,Math.max(.7,.85*scale),white,235,true);
-      if(shimmer>0.96) profileSmoothStar(frame,cx-r*.55,cy-r*.62,1.9*scale,white,245);
+      const r=Math.max(4,Math.round(5.6*scale));
+
+      // Dark setting first: gives every gem a physical bezel instead of a flat dot.
+      profileDiamond(frame,cx,cy,r+3,bezel,235);
+      profileDiamond(frame,cx,cy,r+2,outer,248);
+      profileDiamond(frame,cx,cy,r,mid,255);
+
+      // Four large facets create the cut-stone look at Discord resolution.
+      profilePixelLine(frame,cx,cy-r+1,cx+r-1,cy,1,...white,220);
+      profilePixelLine(frame,cx,cy,cx+r-1,cy+r-1,1,...facetA,220);
+      profilePixelLine(frame,cx,cy+r-1,cx-r+1,cy,1,...facetB,220);
+      profilePixelLine(frame,cx-r+1,cy,cx,cy-r+1,1,...white,235);
+      profileFill(frame,cx-Math.max(1,Math.floor(r*.28)),cy-Math.max(1,Math.floor(r*.28)),Math.max(2,Math.floor(r*.55)),Math.max(2,Math.floor(r*.55)),table[0],table[1],table[2],255);
+
+      // Tiny top-left reflection + animated four-point glint.
+      profileSmoothCircle(frame,cx-r*.30,cy-r*.34,Math.max(.8,.9*scale),white,245,true);
+      if(shimmer>0.90) profileSmoothStar(frame,cx-r*.55,cy-r*.60,Math.max(1.8,2.1*scale),white,235);
+
+      // Occasional secondary pin makes alternating stones feel hand-set.
+      if(variant%3===0){
+        profileSmoothCircle(frame,cx+r*.72,cy+r*.70,Math.max(1.0,.95*scale),outer,220,true);
+      }
+    };
+    const bead=(cx,cy,scale=1,phaseOffset=0)=>{
+      const c=style==='diamond'?[220,248,255]:[255,205,235];
+      const hi=[255,255,255];
+      const r=Math.max(1.5,1.8*scale);
+      profileSmoothCircle(frame,cx,cy,r+0.9,[120,45,95],185,true);
+      profileSmoothCircle(frame,cx,cy,r,c,245,true);
+      profileSmoothCircle(frame,cx-0.45,cy-0.55,.65,hi,235,true);
+      if(Math.sin(p+phaseOffset)>0.72) profileSmoothStar(frame,cx,cy,1.1*scale,hi,190);
     };
 
-    // Dense, evenly spaced stones read as a purchased jewelry chain rather than
-    // a dotted outline. Alternate sizes keep it luxurious without becoming noisy.
-    const top=[];
-    const bottom=[];
-    for(let i=0;i<19;i++){
-      top.push([x+18+i*((w-36)/18),y+11, i%4===0?1.08:(i%2?0.82:.94)]);
-      bottom.push([x+18+i*((w-36)/18),y+h-11, i%5===0?1.06:(i%2?.82:.92)]);
+    // Main top/bottom jewelry rows: fewer, larger stones with tiny setting beads
+    // between them. This avoids the old "pixel dots in a line" appearance.
+    const count=15;
+    for(let i=0;i<count;i++){
+      const t=i/(count-1);
+      const cx=x+24+t*(w-48);
+      const sc=i%5===0?1.16:(i%2?0.92:1.02);
+      gem(cx,y+12,sc,i*.41,i);
+      gem(cx,y+h-12,sc,i*.47,i+20);
+      if(i<count-1){
+        const nx=x+24+(i+0.5)/(count-1)*(w-48);
+        bead(nx,y+12,0.92,i*.31);
+        bead(nx,y+h-12,0.92,i*.37);
+      }
     }
-    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.37));
 
-    const sides=[
-      [x+11,y+74,0.78],[x+11,y+170,.88],[x+11,y+266,.78],[x+11,y+362,.9],
-      [x+w-11,y+74,.88],[x+w-11,y+170,.78],[x+w-11,y+266,.9],[x+w-11,y+362,.78]
-    ];
-    sides.forEach((g,i)=>gem(g[0],g[1],g[2],1.1+i*.43));
+    // Side rows are slightly sparser so the frame remains elegant rather than busy.
+    const sideYs=[72,152,232,312,392];
+    sideYs.forEach((yy,i)=>{
+      gem(x+12,y+yy,i%2?.92:1.02,1.2+i*.46,i+40);
+      gem(x+w-12,y+yy,i%2?1.02:.92,1.55+i*.51,i+60);
+      if(i<sideYs.length-1){
+        bead(x+12,y+yy+40,.78,i*.25);
+        bead(x+w-12,y+yy+40,.78,i*.29);
+      }
+    });
 
-    // Four unmistakable larger corner stones.
+    // Four large statement corners: layered stones + tiny halo pins.
     const corners=[
-      [x+24,y+24,1.55],[x+w-24,y+24,1.55],
-      [x+24,y+h-24,1.55],[x+w-24,y+h-24,1.55]
+      [x+25,y+24,1.62],[x+w-25,y+24,1.62],
+      [x+25,y+h-24,1.62],[x+w-25,y+h-24,1.62]
     ];
     corners.forEach((g,i)=>{
-      gem(g[0],g[1],g[2],2+i*.8);
-      profileSmoothStar(frame,g[0]-2.8,g[1]-3.0,3.4,[255,255,255],165);
+      const [cx,cy,sc]=g;
+      profileSmoothCircle(frame,cx,cy,9*sc,[255,255,255],65,true);
+      gem(cx,cy,sc*1.20,2+i*.8,i+90);
+      bead(cx-10*sc,cy,0.8,i);
+      bead(cx+10*sc,cy,0.8,i+.2);
+      bead(cx,cy-10*sc,0.8,i+.4);
+      bead(cx,cy+10*sc,0.8,i+.6);
+      profileSmoothStar(frame,cx-3*sc,cy-3*sc,3.0*sc,[255,255,255],185);
     });
-    } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
+  } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
 
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
@@ -4094,7 +4133,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const panel=profilePanelColors([br,bgG,bb]);
   const panelBg=panel.panel, panelSoft=panel.panelSoft, panelBorder=panel.panelBorder, panelAccent=panel.panelAccent;
 
-  // PROFILE REDESIGN V5:
+  // PROFILE REDESIGN V6:
   // Keep the proven 800x500 direct renderer, but make the composition feel like
   // a premium collectible card: dedicated tree showcase + structured cosmetic
   // plaque + four real stat cards. No Browser Rendering is introduced here.
