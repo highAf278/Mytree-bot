@@ -3730,80 +3730,111 @@ function profileFrameCornerJewel(frame,x,y,outer,inner,phase=0){
 function drawProfileFrame(frame, frameId, phase=0){
   if(!frameId || !PROFILE_FRAMES[frameId]) return;
   const style=PROFILE_FRAMES[frameId].style;
-  const W=frame.width,H=frame.height;
   const p=phase*Math.PI*2;
-  // Frame only surrounds the profile card. It deliberately does NOT outline the
-  // whole canvas, so the tree/left side stays clean. Colors are chosen from the
-  // GIF-safe palette to avoid the muddy purple fringe caused by quantization.
-  const x=314,y=14,w=466,h=472;
+
+  // Premium frame zone: intentionally inset inside the existing profile card.
+  // One elegant border + a themed ornament system. No giant corner blobs,
+  // no full-canvas outline, and no filled bands that can turn into purple blocks.
+  const x=324,y=24,w=446,h=452;
   const palette={
-    rhinestone:[[255,153,204],[255,255,255]], pink_glitter:[[255,102,204],[255,204,255]],
-    candyland:[[255,153,204],[255,204,102]], butterfly:[[153,102,204],[204,153,255]],
-    rainbow:[[204,102,255],[102,204,255]], starfall:[[255,204,51],[255,255,153]],
-    spiderweb:[[153,153,153],[255,255,255]], gothic:[[51,0,51],[153,102,153]],
-    crimson:[[102,0,0],[255,102,102]], royal_gold:[[204,153,0],[255,255,153]],
-    diamond:[[102,204,255],[204,255,255]], champagne:[[204,153,51],[255,255,153]],
-    purple:[[102,51,204],[204,153,255]], toxic:[[51,204,51],[204,255,102]],
-    chrome:[[51,51,51],[204,204,204]], black_ice:[[51,102,153],[204,255,255]],
-    haunted:[[51,0,51],[153,51,153]]
+    rhinestone:[[204,102,153],[255,235,250]], pink_glitter:[[255,102,204],[255,225,250]],
+    candyland:[[255,102,153],[255,210,100]], butterfly:[[126,76,178],[235,190,255]],
+    rainbow:[[120,70,190],[100,210,255]], starfall:[[190,135,20],[255,240,130]],
+    spiderweb:[[105,105,115],[235,235,245]], gothic:[[65,35,75],[190,145,205]],
+    crimson:[[125,25,40],[255,155,165]], royal_gold:[[175,120,15],[255,235,135]],
+    diamond:[[65,150,205],[215,250,255]], champagne:[[170,125,45],[255,235,170]],
+    purple:[[105,55,175],[220,180,255]], toxic:[[55,165,55],[200,255,120]],
+    chrome:[[70,75,90],[235,240,250]], black_ice:[[60,110,155],[205,245,255]],
+    haunted:[[70,35,85],[205,125,230]]
   };
-  const [base,hi]=palette[style]||[[153,153,153],[255,255,255]];
-  profileSmoothRoundedRect(frame,x,y,w,h,26,base,255,6);
-  profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,19,hi,220,2);
+  const [base,hi]=palette[style]||[[110,110,125],[235,235,245]];
 
-  const corners=[[x+25,y+25],[x+w-25,y+25],[x+25,y+h-25],[x+w-25,y+h-25]];
-  for(let i=0;i<corners.length;i++){
-    const [cx,cy]=corners[i];
-    profileSmoothCircle(frame,cx,cy,7,hi,245,true);
-    profileSmoothCircle(frame,cx,cy,3,base,255,true);
-    const gl=Math.max(0,Math.sin(p+i*1.7));
-    profileSmoothCircle(frame,cx-1.5*gl,cy-1.5*gl,1.5,[255,255,255],210,true);
-  }
+  // Clean double-line frame. The tiny gap between lines preserves the rounded
+  // profile card underneath and gives the cosmetic a polished, purchased look.
+  profileSmoothRoundedRect(frame,x,y,w,h,22,base,245,3);
+  profileSmoothRoundedRect(frame,x+5,y+5,w-10,h-10,18,hi,185,1.2);
 
-  if(style==='rhinestone'||style==='diamond'||style==='champagne'){
-    for(let i=0;i<10;i++){
-      const t=(i+.5)/10;
-      const cx=x+44+t*(w-88), cy=y+4+Math.sin(p+i)*1.2;
-      profileSmoothCircle(frame,cx,cy,2.5,hi,230,true);
-      profileSmoothCircle(frame,cx, y+h-4-Math.sin(p+i)*1.2,2.5,hi,230,true);
+  const sparkle=(cx,cy,r=3)=>{
+    const pulse=0.8+0.35*Math.max(0,Math.sin(p+cx*.017));
+    profileSmoothStar(frame,cx,cy,r*pulse,hi,235);
+    profileSmoothCircle(frame,cx-0.7,cy-0.7,0.8,[255,255,255],210,true);
+  };
+  const butterfly=(cx,cy,sc)=>profileButterfly(frame,cx,cy,sc,hi);
+
+  if(style==='butterfly'){
+    // Actual butterflies, spaced like jewelry around the border.
+    const pts=[[x+30,y+30],[x+w-30,y+30],[x+30,y+h-30],[x+w-30,y+h-30],
+               [x+w/2,y+9],[x+w/2,y+h-9]];
+    for(let i=0;i<pts.length;i++){
+      const [cx,cy]=pts[i];
+      butterfly(cx,cy,4.5+(i%2)*.7);
+      sparkle(cx+(i%2?7:-7),cy+(i<2?6:-6),2);
     }
-  } else if(style==='butterfly'){
-    for(let i=0;i<5;i++) profileButterfly(frame,x+55+i*88,y+7,3,[255,153,204],phase+i*.2);
-  } else if(style==='rainbow'){
-    const cols=[[255,0,0],[255,153,0],[255,255,0],[0,204,0],[0,153,255],[153,0,204]];
-    for(let i=0;i<6;i++){
-      profileSmoothLine(frame,x+45+i*3,y+5,x+w-45-i*3,y+5,1.5,cols[i],230);
-      profileSmoothLine(frame,x+45+i*3,y+h-5,x+w-45-i*3,y+h-5,1.5,cols[i],230);
+  } else if(style==='rhinestone'||style==='diamond'){
+    const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
+    for(const [cx,cy] of pts){
+      profileSmoothCircle(frame,cx,cy,6,hi,235,true);
+      profileSmoothCircle(frame,cx,cy,3,base,245,true);
+      sparkle(cx,cy,3);
     }
-  } else if(style==='starfall'||style==='purple'){
     for(let i=0;i<8;i++){
-      const cx=x+45+i*54, cy=y+7;
-      profileSmoothStar(frame,cx,cy,4,hi,235);
-      profileSmoothStar(frame,cx,y+h-7,4,hi,235);
+      const cx=x+65+i*((w-130)/7);
+      sparkle(cx,y+7,2.2); sparkle(cx,y+h-7,2.2);
+    }
+  } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
+    for(let i=0;i<8;i++){
+      const cx=x+55+i*((w-110)/7);
+      sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
+    }
+    sparkle(x+10,y+h/2,2.4); sparkle(x+w-10,y+h/2,2.4);
+  } else if(style==='rainbow'){
+    const cols=[[230,70,70],[245,150,45],[240,220,60],[70,190,90],[70,150,230],[150,80,210]];
+    for(let i=0;i<6;i++){
+      const yy=y+6+i*.9;
+      profileSmoothLine(frame,x+38,y+6+i*.9,x+w-38,y+6+i*.9,1,cols[i],210);
+      profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
     }
   } else if(style==='spiderweb'||style==='gothic'){
-    for(const [cx,cy] of corners){
-      for(let r=9;r<=20;r+=5) profileSmoothRing(frame,cx,cy,r,hi,150,1.2);
+    const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
+    for(const [cx,cy] of pts){
+      for(let r=8;r<=18;r+=5) profileSmoothRing(frame,cx,cy,r,hi,145,1);
     }
+    profileSmoothLine(frame,x+34,y+34,x+w-34,y+h-34,1,hi,125);
+    profileSmoothLine(frame,x+w-34,y+34,x+34,y+h-34,1,hi,125);
   } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
-    profileCrown(frame,x+48,y+6,6,hi);
-    profileCrown(frame,x+w-48,y+6,6,hi);
-  } else if(style==='toxic'){
-    for(let i=0;i<9;i++) profileSmoothCircle(frame,x+40+i*48,y+6,2.5,hi,210,true);
-  } else if(style==='chrome'||style==='black_ice'){
-    profileSmoothLine(frame,x+42,y+6,x+w-42,y+6,1.5,[255,255,255],210);
-    profileSmoothLine(frame,x+42,y+h-6,x+w-42,y+h-6,1.5,hi,190);
-  } else if(style==='candyland'||style==='pink_glitter'){
-    for(let i=0;i<10;i++){
-      const cx=x+38+i*43;
-      profileSmoothCircle(frame,cx,y+6,4,i%2?hi:base,230,true);
-      profileSmoothCircle(frame,cx,y+h-6,4,i%2?base:hi,230,true);
+    profileCrown(frame,x+31,y+12,5,hi);
+    profileCrown(frame,x+w-31,y+12,5,hi);
+    sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
+  } else if(style==='candyland'){
+    for(let i=0;i<8;i++){
+      const cx=x+52+i*((w-104)/7);
+      profileCandy(frame,cx,y+7,4,i%2?hi:base,i%2);
+      profileCandy(frame,cx,y+h-7,4,i%2?base:hi,(i+1)%2);
     }
+  } else if(style==='champagne'){
+    for(let i=0;i<7;i++){
+      const cx=x+60+i*((w-120)/6);
+      profileSmoothCircle(frame,cx,y+8,2.2,hi,190,true);
+      profileSmoothCircle(frame,cx,y+h-8,2.2,hi,190,true);
+    }
+    sparkle(x+31,y+31,2.3); sparkle(x+w-31,y+31,2.3);
+  } else if(style==='toxic'){
+    for(let i=0;i<7;i++){
+      const cx=x+58+i*((w-116)/6);
+      profileSmoothCircle(frame,cx,y+7,2.3,hi,210,true);
+      profileSmoothCircle(frame,cx,y+h-7,2.3,hi,210,true);
+    }
+    sparkle(x+30,y+30,2.5); sparkle(x+w-30,y+h-30,2.5);
+  } else if(style==='chrome'||style==='black_ice'){
+    profileSmoothLine(frame,x+35,y+7,x+w-35,y+7,1.5,hi,220);
+    profileSmoothLine(frame,x+35,y+h-7,x+w-35,y+h-7,1.5,hi,190);
+    profileSmoothLine(frame,x+7,y+35,x+7,y+h-35,1.2,hi,165);
+    profileSmoothLine(frame,x+w-7,y+35,x+w-7,y+h-35,1.2,hi,165);
+    sparkle(x+30,y+30,2.2); sparkle(x+w-30,y+h-30,2.2);
   } else {
-    for(let i=0;i<10;i++){
-      const cx=x+38+i*43;
-      profileSmoothCircle(frame,cx,y+6,2.5,hi,210,true);
-      profileSmoothCircle(frame,cx,y+h-6,2.5,hi,210,true);
+    for(let i=0;i<8;i++){
+      const cx=x+55+i*((w-110)/7);
+      sparkle(cx,y+7,2); sparkle(cx,y+h-7,2);
     }
   }
 }
