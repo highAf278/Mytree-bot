@@ -4155,124 +4155,149 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileCrown(frame,x+w-31,y+12,5,hi);
     sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
    } else if(style==='candyland'){
-    // Candyland V16: premium confectionery frame, rebuilt from the cleaner V13
-    // composition. The frame stays readable at Discord size: frosting is the
-    // structure, cupcakes are recognizable corner heroes, and candy is accent.
-    const cream=[255,247,249], icing=[255,151,205], icingLight=[255,224,240], icingShade=[220,76,150];
-    const pink=[255,92,171], hotPink=[224,42,132], lavender=[175,128,239], mint=[92,210,181], lemon=[255,213,82], peach=[255,145,116], sky=[100,184,242];
-    const candy=[pink,lavender,mint,lemon,peach,sky];
+    // Candyland V18: clean premium confectionery frame.
+    // The frame is built as one cohesive candy-shop ribbon instead of a normal
+    // profile border with decorations attached. Keep the objects chunky enough
+    // to survive Discord scaling, and keep the animation subtle/cheap.
+    const cream=[255,247,244], creamHi=[255,255,252], creamShade=[245,205,224];
+    const icing=[255,137,194], icingHi=[255,210,232], icingShade=[219,68,143];
+    const pink=[255,78,163], lavender=[174,130,238], mint=[85,210,183], lemon=[255,207,73], sky=[93,182,239], peach=[255,143,111];
+    const candy=[pink,lavender,mint,lemon,sky,peach];
 
-    // Clean premium casing. Cream separates the Candyland frame from any user
-    // profile color without turning the whole border white.
-    profileSmoothRoundedRect(frame,x,y,w,h,19,hotPink,250,3.4);
-    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,16,cream,250,2.0);
-    profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,13,[236,105,177],215,1.0);
+    // Premium candy-shop casing: cream keyline + pink candy shell.
+    profileSmoothRoundedRect(frame,x,y,w,h,19,pink,250,3.6);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,16,cream,250,2.1);
+    profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,13,[231,92,166],235,1.2);
 
-    // Frosting awning: thinner than V15, with a clear icing body, scalloped edge,
-    // a soft highlight, and sparse embedded sprinkles. No rows of loose dots.
-    const frostingAwning=(yy,isTop)=>{
-      const left=x+38, right=x+w-38, bandY=yy;
-      profileSmoothLine(frame,left,bandY,right,bandY,18,icing,250);
-      profileSmoothLine(frame,left+3,bandY-5,right-3,bandY-5,3.2,icingLight,235);
-      profileSmoothLine(frame,left+5,bandY+5,right-5,bandY+5,2.2,icingShade,175);
-      const n=15;
+    // A soft inner cream rail makes the themed frame feel separate from the
+    // user's chosen profile color without filling the whole card with white.
+    profileSmoothRoundedRect(frame,x+19,y+19,w-38,h-38,11,creamShade,120,1.1);
+
+    // Piped icing ribbon. It is intentionally flatter and more continuous than
+    // the previous versions; the small scallops read as icing rather than dots.
+    const icingRibbon=(yy,isTop)=>{
+      const left=x+42,right=x+w-42;
+      profileSmoothLine(frame,left,yy,right,yy,13,icing,248);
+      profileSmoothLine(frame,left+4,yy-4,right-4,yy-4,3.0,icingHi,235);
+      profileSmoothLine(frame,left+5,yy+5,right-5,yy+5,2.0,icingShade,170);
+      const n=25;
       for(let i=0;i<n;i++){
-        const cx=left+8+i*((right-left-16)/(n-1));
-        const cy=isTop?bandY+8:bandY-8;
-        profileSmoothCircle(frame,cx,cy,7.8,icing,248,true);
-        profileSmoothCircle(frame,cx-1.8,cy-2.5,2.7,icingLight,215,true);
+        const cx=left+7+i*((right-left-14)/(n-1));
+        const cy=isTop?yy+6:yy-6;
+        profileSmoothCircle(frame,cx,cy,4.6,icing,245,true);
+        profileSmoothCircle(frame,cx-1.0,cy-1.5,1.5,icingHi,205,true);
       }
-      const drips=isTop?[2,7,12]:[3,9,13];
-      drips.forEach((idx,j)=>{
-        const cx=left+8+idx*((right-left-16)/(n-1));
-        const len=7+(j%2)*4;
-        profileSmoothLine(frame,cx,isTop?bandY+7:bandY-7,cx,isTop?bandY+7+len:bandY-7-len,4.2,icing,242);
-        profileSmoothCircle(frame,cx,isTop?bandY+7+len:bandY-7-len,2.2,icingLight,210,true);
+      // Only a few deliberate drips; these create the bakery-awning silhouette.
+      const drip=[4,11,19];
+      drip.forEach((idx,j)=>{
+        const cx=left+7+idx*((right-left-14)/(n-1));
+        const len=6+(j%2)*3;
+        profileSmoothLine(frame,cx,isTop?yy+5:yy-5,cx,isTop?yy+5+len:yy-5-len,3.2,icing,238);
+        profileSmoothCircle(frame,cx,isTop?yy+5+len:yy-5-len,1.7,icingHi,205,true);
       });
-      const sprinkleCols=[pink,lavender,mint,lemon,sky,peach];
+      // Sprinkles sit inside the icing, never floating over the profile.
       for(let i=0;i<18;i++){
-        const cx=left+14+((i*151+(isTop?31:83))%(right-left-28));
-        const cy=bandY+(i%3-1)*3+(isTop?0.5:-0.5);
-        const ang=-0.85+(i%5)*0.36, len=2.6+(i%3)*0.5;
-        profileSmoothLine(frame,cx-Math.cos(ang)*len,cy-Math.sin(ang)*len,cx+Math.cos(ang)*len,cy+Math.sin(ang)*len,1.6,sprinkleCols[i%sprinkleCols.length],235);
+        const cx=left+13+((i*173+(isTop?23:71))%(right-left-26));
+        const cy=yy+(i%3-1)*2.2;
+        const a=-0.9+(i%5)*0.42;
+        const len=2.2+(i%2)*0.6;
+        const c=candy[i%candy.length];
+        profileSmoothLine(frame,cx-Math.cos(a)*len,cy-Math.sin(a)*len,cx+Math.cos(a)*len,cy+Math.sin(a)*len,1.45,c,225);
       }
     };
-    frostingAwning(y+15,true);
-    frostingAwning(y+h-15,false);
+    icingRibbon(y+16,true);
+    icingRibbon(y+h-16,false);
 
-    // Side rails: substantial candy-cane columns, but kept clean so they frame
-    // rather than compete with the profile contents.
-    const candyCane=(xx)=>{
-      profileSmoothLine(frame,xx,y+58,xx,y+h-58,15,cream,250);
-      profileSmoothLine(frame,xx,y+58,xx,y+h-58,9,icing,248);
-      const stripeCols=[lavender,mint,lemon,sky];
-      for(let i=0;i<6;i++){
-        const cy=y+82+i*((h-164)/5);
-        profileSmoothLine(frame,xx-4.5,cy-10,xx+4.5,cy+10,4.2,stripeCols[i%stripeCols.length],242);
+    // Candy-cane side pillars: wide enough to read, sparse enough to stay elegant.
+    const candyCane=(xx,flip)=>{
+      profileSmoothLine(frame,xx,y+58,xx,y+h-58,12,cream,248);
+      profileSmoothLine(frame,xx,y+58,xx,y+h-58,7.2,icing,248);
+      for(let i=0;i<7;i++){
+        const cy=y+76+i*((h-152)/6);
+        const slant=flip?-7:7;
+        profileSmoothLine(frame,xx-slant,cy-7,xx+slant,cy+7,3.0,candy[(i+1)%candy.length],235);
       }
-      profileSmoothLine(frame,xx+2,y+64,xx+2,y+h-64,1.4,[255,255,255],185);
-      for(const cy of [y+60,y+h-60]){
-        profileSmoothCircle(frame,xx,cy,5.8,icing,242,true);
-        profileSmoothCircle(frame,xx-1.5,cy-2,2.0,icingLight,210,true);
-      }
+      profileSmoothLine(frame,xx+1.5,y+63,xx+1.5,y+h-63,1.2,creamHi,185);
     };
-    candyCane(x+14); candyCane(x+w-14);
+    candyCane(x+15,false); candyCane(x+w-15,true);
 
-    // Recognizable candy pieces. Kept large enough to survive Discord scaling.
-    const lollipop=(cx,cy,col,tilt=1)=>{
-      profileSmoothLine(frame,cx,cy+8,cx+tilt*5,cy+28,2.4,cream,240);
-      profileSmoothCircle(frame,cx,cy,12,col,250,true);
-      profileSmoothLine(frame,cx-6,cy+3,cx-2,cy-5,1.8,cream,220);
-      profileSmoothLine(frame,cx-2,cy-5,cx+5,cy-2,1.8,cream,220);
-      profileSmoothLine(frame,cx+5,cy-2,cx+2,cy+5,1.8,cream,220);
-      profileSmoothCircle(frame,cx-4,cy-5,2.1,[255,255,255],195,true);
+    // Cupcake hero: wrapper is intentionally darker and has a cream lip, ridges,
+    // and a separate frosting cap so Discord can read all three layers.
+    const cupcake=(cx,cy,wrapper,frost,topping)=>{
+      profileSmoothRoundedRect(frame,cx-14,cy+4,28,16,3,wrapper,250,1.0);
+      profileSmoothLine(frame,cx-11,cy+6,cx+11,cy+6,2.0,creamHi,190);
+      profileSmoothLine(frame,cx-7,cy+8,cx-8,cy+18,1.35,icingShade,205);
+      profileSmoothLine(frame,cx,cy+8,cx,cy+19,1.35,icingShade,205);
+      profileSmoothLine(frame,cx+7,cy+8,cx+8,cy+18,1.35,icingShade,205);
+      // Three overlapping frosting puffs, not one giant circle.
+      profileSmoothCircle(frame,cx-7,cy+1,7.4,frost,248,true);
+      profileSmoothCircle(frame,cx+7,cy+1,7.4,frost,248,true);
+      profileSmoothCircle(frame,cx,cy-3,8.2,frost,250,true);
+      profileSmoothCircle(frame,cx-3,cy-5,2.5,icingHi,220,true);
+      profileSmoothStar(frame,cx+3,cy-5,1.0,topping,225);
+      profileSmoothCircle(frame,cx+4,cy-2,1.1,creamHi,180,true);
+    };
+
+    const lollipop=(cx,cy,col,tilt)=>{
+      profileSmoothLine(frame,cx,cy+9,cx+tilt*5,cy+28,2.2,creamHi,230);
+      profileSmoothCircle(frame,cx,cy,10.5,col,250,true);
+      profileSmoothLine(frame,cx-5,cy+1,cx-1,cy-5,1.6,creamHi,205);
+      profileSmoothLine(frame,cx-1,cy-5,cx+5,cy-1,1.6,creamHi,205);
+      profileSmoothCircle(frame,cx-3.5,cy-4,1.8,creamHi,190,true);
     };
     const wrapped=(cx,cy,col)=>{
-      profileSmoothCircle(frame,cx,cy,8.5,col,250,true);
-      profileSmoothCircle(frame,cx-2.8,cy-2.8,2.4,[255,255,255],195,true);
-      profileSmoothLine(frame,cx-8,cy-2,cx-14,cy-6,2.8,col,245);
-      profileSmoothLine(frame,cx+8,cy+2,cx+14,cy+6,2.8,col,245);
-      profileSmoothLine(frame,cx-11,cy-6,cx-14,cy-3,1.3,cream,185);
-      profileSmoothLine(frame,cx+11,cy+6,cx+14,cy+3,1.3,cream,185);
+      profileSmoothCircle(frame,cx,cy,7.2,col,248,true);
+      profileSmoothLine(frame,cx-7,cy-1,cx-12,cy-5,2.5,col,240);
+      profileSmoothLine(frame,cx+7,cy+1,cx+12,cy+5,2.5,col,240);
+      profileSmoothLine(frame,cx-2.5,cy-3,cx+3,cy+2,1.3,creamHi,190);
     };
     const gumdrop=(cx,cy,col)=>{
-      profileSmoothCircle(frame,cx,cy+2,8,col,248,true);
-      profileSmoothCircle(frame,cx-2.4,cy-1,2.3,[255,255,255],190,true);
-      profileSmoothStar(frame,cx+2,cy+3,0.9,cream,165);
+      profileSmoothCircle(frame,cx,cy+2,6.8,col,248,true);
+      profileSmoothCircle(frame,cx-2,cy,1.8,creamHi,185,true);
+      profileSmoothStar(frame,cx+2,cy+3,0.8,creamHi,150);
     };
 
-    // Cupcakes: wrapper is deliberately darker and wider than the frosting so
-    // Discord can read the wrapper as a separate object.
-    const cupcake=(cx,cy,wrapper,frost)=>{
-      profileSmoothRoundedRect(frame,cx-14,cy+5,28,16,3,wrapper,250,1.0);
-      profileSmoothLine(frame,cx-7,cy+8,cx-8,cy+18,1.5,hotPink,205);
-      profileSmoothLine(frame,cx,cy+8,cx,cy+19,1.5,hotPink,205);
-      profileSmoothLine(frame,cx+7,cy+8,cx+8,cy+18,1.5,hotPink,205);
-      // Frosting mound with a clear highlight and small candy topper.
-      profileSmoothCircle(frame,cx,cy+1,11.5,frost,250,true);
-      profileSmoothCircle(frame,cx-6.5,cy+2,7.2,frost,248,true);
-      profileSmoothCircle(frame,cx+6.5,cy+2,7.2,frost,248,true);
-      profileSmoothCircle(frame,cx,cy-5,6.0,icingLight,245,true);
-      profileSmoothLine(frame,cx-4,cy-7,cx+2,cy-9,1.8,[255,255,255],210);
-      profileSmoothStar(frame,cx+4,cy-1,1.0,lemon,220);
+    // Each corner is a different little candy-shop vignette.
+    cupcake(x+48,y+53,pink,lavender,lemon); lollipop(x+79,y+38,lemon,1); wrapped(x+35,y+83,mint); gumdrop(x+78,y+83,sky);
+    cupcake(x+w-48,y+53,lavender,peach,pink); lollipop(x+w-79,y+38,mint,-1); wrapped(x+w-35,y+83,lemon); gumdrop(x+w-78,y+83,peach);
+    cupcake(x+48,y+h-53,sky,pink,mint); lollipop(x+79,y+h-38,peach,1); wrapped(x+35,y+h-83,lavender); gumdrop(x+78,y+h-83,lemon);
+    cupcake(x+w-48,y+h-53,mint,lavender,sky); lollipop(x+w-79,y+h-38,pink,-1); wrapped(x+w-35,y+h-83,sky); gumdrop(x+w-78,y+h-83,pink);
+
+    // A small number of floating candies connect the corner vignettes to the
+    // awnings. They deliberately vary in height instead of forming a dot row.
+    const accents=[
+      [x+125,y+29,pink],[x+230,y+24,lemon],[x+w-125,y+29,mint],[x+w-230,y+24,lavender],
+      [x+135,y+h-29,sky],[x+265,y+h-24,peach],[x+w-135,y+h-29,lemon],[x+w-265,y+h-24,pink]
+    ];
+    accents.forEach(([cx,cy,c],i)=>wrapped(cx,cy,c));
+
+    // Animated premium motion: one glossy highlight travels across the icing,
+    // sprinkles gently sway, and each corner cupcake gets a tiny frosting glint.
+    const cp=phase*Math.PI*2;
+    const sweep=(yy,offset)=>{
+      const t=(0.5+0.5*Math.sin(cp+offset));
+      const cx=x+55+t*(w-110);
+      profileSmoothStar(frame,cx,yy-1,2.1,[255,255,255],145+Math.round(t*90));
     };
+    sweep(y+12,0); sweep(y+h-12,2.2);
 
-    // Four distinct corner displays. The cupcake is the hero, with candy used
-    // sparingly around it so the corners feel premium rather than cluttered.
-    cupcake(x+50,y+55,pink,lavender); lollipop(x+79,y+40,lemon,1); wrapped(x+37,y+87,mint); gumdrop(x+80,y+82,sky);
-    cupcake(x+w-50,y+55,lavender,peach); lollipop(x+w-79,y+40,pink,-1); wrapped(x+w-37,y+87,lemon); gumdrop(x+w-80,y+82,mint);
-    cupcake(x+50,y+h-55,peach,sky); lollipop(x+79,y+h-40,mint,1); wrapped(x+37,y+h-87,pink); gumdrop(x+80,y+h-82,lemon);
-    cupcake(x+w-50,y+h-55,mint,lavender); lollipop(x+w-79,y+h-40,lavender,-1); wrapped(x+w-37,y+h-87,sky); gumdrop(x+w-80,y+h-82,pink);
+    const moving=[
+      [x+155,y+15,0],[x+350,y+15,1.2],[x+560,y+15,2.4],[x+690,y+15,3.6],
+      [x+175,y+h-15,4.8],[x+390,y+h-15,0.7],[x+610,y+h-15,2.0]
+    ];
+    moving.forEach(([cx,cy,o],i)=>{
+      const sway=Math.sin(cp+o)*1.2;
+      const c=candy[(i+1)%candy.length];
+      profileSmoothLine(frame,cx-2,cy+sway-1.4,cx+2,cy+sway+1.4,1.25,c,205);
+    });
 
-    // Only a few loose candies on the awnings; they are accents, not the border.
-    [[x+205,y+15,lemon],[x+430,y+15,mint],[x+655,y+15,pink],
-     [x+240,y+h-15,lavender],[x+470,y+h-15,peach],[x+690,y+h-15,sky]]
-      .forEach(([cx,cy,c])=>wrapped(cx,cy,c));
-
-    // Small sugar-star polish at the four interior corners.
-    [[x+105,y+31,lemon],[x+w-105,y+31,pink],[x+105,y+h-31,mint],[x+w-105,y+h-31,lemon]]
-      .forEach(([cx,cy,c])=>profileSmoothStar(frame,cx,cy,2.0,c,215));
+    const glints=[[x+48,y+53,0],[x+w-48,y+53,1.5],[x+48,y+h-53,3],[x+w-48,y+h-53,4.5]];
+    glints.forEach(([cx,cy,o])=>{
+      const pulse=0.5+0.5*Math.sin(cp+o);
+      profileSmoothStar(frame,cx-4+pulse*1.5,cy-5-pulse,1.0+pulse*1.2,creamHi,135+Math.round(pulse*90));
+    });
   } else if(style==='champagne'){
+
 
 
     for(let i=0;i<7;i++){
@@ -26015,3 +26040,4 @@ export default {
     );
   }
 };
+
