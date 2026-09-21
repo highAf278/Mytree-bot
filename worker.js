@@ -3315,48 +3315,50 @@ function profilePetal(frame,x,y,s,c,flip=1){
   profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
 }
 function profileButterfly(frame,x,y,s,variant=0,phase=0){
-  // Premium smooth butterfly ornament: larger, recognizable wings with an
-  // actual wing-flap animation. Keep the body/antennae dark so the butterfly
-  // remains readable after GIF palette conversion.
+  // Premium butterfly ornament: larger, clearly readable silhouette with
+  // distinct upper/lower wings, visible body/antennae, and obvious flight.
   const palettes=[
-    [[255,105,190],[255,190,235]],
-    [[95,190,255],[180,235,255]],
-    [[255,195,55],[255,235,135]],
-    [[165,105,245],[220,180,255]],
-    [[70,215,165],[165,255,220]],
-    [[255,125,95],[255,195,150]]
+    [[255,92,190],[255,188,232]],
+    [[70,180,255],[170,232,255]],
+    [[255,178,35],[255,230,120]],
+    [[160,92,245],[218,168,255]],
+    [[45,205,155],[155,250,215]],
+    [[255,105,90],[255,190,145]]
   ];
   const [upper,lower]=palettes[variant%palettes.length];
   const t=phase*Math.PI*2;
-  const flap=0.78+0.22*(0.5+0.5*Math.sin(t*2+variant*0.8));
-  const swayX=Math.sin(t+variant*1.3)*1.8;
-  const swayY=Math.cos(t*0.8+variant)*1.6;
-  const cx=x+swayX, cy=y+swayY;
-  const wingW=Math.max(4.8,s*1.35);
-  const upperH=Math.max(3.8,s*1.05*flap);
-  const lowerH=Math.max(2.8,s*.72*(1.15-flap*.25));
-  const tilt=Math.sin(t*2+variant)*0.16;
+  const flap=0.58+0.42*(0.5+0.5*Math.sin(t*2.4+variant*0.9));
+  const swayX=Math.sin(t*1.05+variant*1.7)*2.7;
+  const swayY=Math.cos(t*0.78+variant*1.1)*2.2;
+  const cx=x+swayX,cy=y+swayY;
+  const wingW=Math.max(6.5,s*1.12);
+  const upperH=Math.max(5.0,s*0.98*(0.72+flap*.42));
+  const lowerH=Math.max(3.6,s*0.68*(1.05-flap*.18));
+  const tilt=Math.sin(t*1.6+variant)*0.18;
 
-  // Upper wings: broad rounded teardrops.
-  profileSmoothPetal(frame,cx-wingW*.72,cy-upperH*.34,wingW,upperH,upper,238,-0.28-tilt);
-  profileSmoothPetal(frame,cx+wingW*.72,cy-upperH*.34,wingW,upperH,upper,238,0.28+tilt);
-  // Lower wings: smaller and slightly lighter.
-  profileSmoothPetal(frame,cx-wingW*.60,cy+lowerH*.62,wingW*.72,lowerH,lower,232,0.38-tilt);
-  profileSmoothPetal(frame,cx+wingW*.60,cy+lowerH*.62,wingW*.72,lowerH,lower,232,-0.38+tilt);
+  // Upper wings: broad rounded shapes with a small gap around the body.
+  profileSmoothPetal(frame,cx-wingW*.60,cy-upperH*.22,wingW*.82,upperH,upper,245,-0.22-tilt);
+  profileSmoothPetal(frame,cx+wingW*.60,cy-upperH*.22,wingW*.82,upperH,upper,245,0.22+tilt);
+  // Lower wings give the silhouette the unmistakable four-wing butterfly shape.
+  profileSmoothPetal(frame,cx-wingW*.50,cy+lowerH*.52,wingW*.62,lowerH,lower,240,0.32-tilt);
+  profileSmoothPetal(frame,cx+wingW*.50,cy+lowerH*.52,wingW*.62,lowerH,lower,240,-0.32+tilt);
 
-  // Soft wing highlights.
-  profileSmoothPetal(frame,cx-wingW*.72,cy-upperH*.34,wingW*.48,upperH*.30,[255,255,255],105,-0.28-tilt);
-  profileSmoothPetal(frame,cx+wingW*.72,cy-upperH*.34,wingW*.48,upperH*.30,[255,255,255],105,0.28+tilt);
+  // Inner wing highlights and vein-like accents.
+  profileSmoothPetal(frame,cx-wingW*.58,cy-upperH*.18,wingW*.42,upperH*.28,[255,255,255],125,-0.18-tilt);
+  profileSmoothPetal(frame,cx+wingW*.58,cy-upperH*.18,wingW*.42,upperH*.28,[255,255,255],125,0.18+tilt);
+  profileSmoothLine(frame,cx-wingW*.38,cy-upperH*.05,cx-wingW*.68,cy-upperH*.55,0.7,[255,255,255],95);
+  profileSmoothLine(frame,cx+wingW*.38,cy-upperH*.05,cx+wingW*.68,cy-upperH*.55,0.7,[255,255,255],95);
 
-  // Body, head, and antennae.
-  const body=[55,42,70];
-  profileSmoothCircle(frame,cx,cy,Math.max(1.4,s*.20),body,245,true);
-  profileSmoothCircle(frame,cx,cy-s*.34,Math.max(1.2,s*.16),body,245,true);
-  profileSmoothLine(frame,cx,cy-s*.42,cx-s*.52,cy-s*.86,0.9,body,225);
-  profileSmoothLine(frame,cx,cy-s*.42,cx+s*.52,cy-s*.86,0.9,body,225);
-  profileSmoothCircle(frame,cx-s*.52,cy-s*.86,0.75,[255,255,255],210,true);
-  profileSmoothCircle(frame,cx+s*.52,cy-s*.86,0.75,[255,255,255],210,true);
+  // Clearly visible body/head/antennae.
+  const body=[48,38,62];
+  profileSmoothCircle(frame,cx,cy+s*.05,Math.max(1.7,s*.19),body,250,true);
+  profileSmoothCircle(frame,cx,cy-s*.32,Math.max(1.35,s*.15),body,250,true);
+  profileSmoothLine(frame,cx,cy-s*.42,cx-s*.48,cy-s*.78,1.0,body,235);
+  profileSmoothLine(frame,cx,cy-s*.42,cx+s*.48,cy-s*.78,1.0,body,235);
+  profileSmoothCircle(frame,cx-s*.48,cy-s*.78,0.85,[255,255,255],225,true);
+  profileSmoothCircle(frame,cx+s*.48,cy-s*.78,0.85,[255,255,255],225,true);
 }
+
 function profileCandy(frame,x,y,s,c,alt){
   // Plump wrapped candy with unmistakable pinched/twisted ends.
   const w=Math.max(7,Math.round(s*1.65));
@@ -3862,13 +3864,17 @@ function drawProfileFrame(frame, frameId, phase=0){
   const butterfly=(cx,cy,sc,variant)=>profileButterfly(frame,cx,cy,sc,variant,phase);
 
   if(style==='butterfly'){
-    // Actual butterflies, spaced like jewelry around the border.
-    const pts=[[x+30,y+30],[x+w-30,y+30],[x+30,y+h-30],[x+w-30,y+h-30],
-               [x+w/2,y+10],[x+w/2,y+h-10]];
+    // Butterfly Swarm: larger butterflies follow the border in staggered
+    // positions so the frame reads as a living swarm rather than tiny icons.
+    const pts=[
+      [x+55,y+14,10.2,0],[x+154,y+11,8.8,1],[x+282,y+13,10.0,2],[x+w-58,y+17,9.0,3],
+      [x+w-18,y+118,9.4,4],[x+w-20,y+330,10.1,5],
+      [x+300,y+h-12,9.0,0],[x+126,y+h-15,10.0,2],[x+42,y+h-105,8.8,3],[x+20,y+220,9.5,1]
+    ];
     for(let i=0;i<pts.length;i++){
-      const [cx,cy]=pts[i];
-      butterfly(cx,cy,7.2+(i%2)*.8,i);
-      sparkle(cx+(i%2?9:-9),cy+(i<2?8:-8),1.8);
+      const [cx,cy,sc,v]=pts[i];
+      butterfly(cx,cy,sc,v);
+      if(i%2===0)sparkle(cx+(i%3-1)*8,cy+(i%2?7:-7),1.6);
     }
   } else if(style==='rhinestone'||style==='diamond'){
     const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
