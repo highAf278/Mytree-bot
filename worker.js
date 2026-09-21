@@ -3915,30 +3915,31 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(shimmer>0.96) profileSmoothStar(frame,cx-r*.55,cy-r*.62,2.3*scale,white,235);
     };
 
-    // Closely spaced enough to read as a continuous luxury rhinestone border,
-    // but with enough breathing room that it doesn't become a dotted stitch.
+    // Tighter jewelry-chain spacing: more stones, slightly smaller faces, and
+    // more consistent rhythm so the border reads as a real rhinestone trim
+    // instead of isolated floating diamonds.
     const top=[];
     const bottom=[];
-    for(let i=0;i<13;i++){
-      top.push([x+24+i*((w-48)/12),y+11, i%3===0?1.08:.82]);
-      bottom.push([x+24+i*((w-48)/12),y+h-11, i%4===0?1.02:.78]);
+    for(let i=0;i<17;i++){
+      top.push([x+22+i*((w-44)/16),y+11, i%4===0?0.92:.68]);
+      bottom.push([x+22+i*((w-44)/16),y+h-11, i%5===0?0.88:.66]);
     }
-    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.37));
+    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.31));
 
     const sides=[
-      [x+11,y+74,0.78],[x+11,y+170,.88],[x+11,y+266,.78],[x+11,y+362,.9],
-      [x+w-11,y+74,.88],[x+w-11,y+170,.78],[x+w-11,y+266,.9],[x+w-11,y+362,.78]
+      [x+11,y+58,.68],[x+11,y+126,.72],[x+11,y+194,.68],[x+11,y+262,.72],[x+11,y+330,.68],[x+11,y+398,.72],
+      [x+w-11,y+58,.72],[x+w-11,y+126,.68],[x+w-11,y+194,.72],[x+w-11,y+262,.68],[x+w-11,y+330,.72],[x+w-11,y+398,.68]
     ];
     sides.forEach((g,i)=>gem(g[0],g[1],g[2],1.1+i*.43));
 
     // Four unmistakable larger corner stones.
     const corners=[
-      [x+24,y+24,1.55],[x+w-24,y+24,1.55],
-      [x+24,y+h-24,1.55],[x+w-24,y+h-24,1.55]
+      [x+23,y+23,1.38],[x+w-23,y+23,1.38],
+      [x+23,y+h-23,1.38],[x+w-23,y+h-23,1.38]
     ];
     corners.forEach((g,i)=>{
       gem(g[0],g[1],g[2],2+i*.8);
-      profileSmoothStar(frame,g[0]-2.8,g[1]-3.0,3.4,[255,255,255],165);
+      profileSmoothStar(frame,g[0]-2.5,g[1]-2.7,2.9,[255,255,255],175);
     });
     } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
 
@@ -4141,19 +4142,27 @@ async function renderProfileDirectFrame(env,player,phase=0){
   drawBitmapText(scene,"NAME EFFECT",360,191,2,muted,180);
   drawBitmapText(scene,effect,490,191,2,accent,240);
 
-  // FOUR STAT JEWELS: each stat gets its own subtle card and strong number.
+  // FOUR STAT JEWELS: all four cards use the same lightened version of the
+  // player's chosen profile background. Nothing is hard-coded pink here.
+  // The result is always visibly lighter than the user's own profile color,
+  // while still belonging to that color family.
+  const statBubble=[
+    Math.round(br+(255-br)*0.38),
+    Math.round(bgG+(255-bgG)*0.38),
+    Math.round(bb+(255-bb)*0.38)
+  ];
   const statCard=(x,y,w,h,label,value,accentColor)=>{
-    profileBlendFill(scene,x,y,w,h,255,255,255,88);
-    profileSmoothRoundedRect(scene,x,y,w,h,14,white,92,0.8);
-    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,120);
-    profileSmoothCircle(scene,x+20,y+25,3.2,accentColor||[255,180,220],190,true);
+    profileFill(scene,x,y,w,h,statBubble[0],statBubble[1],statBubble[2],255);
+    profileSmoothRoundedRect(scene,x,y,w,h,14,white,125,0.9);
+    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,115);
+    profileSmoothCircle(scene,x+20,y+25,3.2,statBubble,220,true);
     drawBitmapText(scene,label,x+32,y+18,1.8,muted,Math.max(90,w-48));
     drawBitmapText(scene,value,x+18,y+43,3,ink,Math.max(100,w-36));
   };
-  statCard(326,242,214,70,"LEVEL",String(Number(player.level||1)),[205,125,190]);
-  statCard(558,242,214,70,"SPARKLES",Number(player.sparkles||0).toLocaleString(),[255,190,220]);
-  statCard(326,320,214,70,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT",[155,205,165]);
-  statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)),[230,175,85]);
+  statCard(326,242,214,70,"LEVEL",String(Number(player.level||1)));
+  statCard(558,242,214,70,"SPARKLES",Number(player.sparkles||0).toLocaleString());
+  statCard(326,320,214,70,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT");
+  statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)));
 
   // Titles owned is an achievement ribbon, not an afterthought at the bottom.
   profileSmoothRoundedRect(scene,326,400,446,48,18,white,112,0.9);
