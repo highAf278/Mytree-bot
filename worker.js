@@ -3189,12 +3189,24 @@ function rgbaToRgbPng(frame) {
 async function getPngAsset(env, filename) {
   if (!filename) return null;
 
-  // TREE_DATA stores player/game state; the artwork lives in the public R2 bucket.
-  // Fetch the same public R2 asset URL used by the original image pipeline.
+  // TREE_DATA stores player/game state; artwork lives in the public R2 bucket.
+  // Keep this fetch bounded: a stalled asset request must never leave /tree
+  // permanently stuck on Discord's loading state.
   const url = imageUrl(filename);
-  const response = await fetch(url, {
-    cf: { cacheEverything: true, cacheTtl: 86400 }
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(url, {
+      cf: { cacheEverything: true, cacheTtl: 86400 },
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`Tree asset fetch timed out after 8s: ${filename}`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     throw new Error(`R2 asset fetch failed: ${filename} (HTTP ${response.status})`);
@@ -4097,7 +4109,7 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
 function drawProfileBadges(frame,badgeIds,phase=0){
   if(!Array.isArray(badgeIds)||!badgeIds.length) return;
   const ids=[...new Set(badgeIds.filter(id=>PROFILE_BADGES[id]))].slice(0,4);
-  const y=460;
+  const y=423;
   const positions=[390,480,570,660];
   for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,38,phase+i*.13);
 }
@@ -4107,22 +4119,13 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
   const [br,bgG,bb]=hexRgb(bg);
   const scene=solidRGBA(width,height,bg);
-
-  // Premium profile-card redesign: keep the player's tree artwork untouched,
-  // but make the UI feel like a collectible cosmetic card instead of a flat
-  // stats panel. The Rhinestone Princess frame remains the outer jewelry layer.
-  const soft=[255,255,255];
-  profileBlendFill(scene,18,18,764,464,255,255,255,26);
-  profileSmoothRoundedRect(scene,18,18,764,464,22,[255,255,255],135,1.2);
-
-  // A dedicated tree display area keeps the artwork visually anchored.
-  profileBlendFill(scene,30,30,276,408,255,255,255,24);
-  profileSmoothRoundedRect(scene,30,30,276,408,18,[255,255,255],95,1.0);
-  profileBlendFill(scene,48,48,240,372,br,bgG,bb,28);
-
-  // Soft decorative glow behind the featured tree.
-  profileSmoothCircle(scene,158,220,132,[255,255,255],38,true);
-  profileSmoothCircle(scene,158,220,105,[255,235,250],24,true);
+  /* Soft panel on the right, matching the original profile-card composition. */
+  profileBlendFill(scene,318,18,458,464,255,255,255,205);
+  profileBlendFill(scene,330,30,434,440,br,bgG,bb,55);
+  profileFill(scene,330,30,434,4,255,255,255,150);
+  profileFill(scene,330,466,434,4,255,255,255,150);
+  profileFill(scene,318,18,4,464,255,255,255,180);
+  profileFill(scene,772,18,4,464,255,255,255,180);
 
   const treeFile=getTreeImage(player);
   const tree=await getPngAsset(env,treeFile);
@@ -4133,57 +4136,39 @@ async function renderProfileDirectFrame(env,player,phase=0){
   if(decorFile){
     try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
-
-  // Small featured-tree pedestal/accent, intentionally behind the frame.
-  profileSmoothRoundedRect(scene,62,420,192,25,12,[255,255,255],105,1.0);
-  profileBlendFill(scene,82,424,152,3,255,255,255,110);
-  drawBitmapText(scene,"FEATURED TREE",112,431,1,[110,88,112],250);
-
   const effectId=profileEffectKey(player)&&NAME_EFFECTS[profileEffectKey(player)]?profileEffectKey(player):"";
   const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
   const title=titleId?SOLO_TITLES[titleId].name:"No Title";
   const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
   const ink=[42,32,48], accent=profileEffectColor(effectId);
 
-  // Right-side luxury header.
-  profileSmoothRoundedRect(scene,318,30,434,66,18,[255,255,255],120,1.1);
-  profileBlendFill(scene,334,42,402,2,255,255,255,145);
+  /* Card labels and values are drawn with a tiny embedded bitmap font so this path
+     needs no browser, websocket, font service, or external renderer. */
   drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),350,48,4,ink,390);
   drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
-
-  // Title/name-effect plaque: a layered glass-like collectible panel.
-  profileSmoothRoundedRect(scene,340,112,390,112,18,[255,255,255],135,1.0);
-  profileBlendFill(scene,350,122,370,92,br,bgG,bb,58);
-  profileSmoothRoundedRect(scene,350,122,370,92,14,[255,255,255],75,0.8);
-  drawBitmapText(scene,"TITLE",370,136,2,[105,92,118],340);
+  profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
+  drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
+  /* Draw particles first so they never erase or cover title letters. */
   drawProfileEffectParticles(scene,effectId,phase);
-  drawAnimatedProfileTitle(scene,title,370,160,3,effectId,phase,325);
-  drawBitmapText(scene,"NAME EFFECT",370,190,2,[105,92,118],340);
-  drawBitmapText(scene,effect,370,212,2,accent,340);
+  drawAnimatedProfileTitle(scene,title,372,158,3,effectId,phase,345);
+  drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
+  drawBitmapText(scene,effect,372,212,2,accent,350);
 
-  // Four individual stat jewels/cards instead of one empty rectangle.
-  const statCard=(x,y,w,h,label,value)=>{
-    profileSmoothRoundedRect(scene,x,y,w,h,14,[255,255,255],108,0.9);
-    profileBlendFill(scene,x+10,y+9,w-20,2,255,255,255,125);
-    drawBitmapText(scene,label,x+18,y+22,1.8,[105,92,118],Math.round(w*.72));
-    drawBitmapText(scene,value,x+18,y+47,3,ink,Math.round(w*.72));
-  };
-  statCard(340,238,185,68,"LEVEL",String(Number(player.level||1)));
-  statCard(540,238,190,68,"SPARKLES",Number(player.sparkles||0).toLocaleString());
-  statCard(340,314,185,68,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT");
-  statCard(540,314,190,68,"SOLO WINS",String(Number(player.soloWins||0)));
-
-  // Titles owned becomes a deliberate achievement pill.
-  profileSmoothRoundedRect(scene,340,394,390,44,20,[255,255,255],125,0.95);
-  profileBlendFill(scene,352,405,34,22,br,bgG,bb,80);
-  profileSmoothRoundedRect(scene,352,405,34,22,10,[255,255,255],75,0.7);
-  drawBitmapText(scene,String(Number(player.titles?.length||0)),362,412,2,ink,60);
-  drawBitmapText(scene,"TITLES OWNED",398,412,2,[100,88,110],230);
-
+  profileBlendFill(scene,350,250,394,145,255,255,255,100);
+  drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
+  drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
+  drawBitmapText(scene,Number(player.sparkles||0).toLocaleString(),545,290,3,ink,170);
+  drawBitmapText(scene,"TREE HEIGHT",372,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
+  drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
+  drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
+  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,444,2,[100,88,110],390);
   drawProfileBadges(scene,profileBadgeKeys(player),phase);
   drawProfileFrame(scene,profileFrameKey(player),phase);
   return rgbaToRgbPng(scene);
 }
+
 
 function drawBirthdayConfetti(frame, phase=0) {
   const pieces = [
@@ -9670,11 +9655,13 @@ async function handleTree(
   );
 
   try {
-    await sendTree(
-      env,
-      interaction,
-      player
-    );
+    // Never leave Discord's loading state hanging forever. The renderer gets
+    // a bounded 20-second window; if it stalls, the catch below replaces the
+    // loading response with the actual failure point.
+    await Promise.race([
+      sendTree(env, interaction, player),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Tree renderer timed out after 20 seconds")), 20000))
+    ]);
   } catch (error) {
     console.error(
       "Tree render error:",
