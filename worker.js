@@ -3903,7 +3903,7 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess V6: luxury jewelry treatment. The frame is built from
+    // Rhinestone Princess V7: luxury jewelry treatment. The frame is built from
     // individual bezel-set stones, tiny connector beads, layered facets, and
     // statement corner clusters so it reads like a PREMIUM SHOP COSMETIC.
     const gem=(cx,cy,scale=1,phaseOffset=0,variant=0)=>{
@@ -4133,7 +4133,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const panel=profilePanelColors([br,bgG,bb]);
   const panelBg=panel.panel, panelSoft=panel.panelSoft, panelBorder=panel.panelBorder, panelAccent=panel.panelAccent;
 
-  // PROFILE REDESIGN V6:
+  // PROFILE REDESIGN V7:
   // Keep the proven 800x500 direct renderer, but make the composition feel like
   // a premium collectible card: dedicated tree showcase + structured cosmetic
   // plaque + four real stat cards. No Browser Rendering is introduced here.
@@ -4215,7 +4215,8 @@ async function renderProfileDirectFrame(env,player,phase=0){
   profileSmoothRoundedRect(scene,326,400,446,48,18,panelBorder,220,0.9);
   profileBlendFill(scene,340,409,34,26,panelSoft[0],panelSoft[1],panelSoft[2],235);
   profileSmoothRoundedRect(scene,340,409,34,26,10,panelBorder,200,0.7);
-  profileSmoothStar(scene,357,422,7,panelAccent,225);
+  // Keep the titles count completely unobstructed. The old decorative star sat
+  // directly behind the number and could look like a stray badge/spot in Discord.
   drawBitmapText(scene,String(Number(player.titles?.length||0)),350,414,2,ink,55);
   drawBitmapText(scene,"TITLES OWNED",388,409,2,muted,210);
   drawBitmapText(scene,"ACHIEVEMENTS",388,428,1,muted,200);
