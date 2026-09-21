@@ -3315,56 +3315,64 @@ function profilePetal(frame,x,y,s,c,flip=1){
   profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
 }
 function profileButterfly(frame,x,y,s,variant=0,phase=0){
-  // Premium, unmistakable butterfly: four separated wings, visible body,
-  // antennae, wing markings, and gentle flight/flap motion.
+  // V5: unmistakable butterfly silhouette designed for Discord's final-size render.
+  // The body stays strong and centered while the four wings are separated,
+  // vertically biased, outlined, and animated independently from the frame.
   const palettes=[
     [[255,92,190],[255,188,232]],
-    [[70,180,255],[170,232,255]],
-    [[255,178,35],[255,230,120]],
-    [[160,92,245],[218,168,255]],
-    [[45,205,155],[155,250,215]],
-    [[255,105,90],[255,190,145]]
+    [[55,175,255],[165,232,255]],
+    [[255,175,25],[255,228,105]],
+    [[155,82,240],[215,160,255]],
+    [[35,200,150],[145,245,210]],
+    [[255,90,80],[255,185,140]]
   ];
-  const [upper,lower]=palettes[variant%palettes.length];
-  const t=phase*Math.PI*2 + variant*0.55;
-  const flap=0.82+0.18*Math.sin(t*2.8);
-  const cx=x+Math.sin(t*1.15)*2.2;
-  const cy=y+Math.cos(t*0.85)*1.8;
-  const tilt=Math.sin(t*1.7)*0.10;
-  const wing=Math.max(6,s*1.05);
-  const uh=Math.max(5,s*0.95*flap);
-  const lh=Math.max(4,s*0.62*(1.05-0.12*Math.sin(t*2.8)));
+  const [upper,lower]=palettes[Math.abs(variant)%palettes.length];
+  const t=phase*Math.PI*2 + variant*0.43;
+  const flap=0.78+0.22*(0.5+0.5*Math.sin(t*3.1));
+  const driftX=Math.sin(t*1.17)*1.8;
+  const driftY=Math.cos(t*0.91)*1.4;
+  const cx=x+driftX, cy=y+driftY;
+  const wing=Math.max(6.5,s*0.98);
+  const upperRy=Math.max(6,s*0.92*flap);
+  const lowerRy=Math.max(4,s*0.54*(1.0-0.08*Math.sin(t*3.1)));
+  const outline=[42,32,52];
+  const gap=Math.max(1.8,s*0.16);
 
-  // Upper wings: two-lobed silhouette, angled upward/outward so it cannot
-  // collapse into the old horizontal "bow" shape.
-  profileSmoothPetal(frame,cx-wing*.63,cy-uh*.28,wing*.68,uh*.62,upper,245,-0.58-tilt);
-  profileSmoothCircle(frame,cx-wing*.88,cy-uh*.54,wing*.34,upper,225,true);
-  profileSmoothPetal(frame,cx+wing*.63,cy-uh*.28,wing*.68,uh*.62,upper,245,0.58+tilt);
-  profileSmoothCircle(frame,cx+wing*.88,cy-uh*.54,wing*.34,upper,225,true);
+  // Dark silhouettes first. The small gap beside the body is intentional:
+  // it prevents the two sides from merging into a bow shape after GIF scaling.
+  profileSmoothPetal(frame,cx-wing*.62,cy-upperRy*.22,wing*.48,upperRy,outline,235,-0.28-Math.sin(t)*0.08);
+  profileSmoothPetal(frame,cx+wing*.62,cy-upperRy*.22,wing*.48,upperRy,outline,235,0.28+Math.sin(t)*0.08);
+  profileSmoothPetal(frame,cx-wing*.43,cy+lowerRy*.30,wing*.34,lowerRy,outline,235,0.20);
+  profileSmoothPetal(frame,cx+wing*.43,cy+lowerRy*.30,wing*.34,lowerRy,outline,235,-0.20);
 
-  // Lower wings sit distinctly below the upper pair.
-  profileSmoothPetal(frame,cx-wing*.47,cy+lh*.36,wing*.52,lh*.62,lower,245,0.48-tilt);
-  profileSmoothPetal(frame,cx+wing*.47,cy+lh*.36,wing*.52,lh*.62,lower,245,-0.48+tilt);
+  // Colored inner wings, deliberately taller than they are wide.
+  profileSmoothPetal(frame,cx-wing*.62,cy-upperRy*.22,wing*.40,upperRy*.88,upper,250,-0.28-Math.sin(t)*0.08);
+  profileSmoothPetal(frame,cx+wing*.62,cy-upperRy*.22,wing*.40,upperRy*.88,upper,250,0.28+Math.sin(t)*0.08);
+  profileSmoothPetal(frame,cx-wing*.43,cy+lowerRy*.30,wing*.27,lowerRy*.84,lower,250,0.20);
+  profileSmoothPetal(frame,cx+wing*.43,cy+lowerRy*.30,wing*.27,lowerRy*.84,lower,250,-0.20);
 
-  // Contrasting wing spots/veins make the silhouette read as a butterfly.
-  const spot=[255,255,255];
-  profileSmoothCircle(frame,cx-wing*.67,cy-uh*.38,Math.max(1.3,s*.15),spot,175,true);
-  profileSmoothCircle(frame,cx+wing*.67,cy-uh*.38,Math.max(1.3,s*.15),spot,175,true);
-  profileSmoothCircle(frame,cx-wing*.48,cy+lh*.36,Math.max(1.0,s*.11),upper,185,true);
-  profileSmoothCircle(frame,cx+wing*.48,cy+lh*.36,Math.max(1.0,s*.11),upper,185,true);
-  profileSmoothLine(frame,cx-wing*.20,cy-uh*.02,cx-wing*.62,cy-uh*.34,0.8,spot,130);
-  profileSmoothLine(frame,cx+wing*.20,cy-uh*.02,cx+wing*.62,cy-uh*.34,0.8,spot,130);
+  // Wing markings: visible even when Discord reduces the animation.
+  const mark=[255,255,255];
+  const mr=Math.max(1.2,s*.12);
+  profileSmoothCircle(frame,cx-wing*.70,cy-upperRy*.43,mr,mark,185,true);
+  profileSmoothCircle(frame,cx+wing*.70,cy-upperRy*.43,mr,mark,185,true);
+  profileSmoothCircle(frame,cx-wing*.47,cy+lowerRy*.28,Math.max(1,s*.09),upper,205,true);
+  profileSmoothCircle(frame,cx+wing*.47,cy+lowerRy*.28,Math.max(1,s*.09),upper,205,true);
+  profileSmoothLine(frame,cx-wing*.26,cy-upperRy*.06,cx-wing*.67,cy-upperRy*.34,0.9,mark,155);
+  profileSmoothLine(frame,cx+wing*.26,cy-upperRy*.06,cx+wing*.67,cy-upperRy*.34,0.9,mark,155);
 
-  // Strong central body and head so the wings don't read as a bow.
-  const body=[45,35,55];
-  profileSmoothLine(frame,cx,cy-s*.28,cx,cy+s*.62,Math.max(1.5,s*.18),body,250);
-  profileSmoothCircle(frame,cx,cy-s*.38,Math.max(1.6,s*.17),body,255,true);
-  profileSmoothLine(frame,cx-s*.08,cy-s*.48,cx-s*.42,cy-s*.82,0.9,body,235);
-  profileSmoothLine(frame,cx+s*.08,cy-s*.48,cx+s*.42,cy-s*.82,0.9,body,235);
-  profileSmoothCircle(frame,cx-s*.42,cy-s*.82,0.75,spot,220,true);
-  profileSmoothCircle(frame,cx+s*.42,cy-s*.82,0.75,spot,220,true);
+  // Strong central body, head, and antennae.
+  const bodyW=Math.max(2.6,s*.23);
+  profileSmoothLine(frame,cx,cy-s*.32,cx,cy+s*.62,bodyW,outline,255);
+  profileSmoothCircle(frame,cx,cy-s*.43,Math.max(2.0,s*.20),outline,255,true);
+  profileSmoothLine(frame,cx-s*.06,cy-s*.55,cx-s*.48,cy-s*.98,1.05,outline,245);
+  profileSmoothLine(frame,cx+s*.06,cy-s*.55,cx+s*.48,cy-s*.98,1.05,outline,245);
+  profileSmoothCircle(frame,cx-s*.48,cy-s*.98,0.95,mark,230,true);
+  profileSmoothCircle(frame,cx+s*.48,cy-s*.98,0.95,mark,230,true);
+
+  // Tiny body highlight makes the center readable without becoming pixel art.
+  profileSmoothLine(frame,cx-0.3,cy-s*.20,cx-0.3,cy+s*.42,0.8,[255,255,255],120);
 }
-
 function profileCandy(frame,x,y,s,c,alt){
   // Plump wrapped candy with unmistakable pinched/twisted ends.
   const w=Math.max(7,Math.round(s*1.65));
@@ -3867,19 +3875,20 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothStar(frame,cx,cy,r*pulse,hi,235);
     profileSmoothCircle(frame,cx-0.7,cy-0.7,0.8,[255,255,255],210,true);
   };
-  const butterfly=(cx,cy,sc,variant)=>profileButterfly(frame,cx,cy,sc,variant,phase);
+  const butterfly=(cx,cy,sc,variant,offset=0)=>profileButterfly(frame,cx,cy,sc,variant,phase+offset);
 
   if(style==='butterfly'){
     // Butterfly Swarm: a true full-profile swarm. Butterflies travel around
     // the outside border with varied colors, sizes, and phases.
     const pts=[
-      [72,y+17,9.2,0],[205,y+14,8.0,1],[350,y+18,9.0,2],[505,y+14,8.3,3],[650,y+18,9.0,4],[x+w-42,y+68,8.0,5],
-      [x+w-17,y+205,8.8,1],[x+w-24,y+352,9.0,3],[650,y+h-17,8.2,0],[510,y+h-14,9.0,2],[350,y+h-18,8.0,4],[205,y+h-14,9.0,5],
-      [75,y+h-18,8.2,1],[x+18,y+h-105,8.8,3],[x+17,y+300,8.0,5],[x+21,y+155,9.0,2]
+      [74,y+18,12,0],[205,y+16,11,1],[350,y+18,12,2],[505,y+16,11,3],[650,y+18,12,4],
+      [x+w-28,y+105,11,5],[x+w-24,y+300,12,1],
+      [650,y+h-18,11,0],[510,y+h-16,12,2],[350,y+h-18,11,4],[205,y+h-16,12,5],[74,y+h-18,11,1],
+      [x+22,y+330,12,3],[x+24,y+155,11,5]
     ];
     for(let i=0;i<pts.length;i++){
       const [cx,cy,sc,v]=pts[i];
-      butterfly(cx,cy,sc,v);
+      butterfly(cx,cy,sc,v,i*0.055);
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
