@@ -25604,11 +25604,16 @@ export default {
           // even though the tree handler itself is healthy. Run the tree first.
           const isTreeInteraction = isTreeCommand || isTreeComponent;
           if (isTreeInteraction) {
-            if (interaction.type === 2) {
-              await handleCommand(env, interaction);
-            } else {
-              await handleComponent(env, interaction);
-            }
+            // HARD WATCHDOG: tree work can hang before handleTree() reaches its
+            // renderer timeout (for example during a KV read/save). Keep the
+            // Discord interaction from sitting on “thinking...” forever.
+            const treeWork = interaction.type === 2
+              ? handleCommand(env, interaction)
+              : handleComponent(env, interaction);
+            await Promise.race([
+              treeWork,
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Tree interaction timed out after 15 seconds before completion.")), 15000))
+            ]);
           } else {
             if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
             await maybeCourtWatch(env, interaction);
