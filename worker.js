@@ -3729,121 +3729,81 @@ function profileFrameCornerJewel(frame,x,y,outer,inner,phase=0){
 
 function drawProfileFrame(frame, frameId, phase=0){
   if(!frameId || !PROFILE_FRAMES[frameId]) return;
-  const s=PROFILE_FRAMES[frameId].style;
+  const style=PROFILE_FRAMES[frameId].style;
   const W=frame.width,H=frame.height;
   const p=phase*Math.PI*2;
-  const inset=9;
-  // These are intentionally smooth ornamental overlays rather than pixel-art borders.
-  switch(s){
-    case "rhinestone": {
-      profileSmoothRoundedRect(frame,inset,inset,W-inset*2,H-inset*2,22,[235,150,205],235,5);
-      profileSmoothRoundedRect(frame,16,16,W-32,H-32,17,[255,245,255],220,2);
-      [[28,28],[W-28,28],[28,H-28],[W-28,H-28],[W/2,14],[W/2,H-14]].forEach((q,i)=>profileFrameCornerJewel(frame,q[0],q[1],7,4,i/6+phase));
-      for(let i=0;i<12;i++){const x=45+i*64; profileSmoothCircle(frame,x,12+Math.sin(p+i)*2,2,[255,255,255],190,true);}
-      break;
+  // Frame only surrounds the profile card. It deliberately does NOT outline the
+  // whole canvas, so the tree/left side stays clean. Colors are chosen from the
+  // GIF-safe palette to avoid the muddy purple fringe caused by quantization.
+  const x=314,y=14,w=466,h=472;
+  const palette={
+    rhinestone:[[255,153,204],[255,255,255]], pink_glitter:[[255,102,204],[255,204,255]],
+    candyland:[[255,153,204],[255,204,102]], butterfly:[[153,102,204],[204,153,255]],
+    rainbow:[[204,102,255],[102,204,255]], starfall:[[255,204,51],[255,255,153]],
+    spiderweb:[[153,153,153],[255,255,255]], gothic:[[51,0,51],[153,102,153]],
+    crimson:[[102,0,0],[255,102,102]], royal_gold:[[204,153,0],[255,255,153]],
+    diamond:[[102,204,255],[204,255,255]], champagne:[[204,153,51],[255,255,153]],
+    purple:[[102,51,204],[204,153,255]], toxic:[[51,204,51],[204,255,102]],
+    chrome:[[51,51,51],[204,204,204]], black_ice:[[51,102,153],[204,255,255]],
+    haunted:[[51,0,51],[153,51,153]]
+  };
+  const [base,hi]=palette[style]||[[153,153,153],[255,255,255]];
+  profileSmoothRoundedRect(frame,x,y,w,h,26,base,255,6);
+  profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,19,hi,220,2);
+
+  const corners=[[x+25,y+25],[x+w-25,y+25],[x+25,y+h-25],[x+w-25,y+h-25]];
+  for(let i=0;i<corners.length;i++){
+    const [cx,cy]=corners[i];
+    profileSmoothCircle(frame,cx,cy,7,hi,245,true);
+    profileSmoothCircle(frame,cx,cy,3,base,255,true);
+    const gl=Math.max(0,Math.sin(p+i*1.7));
+    profileSmoothCircle(frame,cx-1.5*gl,cy-1.5*gl,1.5,[255,255,255],210,true);
+  }
+
+  if(style==='rhinestone'||style==='diamond'||style==='champagne'){
+    for(let i=0;i<10;i++){
+      const t=(i+.5)/10;
+      const cx=x+44+t*(w-88), cy=y+4+Math.sin(p+i)*1.2;
+      profileSmoothCircle(frame,cx,cy,2.5,hi,230,true);
+      profileSmoothCircle(frame,cx, y+h-4-Math.sin(p+i)*1.2,2.5,hi,230,true);
     }
-    case "pink_glitter": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,24,[255,75,175],245,7);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,18,[255,190,230],210,2);
-      for(let i=0;i<22;i++){const x=20+((i*83)%760), y=20+((i*47)%460); profileSmoothStar(frame,x+Math.sin(p+i)*2,y+Math.cos(p+i)*2,i%3===0?5:3,i%2?[255,255,255]:[255,130,205],170);}
-      break;
+  } else if(style==='butterfly'){
+    for(let i=0;i<5;i++) profileButterfly(frame,x+55+i*88,y+7,3,[255,153,204],phase+i*.2);
+  } else if(style==='rainbow'){
+    const cols=[[255,0,0],[255,153,0],[255,255,0],[0,204,0],[0,153,255],[153,0,204]];
+    for(let i=0;i<6;i++){
+      profileSmoothLine(frame,x+45+i*3,y+5,x+w-45-i*3,y+5,1.5,cols[i],230);
+      profileSmoothLine(frame,x+45+i*3,y+h-5,x+w-45-i*3,y+h-5,1.5,cols[i],230);
     }
-    case "candyland": {
-      const cols=[[255,125,195],[255,210,90],[125,210,255],[190,135,255],[120,235,180]];
-      profileSmoothRoundedRect(frame,9,9,W-18,H-18,25,[255,175,220],225,4);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,18,[255,235,250],180,2);
-      for(let i=0;i<24;i++){const side=i%4;let x,y;if(side===0){x=28+i*31;y=10;}else if(side===1){x=W-10;y=25+i*19;}else if(side===2){x=W-28-i*31;y=H-10;}else{x=10;y=H-25-i*19;} profileSmoothCircle(frame,x,y,5,cols[i%cols.length],235,true); profileSmoothCircle(frame,x-1,y-1,2,[255,255,255],130,true);}
-      break;
+  } else if(style==='starfall'||style==='purple'){
+    for(let i=0;i<8;i++){
+      const cx=x+45+i*54, cy=y+7;
+      profileSmoothStar(frame,cx,cy,4,hi,235);
+      profileSmoothStar(frame,cx,y+h-7,4,hi,235);
     }
-    case "butterfly": {
-      profileSmoothRoundedRect(frame,10,10,W-20,H-20,25,[175,105,235],230,4);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,18,[245,200,255],170,2);
-      const cols=[[255,140,215],[120,205,255],[195,135,255],[255,225,110]];
-      for(let i=0;i<10;i++){const x=30+i*82,y=i%2?H-28:28; profileButterfly(frame,Math.round(x+Math.sin(p+i)*3),y,4+i%2,cols[i%cols.length]);}
-      break;
+  } else if(style==='spiderweb'||style==='gothic'){
+    for(const [cx,cy] of corners){
+      for(let r=9;r<=20;r+=5) profileSmoothRing(frame,cx,cy,r,hi,150,1.2);
     }
-    case "rainbow": {
-      const cols=profileEffectColors("rainbow");
-      for(let i=0;i<cols.length;i++) profileSmoothRoundedRect(frame,9+i*3,9+i*3,W-18-i*6,H-18-i*6,28-i,[...cols[i]],205,3);
-      profileSmoothRoundedRect(frame,30,30,W-60,H-60,18,[255,255,255],110,2);
-      break;
+  } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
+    profileCrown(frame,x+48,y+6,6,hi);
+    profileCrown(frame,x+w-48,y+6,6,hi);
+  } else if(style==='toxic'){
+    for(let i=0;i<9;i++) profileSmoothCircle(frame,x+40+i*48,y+6,2.5,hi,210,true);
+  } else if(style==='chrome'||style==='black_ice'){
+    profileSmoothLine(frame,x+42,y+6,x+w-42,y+6,1.5,[255,255,255],210);
+    profileSmoothLine(frame,x+42,y+h-6,x+w-42,y+h-6,1.5,hi,190);
+  } else if(style==='candyland'||style==='pink_glitter'){
+    for(let i=0;i<10;i++){
+      const cx=x+38+i*43;
+      profileSmoothCircle(frame,cx,y+6,4,i%2?hi:base,230,true);
+      profileSmoothCircle(frame,cx,y+h-6,4,i%2?base:hi,230,true);
     }
-    case "starfall": {
-      profileSmoothRoundedRect(frame,9,9,W-18,H-18,22,[255,215,75],235,5);
-      profileSmoothRoundedRect(frame,18,18,W-36,H-36,17,[255,245,170],150,2);
-      for(let i=0;i<20;i++){const x=22+((i*83)%750), y=((18+(i*47)%455+phase*45*(i%3+1))%460)+20; profileSmoothStar(frame,x,y,i%4===0?6:4,i%2?[255,255,255]:[255,225,90],190);}
-      break;
-    }
-    case "spiderweb": {
-      profileSmoothRoundedRect(frame,9,9,W-18,H-18,22,[210,210,225],220,3);
-      for(const [cx,cy] of [[34,34],[W-34,34],[34,H-34],[W-34,H-34]]){
-        for(let r=12;r<=55;r+=11) profileSmoothRing(frame,cx,cy,r,[220,220,235],145,1.6);
-        for(let a=0;a<Math.PI*2;a+=Math.PI/6) profileSmoothLine(frame,cx,cy,cx+Math.cos(a)*58,cy+Math.sin(a)*58,1.5,[220,220,235],170);
-      }
-      break;
-    }
-    case "gothic": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,20,[30,22,38],250,8);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,15,[150,95,170],190,2);
-      for(let x=28;x<W-25;x+=30){profileSmoothCircle(frame,x,14,4,[205,145,220],180,false,2);profileSmoothCircle(frame,x,H-14,4,[205,145,220],180,false,2);}
-      break;
-    }
-    case "crimson": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,21,[115,10,28],250,9);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,16,[225,80,95],175,2);
-      for(let i=0;i<10;i++){const x=35+i*80; profileSmoothPetal(frame,x,15,4,9,[255,160,165],170,0); profileSmoothPetal(frame,x+7,15,4,9,[190,35,55],180,0);}
-      break;
-    }
-    case "royal_gold": {
-      profileSmoothRoundedRect(frame,7,7,W-14,H-14,24,[210,155,35],250,8);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[255,235,140],220,2);
-      for(const [x,y] of [[38,30],[W-38,30],[38,H-30],[W-38,H-30]]) profileCrown(frame,x,y,7,[255,215,80]);
-      for(let i=0;i<12;i++) profileSmoothCircle(frame,48+i*64,12,2,[255,245,175],180,true);
-      break;
-    }
-    case "diamond": {
-      profileSmoothRoundedRect(frame,9,9,W-18,H-18,23,[135,205,255],235,5);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[230,250,255],180,2);
-      for(const [x,y] of [[28,28],[W-28,28],[28,H-28],[W-28,H-28]]){profileSmoothCircle(frame,x,y,9,[120,205,255],210,true);profileSmoothCircle(frame,x-2,y-2,4,[255,255,255],230,true);}
-      break;
-    }
-    case "champagne": {
-      profileSmoothRoundedRect(frame,9,9,W-18,H-18,23,[225,175,65],235,5);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,17,[255,235,155],170,2);
-      for(let i=0;i<18;i++){const x=24+((i*61)%750), y=25+((i*37)%440), yy=y-((phase*35+i*7)%25); profileSmoothCircle(frame,x,yy,2.5,[255,240,170],180,true);}
-      break;
-    }
-    case "purple": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[125,55,235],245,8);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[220,170,255],185,2);
-      profileCrown(frame,42,32,7,[245,210,255]); profileCrown(frame,W-42,32,7,[245,210,255]);
-      for(let i=0;i<10;i++) profileSmoothCircle(frame,45+i*70,12,2,[245,210,255],170,true);
-      break;
-    }
-    case "toxic": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[55,225,60],250,7);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[190,255,105],175,2);
-      for(let i=0;i<16;i++){const x=20+((i*53)%760),y=20+((i*71)%450);profileSmoothCircle(frame,x,y,2.5,i%3?[100,255,80]:[220,255,120],185,true);}
-      break;
-    }
-    case "chrome": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,22,[40,45,55],250,8);
-      profileSmoothRoundedRect(frame,19,19,W-38,H-38,16,[215,225,240],205,3);
-      profileSmoothLine(frame,25,25,W-25,25,2,[255,255,255],220); profileSmoothLine(frame,25,H-25,W-25,H-25,2,[100,110,125],180);
-      break;
-    }
-    case "black_ice": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[15,23,38],250,8);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[110,205,245],205,2);
-      for(let i=0;i<10;i++){const x=28+i*78;profileSnowflake(frame,x,22,4,i%2?[145,225,255]:[235,250,255]);profileSnowflake(frame,x,H-22,4,i%2?[235,250,255]:[145,225,255]);}
-      break;
-    }
-    case "haunted": {
-      profileSmoothRoundedRect(frame,8,8,W-16,H-16,23,[38,17,28],250,8);
-      profileSmoothRoundedRect(frame,20,20,W-40,H-40,17,[125,65,170],185,2);
-      for(let i=0;i<7;i++){const x=35+i*115;profilePumpkin(frame,x,20,5,[245,125,25],phase+i*.1);}
-      for(let i=0;i<5;i++){const x=70+i*150;profileGhost(frame,x,H-27,4,i%2?[145,80,185]:[230,230,240]);}
-      break;
+  } else {
+    for(let i=0;i<10;i++){
+      const cx=x+38+i*43;
+      profileSmoothCircle(frame,cx,y+6,2.5,hi,210,true);
+      profileSmoothCircle(frame,cx,y+h-6,2.5,hi,210,true);
     }
   }
 }
