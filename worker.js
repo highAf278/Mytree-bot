@@ -5181,7 +5181,11 @@ function drawAnimatedExperimentalEffect(frame, phase=0) {
 }
 
 async function renderTreeDirectFallback(env, player) {
-  const width = 1024, height = 1024;
+  // CPU-safe render size: keep the same proportions as the known-good 1024px
+  // renderer, but use 768px so the Worker does substantially less pixel work.
+  // Discord scales the attached image normally; this does not change the tree
+  // layout or equipped cosmetics, only the raster workload.
+  const width = 768, height = 768;
   // Start with a safe color, then replace it with the player's ACTUAL
   // equipped background asset whenever the Worker can decode that image.
   // The previous fallback used only a flat color, which is why /tree showed
@@ -5200,8 +5204,9 @@ async function renderTreeDirectFallback(env, player) {
   // itself. It exists so /tree can NEVER be held hostage by Browser Rendering.
   try {
     const tree = await getPngAsset(env, getTreeImage(player));
-    const layer = containRGBA(tree, 922, 922);
-    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), 184);
+    const treeBox = Math.round(width * 0.9004);
+    const layer = containRGBA(tree, treeBox, treeBox);
+    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * 0.1797));
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
   }
@@ -5259,7 +5264,7 @@ async function renderTreeDirectFallback(env, player) {
     experimental_effect_animated: drawAnimatedExperimentalEffect
   };
   if (animatedEffectDrawers[animatedShopEffect]) {
-    const frames=[]; const frameCount=12; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=6; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)}; const phase=i/frameCount;
       animatedEffectDrawers[animatedShopEffect](frame,phase);
@@ -5269,7 +5274,7 @@ async function renderTreeDirectFallback(env, player) {
   }
   if (birthdayAnimatedEffect === "beans") {
     const frames=[];
-    const frameCount=12;
+    const frameCount=6;
     const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
@@ -5282,7 +5287,7 @@ async function renderTreeDirectFallback(env, player) {
     };
   }
   if (birthdayAnimatedEffect === "birthday_cupcake_chaos" || birthdayAnimatedEffect === "birthday_raccoon_party" || birthdayAnimatedEffect === "birthday_balloon_float" || birthdayAnimatedEffect === "birthday_pumpkin_sparkle") {
-    const frames=[]; const frameCount=8; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=6; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
       const phase=i/frameCount;
@@ -5301,7 +5306,7 @@ async function renderTreeDirectFallback(env, player) {
     // the already-rasterized scene. This keeps /tree responsive and gives us a
     // real multi-frame GIF even when Browser Rendering is unavailable.
     const frames=[];
-    const frameCount=8;
+    const frameCount=6;
     const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
@@ -5314,6 +5319,8 @@ async function renderTreeDirectFallback(env, player) {
     };
   }
 
+  // Static PNG encoding is now performed at 768x768 rather than 1024x1024,
+  // avoiding the CPU-limit failure while keeping the full scene/cosmetics.
   return { bytes: rgbaToRgbPng(scene), animated: false };
 }
 
@@ -25570,29 +25577,15 @@ export default {
             else await sendText(env, interaction, "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot. If you believe this was a mistake, contact the bot owner.");
             return;
           }
-          // /tree should reach its actual handler before optional background
-          // alert/watch systems. Those systems are useful, but none of them
-          // should be able to leave the tree interaction stuck on Discord's
-          // "MyTree is thinking..." screen.
-          const isTreeCommand = interaction.type === 2 && interaction.data?.name === "tree";
-
-          if (isTreeCommand) {
-            await handleCommand(env, interaction);
-          }
-
           if (!isPunishmentCommand && !isNewsAcknowledgement) await maybeShowSurpriseAlert(env, interaction);
           await maybeCourtWatch(env, interaction);
           await maybePublicShame(env, interaction);
           await maybeSpoonInvestigation(env, interaction);
-
-          if (!isTreeCommand) {
-            if (interaction.type === 2) {
-              await handleCommand(env, interaction);
-            } else {
-              await handleComponent(env, interaction);
-            }
+          if (interaction.type === 2) {
+            await handleCommand(env, interaction);
+          } else {
+            await handleComponent(env, interaction);
           }
-
           if (!isNewsAcknowledgement) await maybeShowNews(env, interaction);
         } catch (error) {
           console.error("Interaction error:", error);
