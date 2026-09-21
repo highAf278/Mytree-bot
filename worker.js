@@ -4068,9 +4068,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
 function drawProfileBadges(frame,badgeIds,phase=0){
   if(!Array.isArray(badgeIds)||!badgeIds.length) return;
   const ids=[...new Set(badgeIds.filter(id=>PROFILE_BADGES[id]))].slice(0,4);
-  const y=423;
-  const positions=[390,480,570,660];
-  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,38,phase+i*.13);
+  // Badges belong to the tree showcase shelf, not the achievement ribbon.
+  const y=450;
+  const positions=[145,180,215,250];
+  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
 }
 
 async function renderProfileDirectFrame(env,player,phase=0){
@@ -4080,7 +4081,7 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const scene=solidRGBA(width,height,bg);
   const ink=[48,35,55], muted=[112,92,120], white=[255,255,255];
 
-  // PROFILE REDESIGN V2:
+  // PROFILE REDESIGN V3:
   // Keep the proven 800x500 direct renderer, but make the composition feel like
   // a premium collectible card: dedicated tree showcase + structured cosmetic
   // plaque + four real stat cards. No Browser Rendering is introduced here.
@@ -4099,8 +4100,8 @@ async function renderProfileDirectFrame(env,player,phase=0){
 
   const treeFile=getTreeImage(player);
   const tree=await getPngAsset(env,treeFile);
-  const treeLayer=containRGBA(tree,340,420);
-  alphaComposite(scene,treeLayer,6,58);
+  const treeLayer=containRGBA(tree,300,392);
+  alphaComposite(scene,treeLayer,18,68);
 
   const decorFile=getDecorationImage(player);
   if(decorFile){
@@ -4111,10 +4112,11 @@ async function renderProfileDirectFrame(env,player,phase=0){
     }catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
 
-  // Small, unobtrusive showcase label. The old wide pill was visually cramped.
-  profileBlendFill(scene,72,430,190,24,255,255,255,78);
-  profileSmoothRoundedRect(scene,72,430,190,24,12,white,82,0.7);
-  drawBitmapText(scene,"FEATURED TREE",118,437,1,[105,86,115],170);
+  // Bottom showcase shelf: keep the tree area clean and give equipped badges
+  // their own home so they never cover the Titles Owned achievement ribbon.
+  profileBlendFill(scene,58,436,222,28,255,255,255,72);
+  profileSmoothRoundedRect(scene,58,436,222,28,14,white,82,0.7);
+  drawBitmapText(scene,"BADGES",68,443,1,[105,86,115],55);
 
   const effectId=profileEffectKey(player)&&NAME_EFFECTS[profileEffectKey(player)]?profileEffectKey(player):"";
   const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
@@ -4127,13 +4129,11 @@ async function renderProfileDirectFrame(env,player,phase=0){
   profileBlendFill(scene,340,40,418,2,255,255,255,135);
   drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),348,46,4,ink,400);
   drawBitmapText(scene,"WEREWIVES PROFILE",348,80,2,muted,400);
-  profileSmoothStar(scene,748,52,10,[255,185,225],170);
-  profileSmoothStar(scene,724,78,4,[255,255,255],190);
 
   // TITLE / NAME EFFECT: one proper cosmetic plaque instead of floating text.
-  profileSmoothRoundedRect(scene,326,104,446,126,18,white,125,1.0);
-  profileBlendFill(scene,338,116,422,102,br,bgG,bb,50);
-  profileSmoothRoundedRect(scene,338,116,422,102,14,white,65,0.8);
+  profileSmoothRoundedRect(scene,326,104,446,116,18,white,125,1.0);
+  profileBlendFill(scene,338,116,422,92,br,bgG,bb,50);
+  profileSmoothRoundedRect(scene,338,116,422,92,14,white,65,0.8);
   drawBitmapText(scene,"TITLE",360,128,2,muted,390);
   drawProfileEffectParticles(scene,effectId,phase);
   drawAnimatedProfileTitle(scene,title,360,151,3,effectId,phase,365);
@@ -4156,12 +4156,12 @@ async function renderProfileDirectFrame(env,player,phase=0){
   statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)),[230,175,85]);
 
   // Titles owned is an achievement ribbon, not an afterthought at the bottom.
-  profileSmoothRoundedRect(scene,326,400,446,44,18,white,112,0.9);
+  profileSmoothRoundedRect(scene,326,400,446,48,18,white,112,0.9);
   profileSmoothRoundedRect(scene,340,409,34,26,10,[br,bgG,bb],75,0.7);
   profileSmoothStar(scene,357,422,7,[255,190,225],190);
   drawBitmapText(scene,String(Number(player.titles?.length||0)),350,414,2,ink,55);
-  drawBitmapText(scene,"TITLES OWNED",388,411,2,muted,190);
-  drawBitmapText(scene,"ACHIEVEMENTS",388,430,1,[145,120,150],180);
+  drawBitmapText(scene,"TITLES OWNED",388,409,2,muted,210);
+  drawBitmapText(scene,"ACHIEVEMENTS",388,428,1,[145,120,150],200);
 
   drawProfileBadges(scene,profileBadgeKeys(player),phase);
   drawProfileFrame(scene,profileFrameKey(player),phase);
