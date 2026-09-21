@@ -4170,32 +4170,33 @@ function drawProfileFrame(frame, frameId, phase=0){
 
     // A real piped icing rail: thick body, scalloped lower edge, highlights and sprinkles.
     const frostingRail=(yy,isTop)=>{
-      const cy=isTop?yy:yy;
-      profileSmoothLine(frame,x+29,cy,x+w-29,cy,15,icing,250);
-      profileSmoothLine(frame,x+30,cy-2,x+w-30,cy-2,3.0,icingLight,225);
-      // Scalloped icing edge.
-      for(let i=0;i<21;i++){
-        const cx=x+37+i*((w-74)/20);
-        const sy=isTop?cy+6:cy-6;
-        profileSmoothCircle(frame,cx,sy,6.4,icing,250,true);
-        profileSmoothCircle(frame,cx-1.8,sy-2.0,2.0,icingLight,205,true);
+      const cy=yy;
+      // Thick bakery-awning body: the icing itself is the frame, not a thin line with decorations.
+      profileSmoothLine(frame,x+31,cy,x+w-31,cy,20,icing,250);
+      profileSmoothLine(frame,x+32,cy-4,x+w-32,cy-4,4.0,icingLight,235);
+      profileSmoothLine(frame,x+34,cy+4,x+w-34,cy+4,2.0,[238,105,175],190);
+      // Big scalloped icing edge with visible cream highlights.
+      for(let i=0;i<19;i++){
+        const cx=x+43+i*((w-86)/18);
+        const sy=isTop?cy+8:cy-8;
+        profileSmoothCircle(frame,cx,sy,8.2,icing,250,true);
+        profileSmoothCircle(frame,cx-2.4,sy-2.8,2.6,icingLight,215,true);
       }
-      // Occasional icing drips make the material unmistakable.
-      const drips=isTop?[3,9,16]:[1,6,13,19];
+      // A few long icing drips give the rail a hand-piped bakery look.
+      const drips=isTop?[2,7,12,16]:[1,5,10,15,18];
       drips.forEach((idx,j)=>{
-        const cx=x+37+idx*((w-74)/20);
-        const len=7+(j%2)*4;
-        profileSmoothCircle(frame,cx,isTop?cy+9+len*.35:cy-9-len*.35,4.0,icing,245,true);
-        profileSmoothLine(frame,cx,isTop?cy+7:cy-7,cx,isTop?cy+7+len:cy-7-len,4.8,icing,240);
-        profileSmoothCircle(frame,cx,isTop?cy+7+len:cy-7-len,2.5,icingLight,180,true);
+        const cx=x+43+idx*((w-86)/18);
+        const len=10+(j%3)*4;
+        profileSmoothLine(frame,cx,isTop?cy+8:cy-8,cx,isTop?cy+8+len:cy-8-len,5.8,icing,242);
+        profileSmoothCircle(frame,cx,isTop?cy+8+len:cy-8-len,3.0,icingLight,195,true);
       });
-      // Sprinkles are embedded in the icing, never scattered over the profile.
-      for(let i=0;i<34;i++){
-        const cx=x+45+((i*97+(isTop?17:53))%(w-90));
-        const sy=cy+(i%5-2)*2.0+(isTop?1:-1);
+      // Sprinkles sit inside the icing like real bakery decoration.
+      for(let i=0;i<30;i++){
+        const cx=x+48+((i*101+(isTop?17:53))%(w-96));
+        const sy=cy+(i%5-2)*2.5+(isTop?1:-1);
         const c=candy[(i+1)%candy.length];
-        const a=(-.9+(i%7)*.30), len=2.7+(i%3)*.65;
-        profileSmoothLine(frame,cx-Math.cos(a)*len,sy-Math.sin(a)*len,cx+Math.cos(a)*len,sy+Math.sin(a)*len,1.45,c,245);
+        const a=(-.9+(i%7)*.30), len=3.0+(i%3)*.75;
+        profileSmoothLine(frame,cx-Math.cos(a)*len,sy-Math.sin(a)*len,cx+Math.cos(a)*len,sy+Math.sin(a)*len,1.7,c,245);
       }
     };
     frostingRail(y+14,true);
@@ -4203,16 +4204,18 @@ function drawProfileFrame(frame, frameId, phase=0){
 
     // Piped chocolate frosting swirls. Curves + cream highlights prevent any poop-looking blobs.
     const chocolateSwirl=(cx,cy,s,flip=1)=>{
-      const pts=18; let px=cx-s*.78, py=cy+flip*s*.18;
+      // Chocolate frosting is piped as a small bakery swirl with a cream highlight.
+      const pts=22; let px=cx-s*.92, py=cy+flip*s*.10;
       for(let i=1;i<=pts;i++){
-        const t=i/pts, a=t*Math.PI*2.25;
-        const nx=cx + flip*Math.cos(a)*(s*(.78-.48*t));
-        const ny=cy + Math.sin(a)*(s*(.48-.20*t));
-        profileSmoothLine(frame,px,py,nx,ny,2.6,cocoa,245);
+        const t=i/pts, a=t*Math.PI*2.15;
+        const nx=cx + flip*Math.cos(a)*(s*(.92-.60*t));
+        const ny=cy + Math.sin(a)*(s*(.52-.24*t));
+        profileSmoothLine(frame,px,py,nx,ny,3.8,cocoa,245);
         px=nx; py=ny;
       }
-      profileSmoothLine(frame,cx-s*.35,cy-s*.12,cx+s*.20,cy+s*.10,1.1,cocoaLight,190);
-      profileSmoothStar(frame,cx+s*.30,cy-s*.30,1.0,lemon,205);
+      profileSmoothLine(frame,cx-s*.48,cy-s*.18,cx+s*.16,cy+s*.05,1.5,cocoaLight,210);
+      profileSmoothCircle(frame,cx-s*.18,cy-s*.32,1.5,[255,230,220],185,true);
+      profileSmoothStar(frame,cx+s*.34,cy-s*.32,1.15,lemon,215);
     };
 
     // Side candy-cane pillars: broad stripes, glossy center highlight, and icing caps.
@@ -4271,17 +4274,16 @@ function drawProfileFrame(frame, frameId, phase=0){
     };
 
     // Four premium corner confectionery displays; each has a different arrangement.
-    lollipop(x+35,y+37,pink,1); wrappedCandy(x+59,y+31,lemon,1); cupcake(x+58,y+59,pink,mint); gumdrop(x+28,y+62,lavender);
-    lollipop(x+w-35,y+37,lavender,-1); wrappedCandy(x+w-59,y+31,mint,-1); cupcake(x+w-58,y+59,lavender,peach); gumdrop(x+w-28,y+62,lemon);
-    lollipop(x+35,y+h-37,mint,1); wrappedCandy(x+59,y+h-31,peach,1); cupcake(x+58,y+h-59,peach,lavender); gumdrop(x+28,y+h-62,pink);
-    lollipop(x+w-35,y+h-37,lemon,-1); wrappedCandy(x+w-59,y+h-31,pink,-1); cupcake(x+w-58,y+h-59,lemon,pink); gumdrop(x+w-28,y+h-62,mint);
+    lollipop(x+43,y+42,pink,1); wrappedCandy(x+72,y+34,lemon,1); cupcake(x+70,y+66,pink,mint); gumdrop(x+34,y+72,lavender);
+    lollipop(x+w-43,y+42,lavender,-1); wrappedCandy(x+w-72,y+34,mint,-1); cupcake(x+w-70,y+66,lavender,peach); gumdrop(x+w-34,y+72,lemon);
+    lollipop(x+43,y+h-42,mint,1); wrappedCandy(x+72,y+h-34,peach,1); cupcake(x+70,y+h-66,peach,lavender); gumdrop(x+34,y+h-72,pink);
+    lollipop(x+w-43,y+h-42,lemon,-1); wrappedCandy(x+w-72,y+h-34,pink,-1); cupcake(x+w-70,y+h-66,lemon,pink); gumdrop(x+w-34,y+h-72,mint);
 
     // Chocolate swirls are used as deliberate bakery accents, not repeated blobs.
-    chocolateSwirl(x+145,y+14,5.8,1); chocolateSwirl(x+360,y+14,5.4,-1); chocolateSwirl(x+575,y+14,5.8,1);
-    chocolateSwirl(x+145,y+h-14,5.8,-1); chocolateSwirl(x+360,y+h-14,5.4,1); chocolateSwirl(x+575,y+h-14,5.8,-1);
+    chocolateSwirl(x+150,y+14,7.2,1); chocolateSwirl(x+360,y+14,6.8,-1); chocolateSwirl(x+570,y+14,7.2,1);
+    chocolateSwirl(x+150,y+h-14,7.2,-1); chocolateSwirl(x+360,y+h-14,6.8,1); chocolateSwirl(x+570,y+h-14,7.2,-1);
 
-    // A few large wrapped candies break the awning rhythm; no rectangle-shaped tabs.
-    wrappedCandy(x+240,y+11,sky,1); wrappedCandy(x+470,y+h-11,lavender,-1);
+    // Corner displays and the frosting rails carry the candy identity; no stray tabs or coins.
 
     // Tiny sugar stars are rare polish accents only.
     [[x+100,y+31,lemon],[x+305,y+29,mint],[x+660,y+31,pink],[x+100,y+h-31,sky],[x+305,y+h-29,lemon],[x+660,y+h-31,peach]].forEach(([cx,cy,c])=>{
