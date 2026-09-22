@@ -4190,82 +4190,68 @@ function drawProfileFrame(frame, frameId, phase=0){
     webPatch(x+54,y+h-54,false,true,0.72);
     webPatch(x+w-54,y+h-54,true,true,1.0);
 
-    // V13: a true silk-web ribbon around the four open edges.
-    // The existing corner webs and spiders are intentionally untouched.
-    // No border rails, scallops, fans, or repeating decorative waves.
-    const webRibbonH=(x1,x2,yy,dir)=>{
-      const strands=9;
-      const depth=34;
-      const step=(x2-x1)/(strands-1);
-
-      // Curved radial silk strands, like the spokes of a web stretched
-      // between the two existing corner webs.
-      for(let i=0;i<strands;i++){
-        const x0=x1+i*step;
-        const bend=((i%3)-1)*2.2;
-        let px=x0, py=yy;
-        for(let j=1;j<=8;j++){
-          const t=j/8;
-          const nx=x0 + bend*Math.sin(Math.PI*t) + 1.4*Math.sin((i+2)*t*2.4);
-          const ny=yy + dir*depth*t;
-          profileSmoothLine(frame,px,py,nx,ny,0.62,silkHi,102);
+    // Real webbing follows the TOP and BOTTOM edges as shallow woven fans:
+    // three curved strands plus short arched cross-threads. This reads as
+    // actual spider silk rather than three straight border lines.
+    const edgeWebH=(x1,x2,yy,flip)=>{
+      const bands=[0,12,24];
+      const pieces=10;
+      bands.forEach((off,row)=>{
+        const baseY=yy+(flip?-off:off);
+        let px=x1,py=baseY;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const nx=x1+(x2-x1)*t;
+          const bow=(row===1?3.0:row===2?-2.0:1.5);
+          const ny=baseY+Math.sin(t*Math.PI)*bow*(flip?-1:1);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,122-row*10);
           px=nx; py=ny;
         }
-      }
-
-      // Three uneven curved cross-threads.  They connect the spokes without
-      // making the edge look like a stitched/scalloped border.
-      const levels=[0.18,0.50,0.80];
-      for(let r=0;r<levels.length;r++){
-        const t0=levels[r];
-        let prev=null;
-        for(let i=0;i<=strands-1;i++){
-          const x=x1+i*step;
-          const wave=(r===1 ? -2.5 : (r===0 ? 1.8 : -1.2));
-          const y=yy + dir*(depth*t0 + wave*Math.sin((i/(strands-1))*Math.PI));
-          if(prev) profileSmoothLine(frame,prev[0],prev[1],x,y,0.55,silkHi,94);
-          prev=[x,y];
-        }
+      });
+      for(let i=1;i<9;i++){
+        const t=i/9;
+        const cx=x1+(x2-x1)*t;
+        const span=24;
+        const dir=flip?-1:1;
+        const topY=yy;
+        // Small angled silk connectors make each section read like a web cell.
+        profileSmoothLine(frame,cx,topY,cx-8,topY+dir*8,0.7,silkHi,94);
+        profileSmoothLine(frame,cx-8,topY+dir*8,cx-4,topY+dir*15,0.7,silkHi,88);
+        profileSmoothLine(frame,cx-4,topY+dir*15,cx,topY+dir*24,0.7,silkHi,82);
       }
     };
 
-    const webRibbonV=(y1,y2,xx,dir)=>{
-      const strands=7;
-      const depth=34;
-      const step=(y2-y1)/(strands-1);
-
-      for(let i=0;i<strands;i++){
-        const y0=y1+i*step;
-        const bend=((i%3)-1)*2.2;
-        let px=xx, py=y0;
-        for(let j=1;j<=8;j++){
-          const t=j/8;
-          const nx=xx + dir*depth*t;
-          const ny=y0 + bend*Math.sin(Math.PI*t) + 1.4*Math.sin((i+2)*t*2.4);
-          profileSmoothLine(frame,px,py,nx,ny,0.62,silkHi,102);
+    // Real webbing follows the LEFT and RIGHT edges too, mirrored vertically.
+    const edgeWebV=(y1,y2,xx,flip)=>{
+      const bands=[0,12,24];
+      const pieces=9;
+      bands.forEach((off,col)=>{
+        const baseX=xx+(flip?-off:off);
+        let px=baseX,py=y1;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const ny=y1+(y2-y1)*t;
+          const bow=(col===1?3.0:col===2?-2.0:1.5);
+          const nx=baseX+Math.sin(t*Math.PI)*bow*(flip?-1:1);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,122-col*10);
           px=nx; py=ny;
         }
-      }
-
-      const levels=[0.18,0.50,0.80];
-      for(let r=0;r<levels.length;r++){
-        const t0=levels[r];
-        let prev=null;
-        for(let i=0;i<=strands-1;i++){
-          const y=y1+i*step;
-          const wave=(r===1 ? -2.5 : (r===0 ? 1.8 : -1.2));
-          const x=xx + dir*(depth*t0 + wave*Math.sin((i/(strands-1))*Math.PI));
-          if(prev) profileSmoothLine(frame,prev[0],prev[1],x,y,0.55,silkHi,94);
-          prev=[x,y];
-        }
+      });
+      for(let i=1;i<8;i++){
+        const t=i/8;
+        const cy=y1+(y2-y1)*t;
+        const span=24;
+        const dir=flip?-1:1;
+        profileSmoothLine(frame,xx,cy,xx+dir*8,cy-6,0.7,silkHi,94);
+        profileSmoothLine(frame,xx+dir*8,cy-6,xx+dir*15,cy-3,0.7,silkHi,88);
+        profileSmoothLine(frame,xx+dir*15,cy-3,xx+dir*24,cy,0.7,silkHi,82);
       }
     };
 
-    // Leave the four existing corner webs exactly as they are.
-    webRibbonH(x+100,x+w-100,y+10,1);
-    webRibbonH(x+100,x+w-100,y+h-10,-1);
-    webRibbonV(y+100,y+h-100,x+10,1);
-    webRibbonV(y+100,y+h-100,x+w-10,-1);
+    edgeWebH(x+62,x+w-62,y+20,false);
+    edgeWebH(x+62,x+w-62,y+h-20,true);
+    edgeWebV(y+62,y+h-62,x+20,false);
+    edgeWebV(y+62,y+h-62,x+w-20,true);
 
     // Two tiny spiders actually live on the web, tucked safely in empty margins.
     // Clearly recognizable spiders: distinct head + abdomen and eight
