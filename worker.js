@@ -4134,8 +4134,9 @@ function drawProfileFrame(frame, frameId, phase=0){
       }
     }
   } else if(style==='starfall'){
-    // STARFALL V5: classic gold-star night sky. Keep the stars clearly celestial
-    // and avoid rainbow/candy-like colors. Moving comets use tapered tails.
+    // STARFALL V6: gold celestial stars with a few oversized focal stars.
+    // Shooting stars are larger, clearly separated from their tails, and use
+    // tapered comet trails so they read as meteors rather than wands.
     const night=[35,29,70], nightHi=[84,62,135];
     const gold=[255,214,92], goldHi=[255,244,170], goldDeep=[218,160,48];
     const soft=[126,101,180], white=[255,250,235];
@@ -4150,74 +4151,92 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothLine(frame,x+10,y+30,x+10,y+h-30,1.0,soft,120);
     profileSmoothLine(frame,x+w-10,y+30,x+w-10,y+h-30,1.0,goldDeep,125);
 
-    // Large, unmistakable gold stars. No rainbow colors.
+    // Gold-only stars. Most are deliberately spaced out so the frame feels
+    // like a night sky instead of gold confetti.
     const stars=[
-      [36,30,5.8],[92,17,3.9],[155,31,4.7],[225,16,3.5],[292,29,5.0],
-      [370,15,3.8],[440,29,4.8],[510,17,3.6],[580,31,5.2],[655,16,3.8],[726,29,5.8],
-      [22,112,4.2],[17,210,5.0],[24,305,3.7],[20,400,4.8],
-      [w-22,112,4.0],[w-17,210,5.2],[w-24,305,3.8],[w-18,400,4.8],
-      [50,455,5.0],[130,470,3.7],[215,458,4.5],[300,472,3.8],[390,458,5.0],
-      [480,471,3.6],[570,458,4.6],[650,472,3.8],[730,455,5.2]
+      [36,30,5.0],[92,17,3.4],[155,31,4.0],[225,16,3.1],[292,29,4.2],
+      [370,15,3.3],[440,29,4.0],[510,17,3.2],[580,31,4.4],[655,16,3.3],[726,29,5.0],
+      [22,112,3.7],[17,210,4.3],[24,305,3.2],[20,400,4.0],
+      [w-22,112,3.6],[w-17,210,4.4],[w-24,305,3.3],[w-18,400,4.0],
+      [50,455,4.2],[130,470,3.2],[215,458,3.8],[300,472,3.2],[390,458,4.3],
+      [480,471,3.1],[570,458,3.9],[650,472,3.2],[730,455,4.4]
     ];
     stars.forEach(([sx,sy,r],i)=>{
-      const tw=0.86+0.16*Math.max(0,Math.sin(p2+i*1.41));
+      const tw=0.88+0.12*Math.max(0,Math.sin(p2+i*1.41));
       const rr=r*tw;
       profileSmoothStar(frame,x+sx,y+sy,rr,gold,220);
-      // restrained warm core makes the star shape read clearly at Discord size
-      profileSmoothCircle(frame,x+sx,y+sy,Math.max(0.8,rr*.20),goldHi,230,true);
-      if(r>=4.8){
-        profileSmoothLine(frame,x+sx-rr*1.9,y+sy,x+sx+rr*1.9,y+sy,.9,goldHi,105);
-        profileSmoothLine(frame,x+sx,y+sy-rr*1.9,x+sx,y+sy+rr*1.9,.9,goldHi,105);
-      }
+      profileSmoothCircle(frame,x+sx,y+sy,Math.max(.8,rr*.20),goldHi,230,true);
     });
 
-    // Sparse constellation links, all in muted gold so they stay celestial.
+    // Two HUGE focal stars live only in empty frame space: one above the
+    // header and one below the profile card, so neither can cover information.
+    const hugeStars=[
+      [x+285,y+15,10.5],
+      [x+405,y+h-13,11.5]
+    ];
+    hugeStars.forEach(([cx,cy,r],i)=>{
+      const pulse=.94+.08*Math.max(0,Math.sin(p2+i*1.8));
+      profileSmoothStar(frame,cx,cy,r*pulse,goldHi,245);
+      profileSmoothCircle(frame,cx,cy,r*.18,gold,245,true);
+      profileSmoothLine(frame,cx-r*1.35,cy,cx+r*1.35,cy,1.0,goldHi,155);
+      profileSmoothLine(frame,cx,cy-r*1.35,cx,cy+r*1.35,1.0,goldHi,155);
+    });
+
+    // Sparse constellation links. They stay faint so the stars remain the focus.
     const links=[
       [[36,30],[92,17]],[[92,17],[155,31]],[[370,15],[440,29]],
       [[510,17],[580,31]],[[580,31],[655,16]],[[22,112],[17,210]],
       [[w-22,112],[w-17,210]],[[50,455],[130,470]],[[570,458],[650,472]]
     ];
     links.forEach(([[ax,ay],[bx,by]])=>{
-      profileSmoothLine(frame,x+ax,y+ay,x+bx,y+by,.55,goldDeep,105);
+      profileSmoothLine(frame,x+ax,y+ay,x+bx,y+by,.45,goldDeep,85);
     });
 
-    // Crescent moon: quiet focal point, kept in the outer frame only.
+    // Crescent moon: a quiet focal point in the upper-right outer frame.
     const mx=x+w-49, my=y+48;
     profileSmoothCircle(frame,mx,my,15,gold,225,true);
     profileSmoothCircle(frame,mx+6,my-5,13,night,255,true);
     profileSmoothCircle(frame,mx-5,my-5,2.0,goldHi,210,true);
 
-    // Three clearly celestial shooting stars. Small gold star head + tapered
-    // segmented tail; no cross-shaped heads, no rainbow colors, no wand look.
-    const comet=(t,yy,dir,scale)=>{
+    // Larger shooting stars. The gold star head is deliberately separated from
+    // the tail by a visible gap, then the tail tapers smoothly toward the rear.
+    // This keeps the meteor unmistakable and prevents the old wand/lollipop look.
+    const comet=(t,yy,dir,scale,phaseOffset=0)=>{
       const cx=x+55+t*(w-110);
-      const cy=y+yy;
-      const head=3.2*scale;
-      profileSmoothStar(frame,cx,cy,head,goldHi,245);
-      profileSmoothCircle(frame,cx,cy,1.0*scale,gold,240,true);
-      const segments=6;
-      for(let j=1;j<=segments;j++){
+      const cy=y+yy+Math.sin(p2+phaseOffset)*2.2;
+      const head=4.8*scale;
+      const gap=13*scale;
+      const tail=56*scale;
+
+      // Head: a clean gold four-point star, larger than before.
+      profileSmoothStar(frame,cx,cy,head,goldHi,248);
+      profileSmoothCircle(frame,cx,cy,1.15*scale,gold,245,true);
+
+      // Empty gap between the star and the comet trail.
+      const segments=8;
+      for(let j=0;j<segments;j++){
         const u=j/segments;
-        const len=(7+u*27)*scale;
-        const px=cx-dir*len;
-        const py=cy+u*len*.52;
-        const prevLen=(7+(j-1)/segments*27)*scale;
-        const ppx=cx-dir*prevLen;
-        const ppy=cy+(j-1)/segments*prevLen*.52;
-        const width=(1.9-u*1.45)*scale;
-        profileSmoothLine(frame,ppx,ppy,px,py,width,gold,Math.round(210-u*110));
+        const v=(j+1)/segments;
+        const len1=gap+u*tail;
+        const len2=gap+v*tail;
+        const px=cx-dir*len1;
+        const py=cy+u*tail*.48;
+        const qx=cx-dir*len2;
+        const qy=cy+v*tail*.48;
+        const width=(2.8-u*2.35)*scale;
+        const alpha=Math.round(205-u*125);
+        profileSmoothLine(frame,px,py,qx,qy,width,gold,alpha);
       }
     };
-    comet((phase*.30)%1,26,1,1.15);
-    comet((phase*.24+.36)%1,438,-1,.92);
-    comet((phase*.20+.68)%1,86,1,.78);
+    comet((phase*.28)%1,25,1,1.15,0.0);
+    comet((phase*.22+.54)%1,438,-1,1.0,2.2);
 
-    // A few large twinkles anchor the corners; these are stationary stars, not meteors.
+    // Small stationary corner twinkles, kept distinct from the moving meteors.
     [[x+34,y+52],[x+w-34,y+52],[x+34,y+h-52],[x+w-34,y+h-52]].forEach(([cx,cy],i)=>{
       const pulse=.9+.12*Math.max(0,Math.sin(p2+i*1.57));
-      profileSmoothStar(frame,cx,cy,6.5*pulse,goldHi,235);
-      profileSmoothLine(frame,cx-9,cy,cx+9,cy,.8,gold,125);
-      profileSmoothLine(frame,cx,cy-9,cx,cy+9,.8,gold,125);
+      profileSmoothStar(frame,cx,cy,5.8*pulse,goldHi,230);
+      profileSmoothLine(frame,cx-8,cy,cx+8,cy,.7,gold,115);
+      profileSmoothLine(frame,cx,cy-8,cx,cy+8,.7,gold,115);
     });
   } else if(style==='purple'){
     for(let i=0;i<8;i++){
