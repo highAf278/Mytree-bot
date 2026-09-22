@@ -1051,7 +1051,7 @@ async function renderAnimatedProfile(env, player) {
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
     await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
-    const frameCount=8;
+    const frameCount=6;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
@@ -1251,8 +1251,11 @@ async function encodeStaticPlusTransparentGIF(staticPng,overlayPngs,width,height
 
 async function renderProfileDirectAnimated(env,player){
   const frames=[];
-  const frameCount=8;
-  for(let i=0;i<frameCount;i++) frames.push(await renderProfileDirectFrame(env,player,i/frameCount));
+  const frameCount=6;
+  for(let i=0;i<frameCount;i++) {
+    const phase=i/frameCount;
+    frames.push(await renderProfileDirectFrame(env,player,phase));
+  }
   return await encodePNGFramesToGIF(frames,800,500,12);
 }
 async function renderProfileDirect(env,player){
@@ -3241,6 +3244,17 @@ function hexRgb(hex){
   const n=parseInt(String(hex||"#ffd9ef").replace(/^#/ , ""),16)>>>0;
   return [(n>>16)&255,(n>>8)&255,n&255];
 }
+function profilePanelColors(rgb){
+  const [r,g,b]=rgb;
+  const mix=(v,t)=>Math.round(v+(255-v)*t);
+  const lum=0.2126*r+0.7152*g+0.0722*b;
+  let panel=[mix(r,.46),mix(g,.46),mix(b,.46)];
+  if(lum>238) panel=[245,245,245];
+  const panelSoft=[mix(r,.62),mix(g,.62),mix(b,.62)];
+  const panelBorder=[mix(r,.78),mix(g,.78),mix(b,.78)];
+  const panelAccent=[Math.max(0,Math.round(r*.72)),Math.max(0,Math.round(g*.72)),Math.max(0,Math.round(b*.72))];
+  return {panel,panelSoft,panelBorder,panelAccent};
+}
 function profileFill(frame,x,y,w,h,r,g,b,a=255){
   const x0=Math.max(0,Math.floor(x)),y0=Math.max(0,Math.floor(y)),x1=Math.min(frame.width,Math.ceil(x+w)),y1=Math.min(frame.height,Math.ceil(y+h));
   for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const o=(yy*frame.width+xx)*4;frame.data[o]=r;frame.data[o+1]=g;frame.data[o+2]=b;frame.data[o+3]=a;}
@@ -3843,6 +3857,35 @@ function profileFrameCornerJewel(frame,x,y,outer,inner,phase=0){
   profileSmoothCircle(frame,x-gl,y-gl,1.5,[255,255,255],230,true);
 }
 
+
+function profileLollipop(frame,x,y,s,c,phase=0){
+  const r=Math.max(3,s*.72);
+  profileSmoothLine(frame,x,y+r*.45,x,y+s*1.55,1.5,[255,240,248],210);
+  profileSmoothCircle(frame,x,y,r,[255,255,255],200,true);
+  profileSmoothCircle(frame,x,y,r-1.0,c,245,true);
+  if(Math.sin(phase*Math.PI*2+x*.03)>.35) profileSmoothStar(frame,x-r*.28,y-r*.30,Math.max(1.4,s*.22),[255,255,255],210);
+}
+function profileGumdrop(frame,x,y,s,c,phase=0){
+  const r=Math.max(3,s);
+  profileSmoothCircle(frame,x,y,r,[255,245,250],190,true);
+  profileSmoothCircle(frame,x,y+1,r-1,c,245,true);
+  profileSmoothCircle(frame,x-r*.28,y-r*.32,Math.max(.8,r*.16),[255,255,255],210,true);
+}
+function profileWrappedCandy(frame,x,y,s,c,flip=1){
+  const w=Math.max(7,s*1.55), h=Math.max(5,s*.85);
+  profileSmoothRoundedRect(frame,x-w*.42,y-h*.42,w*.84,h*.84,2,[255,255,255],190,.8);
+  profileSmoothRoundedRect(frame,x-w*.34,y-h*.34,w*.68,h*.68,1.5,c,245,.7);
+  profileSmoothLine(frame,x-w*.52,y,x-w*.82,y+flip*2,1.3,c,210);
+  profileSmoothLine(frame,x+w*.52,y,x+w*.82,y+flip*2,1.3,c,210);
+}
+function profileFrosting(frame,x,y,s,c,phase=0){
+  const r=Math.max(3,s*.9);
+  profileSmoothCircle(frame,x,y,r,c,235,true);
+  profileSmoothCircle(frame,x-r*.58,y+r*.18,r*.62,[255,205,235],215,true);
+  profileSmoothCircle(frame,x+r*.58,y+r*.18,r*.62,[255,235,245],215,true);
+  if(Math.sin(phase*Math.PI*2)>.55) profileSmoothStar(frame,x,y-r*.7,1.4,[255,255,255],205);
+}
+
 function drawProfileFrame(frame, frameId, phase=0){
   if(!frameId || !PROFILE_FRAMES[frameId]) return;
   const style=PROFILE_FRAMES[frameId].style;
@@ -3892,50 +3935,205 @@ function drawProfileFrame(frame, frameId, phase=0){
       if(i%3===0)sparkle(cx+(i%2?7:-7),cy+(i%2?-7:7),1.3);
     }
   } else if(style==='rhinestone'||style==='diamond'){
-    // Rhinestone Princess V2: fewer, larger, unmistakable gemstones.
-    // The previous tiny gems collapsed into white/pink specks at Discord size.
-    // These stones are intentionally oversized so their facets survive GIF conversion.
-    const gem=(cx,cy,scale=1,phaseOffset=0)=>{
-      const shimmer=0.78+0.32*Math.max(0,Math.sin(p+phaseOffset));
-      const outer=style==='diamond'?[170,235,255]:[255,185,235];
-      const mid=style==='diamond'?[220,250,255]:[255,220,248];
-      const facet=style==='diamond'?[75,160,220]:[210,105,185];
+    // Rhinestone Princess V7: luxury jewelry treatment. The frame is built from
+    // individual bezel-set stones, tiny connector beads, layered facets, and
+    // statement corner clusters so it reads like a PREMIUM SHOP COSMETIC.
+    const gem=(cx,cy,scale=1,phaseOffset=0,variant=0)=>{
+      const shimmer=0.78+0.22*Math.max(0,Math.sin(p+phaseOffset));
+      const bezel=style==='diamond'?[45,105,160]:[145,42,105];
+      const outer=style==='diamond'?[145,220,250]:[238,112,188];
+      const mid=style==='diamond'?[205,245,255]:[255,178,220];
+      const table=style==='diamond'?[238,253,255]:[255,226,244];
+      const facetA=style==='diamond'?[75,155,205]:[190,65,140];
+      const facetB=style==='diamond'?[125,200,235]:[255,135,195];
       const white=[255,255,255];
-      // Large rotated jewel body: deliberately much bigger than the old dots.
-      profileSmoothPetal(frame,cx,cy,8.2*scale,4.9*scale,outer,245,Math.PI/4);
-      profileSmoothPetal(frame,cx,cy,5.9*scale,3.5*scale,mid,250,Math.PI/4);
-      // Strong four-facet construction so it reads as a gemstone at a glance.
-      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy-4.0*scale,1.15,facet,225);
-      profileSmoothLine(frame,cx,cy-4.0*scale,cx+5.0*scale,cy,1.15,facet,225);
-      profileSmoothLine(frame,cx-5.0*scale,cy,cx,cy+4.0*scale,1.15,facet,205);
-      profileSmoothLine(frame,cx,cy+4.0*scale,cx+5.0*scale,cy,1.15,facet,205);
-      // Bright upper facet + animated star glint.
-      profileSmoothPetal(frame,cx-1.5*scale,cy-1.6*scale,2.4*scale,1.15*scale,white,185,Math.PI/4);
-      if(shimmer>0.94) profileSmoothStar(frame,cx-2.8*scale,cy-2.8*scale,2.1*scale,white,235);
+      const r=Math.max(4,Math.round(5.6*scale));
+
+      // Dark setting first: gives every gem a physical bezel instead of a flat dot.
+      profileDiamond(frame,cx,cy,r+3,bezel,235);
+      profileDiamond(frame,cx,cy,r+2,outer,248);
+      profileDiamond(frame,cx,cy,r,mid,255);
+
+      // Four large facets create the cut-stone look at Discord resolution.
+      profilePixelLine(frame,cx,cy-r+1,cx+r-1,cy,1,...white,220);
+      profilePixelLine(frame,cx,cy,cx+r-1,cy+r-1,1,...facetA,220);
+      profilePixelLine(frame,cx,cy+r-1,cx-r+1,cy,1,...facetB,220);
+      profilePixelLine(frame,cx-r+1,cy,cx,cy-r+1,1,...white,235);
+      profileFill(frame,cx-Math.max(1,Math.floor(r*.28)),cy-Math.max(1,Math.floor(r*.28)),Math.max(2,Math.floor(r*.55)),Math.max(2,Math.floor(r*.55)),table[0],table[1],table[2],255);
+
+      // Tiny top-left reflection + animated four-point glint.
+      profileSmoothCircle(frame,cx-r*.30,cy-r*.34,Math.max(.8,.9*scale),white,245,true);
+      if(shimmer>0.90) profileSmoothStar(frame,cx-r*.55,cy-r*.60,Math.max(1.8,2.1*scale),white,235);
+
+      // Occasional secondary pin makes alternating stones feel hand-set.
+      if(variant%3===0){
+        profileSmoothCircle(frame,cx+r*.72,cy+r*.70,Math.max(1.0,.95*scale),outer,220,true);
+      }
     };
-    // A restrained number of large stones. They are spaced out so each one reads.
-    const top=[
-      [x+48,y+10,1.05],[x+145,y+10,.82],[x+255,y+10,1.18],[x+390,y+10,.9],
-      [x+525,y+10,1.15],[x+650,y+10,.86],[x+744,y+11,1.02]
-    ];
-    const bottom=[
-      [x+48,y+h-10,.88],[x+165,y+h-10,1.12],[x+295,y+h-10,.82],
-      [x+430,y+h-10,1.18],[x+560,y+h-10,.86],[x+690,y+h-10,1.08]
-    ];
-    [...top,...bottom].forEach((g,i)=>gem(g[0],g[1],g[2],i*.47));
-    // Four larger princess-jewel corner clusters, kept elegant rather than circular.
+    const bead=(cx,cy,scale=1,phaseOffset=0)=>{
+      const c=style==='diamond'?[220,248,255]:[255,205,235];
+      const hi=[255,255,255];
+      const r=Math.max(1.5,1.8*scale);
+      profileSmoothCircle(frame,cx,cy,r+0.9,[120,45,95],185,true);
+      profileSmoothCircle(frame,cx,cy,r,c,245,true);
+      profileSmoothCircle(frame,cx-0.45,cy-0.55,.65,hi,235,true);
+      if(Math.sin(p+phaseOffset)>0.72) profileSmoothStar(frame,cx,cy,1.1*scale,hi,190);
+    };
+
+    // Main top/bottom jewelry rows: fewer, larger stones with tiny setting beads
+    // between them. This avoids the old "pixel dots in a line" appearance.
+    const count=15;
+    for(let i=0;i<count;i++){
+      const t=i/(count-1);
+      const cx=x+24+t*(w-48);
+      const sc=i%5===0?1.16:(i%2?0.92:1.02);
+      gem(cx,y+12,sc,i*.41,i);
+      gem(cx,y+h-12,sc,i*.47,i+20);
+      if(i<count-1){
+        const nx=x+24+(i+0.5)/(count-1)*(w-48);
+        bead(nx,y+12,0.92,i*.31);
+        bead(nx,y+h-12,0.92,i*.37);
+      }
+    }
+
+    // Side rows are slightly sparser so the frame remains elegant rather than busy.
+    const sideYs=[72,152,232,312,392];
+    sideYs.forEach((yy,i)=>{
+      gem(x+12,y+yy,i%2?.92:1.02,1.2+i*.46,i+40);
+      gem(x+w-12,y+yy,i%2?1.02:.92,1.55+i*.51,i+60);
+      if(i<sideYs.length-1){
+        bead(x+12,y+yy+40,.78,i*.25);
+        bead(x+w-12,y+yy+40,.78,i*.29);
+      }
+    });
+
+    // Four large statement corners: layered stones + tiny halo pins.
     const corners=[
-      [x+27,y+27,1.55],[x+w-27,y+27,1.55],[x+27,y+h-27,1.55],[x+w-27,y+h-27,1.55]
+      [x+25,y+24,1.62],[x+w-25,y+24,1.62],
+      [x+25,y+h-24,1.62],[x+w-25,y+h-24,1.62]
     ];
     corners.forEach((g,i)=>{
-      gem(g[0],g[1],g[2],i*.8+.2);
-      profileSmoothStar(frame,g[0]-2,g[1]-3,3.0,[255,255,255],150);
+      const [cx,cy,sc]=g;
+      profileSmoothCircle(frame,cx,cy,9*sc,[255,255,255],65,true);
+      gem(cx,cy,sc*1.20,2+i*.8,i+90);
+      bead(cx-10*sc,cy,0.8,i);
+      bead(cx+10*sc,cy,0.8,i+.2);
+      bead(cx,cy-10*sc,0.8,i+.4);
+      bead(cx,cy+10*sc,0.8,i+.6);
+      profileSmoothStar(frame,cx-3*sc,cy-3*sc,3.0*sc,[255,255,255],185);
     });
-    // One small hanging gem on each side gives it a jewelry-chain feel.
-    gem(x+10,y+h*.50,.72,.6);
-    gem(x+w-10,y+h*.50,.72,1.4);
-  } else if(style==='pink_glitter'||style==='starfall'||style==='purple'){
+  } else if(style==='pink_glitter'){
+    // Pink Glitter Bomb V4: a controlled glitter explosion. The glitter is
+    // concentrated around the actual frame so the profile stays readable.
+    const glitterPalette=[
+      [255,45,175],[255,70,195],[255,95,215],[255,130,228],
+      [255,165,238],[255,205,248],[235,35,155],[255,90,225]
+    ];
+    const seed=(i,axis)=>{
+      const v=Math.sin(i*91.731+axis*17.113)*43758.5453;
+      return v-Math.floor(v);
+    };
+    const glitterDot=(cx,cy,r,col,alpha=235)=>{
+      profileSmoothCircle(frame,cx,cy,r+0.8,[255,60,180],Math.min(125,alpha*.55),true);
+      profileSmoothCircle(frame,cx,cy,r,col,alpha,true);
+      profileSmoothCircle(frame,cx-r*.32,cy-r*.38,Math.max(.5,r*.20),[255,255,255],245,true);
+    };
+    const glitterStar=(cx,cy,r,col,offset=0)=>{
+      const pulse=.82+.32*Math.max(0,Math.sin(p+offset));
+      profileSmoothStar(frame,cx,cy,r*pulse,col,242);
+      profileSmoothCircle(frame,cx-r*.25,cy-r*.32,Math.max(.55,r*.18),[255,255,255],250,true);
+    };
+    const burst=(cx,cy,r,col,offset=0)=>{
+      glitterStar(cx,cy,r*1.08,col,offset);
+      profileSmoothCircle(frame,cx,cy,r*.30,[255,255,255],235,true);
+      for(let k=0;k<8;k++){
+        const a=(Math.PI*2*k/8)+offset*.11;
+        const d=r*(1.35+(k%3)*.22);
+        glitterDot(cx+Math.cos(a)*d,cy+Math.sin(a)*d,.62+(k%3)*.22,col,220);
+      }
+    };
 
+    // Heavy top/bottom glitter ribbons. Dense, but kept within the frame zone.
+    for(let i=0;i<86;i++){
+      const top=i%2===0;
+      const edgeY=top ? y+5+seed(i,2)*27 : y+h-5-seed(i,3)*27;
+      const cx=x+12+seed(i,4)*(w-24);
+      const size=.85+seed(i,5)*2.65;
+      const col=glitterPalette[i%glitterPalette.length];
+      if(i%17===0) burst(cx,edgeY,size*1.45,col,i*.29);
+      else if(i%8===0) glitterStar(cx,edgeY,size*1.18,col,i*.37);
+      else glitterDot(cx,edgeY,size,col,215+Math.round(seed(i,6)*35));
+    }
+
+    // Side glitter ribbons: thick enough to look explosive, but not enough to
+    // invade the title/stats area.
+    for(let i=0;i<48;i++){
+      const left=i%2===0;
+      const edgeX=left ? x+5+seed(i,7)*24 : x+w-5-seed(i,8)*24;
+      const cy=y+18+seed(i,9)*(h-36);
+      const size=.8+seed(i,10)*2.45;
+      const col=glitterPalette[(i+3)%glitterPalette.length];
+      if(i%13===0) burst(edgeX,cy,size*1.35,col,i*.43);
+      else if(i%7===0) glitterStar(edgeX,cy,size*1.16,col,i*.51);
+      else glitterDot(edgeX,cy,size,col,210+Math.round(seed(i,11)*35));
+    }
+
+    // Four unmistakable glitter-bomb explosions. These are the visual anchors.
+    const cornerBursts=[
+      [x+27,y+27,11.5],[x+w-27,y+27,11.5],
+      [x+27,y+h-27,11.5],[x+w-27,y+h-27,11.5]
+    ];
+    cornerBursts.forEach((g,i)=>{
+      burst(g[0],g[1],g[2],glitterPalette[(i+1)%glitterPalette.length],i*.8);
+      for(let k=0;k<14;k++){
+        const a=(Math.PI*2*k/10)+i*.23;
+        const d=13+seed(i*10+k,40)*22;
+        glitterDot(g[0]+Math.cos(a)*d,g[1]+Math.sin(a)*d,
+          .75+seed(i*10+k,41)*1.9,glitterPalette[(k+i+2)%glitterPalette.length],205);
+      }
+    });
+
+    // A handful of larger flash stars along the edge make the frame read as
+    // GLITTER rather than a field of tiny dots.
+    const flashes=[
+      [x+105,y+10,5.0],[x+285,y+11,4.4],[x+470,y+10,5.2],[x+650,y+11,4.5],
+      [x+10,y+125,4.2],[x+11,y+265,4.8],[x+12,y+390,4.1],
+      [x+w-10,y+125,4.4],[x+w-11,y+270,4.8],[x+w-12,y+390,4.2],
+      [x+145,y+h-10,4.6],[x+355,y+h-11,5.2],[x+570,y+h-10,4.5]
+    ];
+    flashes.forEach((g,i)=>glitterStar(g[0],g[1],g[2],glitterPalette[(i+4)%glitterPalette.length],i*.67));
+    // A few larger mid-edge bursts give the frame its final GLITTER-BOMB punch
+    // without throwing particles across the readable profile content.
+    const edgeBursts=[
+      [x+190,y+9,5.0],[x+570,y+9,4.6],[x+210,y+h-9,4.8],[x+625,y+h-9,5.1],
+      [x+8,y+205,4.6],[x+w-8,y+210,4.9]
+    ];
+    edgeBursts.forEach((g,i)=>burst(g[0],g[1],g[2],glitterPalette[(i+1)%glitterPalette.length],i*.55));
+
+    // Controlled inward spill: only near the edges/corners, leaving the actual
+    // profile information clean enough to read.
+    for(let i=0;i<24;i++){
+      const corner=i%4;
+      const cx=corner%2===0
+        ? x+30+seed(i,50)*105
+        : x+w-30-seed(i,51)*105;
+      const cy=corner<2
+        ? y+30+seed(i,52)*82
+        : y+h-30-seed(i,53)*82;
+      glitterDot(cx,cy,.65+seed(i,54)*1.5,glitterPalette[(i+2)%glitterPalette.length],185);
+    }
+
+    // Animated highlight flashes stay on the frame zone instead of appearing
+    // randomly over the profile content.
+    for(let i=0;i<8;i++){
+      const onTop=i%2===0;
+      const cx=x+35+seed(i,60)*(w-70);
+      const cy=onTop ? y+8+seed(i,61)*22 : y+h-8-seed(i,62)*22;
+      if(Math.sin(p+i*1.73)>.70){
+        glitterStar(cx,cy,2.2+seed(i,63)*1.8,[255,245,252],i*.9);
+      }
+    }
+  } else if(style==='starfall'||style==='purple'){
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
       sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
@@ -3949,76 +4147,341 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
     }
   } else if(style==='spiderweb'){
-    const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
-    for(const [cx,cy] of pts){
-      for(let r=8;r<=18;r+=5) profileSmoothRing(frame,cx,cy,r,hi,145,1);
-    }
-    profileSmoothLine(frame,x+34,y+34,x+w-34,y+h-34,1,hi,125);
-    profileSmoothLine(frame,x+w-34,y+34,x+34,y+h-34,1,hi,125);
-  } else if(style==='gothic'){
-    // Gothic lace: delicate dark filigree with repeating scalloped loops,
-    // tiny diamond eyelets, and a second fine highlight thread. Keep it
-    // ornamental and lace-like rather than turning it into another web.
-    const lace=[38,24,48], laceHi=[220,188,228];
-    const drawTopBottomLace=(yy,flip=1)=>{
-      const count=13, start=x+24, end=x+w-24, span=(end-start)/count;
-      for(let i=0;i<count;i++){
-        const x0=start+i*span, x1=x0+span;
-        let px=x0, py=yy;
-        for(let s=1;s<=8;s++){
-          const t=s/8;
-          const xx=x0+(x1-x0)*t;
-          const yy2=yy+flip*Math.sin(t*Math.PI)*8;
-          profileSmoothLine(frame,px,py,xx,yy2,1,lace,205);
-          px=xx; py=yy2;
-        }
-        profileSmoothLine(frame,x0,yy,x1,yy,1,laceHi,115);
-        profileSmoothCircle(frame,(x0+x1)/2,yy+flip*7,1.15,laceHi,185,true);
-        if(i%2===0) profileDiamond(frame,(x0+x1)/2,yy+flip*10,1.35,laceHi,170);
-      }
-    };
-    const drawSideLace=(xx,flip=1)=>{
-      const count=8, start=y+24, end=y+h-24, span=(end-start)/count;
-      for(let i=0;i<count;i++){
-        const y0=start+i*span, y1=y0+span;
-        let px=xx, py=y0;
-        for(let s=1;s<=8;s++){
-          const t=s/8;
-          const yy=y0+(y1-y0)*t;
-          const xx2=xx+flip*Math.sin(t*Math.PI)*8;
-          profileSmoothLine(frame,px,py,xx2,yy,1,lace,205);
-          px=xx2; py=yy;
-        }
-        profileSmoothLine(frame,xx,y0,xx,y1,1,laceHi,115);
-        profileSmoothCircle(frame,xx+flip*7,(y0+y1)/2,1.15,laceHi,185,true);
-        if(i%2===0) profileDiamond(frame,xx+flip*10,(y0+y1)/2,1.35,laceHi,170);
-      }
-    };
-    drawTopBottomLace(y+8,-1);
-    drawTopBottomLace(y+h-8,1);
-    drawSideLace(x+8,-1);
-    drawSideLace(x+w-8,1);
+    // SPIDERWEB V2: organic enchanted web grown around the frame.
+    // No giant geometric targets and no lines across the profile.
+    const silk=[222,214,232], silkHi=[255,248,255], webShadow=[104,76,126];
+    const plum=[48,34,62];
+    const p2=phase*Math.PI*2;
 
-    // Four small lace medallions at the corners tie the trim together.
+    // Dark plum casing with a thin silvery-violet silk edge.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,plum,238,7.0);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webShadow,190,2.0);
+    profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,205,1.1);
+
+    // Draw large, organic corner webs. Kept compact enough for direct Worker rendering.
+    const webPatch=(cx,cy,mirrorX,mirrorY)=>{
+      const rays=8;
+      const rings=[11,23,36,49];
+      const angOffset=(mirrorX?0.10:-0.10)+(mirrorY?0.05:-0.03);
+      for(let rIndex=0;rIndex<rings.length;rIndex++){
+        const r=rings[rIndex];
+        let px=cx+Math.cos(angOffset)*r;
+        let py=cy+Math.sin(angOffset)*r;
+        for(let j=1;j<=rays;j++){
+          const a=angOffset+(Math.PI*2*j/rays);
+          const rr=r*(0.96+0.035*Math.sin(j*1.7+rIndex));
+          const nx=cx+Math.cos(a)*rr, ny=cy+Math.sin(a)*rr;
+          profileSmoothLine(frame,px,py,nx,ny,0.95,silkHi,150-rIndex*12);
+          px=nx; py=ny;
+        }
+      }
+      for(let i=0;i<rays;i++){
+        const a=angOffset+(Math.PI*2*i/rays);
+        profileSmoothLine(frame,cx,cy,cx+Math.cos(a)*49,cy+Math.sin(a)*49,1.0,silkHi,160);
+      }
+      profileSmoothCircle(frame,cx,cy,3.5,webShadow,220,true);
+    };
+
+    webPatch(x+54,y+54,false,false);
+    webPatch(x+w-54,y+54,true,false);
+    webPatch(x+54,y+h-54,false,true);
+    webPatch(x+w-54,y+h-54,true,true);
+
+    // Real webbing follows each side in short curved bands. Fewer segments keep
+    // the profile renderer comfortably inside the Worker CPU budget.
+    const edgeWebH=(x1,x2,yy,flip)=>{
+      const rows=[0,14,28];
+      rows.forEach((off,row)=>{
+        const y0=yy+(flip?-off:off);
+        let px=x1,py=y0;
+        const pieces=10;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const nx=x1+(x2-x1)*t;
+          const ny=y0+Math.sin(t*Math.PI)*((row%2===0)?2.5:-1.8);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,120-row*9);
+          px=nx;py=ny;
+        }
+      });
+      for(let i=1;i<6;i++){
+        const t=i/6;
+        const cx=x1+(x2-x1)*t;
+        profileSmoothLine(frame,cx,yy,cx,yy+(flip?-28:28),0.75,silkHi,100);
+      }
+    };
+
+    const edgeWebV=(y1,y2,xx,flip)=>{
+      const cols=[0,14,28];
+      cols.forEach((off,col)=>{
+        const x0=xx+(flip?-off:off);
+        let px=x0,py=y1;
+        const pieces=9;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const ny=y1+(y2-y1)*t;
+          const nx=x0+Math.sin(t*Math.PI)*((col%2===0)?2.5:-1.8);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,120-col*9);
+          px=nx;py=ny;
+        }
+      });
+      for(let i=1;i<6;i++){
+        const t=i/6;
+        const cy=y1+(y2-y1)*t;
+        profileSmoothLine(frame,xx,cy,xx+(flip?-28:28),cy,0.75,silkHi,100);
+      }
+    };
+
+    edgeWebH(x+62,x+w-62,y+20,false);
+    edgeWebH(x+62,x+w-62,y+h-20,true);
+    edgeWebV(y+62,y+h-62,x+20,false);
+    edgeWebV(y+62,y+h-62,x+w-20,true);
+
+    // Two tiny spiders actually live on the web, tucked safely in empty margins.
+    // Clearly recognizable spiders: distinct head + abdomen and eight
+    // separated, angled legs. Kept small, but with enough silhouette
+    // definition to read as spiders at Discord preview size.
+    const spider=(cx,cy)=>{
+      // Clearly recognizable little spider: oval abdomen, separate head,
+      // two tiny eyes, and FOUR legs on EACH side.  Keep it compact so it
+      // reads as a spider instead of a fly, musical note, or stray line.
+      const body=[28,20,34];
+      const leg=[48,40,54];
+
+      // Abdomen + head.
+      profileSmoothCircle(frame,cx+1.8,cy+2.2,5.8,body,245,true);
+      profileSmoothCircle(frame,cx-3.2,cy-3.1,3.5,body,245,true);
+
+      // Two tiny eyes give the silhouette a definite spider face.
+      profileSmoothCircle(frame,cx-4.4,cy-4.2,0.7,webHi,220,true);
+      profileSmoothCircle(frame,cx-2.2,cy-4.2,0.7,webHi,220,true);
+
+      // Eight legs. Each side has a distinct upper, middle-upper,
+      // middle-lower and lower leg with a small elbow bend.
+      const legs=[
+        [-4.0,-3.0,-10.0,-7.0,-15.0,-5.0],
+        [-3.0,-1.0,-11.0,-2.0,-16.0, 1.0],
+        [-2.0, 1.5,-11.0, 3.5,-15.0, 7.0],
+        [ 0.0, 3.5,-8.0, 8.0,-12.0,11.0]
+      ];
+
+      legs.forEach(([sx,sy,mx,my,ex,ey])=>{
+        // left
+        profileSmoothLine(frame,cx+sx,cy+sy,cx+mx,cy+my,1.0,leg,215);
+        profileSmoothLine(frame,cx+mx,cy+my,cx+ex,cy+ey,0.9,leg,205);
+        // mirrored right
+        profileSmoothLine(frame,cx-sx,cy+sy,cx-mx,cy+my,1.0,leg,215);
+        profileSmoothLine(frame,cx-mx,cy+my,cx-ex,cy+ey,0.9,leg,205);
+      });
+    };
+    spider(x+76,y+52);
+    spider(x+w-76,y+h-52);
+
+    // A few dew drops catch the light as the web gently shimmers.
+    const dew=[
+      [x+54,y+43,1.8],[x+w-54,y+43,1.6],
+      [x+55,y+h-45,1.7],[x+w-55,y+h-45,1.8],
+      [x+20,y+160,1.4],[x+w-20,y+265,1.5]
+    ];
+    dew.forEach(([cx,cy,r],i)=>{
+      const q=0.65+0.35*Math.max(0,Math.sin(p2+i*1.6));
+      profileSmoothCircle(frame,cx,cy,r*q,silkHi,120+Math.round(q*90),true);
+    });
+
+    // Restrained web glints, kept away from the actual profile information.
+    [[x+44,y+25],[x+w-44,y+25],[x+44,y+h-25],[x+w-44,y+h-25]].forEach(([cx,cy],i)=>{
+      const q=0.7+0.3*Math.max(0,Math.sin(p2+i*1.8));
+      profileSmoothStar(frame,cx,cy,1.7*q,silkHi,140+Math.round(q*70));
+    });
+  } else if(style==='gothic'){
+    // GOTHIC LACE: delicate black/plum lace trim only. The profile composition,
+    // /panel color, adaptive information bubbles, tree, panda, and stat cards
+    // are intentionally untouched; this branch draws only the cosmetic frame.
+    const lace=[54,34,66], laceHi=[220,185,230], laceSoft=[150,105,165];
+    profileSmoothRoundedRect(frame,x,y,w,h,18,lace,245,3.2);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,laceSoft,205,1.0);
+
+    // Repeating scalloped lace edge: small arches plus hanging points, kept
+    // narrow so it reads as lace rather than a second border.
+    const topBottom=(yy,flip)=>{
+      const left=x+24,right=x+w-24,step=30;
+      for(let cx=left;cx<=right;cx+=step){
+        const r=10;
+        const sy=flip ? yy-2 : yy+2;
+        profileSmoothLine(frame,cx-r,sy,cx,yy+(flip?7:-7),1.2,laceHi,185);
+        profileSmoothLine(frame,cx,yy+(flip?7:-7),cx+r,sy,1.2,laceHi,185);
+        profileSmoothLine(frame,cx-r,sy,cx+r,sy,1,lace,190);
+        profileSmoothCircle(frame,cx,yy+(flip?9:-9),1.5,laceSoft,190,true);
+      }
+    };
+    const leftRight=(xx,flip)=>{
+      const top=y+24,bottom=y+h-24,step=30;
+      for(let cy=top;cy<=bottom;cy+=step){
+        const r=10;
+        const sx=flip ? xx-2 : xx+2;
+        profileSmoothLine(frame,sx,cy-r,xx+(flip?7:-7),cy,1.2,laceHi,185);
+        profileSmoothLine(frame,xx+(flip?7:-7),cy,sx,cy+r,1.2,laceHi,185);
+        profileSmoothLine(frame,sx,cy-r,sx,cy+r,1,lace,190);
+        profileSmoothCircle(frame,xx+(flip?9:-9),cy,1.5,laceSoft,190,true);
+      }
+    };
+    topBottom(y+8,false); topBottom(y+h-8,true);
+    leftRight(x+8,false); leftRight(x+w-8,true);
+
+    // Tiny lace medallions at the four corners.
     const corners=[[x+24,y+24],[x+w-24,y+24],[x+24,y+h-24],[x+w-24,y+h-24]];
     for(const [cx,cy] of corners){
-      profileSmoothRing(frame,cx,cy,7,lace,205,1);
-      profileSmoothRing(frame,cx,cy,4,laceHi,175,1);
-      profileDiamond(frame,cx,cy,1.6,laceHi,205);
-      profileSmoothLine(frame,cx-9,cy,cx+9,cy,1,lace,150);
-      profileSmoothLine(frame,cx,cy-9,cx,cy+9,1,lace,150);
+      profileSmoothRing(frame,cx,cy,8,laceHi,190,1.1);
+      profileSmoothRing(frame,cx,cy,4,laceSoft,190,1.0);
+      profileSmoothCircle(frame,cx,cy,1.6,laceHi,210,true);
     }
   } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
     profileCrown(frame,x+w-31,y+12,5,hi);
     sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
-  } else if(style==='candyland'){
-    for(let i=0;i<8;i++){
-      const cx=x+52+i*((w-104)/7);
-      profileCandy(frame,cx,y+7,4,i%2?hi:base,i%2);
-      profileCandy(frame,cx,y+h-7,4,i%2?base:hi,(i+1)%2);
-    }
+   } else if(style==='candyland'){
+    // Candyland PREMIUM V21: boutique confectionery storefront.
+    // This is a real visual reset of the frame construction, not a particle overlay.
+    // Keep shapes large/readable at Discord preview size and use phase only for
+    // small frosting/sugar highlights so the 8-frame GIF remains lightweight.
+    const vanilla=[255,248,242], icing=[255,190,222], icingHi=[255,225,239];
+    const pink=[255,92,169], pinkDeep=[218,74,139], lavender=[173,139,235];
+    const mint=[91,210,188], lemon=[255,205,75], sky=[92,185,239], peach=[255,151,130];
+    const cocoa=[126,72,91], cocoaHi=[190,124,139];
+    const candy=[pink,lavender,mint,lemon,sky,peach];
+    const p2=phase*Math.PI*2;
+
+    // Outer vanilla pastry casing: distinct from the player's chosen panel color.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,vanilla,252,4.0);
+    profileSmoothRoundedRect(frame,x+5,y+5,w-10,h-10,15,pinkDeep,245,2.0);
+    profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,12,icingHi,230,1.0);
+
+    // A proper bakery awning: a cream band, pink icing shadow, and scalloped icing.
+    const awning=(top)=>{
+      const left=x+27, right=x+w-27;
+      const yy=top ? y+24 : y+h-24;
+      const bandH=top ? 22 : 22;
+      profileSmoothRoundedRect(frame,left,top?y+10:y+h-32,right-left,bandH,9,vanilla,248,1.0);
+      profileSmoothLine(frame,left+8,top?y+12:y+h-13,right-8,top?y+12:y+h-13,4.5,icing,245);
+      profileSmoothLine(frame,left+12,top?y+17:y+h-18,right-12,top?y+17:y+h-18,2.0,pink,220);
+      // Large scallops create a readable icing silhouette instead of a dot chain.
+      const step=38;
+      for(let cx=left+12; cx<=right-12; cx+=step){
+        const cy=top ? y+30 : y+h-30;
+        profileSmoothCircle(frame,cx,cy,9.0,icing,250,true);
+        profileSmoothCircle(frame,cx,cy+(top?4:-4),5.2,vanilla,235,true);
+      }
+      // A few intentional icing drips, each with a soft highlight.
+      [0.16,0.39,0.63,0.84].forEach((t,j)=>{
+        const cx=left+(right-left)*t;
+        const len=[8,13,7,11][j];
+        profileSmoothLine(frame,cx,top?y+26:y+h-26,cx,top?y+26+len:y+h-26-len,3.4,icing,245);
+        profileSmoothCircle(frame,cx,top?y+26+len:y+h-26-len,2.4,icingHi,240,true);
+      });
+      // Sprinkles are embedded in the icing band.
+      for(let i=0;i<15;i++){
+        const cx=left+18+((i*83+(top?17:41))%(Math.max(1,right-left-36)));
+        const cy=top ? y+18+(i%3)*2 : y+h-18-(i%3)*2;
+        const ang=-0.7+(i%5)*0.35+Math.sin(p2+i)*0.04;
+        const len=2.8+(i%3)*0.6;
+        const c=candy[i%candy.length];
+        profileSmoothLine(frame,cx-Math.cos(ang)*len,cy-Math.sin(ang)*len,cx+Math.cos(ang)*len,cy+Math.sin(ang)*len,1.8,c,245);
+      }
+      // Traveling sugar glint = actual animation without moving the whole frame.
+      const t=0.5+0.5*Math.sin(p2+(top?0:Math.PI));
+      const gx=left+40+t*(right-left-80);
+      profileSmoothStar(frame,gx,top?y+12:y+h-12,2.7,vanilla,150+Math.round(t*100));
+    };
+    awning(true); awning(false);
+
+    // Thick candy-cane pillars form the sides of the confectionery storefront.
+    const pillar=(xx,flip)=>{
+      profileSmoothRoundedRect(frame,xx-11,y+48,22,h-96,9,vanilla,250,1.0);
+      // Broad diagonal stripes, with a second soft highlight so they read as candy.
+      for(let i=0;i<7;i++){
+        const cy=y+66+i*((h-132)/6);
+        const dx=flip?-12:12;
+        profileSmoothLine(frame,xx-dx,cy-15,xx+dx,cy+15,5.2,candy[(i+1)%candy.length],238);
+      }
+      profileSmoothLine(frame,xx+3,y+55,xx+3,y+h-55,1.5,icingHi,210);
+      profileSmoothCircle(frame,xx,y+48,7.5,icing,245,true);
+      profileSmoothCircle(frame,xx,y+h-48,7.5,icing,245,true);
+    };
+    pillar(x+16,false); pillar(x+w-16,true);
+
+    // A readable cupcake: wrapper first, then frosting cap, then topping.
+    const cupcake=(cx,cy,wrap,frost,topping,scale=1)=>{
+      const rw=14*scale, rh=10*scale;
+      profileSmoothRoundedRect(frame,cx-rw,cy+5*scale,rw*2,rh+5*scale,3*scale,wrap,250,1.0);
+      // wrapper ridges
+      for(const dx of [-0.62,0,0.62]){
+        profileSmoothLine(frame,cx+rw*dx,cy+7*scale,cx+rw*dx,cy+(rh+3)*scale,1.3*scale,pinkDeep,220);
+      }
+      // frosting silhouette: three connected dollops, plus highlight.
+      profileSmoothCircle(frame,cx-6*scale,cy+2*scale,6.0*scale,frost,250,true);
+      profileSmoothCircle(frame,cx+6*scale,cy+2*scale,6.0*scale,frost,250,true);
+      profileSmoothCircle(frame,cx,cy-3*scale,7.4*scale,frost,250,true);
+      profileSmoothCircle(frame,cx-2.5*scale,cy-5.2*scale,1.8*scale,vanilla,225,true);
+      profileSmoothCircle(frame,cx+2.8*scale,cy-5.6*scale,2.0*scale,topping,245,true);
+      // two tiny sprinkles on the frosting
+      profileSmoothLine(frame,cx-5*scale,cy-1*scale,cx-2*scale,cy-2.5*scale,1.0*scale,candy[2],230);
+      profileSmoothLine(frame,cx+2*scale,cy-7*scale,cx+5*scale,cy-5*scale,1.0*scale,candy[3],230);
+    };
+
+    const lollipop=(cx,cy,col,dir,scale=1)=>{
+      profileSmoothLine(frame,cx,cy+7*scale,cx+dir*6*scale,cy+25*scale,2.0*scale,vanilla,235);
+      profileSmoothCircle(frame,cx,cy,8.5*scale,col,250,true);
+      // clean spiral made from three short segments
+      profileSmoothLine(frame,cx-5*scale,cy+1*scale,cx-1.5*scale,cy-3.5*scale,1.3*scale,vanilla,225);
+      profileSmoothLine(frame,cx-1.5*scale,cy-3.5*scale,cx+3.5*scale,cy-1*scale,1.3*scale,vanilla,225);
+      profileSmoothLine(frame,cx+3.5*scale,cy-1*scale,cx+1.0*scale,cy+3.5*scale,1.3*scale,vanilla,225);
+    };
+    const wrapped=(cx,cy,col,scale=1)=>{
+      profileSmoothRoundedRect(frame,cx-6*scale,cy-5*scale,12*scale,10*scale,3*scale,col,248,1.0);
+      profileSmoothLine(frame,cx-6*scale,cy,cx-11*scale,cy-3*scale,2.2*scale,col,235);
+      profileSmoothLine(frame,cx+6*scale,cy,cx+11*scale,cy+3*scale,2.2*scale,col,235);
+      profileSmoothCircle(frame,cx-2*scale,cy-2*scale,1.2*scale,vanilla,210,true);
+    };
+    const gum=(cx,cy,col,scale=1)=>{
+      profileSmoothCircle(frame,cx,cy,6*scale,col,248,true);
+      profileSmoothCircle(frame,cx-1.8*scale,cy-1.8*scale,1.6*scale,vanilla,205,true);
+    };
+
+    // Four premium corner displays. Each corner has a clear cupcake + candy pairing.
+    cupcake(x+48,y+55,pink,lavender,lemon,1.15);
+    lollipop(x+76,y+38,lemon,1,0.92);
+    wrapped(x+31,y+83,mint,0.9);
+
+    cupcake(x+w-48,y+55,lavender,peach,pink,1.15);
+    lollipop(x+w-76,y+38,mint,-1,0.92);
+    gum(x+w-31,y+83,lemon,0.92);
+
+    cupcake(x+48,y+h-55,sky,pink,mint,1.15);
+    lollipop(x+76,y+h-38,peach,1,0.92);
+    gum(x+31,y+h-83,lavender,0.92);
+
+    cupcake(x+w-48,y+h-55,mint,lavender,sky,1.15);
+    lollipop(x+w-76,y+h-38,pink,-1,0.92);
+    wrapped(x+w-31,y+h-83,sky,0.9);
+
+    // Small bows at the four awning/pillar joins: premium detail without clutter.
+    const bow=(cx,cy,col)=>{
+      profileSmoothCircle(frame,cx-5,cy,5.0,col,240,true);
+      profileSmoothCircle(frame,cx+5,cy,5.0,col,240,true);
+      profileSmoothCircle(frame,cx,cy,2.3,vanilla,235,true);
+    };
+    bow(x+27,y+29,pink); bow(x+w-27,y+29,lavender);
+    bow(x+27,y+h-29,sky); bow(x+w-27,y+h-29,mint);
+
+    // Four moving sugar stars keep the frame animated while staying out of the text.
+    const corners=[[x+48,y+55],[x+w-48,y+55],[x+48,y+h-55],[x+w-48,y+h-55]];
+    corners.forEach(([cx,cy],i)=>{
+      const q=0.5+0.5*Math.sin(p2+i*1.57);
+      profileSmoothStar(frame,cx-7+q*4,cy-9-q,1.2+q*1.4,vanilla,135+Math.round(q*110));
+    });
   } else if(style==='champagne'){
+
+
+
     for(let i=0;i<7;i++){
       const cx=x+60+i*((w-120)/6);
       profileSmoothCircle(frame,cx,y+8,2.2,hi,190,true);
@@ -4115,9 +4578,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
 function drawProfileBadges(frame,badgeIds,phase=0){
   if(!Array.isArray(badgeIds)||!badgeIds.length) return;
   const ids=[...new Set(badgeIds.filter(id=>PROFILE_BADGES[id]))].slice(0,4);
-  const y=423;
-  const positions=[390,480,570,660];
-  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,38,phase+i*.13);
+  // Badges belong to the tree showcase shelf, not the achievement ribbon.
+  const y=450;
+  const positions=[145,180,215,250];
+  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
 }
 
 async function renderProfileDirectFrame(env,player,phase=0){
@@ -4125,56 +4589,102 @@ async function renderProfileDirectFrame(env,player,phase=0){
   const bg=/^#[0-9a-fA-F]{6}$/.test(player.profileColor||"")?player.profileColor:"#ffd9ef";
   const [br,bgG,bb]=hexRgb(bg);
   const scene=solidRGBA(width,height,bg);
-  /* Soft panel on the right, matching the original profile-card composition. */
-  profileBlendFill(scene,318,18,458,464,255,255,255,205);
-  profileBlendFill(scene,330,30,434,440,br,bgG,bb,55);
-  profileFill(scene,330,30,434,4,255,255,255,150);
-  profileFill(scene,330,466,434,4,255,255,255,150);
-  profileFill(scene,318,18,4,464,255,255,255,180);
-  profileFill(scene,772,18,4,464,255,255,255,180);
+  const ink=[48,35,55], muted=[112,92,120], white=[255,255,255];
+  const panel=profilePanelColors([br,bgG,bb]);
+  const panelBg=panel.panel, panelSoft=panel.panelSoft, panelBorder=panel.panelBorder, panelAccent=panel.panelAccent;
+
+  // PROFILE REDESIGN V7:
+  // Keep the proven 800x500 direct renderer, but make the composition feel like
+  // a premium collectible card: dedicated tree showcase + structured cosmetic
+  // plaque + four real stat cards. No Browser Rendering is introduced here.
+
+  // Outer card and left showcase.
+  profileBlendFill(scene,16,16,768,468,255,255,255,34);
+  profileSmoothRoundedRect(scene,16,16,768,468,22,white,120,1.1);
+  profileSmoothRoundedRect(scene,28,28,278,444,18,white,72,1.0);
+  profileBlendFill(scene,40,40,254,420,br,bgG,bb,34);
+  profileSmoothRoundedRect(scene,40,40,254,420,16,white,62,0.8);
+
+  // Soft spotlight behind the tree. It gives the artwork a deliberate display
+  // area without changing the actual tree asset.
+  profileSmoothCircle(scene,167,223,128,white,34,true);
+  profileSmoothCircle(scene,167,223,101,[255,235,250],28,true);
 
   const treeFile=getTreeImage(player);
   const tree=await getPngAsset(env,treeFile);
-  const treeLayer=containRGBA(tree,350,430);
-  alphaComposite(scene,treeLayer,10,65);
+  const treeLayer=containRGBA(tree,300,392);
+  alphaComposite(scene,treeLayer,18,68);
 
   const decorFile=getDecorationImage(player);
   if(decorFile){
-    try{const decor=await getPngAsset(env,decorFile);const dl=containRGBA(decor,135,135);alphaComposite(scene,dl,165,320);}catch(error){console.warn("Profile decoration skipped",error?.message||error);}
+    try{
+      const decor=await getPngAsset(env,decorFile);
+      const dl=containRGBA(decor,125,125);
+      alphaComposite(scene,dl,170,322);
+    }catch(error){console.warn("Profile decoration skipped",error?.message||error);}
   }
+
+  // Bottom showcase shelf: keep the tree area clean and give equipped badges
+  // their own home so they never cover the Titles Owned achievement ribbon.
+  profileBlendFill(scene,58,436,222,28,255,255,255,72);
+  profileSmoothRoundedRect(scene,58,436,222,28,14,white,82,0.7);
+  drawBitmapText(scene,"BADGES",68,443,1,[105,86,115],55);
+
   const effectId=profileEffectKey(player)&&NAME_EFFECTS[profileEffectKey(player)]?profileEffectKey(player):"";
   const titleId=player.equippedTitle&&SOLO_TITLES[player.equippedTitle]?player.equippedTitle:"";
   const title=titleId?SOLO_TITLES[titleId].name:"No Title";
   const effect=effectId?NAME_EFFECTS[effectId].name:"No Name Effect";
-  const ink=[42,32,48], accent=profileEffectColor(effectId);
+  const accent=profileEffectColor(effectId);
 
-  /* Card labels and values are drawn with a tiny embedded bitmap font so this path
-     needs no browser, websocket, font service, or external renderer. */
-  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),350,48,4,ink,390);
-  drawBitmapText(scene,"WEREWIVES PROFILE",350,86,2,[100,88,110],390);
-  profileBlendFill(scene,350,118,394,105,br,bgG,bb,70);
-  drawBitmapText(scene,"TITLE",372,132,2,[110,96,120],350);
-  /* Draw particles first so they never erase or cover title letters. */
+  // RIGHT SIDE: identity header.
+  profileSmoothRoundedRect(scene,326,28,446,66,18,white,115,1.0);
+  profileBlendFill(scene,340,40,418,2,255,255,255,135);
+  drawBitmapText(scene,profileSafeText(player.displayName||player.username||"Werewife"),348,46,4,ink,400);
+  drawBitmapText(scene,"WEREWIVES PROFILE",348,80,2,muted,400);
+
+  // TITLE / NAME EFFECT: every information bubble uses a lighter tint of the
+  // player's own profile color, so the card changes naturally with /panel color.
+  profileBlendFill(scene,326,104,446,116,panelBg[0],panelBg[1],panelBg[2],235);
+  profileSmoothRoundedRect(scene,326,104,446,116,18,panelBorder,220,1.0);
+  profileBlendFill(scene,338,116,422,92,panelSoft[0],panelSoft[1],panelSoft[2],225);
+  profileSmoothRoundedRect(scene,338,116,422,92,14,panelBorder,205,0.8);
+  drawBitmapText(scene,"TITLE",360,128,2,muted,390);
   drawProfileEffectParticles(scene,effectId,phase);
-  drawAnimatedProfileTitle(scene,title,372,158,3,effectId,phase,345);
-  drawBitmapText(scene,"NAME EFFECT",372,190,2,[110,96,120],350);
-  drawBitmapText(scene,effect,372,212,2,accent,350);
+  drawAnimatedProfileTitle(scene,title,360,151,3,effectId,phase,365);
+  profileBlendFill(scene,360,181,365,1,255,255,255,145);
+  drawBitmapText(scene,"NAME EFFECT",360,191,2,muted,180);
+  drawBitmapText(scene,effect,490,191,2,accent,240);
 
-  profileBlendFill(scene,350,250,394,145,255,255,255,100);
-  drawBitmapText(scene,"LEVEL",372,268,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(player.level||1)),372,290,3,ink,165);
-  drawBitmapText(scene,"SPARKLES",545,268,2,[110,96,120],165);
-  drawBitmapText(scene,Number(player.sparkles||0).toLocaleString(),545,290,3,ink,170);
-  drawBitmapText(scene,"TREE HEIGHT",372,335,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(getTreeHeight(player)||0))+" FT",372,357,3,ink,165);
-  drawBitmapText(scene,"SOLO WINS",545,335,2,[110,96,120],165);
-  drawBitmapText(scene,String(Number(player.soloWins||0)),545,357,3,ink,170);
-  drawBitmapText(scene,String(Number(player.titles?.length||0))+" TITLES OWNED",350,444,2,[100,88,110],390);
+  // FOUR STAT JEWELS: all four use the same lighter profile-color bubble.
+  const statCard=(x,y,w,h,label,value)=>{
+    profileBlendFill(scene,x,y,w,h,panelBg[0],panelBg[1],panelBg[2],240);
+    profileSmoothRoundedRect(scene,x,y,w,h,14,panelBorder,220,0.9);
+    profileBlendFill(scene,x+12,y+10,w-24,2,255,255,255,150);
+    profileSmoothCircle(scene,x+20,y+25,3.2,panelAccent,220,true);
+    drawBitmapText(scene,label,x+32,y+18,1.8,muted,Math.max(90,w-48));
+    drawBitmapText(scene,value,x+18,y+43,3,ink,Math.max(100,w-36));
+  };
+  statCard(326,242,214,70,"LEVEL",String(Number(player.level||1)));
+  statCard(558,242,214,70,"SPARKLES",Number(player.sparkles||0).toLocaleString());
+  statCard(326,320,214,70,"TREE HEIGHT",String(Number(getTreeHeight(player)||0))+" FT");
+  statCard(558,320,214,70,"SOLO WINS",String(Number(player.soloWins||0)));
+
+  // Titles owned uses the same color family so it reads as part of the profile
+  // instead of disappearing into the card background.
+  profileBlendFill(scene,326,400,446,48,panelBg[0],panelBg[1],panelBg[2],240);
+  profileSmoothRoundedRect(scene,326,400,446,48,18,panelBorder,220,0.9);
+  profileBlendFill(scene,340,409,34,26,panelSoft[0],panelSoft[1],panelSoft[2],235);
+  profileSmoothRoundedRect(scene,340,409,34,26,10,panelBorder,200,0.7);
+  // Keep the titles count completely unobstructed. The old decorative star sat
+  // directly behind the number and could look like a stray badge/spot in Discord.
+  drawBitmapText(scene,String(Number(player.titles?.length||0)),350,414,2,ink,55);
+  drawBitmapText(scene,"TITLES OWNED",388,409,2,muted,210);
+  drawBitmapText(scene,"ACHIEVEMENTS",388,428,1,muted,200);
+
   drawProfileBadges(scene,profileBadgeKeys(player),phase);
   drawProfileFrame(scene,profileFrameKey(player),phase);
   return rgbaToRgbPng(scene);
 }
-
 
 function drawBirthdayConfetti(frame, phase=0) {
   const pieces = [
@@ -5234,7 +5744,11 @@ function drawAnimatedExperimentalEffect(frame, phase=0) {
 }
 
 async function renderTreeDirectFallback(env, player) {
-  const width = 1024, height = 1024;
+  // CPU-safe render size: keep the same proportions as the known-good 1024px
+  // renderer, but use 768px so the Worker does substantially less pixel work.
+  // Discord scales the attached image normally; this does not change the tree
+  // layout or equipped cosmetics, only the raster workload.
+  const width = 768, height = 768;
   // Start with a safe color, then replace it with the player's ACTUAL
   // equipped background asset whenever the Worker can decode that image.
   // The previous fallback used only a flat color, which is why /tree showed
@@ -5253,8 +5767,9 @@ async function renderTreeDirectFallback(env, player) {
   // itself. It exists so /tree can NEVER be held hostage by Browser Rendering.
   try {
     const tree = await getPngAsset(env, getTreeImage(player));
-    const layer = containRGBA(tree, 922, 922);
-    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), 184);
+    const treeBox = Math.round(width * 0.9004);
+    const layer = containRGBA(tree, treeBox, treeBox);
+    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * 0.1797));
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
   }
@@ -5312,7 +5827,7 @@ async function renderTreeDirectFallback(env, player) {
     experimental_effect_animated: drawAnimatedExperimentalEffect
   };
   if (animatedEffectDrawers[animatedShopEffect]) {
-    const frames=[]; const frameCount=12; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=6; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)}; const phase=i/frameCount;
       animatedEffectDrawers[animatedShopEffect](frame,phase);
@@ -5322,7 +5837,7 @@ async function renderTreeDirectFallback(env, player) {
   }
   if (birthdayAnimatedEffect === "beans") {
     const frames=[];
-    const frameCount=12;
+    const frameCount=6;
     const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
@@ -5335,7 +5850,7 @@ async function renderTreeDirectFallback(env, player) {
     };
   }
   if (birthdayAnimatedEffect === "birthday_cupcake_chaos" || birthdayAnimatedEffect === "birthday_raccoon_party" || birthdayAnimatedEffect === "birthday_balloon_float" || birthdayAnimatedEffect === "birthday_pumpkin_sparkle") {
-    const frames=[]; const frameCount=8; const baseData=scene.data.slice();
+    const frames=[]; const frameCount=6; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
       const phase=i/frameCount;
@@ -5354,7 +5869,7 @@ async function renderTreeDirectFallback(env, player) {
     // the already-rasterized scene. This keeps /tree responsive and gives us a
     // real multi-frame GIF even when Browser Rendering is unavailable.
     const frames=[];
-    const frameCount=8;
+    const frameCount=6;
     const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
@@ -5367,6 +5882,8 @@ async function renderTreeDirectFallback(env, player) {
     };
   }
 
+  // Static PNG encoding is now performed at 768x768 rather than 1024x1024,
+  // avoiding the CPU-limit failure while keeping the full scene/cosmetics.
   return { bytes: rgbaToRgbPng(scene), animated: false };
 }
 
@@ -9887,7 +10404,7 @@ async function experimentCaptureOriginalMessage(env,interaction,game){
 }
 
 async function experimentSendPublicInitial(env,interaction,content,components){return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:4,data:{content,components}})});}
-async function experimentFinish(env,interaction,game,chosenDoor){const state=await getGuildState(env,interaction.guild_id),latest=state.experiment;if(!latest||latest.id!==game.id)return;const counts=experimentChoiceCounts(latest),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),resolved=leaders.length===1?leaders[0]:leaders[0];latest.status="finished";latest.chosenDoor=chosenDoor;latest.finishedAt=Date.now();latest.outcome=leaders.length>1&&!latest.tieBreaker?"tie":(resolved===latest.safeDoor?"success":"failure");await experimentRewardPlayers(env,latest,latest.outcome);const result=experimentOutcomeText(latest,chosenDoor);state.experiment=null;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,latest,{content:result,components:[]});return sendEphemeralFollowup(env,interaction,"🧪 The shared Experiment board has been updated for everyone. Your vote was locked.");}
+async function experimentFinish(env,interaction,game,chosenDoor){const state=await getGuildState(env,interaction.guild_id),latest=state.experiment;if(!latest||latest.id!==game.id)return;const counts=experimentChoiceCounts(latest),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),resolved=leaders.length===1?leaders[0]:leaders[0];latest.status="finished";latest.chosenDoor=chosenDoor;latest.finishedAt=Date.now();latest.outcome=leaders.length>1&&!latest.tieBreaker?"tie":(resolved===latest.safeDoor?"success":"failure");await experimentRewardPlayers(env,latest,latest.outcome);const result=experimentOutcomeText(latest,chosenDoor);const update={content:result,components:[]};let updated=await experimentEditPublic(env,latest,update);if(!updated&&interaction){const fallback=await editOriginalResponse(env,interaction,update);updated=fallback?.ok;}state.experiment=null;await saveGuildState(env,interaction.guild_id,state);return sendEphemeralFollowup(env,interaction,updated?"🧪 The Experiment is over! The shared board now shows the results.":"🧪 The Experiment ended, but Discord did not let me refresh the shared board. The game state is cleared and you can start a new one.");}
 async function experimentRolePowerMenu(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Experiment is no longer active.");const p=user&&game.players?.[user.id];if(!p)return sendEphemeralFollowup(env,interaction,"❌ You are not a player in this Experiment.");if(p.powerUsed)return sendEphemeralFollowup(env,interaction,"🎭 Your role power has already been used this Experiment.");const r=p.secret?.id;if(r==="guardian")return sendEphemeralFollowup(env,interaction,"🛡️ **Guardian Power**\nChoose the door you want to reserve as the tie-break.",[row(button("A",`experiment:rolepick:${game.id}:guardian:A`,1),button("B",`experiment:rolepick:${game.id}:guardian:B`,1),button("C",`experiment:rolepick:${game.id}:guardian:C`,1))]);if(r==="analyst")return sendEphemeralFollowup(env,interaction,"🧠 **Analyst Power**\nChoose one door to inspect.",[row(button("Inspect A",`experiment:rolepick:${game.id}:analyst:A`,1),button("Inspect B",`experiment:rolepick:${game.id}:analyst:B`,1),button("Inspect C",`experiment:rolepick:${game.id}:analyst:C`,1))]);return handleExperimentRolePower(env,interaction,gameId,null);}
 async function handleExperimentRolePower(env,interaction,gameId,pick){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendEphemeralFollowup(env,interaction,"❌ That Experiment is no longer active.");const p=user&&game.players?.[user.id];if(!p)return sendEphemeralFollowup(env,interaction,"❌ You are not a player in this Experiment.");if(p.powerUsed)return sendEphemeralFollowup(env,interaction,"🎭 Your role power has already been used.");const role=p.secret?.id,others=experimentOtherPlayers(game,user.id);let msg="";
   if(role==="analyst"){const door=pick||experimentRandomChoice();const safe=door===game.safeDoor;msg=`You inspected ${experimentDoorLabel(door)}. System confidence: **${safe?"PROMISING":"RISKY"}**. This is a cautious reading, not a guarantee.`;}
@@ -9909,7 +10426,7 @@ async function handleExperimentJoin(env,interaction,gameId){if(await checkGamePu
 async function handleExperimentEnd(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(!user|| (user.id!==game.hostId && user.id!==env.OWNER_ID))return sendText(env,interaction,"❌ Only the Experiment host or bot owner can end this Experiment.");state.experiment=null;await saveGuildState(env,interaction.guild_id,state);const wasLobby=game.status==="lobby";await experimentEditPublic(env,game,{content:wasLobby?"🧹 The Experiment lobby was ended. You can now create a new Experiment.":"🛑 The active Experiment was ended. No Experiment rewards were issued.",components:[]});return sendEphemeralFollowup(env,interaction,wasLobby?"🧹 Abandoned Experiment lobby cleared.":"🛑 Experiment ended. No rewards were issued.");}
 async function handleExperimentLeave(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You're not in this Experiment.");if(game.status!=="lobby")return sendText(env,interaction,"❌ The Experiment has already started; you cannot leave during the experiment.");delete game.players[user.id];const remaining=experimentPlayers(game);if(!remaining.length){state.experiment=null;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:"🧪 The Experiment lobby closed because everyone left.",components:[]});return sendEphemeralFollowup(env,interaction,"🧹 Lobby closed.");}if(game.hostId===user.id)game.hostId=remaining[0].id;await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:experimentLobbyText(game),components:experimentLobbyComponents(game)});return sendEphemeralFollowup(env,interaction,"🚪 You left the Experiment lobby.");}
 async function handleExperimentStart(env,interaction,gameId){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="lobby")return sendText(env,interaction,"❌ That Experiment lobby is no longer available.");if(!user||user.id!==game.hostId)return sendText(env,interaction,"❌ Only the Experiment host can start it.");const players=experimentPlayers(game);if(players.length<EXPERIMENT_MIN_PLAYERS)return sendText(env,interaction,`❌ You need at least **${EXPERIMENT_MIN_PLAYERS} players** to start.`);game.safeDoor=experimentRandomChoice();game.doors=experimentBuildDoors(game.safeDoor);game.scenarioTag=Math.random().toString(36).slice(2,8).toUpperCase();game.flavor=EXPERIMENT_FLAVORS[randomInt(0,EXPERIMENT_FLAVORS.length-1)];players.forEach(p=>{p.clue=experimentTruthClue(game);p.vote=null;p.dmDelivered=false;p.bonusOffer=false;p.powerUsed=false;p.roleResult="";});experimentAssignRoles(game);const sab=game.players[game.saboteurId];if(sab)sab.clue=experimentSaboteurClue(game);experimentApplyTwist(game);game.status="playing";game.phase="discussion";game.startedAt=Date.now();await saveGuildState(env,interaction.guild_id,state);await experimentSendClues(env,game);await saveGuildState(env,interaction.guild_id,state);await experimentEditPublic(env,game,{content:experimentStartText(game),components:experimentActionComponents(game)});return sendEphemeralFollowup(env,interaction,"🧪 The Experiment has started. Your private file has been sent.");}
-async function handleExperimentVote(env,interaction,gameId,door){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Experiment is no longer accepting votes.");if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You are not a player in this Experiment.");if(!["A","B","C"].includes(door))return sendText(env,interaction,"❌ Invalid option.");if(game.players[user.id].vote)return sendEphemeralFollowup(env,interaction,`🔒 Your choice is already locked on **Option ${game.players[user.id].vote}**.`);game.players[user.id].vote=door;game.players[user.id].votedAt=Date.now();const total=experimentPlayers(game).length,voted=experimentPlayers(game).filter(p=>p.vote).length;await saveGuildState(env,interaction.guild_id,state);if(voted>=total){const counts=experimentChoiceCounts(game),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),chosen=leaders[0];return experimentFinish(env,interaction,game,chosen);}await experimentEditPublic(env,game,{content:experimentPublicText(game,`🗳️ **${voted}/${total}** votes locked.`),components:experimentActionComponents(game)});return sendEphemeralFollowup(env,interaction,`🔒 **Choice locked:** ${experimentDoorLabel(door)}\n\nYour choice is private. **${voted}/${total}** players have voted.`);}
+async function handleExperimentVote(env,interaction,gameId,door){if(await checkGamePunishment(env,interaction))return;const state=await getGuildState(env,interaction.guild_id),game=state.experiment,user=getUserFromInteraction(interaction);if(!game||game.id!==gameId||game.status!=="playing")return sendText(env,interaction,"❌ That Experiment is no longer accepting votes.");if(!user||!game.players?.[user.id])return sendText(env,interaction,"❌ You are not a player in this Experiment.");if(!["A","B","C"].includes(door))return sendText(env,interaction,"❌ Invalid option.");if(game.players[user.id].vote)return sendEphemeralFollowup(env,interaction,`🔒 Your choice is already locked on **Option ${game.players[user.id].vote}**.`);game.players[user.id].vote=door;game.players[user.id].votedAt=Date.now();const total=experimentPlayers(game).length,voted=experimentPlayers(game).filter(p=>p.vote).length;await saveGuildState(env,interaction.guild_id,state);if(voted>=total){const counts=experimentChoiceCounts(game),max=Math.max(counts.A,counts.B,counts.C),leaders=["A","B","C"].filter(d=>counts[d]===max),chosen=leaders[0];return experimentFinish(env,interaction,game,chosen);}const update={content:experimentPublicText(game,`🗳️ **${voted}/${total}** votes locked.`),components:experimentActionComponents(game)};let updated=await experimentEditPublic(env,game,update);if(!updated){const fallback=await editOriginalResponse(env,interaction,update);updated=fallback?.ok;}return sendEphemeralFollowup(env,interaction,`🔒 **Choice locked:** ${experimentDoorLabel(door)}\n\nYour choice is private. **${voted}/${total}** players have voted.`);}
 async function handleExperimentStatus(env,interaction,gameId){const state=await getGuildState(env,interaction.guild_id),game=state.experiment;if(!game||game.id!==gameId)return sendText(env,interaction,"❌ That Experiment no longer exists.");if(game.status==="lobby")return sendEphemeralFollowup(env,interaction,experimentLobbyText(game),experimentLobbyComponents(game));const counts=experimentChoiceCounts(game),voted=experimentPlayers(game).filter(p=>p.vote).length;return sendEphemeralFollowup(env,interaction,experimentPublicText(game,`🗳️ **${voted}/${experimentPlayers(game).length}** votes locked.`),experimentActionComponents(game));}
 async function handleExperimentCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"create";if(sub==="create")return handleExperimentCreate(env,interaction);const state=await getGuildState(env,interaction.guild_id),game=state.experiment;if(sub==="status"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now. Use `/experiment create` to start one.");return handleExperimentStatus(env,interaction,game.id);}if(sub==="leave"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentLeave(env,interaction,game.id);}if(sub==="end"){if(!game)return sendText(env,interaction,"🧪 There is no active Experiment right now.");return handleExperimentEnd(env,interaction,game.id);}if(sub==="start"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentStart(env,interaction,game.id);}if(sub==="join"){if(!game)return sendText(env,interaction,"🧪 There is no Experiment lobby right now.");return handleExperimentJoin(env,interaction,game.id);}return handleExperimentCreate(env,interaction);}
 
@@ -16387,12 +16904,20 @@ async function handleIslandJoin(env, interaction) {
   const game=state.island;
   if (!game || game.status !== "lobby") return sendText(env, interaction, "❌ There isn't an open Chaos Island lobby right now.");
   const user=getUserFromInteraction(interaction);
-  const player=await getPlayer(env, user.id);
-  if (game.players[user.id]) return sendText(env, interaction, "🏝️ You're already on the island!", islandLobbyComponents(game));
+  if (!user) return sendEphemeralFollowup(env, interaction, "❌ I couldn't identify you.");
+
+  /* Double-clicks must NEVER edit the public lobby or overwrite game state.
+     Answer the second click privately instead. */
+  if (game.players[user.id]) {
+    await deferInteraction(env, interaction, { ephemeral: true });
+    return sendEphemeralFollowup(env, interaction, "🏝️ You're already on the island! Your second click was ignored.");
+  }
+
   if (Object.keys(game.players).length >= ISLAND_MAX_PLAYERS) return sendText(env, interaction, "❌ The island is full! 10 players maximum.");
+  const player=await getPlayer(env, user.id);
   game.players[user.id]={id:user.id,username:user.username,displayName:user.global_name || user.username,hearts:3,alive:true,choice:null,points:0,sparklesEarned:0,equippedTitle:player.equippedTitle || ""};
-  const joiningPunishment = await refreshPunishmentState(env, player);
-  
+  await refreshPunishmentState(env, player);
+
   await islandSave(env, game);
   await acknowledge(env, interaction);
   await islandPublicUpdate(env, interaction, islandLobbyText(game), islandLobbyComponents(game), game);
@@ -17533,8 +18058,8 @@ async function handleTitleUnequip(env,interaction){
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
-const HEIST_NIGHT_DURATION = 60 * 1000;
-const HEIST_VOTE_DURATION = 3 * 60 * 1000;
+const HEIST_NIGHT_DURATION = 40 * 1000;
+const HEIST_VOTE_DURATION = 40 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
 const HEIST_STEAL_MAX = 1500;
@@ -18317,7 +18842,7 @@ async function startHeistNight(
     `💬 The heist channel stays open — use the private buttons for secret actions.\n\n` +
     `Everyone has a secret role. Perform your action using the private buttons below.\n\n` +
     `💰 Vault: **${game.vault} ✨**\n` +
-    `⏳ Night ends when everyone acts or the timer expires.`;
+    `⏳ Night lasts **40 seconds** and ends immediately when everyone alive submits an action.`;
 
   await heistSendPublic(
     env,
@@ -19971,9 +20496,29 @@ async function finishHeist(
   game.status = "ended";
 }
 
+async function getKnownGuildIds(env) {
+  const ids = new Set();
+  try {
+    let cursor = undefined;
+    do {
+      const page = await env.TREE_DATA.list({ prefix: "guild:", limit: 1000, cursor });
+      for (const key of page.keys || []) {
+        const id = String(key.name || "").slice("guild:".length);
+        if (id) ids.add(id);
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+  } catch (error) {
+    console.error("getKnownGuildIds failed:", error);
+  }
+  return [...ids];
+}
+
 async function processHeistTimers(
   env
 ) {
+  // Phase deadlines are authoritative. If the scheduled trigger runs late,
+  // the first pass after the deadline resolves the phase immediately.
   const guildIds =
     await getKnownGuildIds(env);
 
