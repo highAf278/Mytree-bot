@@ -1051,7 +1051,7 @@ async function renderAnimatedProfile(env, player) {
     await page.setContent(profileCardHTML(player,0),{waitUntil:"load"});
     await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=r;img.onerror=r;})))});
     const frames=[];
-    const frameCount=8;
+    const frameCount=6;
     for(let i=0;i<frameCount;i++){
       const phase=i/frameCount;
       await page.evaluate((html)=>{document.open();document.write(html);document.close();}, profileCardHTML(player,phase));
@@ -1251,7 +1251,7 @@ async function encodeStaticPlusTransparentGIF(staticPng,overlayPngs,width,height
 
 async function renderProfileDirectAnimated(env,player){
   const frames=[];
-  const frameCount=8;
+  const frameCount=6;
   for(let i=0;i<frameCount;i++) {
     const phase=i/frameCount;
     frames.push(await renderProfileDirectFrame(env,player,phase));
@@ -4158,90 +4158,79 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webShadow,190,2.0);
     profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,205,1.1);
 
-    // Draw a large, irregular corner web. These are intentionally bigger than
-    // the side webbing so the corners feel like the anchors of one continuous web.
+    // Draw large, organic corner webs. Kept compact enough for direct Worker rendering.
     const webPatch=(cx,cy,mirrorX,mirrorY)=>{
-      const rays=9;
-      const rings=[10,20,31,43,55];
-      const angOffset=(mirrorX?0.08:-0.08)+(mirrorY?0.05:-0.03);
+      const rays=8;
+      const rings=[11,23,36,49];
+      const angOffset=(mirrorX?0.10:-0.10)+(mirrorY?0.05:-0.03);
       for(let rIndex=0;rIndex<rings.length;rIndex++){
         const r=rings[rIndex];
         let px=cx+Math.cos(angOffset)*r;
         let py=cy+Math.sin(angOffset)*r;
         for(let j=1;j<=rays;j++){
           const a=angOffset+(Math.PI*2*j/rays);
-          const rr=r*(0.94+0.045*Math.sin(j*1.8+rIndex*1.4));
-          const nx=cx+Math.cos(a)*rr;
-          const ny=cy+Math.sin(a)*rr;
-          profileSmoothLine(frame,px,py,nx,ny,1.0,silkHi,160-rIndex*13);
+          const rr=r*(0.96+0.035*Math.sin(j*1.7+rIndex));
+          const nx=cx+Math.cos(a)*rr, ny=cy+Math.sin(a)*rr;
+          profileSmoothLine(frame,px,py,nx,ny,0.95,silkHi,150-rIndex*12);
           px=nx; py=ny;
         }
       }
       for(let i=0;i<rays;i++){
         const a=angOffset+(Math.PI*2*i/rays);
-        const mx=cx+Math.cos(a)*27;
-        const my=cy+Math.sin(a)*27;
-        const ex=cx+Math.cos(a)*55;
-        const ey=cy+Math.sin(a)*55;
-        profileSmoothLine(frame,cx,cy,mx,my,1.1,silkHi,170);
-        profileSmoothLine(frame,mx,my,ex,ey,0.9,silkHi,150);
+        profileSmoothLine(frame,cx,cy,cx+Math.cos(a)*49,cy+Math.sin(a)*49,1.0,silkHi,160);
       }
-      profileSmoothCircle(frame,cx,cy,3.8,webShadow,220,true);
+      profileSmoothCircle(frame,cx,cy,3.5,webShadow,220,true);
     };
 
-    // Large corner webs.
-    webPatch(x+58,y+58,false,false);
-    webPatch(x+w-58,y+58,true,false);
-    webPatch(x+58,y+h-58,false,true);
-    webPatch(x+w-58,y+h-58,true,true);
+    webPatch(x+54,y+54,false,false);
+    webPatch(x+w-54,y+54,true,false);
+    webPatch(x+54,y+h-54,false,true);
+    webPatch(x+w-54,y+h-54,true,true);
 
-    // Real webbing runs along the sides: curved cross-strands plus short
-    // connector strands. This is web structure, not a single straight line.
+    // Real webbing follows each side in short curved bands. Fewer segments keep
+    // the profile renderer comfortably inside the Worker CPU budget.
     const edgeWebH=(x1,x2,yy,flip)=>{
-      const rows=[0,10,20,30];
+      const rows=[0,14,28];
       rows.forEach((off,row)=>{
         const y0=yy+(flip?-off:off);
-        let px=x1, py=y0;
-        const pieces=18;
+        let px=x1,py=y0;
+        const pieces=10;
         for(let i=1;i<=pieces;i++){
           const t=i/pieces;
           const nx=x1+(x2-x1)*t;
-          const bow=Math.sin(t*Math.PI)*((row%2===0)?2.8:-2.2);
-          const ny=y0+bow;
-          profileSmoothLine(frame,px,py,nx,ny,0.85,silkHi,125-row*10);
-          px=nx; py=ny;
+          const ny=y0+Math.sin(t*Math.PI)*((row%2===0)?2.5:-1.8);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,120-row*9);
+          px=nx;py=ny;
         }
       });
-      for(let i=1;i<9;i++){
-        const t=i/9;
+      for(let i=1;i<6;i++){
+        const t=i/6;
         const cx=x1+(x2-x1)*t;
-        profileSmoothLine(frame,cx,yy,cx,yy+(flip?-30:30),0.7,silkHi,105);
+        profileSmoothLine(frame,cx,yy,cx,yy+(flip?-28:28),0.75,silkHi,100);
       }
     };
 
     const edgeWebV=(y1,y2,xx,flip)=>{
-      const cols=[0,10,20,30];
+      const cols=[0,14,28];
       cols.forEach((off,col)=>{
         const x0=xx+(flip?-off:off);
-        let px=x0, py=y1;
-        const pieces=16;
+        let px=x0,py=y1;
+        const pieces=9;
         for(let i=1;i<=pieces;i++){
           const t=i/pieces;
           const ny=y1+(y2-y1)*t;
-          const bow=Math.sin(t*Math.PI)*((col%2===0)?2.8:-2.2);
-          const nx=x0+bow;
-          profileSmoothLine(frame,px,py,nx,ny,0.85,silkHi,125-col*10);
-          px=nx; py=ny;
+          const nx=x0+Math.sin(t*Math.PI)*((col%2===0)?2.5:-1.8);
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,120-col*9);
+          px=nx;py=ny;
         }
       });
-      for(let i=1;i<8;i++){
-        const t=i/8;
+      for(let i=1;i<6;i++){
+        const t=i/6;
         const cy=y1+(y2-y1)*t;
-        profileSmoothLine(frame,xx,cy,xx+(flip?-30:30),cy,0.7,silkHi,105);
+        profileSmoothLine(frame,xx,cy,xx+(flip?-28:28),cy,0.75,silkHi,100);
       }
     };
 
-    // Short side-web panels leave breathing room around the profile content.
     edgeWebH(x+62,x+w-62,y+20,false);
     edgeWebH(x+62,x+w-62,y+h-20,true);
     edgeWebV(y+62,y+h-62,x+20,false);
