@@ -4166,16 +4166,17 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothCircle(frame,x+sx,y+sy,Math.max(.7,r*.18),goldHi,235,true);
     });
 
-    // Two large, unmistakable 5-point gold stars. They sit in empty frame space
-    // and have no crossing lines, so they read as stars instead of ornaments.
+    // Two HUGE focal stars. They are larger than the ordinary stars but remain
+    // crisp five-point stars, with no decorative connector lines crossing them.
+    // Their positions stay in empty frame-only space.
     const focalStars=[
-      [x+286,y+22,8.8],
-      [x+405,y+h-22,9.6]
+      [x+292,y+24,12.8],
+      [x+w-350,y+h-25,13.6]
     ];
     focalStars.forEach(([cx,cy,r],i)=>{
-      const pulse=.96+.06*Math.max(0,Math.sin(p2+i*1.8));
-      profileSmoothStar(frame,cx,cy,r*pulse,goldHi,250);
-      profileSmoothCircle(frame,cx,cy,r*.14,gold,245,true);
+      const pulse=.97+.05*Math.max(0,Math.sin(p2+i*1.8));
+      profileSmoothStar(frame,cx,cy,r*pulse,goldHi,255);
+      profileSmoothCircle(frame,cx,cy,r*.12,gold,250,true);
     });
 
     // Crescent moon in the upper-right.
@@ -4184,29 +4185,33 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothCircle(frame,mx+6,my-5,13,night,255,true);
     profileSmoothCircle(frame,mx-5,my-5,2.0,goldHi,215,true);
 
-    // Detached shooting stars: a larger gold star head, a generous empty gap,
-    // then a short thick-to-thin tapered tail. The gap is intentionally obvious.
+    // Shooting stars: BIG, unmistakable gold star head, then a clearly visible
+    // empty gap, followed by a compact thick-to-thin comet tail. The head is
+    // intentionally separated from the trail so it cannot read as a wand.
     const comet=(t,yy,dir,scale,phaseOffset=0)=>{
-      const cx=x+55+t*(w-110);
-      const cy=y+yy+Math.sin(p2+phaseOffset)*2.0;
-      const head=5.8*scale;
-      const gap=18*scale;
-      const tail=46*scale;
-      profileSmoothStar(frame,cx,cy,head,goldHi,250);
-      profileSmoothCircle(frame,cx,cy,1.15*scale,gold,245,true);
-      const segments=9;
+      const cx=x+58+t*(w-116);
+      const cy=y+yy+Math.sin(p2+phaseOffset)*2.2;
+      const head=7.2*scale;
+      const gap=22*scale;
+      const tail=34*scale;
+      profileSmoothStar(frame,cx,cy,head,goldHi,255);
+      profileSmoothCircle(frame,cx,cy,1.35*scale,gold,250,true);
+      const segments=7;
       for(let j=0;j<segments;j++){
         const u=j/segments, v=(j+1)/segments;
         const len1=gap+u*tail, len2=gap+v*tail;
-        const px=cx-dir*len1, py=cy+u*tail*.42;
-        const qx=cx-dir*len2, qy=cy+v*tail*.42;
-        const width=(4.2-u*3.55)*scale;
-        const alpha=Math.round(205-u*120);
+        const px=cx-dir*len1, py=cy+u*tail*.48;
+        const qx=cx-dir*len2, qy=cy+v*tail*.48;
+        const width=(5.4-u*4.8)*scale;
+        const alpha=Math.round(220-u*145);
         profileSmoothLine(frame,px,py,qx,qy,width,gold,alpha);
       }
+      // Tiny glow just behind the head reinforces the sense of motion without
+      // connecting the star to the tail.
+      profileSmoothCircle(frame,cx-dir*(gap*.58),cy+gap*.18,1.5*scale,goldHi,75,true);
     };
-    comet((phase*.24)%1,27,1,1.15,0.0);
-    comet((phase*.19+.53)%1,443,-1,1.05,2.4);
+    comet((phase*.24)%1,29,1,1.25,0.0);
+    comet((phase*.19+.53)%1,438,-1,1.18,2.4);
 
     // Four restrained corner sparkles, separate from the moving meteors.
     [[x+34,y+52],[x+w-34,y+52],[x+34,y+h-52],[x+w-34,y+h-52]].forEach(([cx,cy],i)=>{
