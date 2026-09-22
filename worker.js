@@ -4293,47 +4293,82 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothStar(frame,cx,cy,1.7*q,silkHi,140+Math.round(q*70));
     });
   } else if(style==='gothic'){
-    // GOTHIC LACE: delicate black/plum lace trim only. The profile composition,
-    // /panel color, adaptive information bubbles, tree, panda, and stat cards
-    // are intentionally untouched; this branch draws only the cosmetic frame.
-    const lace=[54,34,66], laceHi=[220,185,230], laceSoft=[150,105,165];
-    profileSmoothRoundedRect(frame,x,y,w,h,18,lace,245,3.2);
-    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,laceSoft,205,1.0);
+    // GOTHIC LACE — Discord-first construction.
+    // The lace is intentionally dark, thick, and repetitive enough to survive
+    // Discord's PNG/GIF preview scaling.  It is an OPEN LACE TRIM, not a
+    // geometric border, and it stays entirely inside the cosmetic frame zone.
+    const laceBlack=[24,18,28], laceDeep=[43,27,48];
+    const laceHi=[158,128,165], laceSoft=[205,182,210];
 
-    // Repeating scalloped lace edge: small arches plus hanging points, kept
-    // narrow so it reads as lace rather than a second border.
-    const topBottom=(yy,flip)=>{
-      const left=x+24,right=x+w-24,step=30;
-      for(let cx=left;cx<=right;cx+=step){
-        const r=10;
-        const sy=flip ? yy-2 : yy+2;
-        profileSmoothLine(frame,cx-r,sy,cx,yy+(flip?7:-7),1.2,laceHi,185);
-        profileSmoothLine(frame,cx,yy+(flip?7:-7),cx+r,sy,1.2,laceHi,185);
-        profileSmoothLine(frame,cx-r,sy,cx+r,sy,1,lace,190);
-        profileSmoothCircle(frame,cx,yy+(flip?9:-9),1.5,laceSoft,190,true);
-      }
-    };
-    const leftRight=(xx,flip)=>{
-      const top=y+24,bottom=y+h-24,step=30;
-      for(let cy=top;cy<=bottom;cy+=step){
-        const r=10;
-        const sx=flip ? xx-2 : xx+2;
-        profileSmoothLine(frame,sx,cy-r,xx+(flip?7:-7),cy,1.2,laceHi,185);
-        profileSmoothLine(frame,xx+(flip?7:-7),cy,sx,cy+r,1.2,laceHi,185);
-        profileSmoothLine(frame,sx,cy-r,sx,cy+r,1,lace,190);
-        profileSmoothCircle(frame,xx+(flip?9:-9),cy,1.5,laceSoft,190,true);
-      }
-    };
-    topBottom(y+8,false); topBottom(y+h-8,true);
-    leftRight(x+8,false); leftRight(x+w-8,true);
+    // Dark stitched foundation: keeps the frame unmistakably black at thumbnail size.
+    profileSmoothRoundedRect(frame,x+1,y+1,w-2,h-2,18,laceBlack,235,5.2);
+    profileSmoothRoundedRect(frame,x+6,y+6,w-12,h-12,14,laceDeep,235,2.2);
 
-    // Tiny lace medallions at the four corners.
-    const corners=[[x+24,y+24],[x+w-24,y+24],[x+24,y+h-24],[x+w-24,y+h-24]];
-    for(const [cx,cy] of corners){
-      profileSmoothRing(frame,cx,cy,8,laceHi,190,1.1);
-      profileSmoothRing(frame,cx,cy,4,laceSoft,190,1.0);
-      profileSmoothCircle(frame,cx,cy,1.6,laceHi,210,true);
+    // Small open lace loop used around all four sides.  The pale inner opening
+    // is deliberately restrained; it reads as punched lace instead of dots.
+    const loopH=(cx,cy,flip=1)=>{
+      profileSmoothCircle(frame,cx,cy,7.2,laceBlack,238,true);
+      profileSmoothCircle(frame,cx,cy+flip*0.8,4.1,[188,162,194],185,true);
+      profileSmoothCircle(frame,cx,cy+flip*0.8,2.0,laceBlack,230,true);
+      profileSmoothLine(frame,cx-7,cy+flip*4.5,cx,cy+flip*8.2,1.8,laceBlack,235);
+      profileSmoothLine(frame,cx,cy+flip*8.2,cx+7,cy+flip*4.5,1.8,laceBlack,235);
+    };
+    const loopV=(cx,cy,flip=1)=>{
+      profileSmoothCircle(frame,cx,cy,7.2,laceBlack,238,true);
+      profileSmoothCircle(frame,cx+flip*0.8,cy,4.1,[188,162,194],185,true);
+      profileSmoothCircle(frame,cx+flip*0.8,cy,2.0,laceBlack,230,true);
+      profileSmoothLine(frame,cx+flip*4.5,cy-7,cx+flip*8.2,cy,1.8,laceBlack,235);
+      profileSmoothLine(frame,cx+flip*8.2,cy,cx+flip*4.5,cy+7,1.8,laceBlack,235);
+    };
+
+    // Continuous Victorian scalloped trim.  The spacing is intentionally wide
+    // enough to remain distinct after Discord scales the 800x500 render down.
+    const step=30;
+    for(let cx=x+25;cx<=x+w-25;cx+=step){
+      loopH(cx,y+10,1);
+      loopH(cx,y+h-10,-1);
     }
+    for(let cy=y+25;cy<=y+h-25;cy+=step){
+      loopV(x+10,cy,1);
+      loopV(x+w-10,cy,-1);
+    }
+
+    // Fine woven thread between the larger loops: three small diagonal stitches
+    // per repeat, giving the trim a lace/fabric feel rather than a chain of dots.
+    for(let cx=x+10;cx<=x+w-40;cx+=step){
+      profileSmoothLine(frame,cx,y+5,cx+10,y+15,1.1,laceHi,190);
+      profileSmoothLine(frame,cx+10,y+15,cx+20,y+5,1.1,laceHi,190);
+      profileSmoothLine(frame,cx,y+h-5,cx+10,y+h-15,1.1,laceHi,190);
+      profileSmoothLine(frame,cx+10,y+h-15,cx+20,y+h-5,1.1,laceHi,190);
+    }
+    for(let cy=y+10;cy<=y+h-40;cy+=step){
+      profileSmoothLine(frame,x+5,cy,x+15,cy+10,1.1,laceHi,190);
+      profileSmoothLine(frame,x+15,cy+10,x+5,cy+20,1.1,laceHi,190);
+      profileSmoothLine(frame,x+w-5,cy,x+w-15,cy+10,1.1,laceHi,190);
+      profileSmoothLine(frame,x+w-15,cy+10,x+w-5,cy+20,1.1,laceHi,190);
+    }
+
+    // Four compact floral lace corner medallions.  These are fabric ornaments,
+    // not jewels or spiderwebs, and remain inside the rounded corners.
+    const laceCorner=(cx,cy)=>{
+      profileSmoothCircle(frame,cx,cy,10.5,laceBlack,235,false,2.2);
+      for(let i=0;i<4;i++){
+        const a=i*Math.PI/2;
+        profileSmoothPetal(frame,cx+Math.cos(a)*5,cy+Math.sin(a)*5,4.5,2.5,laceBlack,235,a);
+      }
+      profileSmoothCircle(frame,cx,cy,2.2,laceSoft,190,true);
+      profileSmoothCircle(frame,cx,cy,0.9,laceBlack,235,true);
+    };
+    laceCorner(x+19,y+19);
+    laceCorner(x+w-19,y+19);
+    laceCorner(x+19,y+h-19);
+    laceCorner(x+w-19,y+h-19);
+
+    // Tiny thread highlights, kept sparse so the lace remains BLACK rather than lavender.
+    profileSmoothLine(frame,x+30,y+5,x+w-30,y+5,0.9,laceSoft,125);
+    profileSmoothLine(frame,x+30,y+h-5,x+w-30,y+h-5,0.9,laceSoft,105);
+    profileSmoothLine(frame,x+5,y+30,x+5,y+h-30,0.9,laceSoft,105);
+    profileSmoothLine(frame,x+w-5,y+30,x+w-5,y+h-30,0.9,laceSoft,105);
   } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
     profileCrown(frame,x+w-31,y+12,5,hi);
