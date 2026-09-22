@@ -4133,126 +4133,96 @@ function drawProfileFrame(frame, frameId, phase=0){
         glitterStar(cx,cy,2.2+seed(i,63)*1.8,[255,245,252],i*.9);
       }
     }
-  } else if(style==='starfall'||style==='purple'){
+  } else if(style==='starfall'){
+    // STARFALL PREMIUM: a dreamy midnight sky wrapped around the profile.
+    // The cosmic treatment lives in the frame margin only, so profile text,
+    // stats, tree, and badges remain completely unobstructed.
+    const night=[48,39,92], nightHi=[108,82,175];
+    const violet=[164,112,255], blue=[102,178,255], cyan=[133,224,255];
+    const pink=[255,151,220], gold=[255,221,120], white=[255,250,255];
+    const cosmic=[violet,blue,cyan,pink,gold];
+    const p2=phase*Math.PI*2;
+
+    // Deep-space casing gives Starfall a completely different identity from
+    // the lighter profile frames without filling the card itself.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,night,235,2.8);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,nightHi,190,1.0);
+    profileSmoothLine(frame,x+30,y+10,x+w-30,y+10,1.3,white,155);
+    profileSmoothLine(frame,x+30,y+h-10,x+w-30,y+h-10,1.1,violet,150);
+    profileSmoothLine(frame,x+10,y+30,x+10,y+h-30,1.0,blue,135);
+    profileSmoothLine(frame,x+w-10,y+30,x+w-10,y+h-30,1.0,pink,135);
+
+    // Fixed constellation stars: varied sizes and colors so it reads as a sky,
+    // not a row of identical dots.
+    const stars=[
+      [34,27,3.8,gold],[82,15,2.1,white],[138,29,2.7,cyan],[205,16,2.0,violet],
+      [274,27,3.0,pink],[344,14,2.2,white],[420,26,2.5,blue],[500,15,2.0,gold],
+      [574,28,3.2,cyan],[650,15,2.1,pink],[718,27,3.7,white],
+      [22,110,2.5,violet],[17,206,3.1,cyan],[24,300,2.0,gold],[19,390,3.0,pink],
+      [w-22,112,2.4,blue],[w-17,205,3.3,gold],[w-24,300,2.1,violet],[w-18,390,3.0,cyan],
+      [52,455,3.1,white],[125,470,2.0,pink],[205,458,2.7,gold],[286,472,2.2,cyan],
+      [380,458,3.2,violet],[470,471,2.0,white],[555,458,2.7,pink],[642,472,2.1,gold],[730,455,3.4,blue]
+    ];
+    stars.forEach(([sx,sy,r,c],i)=>{
+      const tw=0.78+0.28*Math.max(0,Math.sin(p2+i*1.37));
+      profileSmoothStar(frame,x+sx,y+sy,r*tw,c,185+Math.round(tw*65));
+      if(r>=3.0){
+        profileSmoothLine(frame,x+sx-r*1.9,y+sy,x+sx+r*1.9,y+sy,0.7,c,100);
+        profileSmoothLine(frame,x+sx,y+sy-r*1.9,x+sx,y+sy+r*1.9,0.7,c,100);
+      }
+    });
+
+    // Tiny constellations connect selected stars with whisper-thin trails.
+    const links=[
+      [[34,27],[82,15]],[[82,15],[138,29]],[[420,26],[500,15]],[[574,28],[650,15]],
+      [[22,110],[17,206]],[[w-22,112],[w-17,205]],[[52,455],[125,470]],[[555,458],[642,472]]
+    ];
+    links.forEach(([[ax,ay],[bx,by]],i)=>{
+      profileSmoothLine(frame,x+ax,y+ay,x+bx,y+by,0.65,cosmic[i%cosmic.length],90);
+    });
+
+    // Animated falling stars: short diagonal meteors travel only through the
+    // outer frame zone. Their positions wrap smoothly around the perimeter.
+    for(let i=0;i<7;i++){
+      const t=(phase*0.85+i/7)%1;
+      const sx=x+42+t*(w-84);
+      const sy=y+18+(i%2)*3;
+      const tail=10+(i%3)*5;
+      const yy=sy+Math.sin(p2+i*1.9)*2;
+      profileSmoothLine(frame,sx,yy,sx-tail,yy+tail*.58,1.5,cosmic[i%cosmic.length],195);
+      profileSmoothStar(frame,sx,yy,2.0+(i%2)*.8,white,215);
+    }
+    for(let i=0;i<4;i++){
+      const t=(phase*0.65+i/4+0.18)%1;
+      const sy=y+95+t*(h-190);
+      const sx=i%2===0?x+13:x+w-13;
+      const dir=i%2===0?1:-1;
+      profileSmoothLine(frame,sx,sy,sx+dir*10,sy-8,1.35,cosmic[(i+2)%cosmic.length],180);
+      profileSmoothStar(frame,sx,sy,1.8,white,205);
+    }
+
+    // A few soft shooting-star bursts anchor the corners without clutter.
+    const bursts=[[x+32,y+48],[x+w-32,y+48],[x+32,y+h-48],[x+w-32,y+h-48]];
+    bursts.forEach(([cx,cy],i)=>{
+      const pulse=0.75+0.3*Math.max(0,Math.sin(p2+i*1.57));
+      profileSmoothStar(frame,cx,cy,3.8*pulse,cosmic[i],210);
+      profileSmoothLine(frame,cx-6,cy,cx+6,cy,0.9,white,115);
+      profileSmoothLine(frame,cx,cy-6,cx,cy+6,0.9,white,115);
+    });
+  } else if(style==='purple'){
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
       sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
     }
     sparkle(x+10,y+h/2,2.4); sparkle(x+w-10,y+h/2,2.4);
   } else if(style==='rainbow'){
-    // RAINBOW DREAM — full dreamy sky scene, not colored border lines.
-    // The frame itself becomes a little cloud-and-rainbow dreamscape while
-    // keeping the profile information completely unobstructed.
-    const red=[255,92,120], orange=[255,166,82], yellow=[255,224,92];
-    const green=[105,220,176], blue=[105,190,255], violet=[174,125,255];
-    const cloud=[255,255,255], cloudHi=[255,248,255], cloudShade=[214,198,236], cloudGlow=[255,232,250];
-    const night=[150,108,205];
-    const p2=phase*Math.PI*2;
-
-    // Soft rainbow ribbons hugging the outside of the profile instead of
-    // sitting on top of it like six colored wires.
-    const arc=(cx,cy,r,rx,ry,cols,alpha)=>{
-      const steps=34;
-      for(let k=0;k<cols.length;k++){
-        const rr=r+k*5.2;
-        let px=null,py=null;
-        for(let i=0;i<=steps;i++){
-          const t=Math.PI + (Math.PI*i/steps);
-          const xx=cx+Math.cos(t)*Math.max(20,rr*rx);
-          const yy=cy+Math.sin(t)*Math.max(18,rr*ry);
-          if(px!==null) profileSmoothLine(frame,px,py,xx,yy,3.0,cols[k],alpha);
-          px=xx; py=yy;
-        }
-      }
-    };
-
-    // Two dreamy rainbow sweeps live in the safe outer zones.
-    // One hero rainbow only: keep the lower-right stats completely clean.
-    arc(x+150,y+105,82,1.0,.78,[red,orange,yellow,green,blue,violet],225);
-
-    // Flowing rainbow ribbon along the top and bottom edges. Gentle phase
-    // movement makes the colors shimmer without shifting the whole frame.
-    const ribbon=(yy,flip)=>{
-      const cols=[red,orange,yellow,green,blue,violet];
-      for(let k=0;k<cols.length;k++){
-        let px=x+38, py=yy+k*2.9;
-        for(let i=1;i<=22;i++){
-          const xx=x+38+i*((w-76)/22);
-          const wave=Math.sin(i*.52+p2*.45+k*.35)*2.4;
-          const ny=yy+k*2.9+(flip?-wave:wave);
-          // Soft glow underneath, then a thin bright rainbow core.
-          profileSmoothLine(frame,px,py,xx,ny,4.0,cols[k],62);
-          profileSmoothLine(frame,px,py,xx,ny,1.8,cols[k],215);
-          px=xx; py=ny;
-        }
-      }
-      // White sugar-like shimmer drifting across the ribbon.
-      const sx=x+70+((p2*18)%Math.max(1,w-140));
-      profileSmoothStar(frame,sx,yy-2,2.0,[255,255,255],145);
-    };
-    ribbon(y+18,false); ribbon(y+h-18,true);
-
-    // Cloud clusters: large enough to read as clouds at Discord preview size.
-    const cloudCluster=(cx,cy,s=1)=>{
-      // Layered cloud puff: soft lavender underside + warm pink dream glow.
-      profileSmoothCircle(frame,cx-17*s,cy+5*s,12*s,cloudShade,175,true);
-      profileSmoothCircle(frame,cx+20*s,cy+5*s,12*s,cloudShade,165,true);
-      profileSmoothCircle(frame,cx-8*s,cy-4*s,15*s,cloudGlow,185,true);
-      profileSmoothCircle(frame,cx+8*s,cy-2*s,18*s,cloud,235,true);
-      profileSmoothCircle(frame,cx-7*s,cy-5*s,12*s,cloud,225,true);
-      profileSmoothRoundedRect(frame,cx-28*s,cy+3*s,56*s,14*s,7*s,cloud,225,0.8);
-      profileSmoothLine(frame,cx-18*s,cy+10*s,cx+17*s,cy+10*s,1.8*s,cloudShade,105);
-      profileSmoothCircle(frame,cx-10*s,cy-9*s,3.2*s,cloudHi,205,true);
-      profileSmoothCircle(frame,cx+10*s,cy-8*s,2.6*s,cloudHi,190,true);
-    };
-
-    cloudCluster(x+48,y+48,.95);
-    cloudCluster(x+w-48,y+48,.95);
-    cloudCluster(x+48,y+h-48,.9);
-    cloudCluster(x+w-48,y+h-48,.9);
-
-    // Little drifting dream clouds sit along the side edges, intentionally
-    // outside the tree/profile text areas.
-    cloudCluster(x+19,y+178,.52);
-    cloudCluster(x+w-19,y+300,.52);
-
-    // Stars + tiny twinkles make the negative space feel like a dreamy sky.
-    const star=(cx,cy,r,alpha=225)=>{
-      profileSmoothStar(frame,cx,cy,r,[255,250,255],alpha);
-      profileSmoothCircle(frame,cx-r*.25,cy-r*.25,r*.22,[255,255,255],220,true);
-    };
-    const stars=[
-      [x+100,y+30,3.4],[x+218,y+48,2.0],[x+292,y+24,2.7],
-      [x+w-104,y+31,3.4],[x+w-218,y+49,2.0],[x+w-292,y+25,2.7],
-      [x+29,y+125,2.4],[x+24,y+350,2.8],[x+w-27,y+145,2.5],
-      [x+w-25,y+365,2.8],[x+122,y+h-29,2.5],[x+w-122,y+h-29,2.5],
-      [x+332,y+16,1.8],[x+w-332,y+17,1.8]
-    ];
-    stars.forEach((s,i)=>{
-      const pulse=.82+.25*Math.sin(p2+i*.9);
-      star(s[0],s[1],s[2]*pulse,190+Math.round(35*pulse));
-    });
-
-    // A few tiny colored dream-dust dots travel slowly around the clouds.
-    const dust=[red,orange,yellow,green,blue,violet];
-    for(let i=0;i<22;i++){
-      const side=i%2===0;
-      const baseX=side ? x+25 : x+w-25;
-      const baseY=y+82+(i*23)%320;
-      const drift=Math.sin(p2+i*1.7)*5;
-      profileSmoothCircle(frame,baseX+drift,baseY,.75+(i%3)*.42,dust[i%dust.length],155,true);
-    }
-
-    // Animated shooting-star glints stay in the frame zone.
-    for(let i=0;i<4;i++){
-      const q=.5+.5*Math.sin(p2+i*1.57);
-      const sx=x+115+i*185+q*18;
-      const sy=(i%2===0)?y+12:y+h-12;
-      profileSmoothLine(frame,sx-5,sy+3,sx+5,sy-3,1.1,[255,255,255],120+Math.round(q*100));
-      if(q>.72) profileSmoothStar(frame,sx,sy,2.5,[255,255,255],220);
+    const cols=[[230,70,70],[245,150,45],[240,220,60],[70,190,90],[70,150,230],[150,80,210]];
+    for(let i=0;i<6;i++){
+      const yy=y+6+i*.9;
+      profileSmoothLine(frame,x+38,y+6+i*.9,x+w-38,y+6+i*.9,1,cols[i],210);
+      profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
     }
   } else if(style==='spiderweb'||style==='gothic'){
-
     const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
     for(const [cx,cy] of pts){
       for(let r=8;r<=18;r+=5) profileSmoothRing(frame,cx,cy,r,hi,145,1);
