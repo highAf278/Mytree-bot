@@ -4145,8 +4145,9 @@ function drawProfileFrame(frame, frameId, phase=0){
 
     // Deep-space casing gives Starfall a completely different identity from
     // the lighter profile frames without filling the card itself.
-    profileSmoothRoundedRect(frame,x,y,w,h,18,night,235,2.8);
-    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,nightHi,190,1.0);
+    profileSmoothRoundedRect(frame,x,y,w,h,18,night,245,10.0);
+    profileSmoothRoundedRect(frame,x+3,y+3,w-6,h-6,16,nightHi,220,4.0);
+    profileSmoothRoundedRect(frame,x+7,y+7,w-14,h-14,12,violet,150,1.5);
     profileSmoothLine(frame,x+30,y+10,x+w-30,y+10,1.3,white,155);
     profileSmoothLine(frame,x+30,y+h-10,x+w-30,y+h-10,1.1,violet,150);
     profileSmoothLine(frame,x+10,y+30,x+10,y+h-30,1.0,blue,135);
@@ -4166,9 +4167,9 @@ function drawProfileFrame(frame, frameId, phase=0){
     stars.forEach(([sx,sy,r,c],i)=>{
       const tw=0.78+0.28*Math.max(0,Math.sin(p2+i*1.37));
       profileSmoothStar(frame,x+sx,y+sy,r*tw,c,185+Math.round(tw*65));
-      if(r>=3.0){
-        profileSmoothLine(frame,x+sx-r*1.9,y+sy,x+sx+r*1.9,y+sy,0.7,c,100);
-        profileSmoothLine(frame,x+sx,y+sy-r*1.9,x+sx,y+sy+r*1.9,0.7,c,100);
+      if(r>=3.5){
+        profileSmoothLine(frame,x+sx-r*2.5,y+sy,x+sx+r*2.5,y+sy,0.7,c,100);
+        profileSmoothLine(frame,x+sx,y+sy-r*2.5,x+sx,y+sy+r*2.5,0.7,c,100);
       }
     });
 
@@ -4205,7 +4206,7 @@ function drawProfileFrame(frame, frameId, phase=0){
     const bursts=[[x+32,y+48],[x+w-32,y+48],[x+32,y+h-48],[x+w-32,y+h-48]];
     bursts.forEach(([cx,cy],i)=>{
       const pulse=0.75+0.3*Math.max(0,Math.sin(p2+i*1.57));
-      profileSmoothStar(frame,cx,cy,3.8*pulse,cosmic[i],210);
+      profileSmoothStar(frame,cx,cy,5.8*pulse,cosmic[i],225);
       profileSmoothLine(frame,cx-6,cy,cx+6,cy,0.9,white,115);
       profileSmoothLine(frame,cx,cy-6,cx,cy+6,0.9,white,115);
     });
