@@ -4133,99 +4133,7 @@ function drawProfileFrame(frame, frameId, phase=0){
         glitterStar(cx,cy,2.2+seed(i,63)*1.8,[255,245,252],i*.9);
       }
     }
-  } else if(style==='starfall'){
-    // STARFALL V7: clean gold celestial sky. The stars are deliberately sparse,
-    // the focal stars are unmistakable, and the meteors have a real detached
-    // star head + tapered trail so they read as shooting stars rather than wands.
-    const night=[34,27,68], nightHi=[82,58,132];
-    const gold=[255,214,92], goldHi=[255,246,178], goldDeep=[214,155,42];
-    const violet=[126,92,175], white=[255,250,235];
-    const p2=phase*Math.PI*2;
-
-    // Deep cosmic casing.
-    profileSmoothRoundedRect(frame,x,y,w,h,18,night,250,10.0);
-    profileSmoothRoundedRect(frame,x+3,y+3,w-6,h-6,16,nightHi,225,3.5);
-    profileSmoothRoundedRect(frame,x+7,y+7,w-14,h-14,12,goldDeep,125,1.1);
-    profileSmoothLine(frame,x+30,y+10,x+w-30,y+10,1.1,goldHi,150);
-    profileSmoothLine(frame,x+30,y+h-10,x+w-30,y+h-10,1.0,violet,120);
-    profileSmoothLine(frame,x+10,y+30,x+10,y+h-30,1.0,violet,110);
-    profileSmoothLine(frame,x+w-10,y+30,x+w-10,y+h-30,1.0,goldDeep,120);
-
-    // Sparse gold stars. Fewer stars + more breathing room makes the large
-    // focal stars and shooting stars visually important.
-    const stars=[
-      [42,30,4.0],[108,18,3.0],[178,31,3.7],[258,17,2.9],[335,30,3.6],
-      [430,17,3.0],[505,30,3.8],[595,18,3.0],[700,30,4.0],
-      [22,125,3.4],[18,225,3.9],[24,330,3.0],[20,410,3.6],
-      [w-22,125,3.4],[w-18,225,4.0],[w-24,330,3.0],[w-20,410,3.7],
-      [65,462,3.7],[155,474,2.9],[250,460,3.4],[470,462,3.6],[575,474,2.9],[690,458,3.8]
-    ];
-    stars.forEach(([sx,sy,r],i)=>{
-      const tw=.90+.10*Math.max(0,Math.sin(p2+i*1.63));
-      profileSmoothStar(frame,x+sx,y+sy,r*tw,gold,225);
-      profileSmoothCircle(frame,x+sx,y+sy,Math.max(.7,r*.18),goldHi,235,true);
-    });
-
-    // Two HUGE focal stars. They are larger than the ordinary stars but remain
-    // crisp five-point stars, with no decorative connector lines crossing them.
-    // Their positions stay in empty frame-only space.
-    const focalStars=[
-      [x+292,y+24,12.8],
-      [x+w-350,y+h-25,13.6]
-    ];
-    focalStars.forEach(([cx,cy,r],i)=>{
-      const pulse=.97+.05*Math.max(0,Math.sin(p2+i*1.8));
-      profileSmoothStar(frame,cx,cy,r*pulse,goldHi,255);
-      profileSmoothCircle(frame,cx,cy,r*.12,gold,250,true);
-    });
-
-    // Crescent moon in the upper-right.
-    const mx=x+w-49, my=y+48;
-    profileSmoothCircle(frame,mx,my,15,gold,230,true);
-    profileSmoothCircle(frame,mx+6,my-5,13,night,255,true);
-    profileSmoothCircle(frame,mx-5,my-5,2.0,goldHi,215,true);
-
-    // Shooting stars V9: unmistakable gold comets. The head is a clear star,
-    // the trail begins after a real visual gap, and the trail is short, thick,
-    // tapered, and diagonal so it reads as motion rather than a string or wand.
-    const comet=(cx,cy,dir,scale,tilt)=>{
-      const head=6.6*scale;
-      const gap=10*scale;
-      const tail=27*scale;
-      const rise=15*scale*tilt;
-
-      // Bright gold star head.
-      profileSmoothStar(frame,cx,cy,head,goldHi,255);
-      profileSmoothCircle(frame,cx,cy,1.25*scale,gold,255,true);
-
-      // Rounded tapered trail segments. Each segment gets progressively thinner
-      // and dimmer, producing a comet tail rather than one hairline.
-      const segments=6;
-      for(let j=0;j<segments;j++){
-        const a=j/segments, b=(j+1)/segments;
-        const d1=gap+a*tail, d2=gap+b*tail;
-        const px=cx-dir*d1, py=cy+a*rise;
-        const qx=cx-dir*d2, qy=cy+b*rise;
-        const width=(4.8-a*3.9)*scale;
-        const alpha=Math.round(225-a*145);
-        profileSmoothLine(frame,px,py,qx,qy,width,gold,alpha);
-        profileSmoothCircle(frame,qx,qy,Math.max(.55,width*.32),gold,Math.max(65,alpha-25),true);
-      }
-    };
-
-    // Two comets only: one crossing the quiet upper-left margin and one
-    // traveling through the far-right margin. They never enter profile content.
-    const c1t=(phase*.22)%1;
-    comet(x+34+c1t*150,y+48,1,1.18,1);
-    const c2t=(phase*.17+.5)%1;
-    comet(x+w-32-c2t*135,y+178,-1,1.12,1);
-
-    // Four restrained corner sparkles, separate from the moving meteors.
-    [[x+34,y+52],[x+w-34,y+52],[x+34,y+h-52],[x+w-34,y+h-52]].forEach(([cx,cy],i)=>{
-      const pulse=.92+.08*Math.max(0,Math.sin(p2+i*1.57));
-      profileSmoothStar(frame,cx,cy,4.8*pulse,goldHi,225);
-    });
-  } else if(style==='purple'){
+  } else if(style==='starfall'||style==='purple'){
     for(let i=0;i<8;i++){
       const cx=x+55+i*((w-110)/7);
       sparkle(cx,y+7,2.4); sparkle(cx,y+h-7,2.4);
@@ -4238,13 +4146,71 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothLine(frame,x+38,y+6+i*.9,x+w-38,y+6+i*.9,1,cols[i],210);
       profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
     }
-  } else if(style==='spiderweb'||style==='gothic'){
-    const pts=[[x+29,y+29],[x+w-29,y+29],[x+29,y+h-29],[x+w-29,y+h-29]];
-    for(const [cx,cy] of pts){
-      for(let r=8;r<=18;r+=5) profileSmoothRing(frame,cx,cy,r,hi,145,1);
+  } else if(style==='spiderweb'){
+    // SPIDERWEB PREMIUM: an elegant haunted-web frame, not crossing the profile.
+    const silk=[238,232,246], webHi=[255,248,255], webGlow=[196,157,235];
+    const ink=[54,40,72];
+    const p2=phase*Math.PI*2;
+
+    // Soft dark-violet casing keeps the theme distinct while preserving the card.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,ink,235,7.0);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webGlow,170,2.0);
+    profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,210,1.2);
+
+    // Four compact web nests live in the corners; nothing crosses the profile.
+    const webCorner=(cx,cy,flip)=>{
+      const rings=[7,13,20,28];
+      rings.forEach((r,i)=>{
+        profileSmoothRing(frame,cx,cy,r,webHi,150-i*16,1.15);
+      });
+      const spokes=8;
+      for(let i=0;i<spokes;i++){
+        const a=(Math.PI*2*i/spokes)+(flip?0.08:-0.08);
+        const ex=cx+Math.cos(a)*28, ey=cy+Math.sin(a)*28;
+        profileSmoothLine(frame,cx,cy,ex,ey,0.9,webHi,145);
+      }
+      profileSmoothCircle(frame,cx,cy,3.2,webGlow,210,true);
+    };
+    webCorner(x+31,y+31,false); webCorner(x+w-31,y+31,true);
+    webCorner(x+31,y+h-31,true); webCorner(x+w-31,y+h-31,false);
+
+    // Delicate web strands hug the outer perimeter rather than crossing the card.
+    const edge=(x1,y1,x2,y2,segments,amp,phaseOff)=>{
+      let px=x1, py=y1;
+      for(let i=1;i<=segments;i++){
+        const t=i/segments;
+        const nx=x1+(x2-x1)*t;
+        const ny=y1+(y2-y1)*t + Math.sin(t*Math.PI*2+phaseOff)*amp;
+        profileSmoothLine(frame,px,py,nx,ny,1.0,webHi,145);
+        px=nx; py=ny;
+      }
+    };
+    edge(x+35,y+31,x+w-35,y+31,18,1.5,p2);
+    edge(x+35,y+h-31,x+w-35,y+h-31,18,1.5,p2+Math.PI);
+    edge(x+31,y+35,x+31,y+h-35,14,1.2,p2+1);
+    edge(x+w-31,y+35,x+w-31,y+h-35,14,1.2,p2+2);
+
+    // A few tiny dew drops animate along the silk for a subtle premium effect.
+    for(let i=0;i<8;i++){
+      const t=(phase*0.35+i/8)%1;
+      const top=i%2===0;
+      const cx=x+45+t*(w-90);
+      const cy=top?y+27:y+h-27;
+      profileSmoothCircle(frame,cx,cy,1.8,webHi,150+Math.round(50*Math.sin(p2+i)),true);
     }
-    profileSmoothLine(frame,x+34,y+34,x+w-34,y+h-34,1,hi,125);
-    profileSmoothLine(frame,x+w-34,y+34,x+34,y+h-34,1,hi,125);
+
+    // Small floating web-sparkles stay in the frame margins.
+    [[x+58,y+52],[x+w-58,y+52],[x+58,y+h-52],[x+w-58,y+h-52]].forEach(([cx,cy],i)=>{
+      const q=0.75+0.25*Math.max(0,Math.sin(p2+i));
+      profileSmoothStar(frame,cx,cy,2.0*q,webHi,175);
+    });
+  } else if(style==='gothic'){
+    const gothic=[72,55,90], gothicHi=[220,190,235];
+    profileSmoothRoundedRect(frame,x,y,w,h,18,gothic,235,6.0);
+    profileSmoothLine(frame,x+28,y+9,x+w-28,y+9,1.2,gothicHi,170);
+    profileSmoothLine(frame,x+28,y+h-9,x+w-28,y+h-9,1.2,gothicHi,145);
+    profileSmoothLine(frame,x+9,y+28,x+9,y+h-28,1.0,gothicHi,140);
+    profileSmoothLine(frame,x+w-9,y+28,x+w-9,y+h-28,1.0,gothicHi,140);
   } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
     profileCrown(frame,x+w-31,y+12,5,hi);
