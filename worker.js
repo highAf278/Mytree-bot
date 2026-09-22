@@ -4158,88 +4158,134 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webShadow,190,2.0);
     profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,205,1.1);
 
-    // Draw a curved/irregular web patch. The strands are segmented so the
-    // web feels hand-spun rather than like a perfect circular logo.
+    // Draw a large, irregular corner web. These are intentionally bigger than
+    // the side webbing so the corners feel like the anchors of one continuous web.
     const webPatch=(cx,cy,mirrorX,mirrorY)=>{
-      const rays=7;
-      const rings=[9,17,26,35];
-      const angOffset=(mirrorX?0.06:-0.06)+(mirrorY?0.04:-0.02);
+      const rays=9;
+      const rings=[10,20,31,43,55];
+      const angOffset=(mirrorX?0.08:-0.08)+(mirrorY?0.05:-0.03);
       for(let rIndex=0;rIndex<rings.length;rIndex++){
         const r=rings[rIndex];
         let px=cx+Math.cos(angOffset)*r;
         let py=cy+Math.sin(angOffset)*r;
         for(let j=1;j<=rays;j++){
           const a=angOffset+(Math.PI*2*j/rays);
-          const rr=r*(0.94+0.05*Math.sin(j*2.1+rIndex));
+          const rr=r*(0.94+0.045*Math.sin(j*1.8+rIndex*1.4));
           const nx=cx+Math.cos(a)*rr;
           const ny=cy+Math.sin(a)*rr;
-          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,145-rIndex*12);
+          profileSmoothLine(frame,px,py,nx,ny,1.0,silkHi,160-rIndex*13);
           px=nx; py=ny;
         }
       }
-      // Irregular spokes, with slight bends between each point.
       for(let i=0;i<rays;i++){
         const a=angOffset+(Math.PI*2*i/rays);
-        const mx=cx+Math.cos(a)*18;
-        const my=cy+Math.sin(a)*18;
-        const ex=cx+Math.cos(a)*37;
-        const ey=cy+Math.sin(a)*37;
-        profileSmoothLine(frame,cx,cy,mx,my,1.0,silkHi,155);
-        profileSmoothLine(frame,mx,my,ex,ey,0.8,silkHi,135);
+        const mx=cx+Math.cos(a)*27;
+        const my=cy+Math.sin(a)*27;
+        const ex=cx+Math.cos(a)*55;
+        const ey=cy+Math.sin(a)*55;
+        profileSmoothLine(frame,cx,cy,mx,my,1.1,silkHi,170);
+        profileSmoothLine(frame,mx,my,ex,ey,0.9,silkHi,150);
+      }
+      profileSmoothCircle(frame,cx,cy,3.8,webShadow,220,true);
+    };
+
+    // Large corner webs.
+    webPatch(x+58,y+58,false,false);
+    webPatch(x+w-58,y+58,true,false);
+    webPatch(x+58,y+h-58,false,true);
+    webPatch(x+w-58,y+h-58,true,true);
+
+    // Real webbing runs along the sides: curved cross-strands plus short
+    // connector strands. This is web structure, not a single straight line.
+    const edgeWebH=(x1,x2,yy,flip)=>{
+      const rows=[0,10,20,30];
+      rows.forEach((off,row)=>{
+        const y0=yy+(flip?-off:off);
+        let px=x1, py=y0;
+        const pieces=18;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const nx=x1+(x2-x1)*t;
+          const bow=Math.sin(t*Math.PI)*((row%2===0)?2.8:-2.2);
+          const ny=y0+bow;
+          profileSmoothLine(frame,px,py,nx,ny,0.85,silkHi,125-row*10);
+          px=nx; py=ny;
+        }
+      });
+      for(let i=1;i<9;i++){
+        const t=i/9;
+        const cx=x1+(x2-x1)*t;
+        profileSmoothLine(frame,cx,yy,cx,yy+(flip?-30:30),0.7,silkHi,105);
       }
     };
 
-    // Webs sit mostly in the corners and are deliberately asymmetric.
-    webPatch(x+35,y+35,false,false);
-    webPatch(x+w-35,y+35,true,false);
-    webPatch(x+35,y+h-35,false,true);
-    webPatch(x+w-35,y+h-35,true,true);
-
-    // Soft web strands creep along the perimeter in short, separated sections.
-    // They never span across the profile content.
-    const strand=(x1,y1,x2,y2,count,phaseOff)=>{
-      let px=x1,py=y1;
-      for(let i=1;i<=count;i++){
-        const t=i/count;
-        const nx=x1+(x2-x1)*t;
-        const ny=y1+(y2-y1)*t+Math.sin(t*Math.PI*2+phaseOff)*1.8;
-        profileSmoothLine(frame,px,py,nx,ny,0.75,silkHi,125);
-        px=nx;py=ny;
+    const edgeWebV=(y1,y2,xx,flip)=>{
+      const cols=[0,10,20,30];
+      cols.forEach((off,col)=>{
+        const x0=xx+(flip?-off:off);
+        let px=x0, py=y1;
+        const pieces=16;
+        for(let i=1;i<=pieces;i++){
+          const t=i/pieces;
+          const ny=y1+(y2-y1)*t;
+          const bow=Math.sin(t*Math.PI)*((col%2===0)?2.8:-2.2);
+          const nx=x0+bow;
+          profileSmoothLine(frame,px,py,nx,ny,0.85,silkHi,125-col*10);
+          px=nx; py=ny;
+        }
+      });
+      for(let i=1;i<8;i++){
+        const t=i/8;
+        const cy=y1+(y2-y1)*t;
+        profileSmoothLine(frame,xx,cy,xx+(flip?-30:30),cy,0.7,silkHi,105);
       }
     };
-    strand(x+68,y+20,x+w-68,y+20,20,p2);
-    strand(x+68,y+h-20,x+w-68,y+h-20,20,p2+1.7);
-    strand(x+20,y+68,x+20,y+h-68,14,p2+0.8);
-    strand(x+w-20,y+68,x+w-20,y+h-68,14,p2+2.1);
+
+    // Short side-web panels leave breathing room around the profile content.
+    edgeWebH(x+62,x+w-62,y+20,false);
+    edgeWebH(x+62,x+w-62,y+h-20,true);
+    edgeWebV(y+62,y+h-62,x+20,false);
+    edgeWebV(y+62,y+h-62,x+w-20,true);
 
     // Two tiny spiders actually live on the web, tucked safely in empty margins.
     // Clearly recognizable spiders: distinct head + abdomen and eight
     // separated, angled legs. Kept small, but with enough silhouette
     // definition to read as spiders at Discord preview size.
-    const spider=(cx,cy,flip)=>{
-      const body=[32,23,38];
-      const leg=[52,43,58];
-      const side=flip?-1:1;
-      // Abdomen + smaller head, with a tiny highlight.
-      profileSmoothCircle(frame,cx,cy+2.5,5.0,body,245,true);
-      profileSmoothCircle(frame,cx,cy-3.5,3.1,body,245,true);
-      profileSmoothCircle(frame,cx-0.9*side,cy-4.3,0.8,silkHi,145,true);
-      // Four clearly separated legs on each side.
-      const legEnds=[
-        [-8,-5],[-10,-1],[-10,3],[-8,7]
+    const spider=(cx,cy)=>{
+      // Clearly recognizable little spider: oval abdomen, separate head,
+      // two tiny eyes, and FOUR legs on EACH side.  Keep it compact so it
+      // reads as a spider instead of a fly, musical note, or stray line.
+      const body=[28,20,34];
+      const leg=[48,40,54];
+
+      // Abdomen + head.
+      profileSmoothCircle(frame,cx+1.8,cy+2.2,5.8,body,245,true);
+      profileSmoothCircle(frame,cx-3.2,cy-3.1,3.5,body,245,true);
+
+      // Two tiny eyes give the silhouette a definite spider face.
+      profileSmoothCircle(frame,cx-4.4,cy-4.2,0.7,webHi,220,true);
+      profileSmoothCircle(frame,cx-2.2,cy-4.2,0.7,webHi,220,true);
+
+      // Eight legs. Each side has a distinct upper, middle-upper,
+      // middle-lower and lower leg with a small elbow bend.
+      const legs=[
+        [-4.0,-3.0,-10.0,-7.0,-15.0,-5.0],
+        [-3.0,-1.0,-11.0,-2.0,-16.0, 1.0],
+        [-2.0, 1.5,-11.0, 3.5,-15.0, 7.0],
+        [ 0.0, 3.5,-8.0, 8.0,-12.0,11.0]
       ];
-      legEnds.forEach(([dx,dy],i)=>{
-        const sy=cy-4.5+i*2.6;
-        const ex=cx+side*(-6+dx);
-        const ey=cy+dy;
-        const mx=cx+side*(5+Math.abs(dx)*0.35);
-        const my=sy+(dy-sy)*0.48;
-        profileSmoothLine(frame,cx+side*2.0,sy,mx,my,1.05,leg,205);
-        profileSmoothLine(frame,mx,my,ex,ey,1.0,leg,195);
+
+      legs.forEach(([sx,sy,mx,my,ex,ey])=>{
+        // left
+        profileSmoothLine(frame,cx+sx,cy+sy,cx+mx,cy+my,1.0,leg,215);
+        profileSmoothLine(frame,cx+mx,cy+my,cx+ex,cy+ey,0.9,leg,205);
+        // mirrored right
+        profileSmoothLine(frame,cx-sx,cy+sy,cx-mx,cy+my,1.0,leg,215);
+        profileSmoothLine(frame,cx-mx,cy+my,cx-ex,cy+ey,0.9,leg,205);
       });
     };
-    spider(x+76,y+52,false);
-    spider(x+w-76,y+h-52,true);
+    spider(x+76,y+52);
+    spider(x+w-76,y+h-52);
 
     // A few dew drops catch the light as the web gently shimmers.
     const dew=[
