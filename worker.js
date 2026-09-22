@@ -4190,61 +4190,100 @@ function drawProfileFrame(frame, frameId, phase=0){
     webPatch(x+54,y+h-54,false,true,0.72);
     webPatch(x+w-54,y+h-54,true,true,1.0);
 
-    // Real webbing follows the TOP and BOTTOM edges as shallow woven fans:
-    // three curved strands plus short arched cross-threads. This reads as
-    // actual spider silk rather than three straight border lines.
+    // Organic webbing along every edge. Instead of a repeated stitched border,
+    // each side uses irregular silk anchors, curved strands, and short curved
+    // cross-threads so it reads like a real web growing into the frame.
+    const curveH=(x1,x2,y0,dir,seed)=>{
+      const steps=8;
+      const pts=[];
+      for(let i=0;i<=steps;i++){
+        const t=i/steps;
+        const wob=Math.sin((t*2.7+seed)*Math.PI)*2.2 + Math.sin((t*5.1+seed)*Math.PI)*0.9;
+        const depth=Math.sin(t*Math.PI)*(9+((seed*7)%5));
+        pts.push([x1+(x2-x1)*t,y0+dir*(depth+wob)]);
+      }
+      for(let i=1;i<pts.length;i++) profileSmoothLine(frame,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1],0.85,silkHi,116);
+      return pts;
+    };
+
     const edgeWebH=(x1,x2,yy,flip)=>{
-      const bands=[0,12,24];
-      const pieces=10;
-      bands.forEach((off,row)=>{
-        const baseY=yy+(flip?-off:off);
-        let px=x1,py=baseY;
-        for(let i=1;i<=pieces;i++){
-          const t=i/pieces;
-          const nx=x1+(x2-x1)*t;
-          const bow=(row===1?3.0:row===2?-2.0:1.5);
-          const ny=baseY+Math.sin(t*Math.PI)*bow*(flip?-1:1);
-          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,122-row*10);
+      const dir=flip?-1:1;
+      const anchors=[x1+8,x1+(x2-x1)*0.28,x1+(x2-x1)*0.51,x1+(x2-x1)*0.73,x2-8];
+      const curves=[];
+      anchors.forEach((a,i)=>curves.push(curveH(a-18,a+18,yy,dir,i+1)));
+
+      // A few long, uneven strands tie the little fans together without
+      // turning the edge into a geometric repeating pattern.
+      const longCurves=[
+        {a:x1,b:x1+(x2-x1)*0.38,d:dir*0.72,s:7},
+        {a:x1+(x2-x1)*0.22,b:x1+(x2-x1)*0.66,d:dir*0.58,s:9},
+        {a:x1+(x2-x1)*0.56,b:x2,d:dir*0.72,s:12}
+      ];
+      longCurves.forEach((c,idx)=>{
+        const steps=10; let px=c.a, py=yy;
+        for(let i=1;i<=steps;i++){
+          const t=i/steps;
+          const nx=c.a+(c.b-c.a)*t;
+          const ny=yy+c.d*Math.sin(t*Math.PI)+Math.sin((t*3+idx)*Math.PI)*1.4;
+          profileSmoothLine(frame,px,py,nx,ny,0.72,silkHi,96-idx*6);
           px=nx; py=ny;
         }
       });
-      for(let i=1;i<9;i++){
-        const t=i/9;
-        const cx=x1+(x2-x1)*t;
-        const span=24;
-        const dir=flip?-1:1;
-        const topY=yy;
-        // Small angled silk connectors make each section read like a web cell.
-        profileSmoothLine(frame,cx,topY,cx-8,topY+dir*8,0.7,silkHi,94);
-        profileSmoothLine(frame,cx-8,topY+dir*8,cx-4,topY+dir*15,0.7,silkHi,88);
-        profileSmoothLine(frame,cx-4,topY+dir*15,cx,topY+dir*24,0.7,silkHi,82);
+
+      // Short curved cross-threads between neighboring strands.
+      for(let i=1;i<anchors.length-1;i++){
+        const cx=anchors[i];
+        for(let row=0;row<2;row++){
+          const span=14+row*7;
+          const yy2=yy+dir*(5+row*7);
+          profileSmoothLine(frame,cx-span,yy2+dir*2,cx,yy+dir*(10+row*8),0.65,silkHi,82-row*8);
+          profileSmoothLine(frame,cx,yy+dir*(10+row*8),cx+span,yy2+dir*2,0.65,silkHi,82-row*8);
+        }
       }
     };
 
-    // Real webbing follows the LEFT and RIGHT edges too, mirrored vertically.
+    const curveV=(y1,y2,x0,dir,seed)=>{
+      const steps=8;
+      const pts=[];
+      for(let i=0;i<=steps;i++){
+        const t=i/steps;
+        const wob=Math.sin((t*2.7+seed)*Math.PI)*2.2 + Math.sin((t*5.1+seed)*Math.PI)*0.9;
+        const depth=Math.sin(t*Math.PI)*(9+((seed*7)%5));
+        pts.push([x0+dir*(depth+wob),y1+(y2-y1)*t]);
+      }
+      for(let i=1;i<pts.length;i++) profileSmoothLine(frame,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1],0.85,silkHi,116);
+      return pts;
+    };
+
     const edgeWebV=(y1,y2,xx,flip)=>{
-      const bands=[0,12,24];
-      const pieces=9;
-      bands.forEach((off,col)=>{
-        const baseX=xx+(flip?-off:off);
-        let px=baseX,py=y1;
-        for(let i=1;i<=pieces;i++){
-          const t=i/pieces;
-          const ny=y1+(y2-y1)*t;
-          const bow=(col===1?3.0:col===2?-2.0:1.5);
-          const nx=baseX+Math.sin(t*Math.PI)*bow*(flip?-1:1);
-          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,122-col*10);
+      const dir=flip?-1:1;
+      const anchors=[y1+8,y1+(y2-y1)*0.28,y1+(y2-y1)*0.51,y1+(y2-y1)*0.73,y2-8];
+      anchors.forEach((a,i)=>curveV(a-18,a+18,xx,dir,i+5));
+
+      const longCurves=[
+        {a:y1,b:y1+(y2-y1)*0.38,d:dir*0.72,s:7},
+        {a:y1+(y2-y1)*0.22,b:y1+(y2-y1)*0.66,d:dir*0.58,s:9},
+        {a:y1+(y2-y1)*0.56,b:y2,d:dir*0.72,s:12}
+      ];
+      longCurves.forEach((c,idx)=>{
+        const steps=10; let px=xx, py=c.a;
+        for(let i=1;i<=steps;i++){
+          const t=i/steps;
+          const ny=c.a+(c.b-c.a)*t;
+          const nx=xx+c.d*Math.sin(t*Math.PI)+Math.sin((t*3+idx)*Math.PI)*1.4;
+          profileSmoothLine(frame,px,py,nx,ny,0.72,silkHi,96-idx*6);
           px=nx; py=ny;
         }
       });
-      for(let i=1;i<8;i++){
-        const t=i/8;
-        const cy=y1+(y2-y1)*t;
-        const span=24;
-        const dir=flip?-1:1;
-        profileSmoothLine(frame,xx,cy,xx+dir*8,cy-6,0.7,silkHi,94);
-        profileSmoothLine(frame,xx+dir*8,cy-6,xx+dir*15,cy-3,0.7,silkHi,88);
-        profileSmoothLine(frame,xx+dir*15,cy-3,xx+dir*24,cy,0.7,silkHi,82);
+
+      for(let i=1;i<anchors.length-1;i++){
+        const cy=anchors[i];
+        for(let row=0;row<2;row++){
+          const span=14+row*7;
+          const xx2=xx+dir*(5+row*7);
+          profileSmoothLine(frame,xx2+dir*2,cy-span,xx+dir*(10+row*8),cy,0.65,silkHi,82-row*8);
+          profileSmoothLine(frame,xx+dir*(10+row*8),cy,xx2+dir*2,cy+span,0.65,silkHi,82-row*8);
+        }
       }
     };
 
