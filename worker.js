@@ -4190,106 +4190,82 @@ function drawProfileFrame(frame, frameId, phase=0){
     webPatch(x+54,y+h-54,false,true,0.72);
     webPatch(x+w-54,y+h-54,true,true,1.0);
 
-    // V12: continuous WEB FRAME around the open edges.
-    // The corner webs above are intentionally untouched.  This section only
-    // fills the four open stretches between them with a connected web mesh.
-    // No fan/starburst shapes and no straight decorative rails.
-    const webFrameH=(x1,x2,yy,dir)=>{
-      const cells=7;
-      const step=(x2-x1)/cells;
-      const outer=yy;
-      const inner=yy+dir*28;
+    // V13: a true silk-web ribbon around the four open edges.
+    // The existing corner webs and spiders are intentionally untouched.
+    // No border rails, scallops, fans, or repeating decorative waves.
+    const webRibbonH=(x1,x2,yy,dir)=>{
+      const strands=9;
+      const depth=34;
+      const step=(x2-x1)/(strands-1);
 
-      // Light perimeter strands keep the mesh attached to the existing
-      // corner webs without turning into a solid border.
-      profileSmoothLine(frame,x1,outer,x2,outer,0.62,silkHi,108);
-      profileSmoothLine(frame,x1,inner,x2,inner,0.58,silkHi,92);
-
-      // Repeating diamond/ring structure. Each connector bends slightly so
-      // the silk reads as hand-spun web rather than a geometric grid.
-      for(let i=0;i<cells;i++){
-        const xa=x1+i*step, xb=xa+step;
-        const xm=(xa+xb)/2;
-        const bow=dir*(4.5+2.0*Math.sin(i*1.37));
-
-        // Two curved sides make one web cell.
-        for(let j=0;j<7;j++){
-          const t=j/6;
-          const px1=xa+(xm-xa)*t;
-          const py1=outer+dir*(28*t)+bow*Math.sin(Math.PI*t);
-          const px2=xm+(xb-xm)*t;
-          const py2=inner-dir*(28*t)+bow*Math.sin(Math.PI*t);
-          if(j>0){
-            const pt1x=xa+(xm-xa)*((j-1)/6);
-            const pt1y=outer+dir*(28*((j-1)/6))+bow*Math.sin(Math.PI*((j-1)/6));
-            profileSmoothLine(frame,pt1x,pt1y,px1,py1,0.54,silkHi,92);
-            const pt2x=xm+(xb-xm)*((j-1)/6);
-            const pt2y=inner-dir*(28*((j-1)/6))+bow*Math.sin(Math.PI*((j-1)/6));
-            profileSmoothLine(frame,pt2x,pt2y,px2,py2,0.54,silkHi,92);
-          }
-        }
-
-        // Curved cross-thread through the middle of each cell.
-        const pts=[];
-        for(let j=0;j<=8;j++){
+      // Curved radial silk strands, like the spokes of a web stretched
+      // between the two existing corner webs.
+      for(let i=0;i<strands;i++){
+        const x0=x1+i*step;
+        const bend=((i%3)-1)*2.2;
+        let px=x0, py=yy;
+        for(let j=1;j<=8;j++){
           const t=j/8;
-          const px=xa+step*t;
-          const py=outer+dir*(8+10*Math.sin(Math.PI*t)) + dir*(i%2?2:-1);
-          pts.push([px,py]);
-          if(j>0){
-            const [lx,ly]=pts[j-1];
-            profileSmoothLine(frame,lx,ly,px,py,0.50,silkHi,82);
-          }
+          const nx=x0 + bend*Math.sin(Math.PI*t) + 1.4*Math.sin((i+2)*t*2.4);
+          const ny=yy + dir*depth*t;
+          profileSmoothLine(frame,px,py,nx,ny,0.62,silkHi,102);
+          px=nx; py=ny;
+        }
+      }
+
+      // Three uneven curved cross-threads.  They connect the spokes without
+      // making the edge look like a stitched/scalloped border.
+      const levels=[0.18,0.50,0.80];
+      for(let r=0;r<levels.length;r++){
+        const t0=levels[r];
+        let prev=null;
+        for(let i=0;i<=strands-1;i++){
+          const x=x1+i*step;
+          const wave=(r===1 ? -2.5 : (r===0 ? 1.8 : -1.2));
+          const y=yy + dir*(depth*t0 + wave*Math.sin((i/(strands-1))*Math.PI));
+          if(prev) profileSmoothLine(frame,prev[0],prev[1],x,y,0.55,silkHi,94);
+          prev=[x,y];
         }
       }
     };
 
-    const webFrameV=(y1,y2,xx,dir)=>{
-      const cells=5;
-      const step=(y2-y1)/cells;
-      const outer=xx;
-      const inner=xx+dir*28;
+    const webRibbonV=(y1,y2,xx,dir)=>{
+      const strands=7;
+      const depth=34;
+      const step=(y2-y1)/(strands-1);
 
-      profileSmoothLine(frame,outer,y1,outer,y2,0.62,silkHi,108);
-      profileSmoothLine(frame,inner,y1,inner,y2,0.58,silkHi,92);
-
-      for(let i=0;i<cells;i++){
-        const ya=y1+i*step, yb=ya+step;
-        const ym=(ya+yb)/2;
-        const bow=dir*(4.5+2.0*Math.sin(i*1.61));
-
-        for(let j=0;j<7;j++){
-          const t=j/6;
-          const py1=ya+(ym-ya)*t;
-          const px1=outer+dir*(28*t)+bow*Math.sin(Math.PI*t);
-          const py2=ym+(yb-ym)*t;
-          const px2=inner-dir*(28*t)+bow*Math.sin(Math.PI*t);
-          if(j>0){
-            const u=(j-1)/6;
-            profileSmoothLine(frame,ya+(ym-ya)*u,outer+dir*(28*u)+bow*Math.sin(Math.PI*u),py1,px1,0.54,silkHi,92);
-            profileSmoothLine(frame,ym+(yb-ym)*u,inner-dir*(28*u)+bow*Math.sin(Math.PI*u),py2,px2,0.54,silkHi,92);
-          }
-        }
-
-        const pts=[];
-        for(let j=0;j<=8;j++){
+      for(let i=0;i<strands;i++){
+        const y0=y1+i*step;
+        const bend=((i%3)-1)*2.2;
+        let px=xx, py=y0;
+        for(let j=1;j<=8;j++){
           const t=j/8;
-          const py=ya+step*t;
-          const px=outer+dir*(8+10*Math.sin(Math.PI*t))+dir*(i%2?2:-1);
-          pts.push([py,px]);
-          if(j>0){
-            const [ly,lx]=pts[j-1];
-            profileSmoothLine(frame,lx,ly,px,py,0.50,silkHi,82);
-          }
+          const nx=xx + dir*depth*t;
+          const ny=y0 + bend*Math.sin(Math.PI*t) + 1.4*Math.sin((i+2)*t*2.4);
+          profileSmoothLine(frame,px,py,nx,ny,0.62,silkHi,102);
+          px=nx; py=ny;
+        }
+      }
+
+      const levels=[0.18,0.50,0.80];
+      for(let r=0;r<levels.length;r++){
+        const t0=levels[r];
+        let prev=null;
+        for(let i=0;i<=strands-1;i++){
+          const y=y1+i*step;
+          const wave=(r===1 ? -2.5 : (r===0 ? 1.8 : -1.2));
+          const x=xx + dir*(depth*t0 + wave*Math.sin((i/(strands-1))*Math.PI));
+          if(prev) profileSmoothLine(frame,prev[0],prev[1],x,y,0.55,silkHi,94);
+          prev=[x,y];
         }
       }
     };
 
-    // Leave generous gaps around the four existing corner webs.
-    webFrameH(x+104,x+w-104,y+14,1);
-    webFrameH(x+104,x+w-104,y+h-14,-1);
-    webFrameV(y+104,y+h-104,x+14,1);
-    webFrameV(y+104,y+h-104,x+w-14,-1);
+    // Leave the four existing corner webs exactly as they are.
+    webRibbonH(x+100,x+w-100,y+10,1);
+    webRibbonH(x+100,x+w-100,y+h-10,-1);
+    webRibbonV(y+100,y+h-100,x+10,1);
+    webRibbonV(y+100,y+h-100,x+w-10,-1);
 
     // Two tiny spiders actually live on the web, tucked safely in empty margins.
     // Clearly recognizable spiders: distinct head + abdomen and eight
