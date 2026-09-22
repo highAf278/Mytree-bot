@@ -4147,62 +4147,101 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothLine(frame,x+38,y+h-6-i*.9,x+w-38,y+h-6-i*.9,1,cols[i],210);
     }
   } else if(style==='spiderweb'){
-    // SPIDERWEB PREMIUM: an elegant haunted-web frame, not crossing the profile.
-    const silk=[238,232,246], webHi=[255,248,255], webGlow=[196,157,235];
-    const ink=[54,40,72];
+    // SPIDERWEB V2: organic enchanted web grown around the frame.
+    // No giant geometric targets and no lines across the profile.
+    const silk=[222,214,232], silkHi=[255,248,255], webShadow=[104,76,126];
+    const plum=[48,34,62];
     const p2=phase*Math.PI*2;
 
-    // Soft dark-violet casing keeps the theme distinct while preserving the card.
-    profileSmoothRoundedRect(frame,x,y,w,h,18,ink,235,7.0);
-    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webGlow,170,2.0);
-    profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,210,1.2);
+    // Dark plum casing with a thin silvery-violet silk edge.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,plum,238,7.0);
+    profileSmoothRoundedRect(frame,x+4,y+4,w-8,h-8,15,webShadow,190,2.0);
+    profileSmoothRoundedRect(frame,x+8,y+8,w-16,h-16,12,silk,205,1.1);
 
-    // Four compact web nests live in the corners; nothing crosses the profile.
-    const webCorner=(cx,cy,flip)=>{
-      const rings=[7,13,20,28];
-      rings.forEach((r,i)=>{
-        profileSmoothRing(frame,cx,cy,r,webHi,150-i*16,1.15);
-      });
-      const spokes=8;
-      for(let i=0;i<spokes;i++){
-        const a=(Math.PI*2*i/spokes)+(flip?0.08:-0.08);
-        const ex=cx+Math.cos(a)*28, ey=cy+Math.sin(a)*28;
-        profileSmoothLine(frame,cx,cy,ex,ey,0.9,webHi,145);
+    // Draw a curved/irregular web patch. The strands are segmented so the
+    // web feels hand-spun rather than like a perfect circular logo.
+    const webPatch=(cx,cy,mirrorX,mirrorY)=>{
+      const rays=7;
+      const rings=[9,17,26,35];
+      const angOffset=(mirrorX?0.06:-0.06)+(mirrorY?0.04:-0.02);
+      for(let rIndex=0;rIndex<rings.length;rIndex++){
+        const r=rings[rIndex];
+        let px=cx+Math.cos(angOffset)*r;
+        let py=cy+Math.sin(angOffset)*r;
+        for(let j=1;j<=rays;j++){
+          const a=angOffset+(Math.PI*2*j/rays);
+          const rr=r*(0.94+0.05*Math.sin(j*2.1+rIndex));
+          const nx=cx+Math.cos(a)*rr;
+          const ny=cy+Math.sin(a)*rr;
+          profileSmoothLine(frame,px,py,nx,ny,0.9,silkHi,145-rIndex*12);
+          px=nx; py=ny;
+        }
       }
-      profileSmoothCircle(frame,cx,cy,3.2,webGlow,210,true);
+      // Irregular spokes, with slight bends between each point.
+      for(let i=0;i<rays;i++){
+        const a=angOffset+(Math.PI*2*i/rays);
+        const mx=cx+Math.cos(a)*18;
+        const my=cy+Math.sin(a)*18;
+        const ex=cx+Math.cos(a)*37;
+        const ey=cy+Math.sin(a)*37;
+        profileSmoothLine(frame,cx,cy,mx,my,1.0,silkHi,155);
+        profileSmoothLine(frame,mx,my,ex,ey,0.8,silkHi,135);
+      }
     };
-    webCorner(x+31,y+31,false); webCorner(x+w-31,y+31,true);
-    webCorner(x+31,y+h-31,true); webCorner(x+w-31,y+h-31,false);
 
-    // Delicate web strands hug the outer perimeter rather than crossing the card.
-    const edge=(x1,y1,x2,y2,segments,amp,phaseOff)=>{
-      let px=x1, py=y1;
-      for(let i=1;i<=segments;i++){
-        const t=i/segments;
+    // Webs sit mostly in the corners and are deliberately asymmetric.
+    webPatch(x+35,y+35,false,false);
+    webPatch(x+w-35,y+35,true,false);
+    webPatch(x+35,y+h-35,false,true);
+    webPatch(x+w-35,y+h-35,true,true);
+
+    // Soft web strands creep along the perimeter in short, separated sections.
+    // They never span across the profile content.
+    const strand=(x1,y1,x2,y2,count,phaseOff)=>{
+      let px=x1,py=y1;
+      for(let i=1;i<=count;i++){
+        const t=i/count;
         const nx=x1+(x2-x1)*t;
-        const ny=y1+(y2-y1)*t + Math.sin(t*Math.PI*2+phaseOff)*amp;
-        profileSmoothLine(frame,px,py,nx,ny,1.0,webHi,145);
-        px=nx; py=ny;
+        const ny=y1+(y2-y1)*t+Math.sin(t*Math.PI*2+phaseOff)*1.8;
+        profileSmoothLine(frame,px,py,nx,ny,0.75,silkHi,125);
+        px=nx;py=ny;
       }
     };
-    edge(x+35,y+31,x+w-35,y+31,18,1.5,p2);
-    edge(x+35,y+h-31,x+w-35,y+h-31,18,1.5,p2+Math.PI);
-    edge(x+31,y+35,x+31,y+h-35,14,1.2,p2+1);
-    edge(x+w-31,y+35,x+w-31,y+h-35,14,1.2,p2+2);
+    strand(x+68,y+20,x+w-68,y+20,20,p2);
+    strand(x+68,y+h-20,x+w-68,y+h-20,20,p2+1.7);
+    strand(x+20,y+68,x+20,y+h-68,14,p2+0.8);
+    strand(x+w-20,y+68,x+w-20,y+h-68,14,p2+2.1);
 
-    // A few tiny dew drops animate along the silk for a subtle premium effect.
-    for(let i=0;i<8;i++){
-      const t=(phase*0.35+i/8)%1;
-      const top=i%2===0;
-      const cx=x+45+t*(w-90);
-      const cy=top?y+27:y+h-27;
-      profileSmoothCircle(frame,cx,cy,1.8,webHi,150+Math.round(50*Math.sin(p2+i)),true);
-    }
+    // Two tiny spiders actually live on the web, tucked safely in empty margins.
+    const spider=(cx,cy,flip)=>{
+      const body=[34,25,40];
+      profileSmoothCircle(frame,cx,cy,4.2,body,235,true);
+      profileSmoothCircle(frame,cx,cy-5.2,2.7,body,235,true);
+      for(let i=0;i<4;i++){
+        const yy=cy-3+i*2.0;
+        const side=flip?-1:1;
+        profileSmoothLine(frame,cx-2,yy,cx+side*(8+i*1.2),yy-4+i*0.9,0.75,silkHi,180);
+        profileSmoothLine(frame,cx+2,yy,cx-side*(8+i*1.2),yy-4+i*0.9,0.75,silkHi,180);
+      }
+    };
+    spider(x+76,y+52,false);
+    spider(x+w-76,y+h-52,true);
 
-    // Small floating web-sparkles stay in the frame margins.
-    [[x+58,y+52],[x+w-58,y+52],[x+58,y+h-52],[x+w-58,y+h-52]].forEach(([cx,cy],i)=>{
-      const q=0.75+0.25*Math.max(0,Math.sin(p2+i));
-      profileSmoothStar(frame,cx,cy,2.0*q,webHi,175);
+    // A few dew drops catch the light as the web gently shimmers.
+    const dew=[
+      [x+54,y+43,1.8],[x+w-54,y+43,1.6],
+      [x+55,y+h-45,1.7],[x+w-55,y+h-45,1.8],
+      [x+20,y+160,1.4],[x+w-20,y+265,1.5]
+    ];
+    dew.forEach(([cx,cy,r],i)=>{
+      const q=0.65+0.35*Math.max(0,Math.sin(p2+i*1.6));
+      profileSmoothCircle(frame,cx,cy,r*q,silkHi,120+Math.round(q*90),true);
+    });
+
+    // Restrained web glints, kept away from the actual profile information.
+    [[x+44,y+25],[x+w-44,y+25],[x+44,y+h-25],[x+w-44,y+h-25]].forEach(([cx,cy],i)=>{
+      const q=0.7+0.3*Math.max(0,Math.sin(p2+i*1.8));
+      profileSmoothStar(frame,cx,cy,1.7*q,silkHi,140+Math.round(q*70));
     });
   } else if(style==='gothic'){
     const gothic=[72,55,90], gothicHi=[220,190,235];
