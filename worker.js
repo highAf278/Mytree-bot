@@ -4134,115 +4134,90 @@ function drawProfileFrame(frame, frameId, phase=0){
       }
     }
   } else if(style==='starfall'){
-    // STARFALL V4: a cleaner magical night-sky frame.
-    // The frame is darker, calmer, and more cosmic; meteors are true comets,
-    // not star-shaped wands. Everything stays outside the readable profile area.
-    const midnight=[18,18,45], deep=[35,25,72], violet=[126,82,225];
-    const blue=[76,145,245], cyan=[105,215,255], pink=[224,104,205];
-    const gold=[255,214,105], white=[255,252,255];
-    const cosmic=[violet,blue,cyan,pink,gold];
+    // STARFALL V5: classic gold-star night sky. Keep the stars clearly celestial
+    // and avoid rainbow/candy-like colors. Moving comets use tapered tails.
+    const night=[35,29,70], nightHi=[84,62,135];
+    const gold=[255,214,92], goldHi=[255,244,170], goldDeep=[218,160,48];
+    const soft=[126,101,180], white=[255,250,235];
     const p2=phase*Math.PI*2;
 
-    // Stronger midnight casing: a wide outer "night sky" rather than a thin outline.
-    profileSmoothRoundedRect(frame,x,y,w,h,19,midnight,255,24.0);
-    profileSmoothRoundedRect(frame,x+6,y+6,w-12,h-12,15,deep,250,6.0);
-    profileSmoothRoundedRect(frame,x+11,y+11,w-22,h-22,12,violet,145,1.4);
+    // Deep cosmic casing.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,night,248,10.0);
+    profileSmoothRoundedRect(frame,x+3,y+3,w-6,h-6,16,nightHi,225,4.0);
+    profileSmoothRoundedRect(frame,x+7,y+7,w-14,h-14,12,goldDeep,135,1.2);
+    profileSmoothLine(frame,x+30,y+10,x+w-30,y+10,1.2,goldHi,145);
+    profileSmoothLine(frame,x+30,y+h-10,x+w-30,y+h-10,1.0,soft,125);
+    profileSmoothLine(frame,x+10,y+30,x+10,y+h-30,1.0,soft,120);
+    profileSmoothLine(frame,x+w-10,y+30,x+w-10,y+h-30,1.0,goldDeep,125);
 
-    // Soft nebula ribbons. They are intentionally broad and slow so the frame
-    // feels dreamy rather than busy.
-    const nebula=(yy,phaseOffset,thick,alpha)=>{
-      const pts=18;
-      for(let j=0;j<pts-1;j++){
-        const ax=x+16+j*((w-32)/(pts-1));
-        const bx=x+16+(j+1)*((w-32)/(pts-1));
-        const wa=Math.sin(p2*.22+j*.52+phaseOffset)*3.0;
-        const wb=Math.sin(p2*.22+(j+1)*.52+phaseOffset)*3.0;
-        profileSmoothLine(frame,ax,yy+wa,bx,yy+wb,thick,cosmic[(j+phaseOffset)%cosmic.length],alpha);
-      }
-    };
-    nebula(y+14,0,3.2,135);
-    nebula(y+20,2,1.6,105);
-    nebula(y+h-14,3,3.2,135);
-    nebula(y+h-20,1,1.6,105);
-
-    // Sparse BIG stars: these are simple glowing starbursts, not comet heads.
+    // Large, unmistakable gold stars. No rainbow colors.
     const stars=[
-      [34,30,5.8,gold],[103,17,4.2,white],[181,29,5.0,cyan],[265,16,3.8,violet],
-      [351,30,5.4,pink],[445,17,4.0,white],[533,29,5.1,blue],[625,16,4.0,gold],
-      [744,31,5.8,cyan],
-      [18,122,4.8,violet],[16,224,5.8,cyan],[19,334,4.6,gold],[18,430,5.3,pink],
-      [w-18,122,4.8,blue],[w-16,224,5.8,gold],[w-19,334,4.6,violet],[w-17,430,5.3,cyan],
-      [55,463,5.4,white],[155,475,4.0,pink],[270,462,5.0,gold],
-      [395,474,4.1,cyan],[515,462,5.0,violet],[635,475,4.0,white],[740,462,5.5,blue]
+      [36,30,5.8],[92,17,3.9],[155,31,4.7],[225,16,3.5],[292,29,5.0],
+      [370,15,3.8],[440,29,4.8],[510,17,3.6],[580,31,5.2],[655,16,3.8],[726,29,5.8],
+      [22,112,4.2],[17,210,5.0],[24,305,3.7],[20,400,4.8],
+      [w-22,112,4.0],[w-17,210,5.2],[w-24,305,3.8],[w-18,400,4.8],
+      [50,455,5.0],[130,470,3.7],[215,458,4.5],[300,472,3.8],[390,458,5.0],
+      [480,471,3.6],[570,458,4.6],[650,472,3.8],[730,455,5.2]
     ];
-    stars.forEach(([sx,sy,r,c],i)=>{
-      const tw=.88+.16*Math.max(0,Math.sin(p2*.75+i*1.43));
-      profileSmoothStar(frame,x+sx,y+sy,r*tw,c,215+Math.round(tw*35));
-      if(r>=5){
-        profileSmoothLine(frame,x+sx-r*1.65,y+sy,x+sx+r*1.65,y+sy,.75,c,110);
-        profileSmoothLine(frame,x+sx,y+sy-r*1.65,x+sx,y+sy+r*1.65,.75,c,110);
+    stars.forEach(([sx,sy,r],i)=>{
+      const tw=0.86+0.16*Math.max(0,Math.sin(p2+i*1.41));
+      const rr=r*tw;
+      profileSmoothStar(frame,x+sx,y+sy,rr,gold,220);
+      // restrained warm core makes the star shape read clearly at Discord size
+      profileSmoothCircle(frame,x+sx,y+sy,Math.max(0.8,rr*.20),goldHi,230,true);
+      if(r>=4.8){
+        profileSmoothLine(frame,x+sx-rr*1.9,y+sy,x+sx+rr*1.9,y+sy,.9,goldHi,105);
+        profileSmoothLine(frame,x+sx,y+sy-rr*1.9,x+sx,y+sy+rr*1.9,.9,goldHi,105);
       }
     });
 
-    // Crescent moon: a single quiet focal point in the upper-right.
-    const mx=x+w-68, my=y+54;
-    profileSmoothCircle(frame,mx,my,14,gold,240,true);
-    profileSmoothCircle(frame,mx+7,my-4,14,midnight,255,true);
-    profileSmoothCircle(frame,mx-4,my+5,1.7,white,210,true);
-
-    // Minimal constellation threads, kept subtle so the stars remain the focus.
+    // Sparse constellation links, all in muted gold so they stay celestial.
     const links=[
-      [[34,30],[103,17]],[[103,17],[181,29]],[[351,30],[445,17]],
-      [[533,29],[625,16]],[[18,122],[16,224]],[[w-18,122],[w-16,224]],
-      [[55,463],[155,475]],[[515,462],[635,475]]
+      [[36,30],[92,17]],[[92,17],[155,31]],[[370,15],[440,29]],
+      [[510,17],[580,31]],[[580,31],[655,16]],[[22,112],[17,210]],
+      [[w-22,112],[w-17,210]],[[50,455],[130,470]],[[570,458],[650,472]]
     ];
-    links.forEach(([[ax,ay],[bx,by]],i)=>{
-      profileSmoothLine(frame,x+ax,y+ay,x+bx,y+by,.55,cosmic[i%cosmic.length],85);
+    links.forEach(([[ax,ay],[bx,by]])=>{
+      profileSmoothLine(frame,x+ax,y+ay,x+bx,y+by,.55,goldDeep,105);
     });
 
-    // TRUE COMETS: tiny round heads with tapered segmented tails.
-    // No star/cross at the front, so they cannot read as lollipops or wands.
-    const comet=(sx,sy,dx,dy,col)=>{
-      const len=Math.hypot(dx,dy);
-      const ux=dx/len, uy=dy/len;
-      const segs=5;
-      for(let k=segs;k>=1;k--){
-        const t=k/segs;
-        const ex=sx-dx*t, ey=sy-dy*t;
-        const nextT=Math.max(0,(k-1)/segs);
-        const nx=sx-dx*nextT, ny=sy-dy*nextT;
-        const width=0.65+(1-t)*1.25;
-        profileSmoothLine(frame,ex,ey,nx,ny,width,col,115+Math.round((1-t)*80));
+    // Crescent moon: quiet focal point, kept in the outer frame only.
+    const mx=x+w-49, my=y+48;
+    profileSmoothCircle(frame,mx,my,15,gold,225,true);
+    profileSmoothCircle(frame,mx+6,my-5,13,night,255,true);
+    profileSmoothCircle(frame,mx-5,my-5,2.0,goldHi,210,true);
+
+    // Three clearly celestial shooting stars. Small gold star head + tapered
+    // segmented tail; no cross-shaped heads, no rainbow colors, no wand look.
+    const comet=(t,yy,dir,scale)=>{
+      const cx=x+55+t*(w-110);
+      const cy=y+yy;
+      const head=3.2*scale;
+      profileSmoothStar(frame,cx,cy,head,goldHi,245);
+      profileSmoothCircle(frame,cx,cy,1.0*scale,gold,240,true);
+      const segments=6;
+      for(let j=1;j<=segments;j++){
+        const u=j/segments;
+        const len=(7+u*27)*scale;
+        const px=cx-dir*len;
+        const py=cy+u*len*.52;
+        const prevLen=(7+(j-1)/segments*27)*scale;
+        const ppx=cx-dir*prevLen;
+        const ppy=cy+(j-1)/segments*prevLen*.52;
+        const width=(1.9-u*1.45)*scale;
+        profileSmoothLine(frame,ppx,ppy,px,py,width,gold,Math.round(210-u*110));
       }
-      profileSmoothCircle(frame,sx,sy,1.9,white,245,true);
-      profileSmoothCircle(frame,sx-.55*ux,sy-.55*uy,.75,col,220,true);
     };
+    comet((phase*.30)%1,26,1,1.15);
+    comet((phase*.24+.36)%1,438,-1,.92);
+    comet((phase*.20+.68)%1,86,1,.78);
 
-    // Three distinct diagonal comet paths; they move slowly and never cross the card.
-    const c1=(phase*.55)%1;
-    const c2=(phase*.42+.34)%1;
-    const c3=(phase*.48+.68)%1;
-    comet(x+42+c1*(w-84),y+23,13,-8,cyan);
-    comet(x+w-42-c2*(w-84),y+h-23,-15,9,pink);
-    comet(x+25,y+105+c3*55,10,-11,gold);
-
-    // Tiny drifting dust, clustered near the cosmic casing instead of everywhere.
-    for(let i=0;i<12;i++){
-      const side=i%4;
-      let sx,sy;
-      if(side===0){sx=x+32+(i*47)%185;sy=y+43+(i*13)%22;}
-      else if(side===1){sx=x+w-32-(i*43)%185;sy=y+43+(i*11)%22;}
-      else if(side===2){sx=x+32+(i*53)%220;sy=y+h-43-(i*13)%22;}
-      else {sx=x+w-32-(i*49)%220;sy=y+h-43-(i*11)%22;}
-      const pulse=.65+.35*Math.max(0,Math.sin(p2+i*1.7));
-      profileSmoothCircle(frame,sx,sy,0.9+pulse*.8,cosmic[i%cosmic.length],150+Math.round(pulse*50),true);
-    }
-
-    // Four restrained corner glows instead of giant wand-like starbursts.
-    const glows=[[x+35,y+55,gold],[x+w-35,y+55,cyan],[x+35,y+h-55,pink],[x+w-35,y+h-55,violet]];
-    glows.forEach(([cx,cy,c],i)=>{
-      const pulse=.9+.15*Math.max(0,Math.sin(p2+i*1.57));
-      profileSmoothStar(frame,cx,cy,5.0*pulse,c,210);
+    // A few large twinkles anchor the corners; these are stationary stars, not meteors.
+    [[x+34,y+52],[x+w-34,y+52],[x+34,y+h-52],[x+w-34,y+h-52]].forEach(([cx,cy],i)=>{
+      const pulse=.9+.12*Math.max(0,Math.sin(p2+i*1.57));
+      profileSmoothStar(frame,cx,cy,6.5*pulse,goldHi,235);
+      profileSmoothLine(frame,cx-9,cy,cx+9,cy,.8,gold,125);
+      profileSmoothLine(frame,cx,cy-9,cx,cy+9,.8,gold,125);
     });
   } else if(style==='purple'){
     for(let i=0;i<8;i++){
