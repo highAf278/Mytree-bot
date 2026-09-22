@@ -4252,8 +4252,8 @@ function drawProfileFrame(frame, frameId, phase=0){
       profileSmoothCircle(frame,cx-3.2,cy-3.1,3.5,body,245,true);
 
       // Two tiny eyes give the silhouette a definite spider face.
-      profileSmoothCircle(frame,cx-4.4,cy-4.2,0.7,webHi,220,true);
-      profileSmoothCircle(frame,cx-2.2,cy-4.2,0.7,webHi,220,true);
+      profileSmoothCircle(frame,cx-4.4,cy-4.2,0.7,silkHi,220,true);
+      profileSmoothCircle(frame,cx-2.2,cy-4.2,0.7,silkHi,220,true);
 
       // Eight legs. Each side has a distinct upper, middle-upper,
       // middle-lower and lower leg with a small elbow bend.
