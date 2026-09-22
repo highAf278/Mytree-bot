@@ -4213,16 +4213,30 @@ function drawProfileFrame(frame, frameId, phase=0){
     strand(x+w-20,y+68,x+w-20,y+h-68,14,p2+2.1);
 
     // Two tiny spiders actually live on the web, tucked safely in empty margins.
+    // Clearly recognizable spiders: distinct head + abdomen and eight
+    // separated, angled legs. Kept small, but with enough silhouette
+    // definition to read as spiders at Discord preview size.
     const spider=(cx,cy,flip)=>{
-      const body=[34,25,40];
-      profileSmoothCircle(frame,cx,cy,4.2,body,235,true);
-      profileSmoothCircle(frame,cx,cy-5.2,2.7,body,235,true);
-      for(let i=0;i<4;i++){
-        const yy=cy-3+i*2.0;
-        const side=flip?-1:1;
-        profileSmoothLine(frame,cx-2,yy,cx+side*(8+i*1.2),yy-4+i*0.9,0.75,silkHi,180);
-        profileSmoothLine(frame,cx+2,yy,cx-side*(8+i*1.2),yy-4+i*0.9,0.75,silkHi,180);
-      }
+      const body=[32,23,38];
+      const leg=[52,43,58];
+      const side=flip?-1:1;
+      // Abdomen + smaller head, with a tiny highlight.
+      profileSmoothCircle(frame,cx,cy+2.5,5.0,body,245,true);
+      profileSmoothCircle(frame,cx,cy-3.5,3.1,body,245,true);
+      profileSmoothCircle(frame,cx-0.9*side,cy-4.3,0.8,silkHi,145,true);
+      // Four clearly separated legs on each side.
+      const legEnds=[
+        [-8,-5],[-10,-1],[-10,3],[-8,7]
+      ];
+      legEnds.forEach(([dx,dy],i)=>{
+        const sy=cy-4.5+i*2.6;
+        const ex=cx+side*(-6+dx);
+        const ey=cy+dy;
+        const mx=cx+side*(5+Math.abs(dx)*0.35);
+        const my=sy+(dy-sy)*0.48;
+        profileSmoothLine(frame,cx+side*2.0,sy,mx,my,1.05,leg,205);
+        profileSmoothLine(frame,mx,my,ex,ey,1.0,leg,195);
+      });
     };
     spider(x+76,y+52,false);
     spider(x+w-76,y+h-52,true);
