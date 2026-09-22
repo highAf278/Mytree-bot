@@ -17988,7 +17988,7 @@ async function handleTitleUnequip(env,interaction){
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
-const HEIST_NIGHT_DURATION = 60 * 1000;
+const HEIST_NIGHT_DURATION = 40 * 1000;
 const HEIST_VOTE_DURATION = 40 * 1000;
 const HEIST_STARTING_VAULT = 10000;
 const HEIST_STEAL_MIN = 500;
@@ -18772,7 +18772,7 @@ async function startHeistNight(
     `💬 The heist channel stays open — use the private buttons for secret actions.\n\n` +
     `Everyone has a secret role. Perform your action using the private buttons below.\n\n` +
     `💰 Vault: **${game.vault} ✨**\n` +
-    `⏳ Night ends when everyone acts or the timer expires.`;
+    `⏳ Night lasts **40 seconds** and ends immediately when everyone alive submits an action.`;
 
   await heistSendPublic(
     env,
@@ -20447,6 +20447,8 @@ async function getKnownGuildIds(env) {
 async function processHeistTimers(
   env
 ) {
+  // Phase deadlines are authoritative. If the scheduled trigger runs late,
+  // the first pass after the deadline resolves the phase immediately.
   const guildIds =
     await getKnownGuildIds(env);
 
