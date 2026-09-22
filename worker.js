@@ -4190,89 +4190,78 @@ function drawProfileFrame(frame, frameId, phase=0){
     webPatch(x+54,y+h-54,false,true,0.72);
     webPatch(x+w-54,y+h-54,true,true,1.0);
 
-    // Real webbing along every edge: short radial silk strands plus
-    // curved cross-threads.  Kept close to the frame so it reads as web,
-    // not as a decorative scalloped border.
-    const edgeWebH=(x1,x2,outerY,dir)=>{
-      const span=x2-x1;
-      const count=7;
-      const pts=[];
-      for(let i=0;i<count;i++){
-        const t=i/(count-1);
-        const px=x1+span*t;
-        const innerY=outerY+dir*(16+4*Math.sin((i+1)*1.37));
-        pts.push([px,innerY]);
-        profileSmoothLine(frame,px,outerY,px,innerY,0.72,silkHi,118);
+    // Actual webbing along the open edges.  Instead of straight rails,
+    // these are small overlapping fan-webs: a silk hub on the frame,
+    // curved inner rings, and uneven radial strands.  They stay shallow
+    // so the web lives on the border without crossing the profile panels.
+    const halfWebH=(cx,outerY,dir,spread=62,depth=25)=>{
+      const rays=6;
+      const hubY=outerY;
+      const ringPts=[];
+      for(let i=0;i<rays;i++){
+        const t=(i/(rays-1))*2-1;
+        const px=cx+t*spread;
+        const py=outerY+dir*(depth*(0.82+0.18*(1-t*t)));
+        ringPts.push([px,py]);
+        profileSmoothLine(frame,cx,hubY,px,py,0.72,silkHi,126);
       }
-
-      // Three uneven curved cross-threads, the key shape that makes the
-      // edge read as connected spider silk instead of a repeated border.
-      const rows=[0.28,0.58,0.84];
-      rows.forEach((r,row)=>{
-        const y=outerY+dir*(16*r);
-        let px=x1, py=outerY;
-        const steps=12;
-        for(let j=1;j<=steps;j++){
-          const t=j/steps;
-          const nx=x1+span*t;
-          const curve=dir*(16*r + Math.sin(t*Math.PI*2.0+row*0.8)*2.0);
-          const ny=outerY+curve;
-          profileSmoothLine(frame,px,py,nx,ny,0.68,silkHi,96-row*8);
-          px=nx; py=ny;
+      // Two curved cross-threads joining the fan's spokes.
+      for(let ring=0;ring<2;ring++){
+        const pts=[];
+        const depthMul=0.48+ring*0.27;
+        for(let j=0;j<=12;j++){
+          const t=j/12;
+          const x0=cx-spread + 2*spread*t;
+          const curve=depth*depthMul*(0.74+0.26*Math.cos((t-0.5)*Math.PI));
+          const y0=outerY+dir*curve;
+          pts.push([x0,y0]);
+          if(j>0){
+            const [px,py]=pts[j-1];
+            profileSmoothLine(frame,px,py,x0,y0,0.64,silkHi,104-ring*12);
+          }
         }
-      });
-
-      // A few diagonal ties make the intersections feel hand-grown.
-      for(let i=0;i<count-1;i+=2){
-        profileSmoothLine(
-          frame,pts[i][0],pts[i][1],
-          pts[i+1][0],pts[i+1][1],
-          0.58,silkHi,82
-        );
       }
+      // A few offset ties keep the web irregular and organic.
+      profileSmoothLine(frame,cx-spread*0.98,outerY,cx-spread*0.56,outerY+dir*depth*0.48,0.55,silkHi,86);
+      profileSmoothLine(frame,cx+spread*0.98,outerY,cx+spread*0.58,outerY+dir*depth*0.52,0.55,silkHi,86);
     };
 
-    const edgeWebV=(y1,y2,outerX,dir)=>{
-      const span=y2-y1;
-      const count=7;
-      const pts=[];
-      for(let i=0;i<count;i++){
-        const t=i/(count-1);
-        const py=y1+span*t;
-        const innerX=outerX+dir*(16+4*Math.sin((i+1)*1.37));
-        pts.push([innerX,py]);
-        profileSmoothLine(frame,outerX,py,innerX,py,0.72,silkHi,118);
+    const halfWebV=(cy,outerX,dir,spread=62,depth=25)=>{
+      const rays=6;
+      const ringPts=[];
+      for(let i=0;i<rays;i++){
+        const t=(i/(rays-1))*2-1;
+        const py=cy+t*spread;
+        const px=outerX+dir*(depth*(0.82+0.18*(1-t*t)));
+        ringPts.push([px,py]);
+        profileSmoothLine(frame,outerX,cy,px,py,0.72,silkHi,126);
       }
-
-      const cols=[0.28,0.58,0.84];
-      cols.forEach((r,col)=>{
-        const x=outerX+dir*(16*r);
-        let px=outerX, py=y1;
-        const steps=12;
-        for(let j=1;j<=steps;j++){
-          const t=j/steps;
-          const ny=y1+span*t;
-          const curve=dir*(16*r + Math.sin(t*Math.PI*2.0+col*0.8)*2.0);
-          const nx=outerX+curve;
-          profileSmoothLine(frame,px,py,nx,ny,0.68,silkHi,96-col*8);
-          px=nx; py=ny;
+      for(let ring=0;ring<2;ring++){
+        let last=null;
+        const depthMul=0.48+ring*0.27;
+        for(let j=0;j<=12;j++){
+          const t=j/12;
+          const y0=cy-spread + 2*spread*t;
+          const curve=depth*depthMul*(0.74+0.26*Math.cos((t-0.5)*Math.PI));
+          const x0=outerX+dir*curve;
+          if(last) profileSmoothLine(frame,last[0],last[1],x0,y0,0.64,silkHi,104-ring*12);
+          last=[x0,y0];
         }
-      });
-
-      for(let i=0;i<count-1;i+=2){
-        profileSmoothLine(
-          frame,pts[i][0],pts[i][1],
-          pts[i+1][0],pts[i+1][1],
-          0.58,silkHi,82
-        );
       }
+      profileSmoothLine(frame,outerX,cy-spread*0.98,outerX+dir*depth*0.48,cy-spread*0.56,0.55,silkHi,86);
+      profileSmoothLine(frame,outerX,cy+spread*0.98,outerX+dir*depth*0.52,cy+spread*0.58,0.55,silkHi,86);
     };
 
-    // Leave the corner webs clear; the edge webs bridge the spaces between them.
-    edgeWebH(x+66,x+w-66,y+13,1);
-    edgeWebH(x+66,x+w-66,y+h-13,-1);
-    edgeWebV(y+66,y+h-66,x+13,1);
-    edgeWebV(y+66,y+h-66,x+w-13,-1);
+    // A few separated fans make the four edges read as connected spider silk
+    // while leaving the large corner webs as the visual anchors.
+    halfWebH(x+188,y+12,1,55,23);
+    halfWebH(x+w-188,y+12,1,55,23);
+    halfWebH(x+188,y+h-12,-1,55,23);
+    halfWebH(x+w-188,y+h-12,-1,55,23);
+    halfWebV(y+188,x+12,1,55,23);
+    halfWebV(y+h-188,x+12,1,55,23);
+    halfWebV(y+188,x+w-12,-1,55,23);
+    halfWebV(y+h-188,x+w-12,-1,55,23);
 
     // Two tiny spiders actually live on the web, tucked safely in empty margins.
     // Clearly recognizable spiders: distinct head + abdomen and eight
