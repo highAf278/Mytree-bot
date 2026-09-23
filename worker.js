@@ -4369,7 +4369,81 @@ function drawProfileFrame(frame, frameId, phase=0){
     profileSmoothLine(frame,x+30,y+h-5,x+w-30,y+h-5,0.9,laceSoft,105);
     profileSmoothLine(frame,x+5,y+30,x+5,y+h-30,0.9,laceSoft,105);
     profileSmoothLine(frame,x+w-5,y+30,x+w-5,y+h-30,0.9,laceSoft,105);
-  } else if(style==='royal_gold'||style==='crimson'||style==='haunted'){
+  } else if(style==='royal_gold'){
+    // ROYAL GOLD — dark, regal, Discord-proof.
+    // The old version was only two gold crowns on a generic gold border, which
+    // read as decorative/pink rather than royal.  This version uses a BLACK
+    // foundation, thick antique-gold rails, substantial corner brackets, and
+    // restrained crown/crest details.  Everything is large enough to survive
+    // Discord preview scaling and stays out of the profile content.
+    const black=[18,17,15], black2=[30,27,21];
+    const antique=[150,104,22], gold=[205,155,42], bright=[244,207,92];
+    const warm=[255,226,135];
+
+    // Heavy dark frame body: this is what makes the cosmetic read BLACK + GOLD
+    // instead of yellow/girly at thumbnail size.
+    profileSmoothRoundedRect(frame,x,y,w,h,18,black,248,7.5);
+    profileSmoothRoundedRect(frame,x+5,y+5,w-10,h-10,15,antique,248,3.0);
+    profileSmoothRoundedRect(frame,x+9,y+9,w-18,h-18,12,black2,238,2.0);
+
+    // Thick inner gold rails.  Two strong lines read cleanly after Discord GIF/PNG
+    // scaling; the small gap between them gives the frame a real metal edge.
+    profileSmoothLine(frame,x+22,y+17,x+w-22,y+17,2.8,gold,245);
+    profileSmoothLine(frame,x+22,y+h-17,x+w-22,y+h-17,2.8,gold,245);
+    profileSmoothLine(frame,x+17,y+22,x+17,y+h-22,2.8,gold,245);
+    profileSmoothLine(frame,x+w-17,y+22,x+w-17,y+h-22,2.8,gold,245);
+
+    // Short secondary rails create a carved-frame effect without adding fragile
+    // micro-detail.
+    profileSmoothLine(frame,x+30,y+25,x+w-30,y+25,1.1,bright,205);
+    profileSmoothLine(frame,x+30,y+h-25,x+w-30,y+h-25,1.1,bright,190);
+    profileSmoothLine(frame,x+25,y+30,x+25,y+h-30,1.1,bright,190);
+    profileSmoothLine(frame,x+w-25,y+30,x+w-25,y+h-30,1.1,bright,190);
+
+    // Large heraldic corner brackets.  These are deliberately angular and heavy,
+    // so the frame feels like a royal crest/coat-of-arms rather than jewelry.
+    const bracket=(cx,cy,dx,dy)=>{
+      const s=dx;
+      profileSmoothLine(frame,cx,cy,cx+s*18,cy,3.2,gold,248);
+      profileSmoothLine(frame,cx,cy,cx,cy+dy*18,3.2,gold,248);
+      profileSmoothLine(frame,cx+s*5,cy+dy*5,cx+s*14,cy+dy*5,1.5,bright,220);
+      profileSmoothLine(frame,cx+s*5,cy+dy*5,cx+s*5,cy+dy*14,1.5,bright,220);
+      profileDiamond(frame,cx+s*4.5,cy+dy*4.5,3.2,antique,245);
+      profileDiamond(frame,cx+s*4.5,cy+dy*4.5,1.7,warm,235);
+    };
+    bracket(x+13,y+13,1,1);
+    bracket(x+w-13,y+13,-1,1);
+    bracket(x+13,y+h-13,1,-1);
+    bracket(x+w-13,y+h-13,-1,-1);
+
+    // Crown crest at the top center: one unmistakable royal symbol, kept compact
+    // so it doesn't compete with the profile title.
+    profileCrown(frame,x+w/2,y+16,7,bright);
+    profileSmoothLine(frame,x+w/2-12,y+23,x+w/2+12,y+23,2.0,antique,240);
+    profileDiamond(frame,x+w/2,y+23,2.6,gold,240);
+
+    // Small heraldic studs along the rails. Fewer, larger points survive Discord
+    // much better than a field of tiny sparkles.
+    const studs=[
+      [x+105,y+17],[x+205,y+17],[x+305,y+17],[x+405,y+17],[x+505,y+17],[x+605,y+17],[x+705,y+17],
+      [x+105,y+h-17],[x+205,y+h-17],[x+305,y+h-17],[x+405,y+h-17],[x+505,y+h-17],[x+605,y+h-17],[x+705,y+h-17]
+    ];
+    studs.forEach(([cx,cy],i)=>{
+      profileSmoothCircle(frame,cx,cy,2.0,antique,245,true);
+      profileSmoothCircle(frame,cx-.5,cy-.6,.8,bright,235,true);
+      if(Math.sin(p+i*.73)>.86) profileSmoothStar(frame,cx,cy,2.0,warm,220);
+    });
+
+    // Restrained animated metal glints: gold stays gold; no pastel/pink shimmer.
+    const glints=[
+      [x+115,y+17,2.8],[x+390,y+17,2.4],[x+665,y+17,2.7],
+      [x+115,y+h-17,2.5],[x+390,y+h-17,2.8],[x+665,y+h-17,2.4]
+    ];
+    glints.forEach(([cx,cy,r],i)=>{
+      const q=Math.max(0,Math.sin(p+i*1.35));
+      if(q>.55) profileSmoothStar(frame,cx,cy,r*(.75+.45*q),warm,150+Math.round(q*80));
+    });
+  } else if(style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
     profileCrown(frame,x+w-31,y+12,5,hi);
     sparkle(x+31,y+h-12,2.5); sparkle(x+w-31,y+h-12,2.5);
