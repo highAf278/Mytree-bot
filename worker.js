@@ -4413,43 +4413,70 @@ function drawProfileFrame(frame, frameId, phase=0){
     heraldicCorner(x+13,y+h-13,1,-1);
     heraldicCorner(x+w-13,y+h-13,-1,-1);
 
-    // Strong central crown crest. It is intentionally much larger than the old
-    // tiny crown so it reads as a royal insignia instead of a sparkle.
-    const cx=x+w/2, crownY=y+17;
-    profileSmoothLine(frame,cx-28,crownY+12,cx+28,crownY+12,5.0,gold,255);
-    profileSmoothLine(frame,cx-23,crownY+8,cx-17,crownY-7,4.5,bright,255);
-    profileSmoothLine(frame,cx-17,crownY-7,cx-6,crownY+3,4.5,bright,255);
-    profileSmoothLine(frame,cx-6,crownY+3,cx,crownY-10,4.5,bright,255);
-    profileSmoothLine(frame,cx,crownY-10,cx+7,crownY+3,4.5,bright,255);
-    profileSmoothLine(frame,cx+7,crownY+3,cx+18,crownY-7,4.5,bright,255);
-    profileSmoothLine(frame,cx+18,crownY-7,cx+24,crownY+8,4.5,bright,255);
-    profileSmoothRoundedRect(frame,cx-23,crownY+4,47,13,3,goldDark,245,2.5);
-    profileSmoothLine(frame,cx-17,crownY+8,cx+18,crownY+8,2.5,warm,245);
-    [cx-19,cx,cx+20].forEach((px,i)=>{
-      profileSmoothCircle(frame,px,crownY-8+(i===1?-2:0),3.2,bright,255,true);
-      profileSmoothCircle(frame,px-.7,crownY-8+(i===1?-2:0)-.7,1.1,warm,255,true);
-    });
+    // CENTRAL ROYAL CROWN — simplified, symmetrical silhouette so it stays clean
+    // after Discord GIF scaling. The crown is deliberately chunky rather than
+    // made from thin crossed lines that can look warped frame-to-frame.
+    const cx=x+w/2;
+    const crownBaseY=y+31;
+    const crownGold=[197,143,31], crownBright=[255,220,105], crownDark=[105,67,12];
 
-    // Small, bold heraldic medallions at the midpoints. No hearts, flowers, or
-    // pastel sparkle motifs: these are simple royal-metal studs.
+    // Crown body: solid band + three broad points.
+    profileSmoothRoundedRect(frame,cx-28,crownBaseY-5,56,13,3,crownDark,255,2.5);
+    profileSmoothRoundedRect(frame,cx-25,crownBaseY-7,50,10,2,crownGold,255,1.5);
+    profileSmoothLine(frame,cx-22,crownBaseY-2,cx+22,crownBaseY-2,2.2,crownBright,255);
+
+    // Three clean points with a stable, mirrored silhouette.
+    const crownPoint=(px,py)=>{
+      profileSmoothLine(frame,px-7,py+11,px,py,5.0,crownGold,255);
+      profileSmoothLine(frame,px,py,px+7,py+11,5.0,crownGold,255);
+      profileSmoothCircle(frame,px,py,3.0,crownBright,255,true);
+    };
+    crownPoint(cx-20,crownBaseY-18);
+    crownPoint(cx,crownBaseY-23);
+    crownPoint(cx+20,crownBaseY-18);
+
+    // Crown jewels pulse subtly instead of staying static.
+    const crownPulse=0.78+0.22*(0.5+0.5*Math.sin(p*Math.PI*2));
+    profileSmoothCircle(frame,cx,crownBaseY-2,3.1,[255,235,150],Math.round(190+65*crownPulse),true);
+    profileSmoothCircle(frame,cx-15,crownBaseY-2,2.1,[255,210,80],Math.round(175+65*crownPulse),true);
+    profileSmoothCircle(frame,cx+15,crownBaseY-2,2.1,[255,210,80],Math.round(175+65*crownPulse),true);
+
+    // Side heraldic medallions: large enough to remain visible in Discord.
     const medallion=(mx,my)=>{
-      profileSmoothCircle(frame,mx,my,6.0,black,255,true);
-      profileSmoothCircle(frame,mx,my,5.0,gold,255,true);
-      profileSmoothCircle(frame,mx,my,2.2,black2,255,true);
+      profileSmoothCircle(frame,mx,my,7.0,black,255,true);
+      profileSmoothCircle(frame,mx,my,5.6,gold,255,true);
+      profileSmoothCircle(frame,mx,my,2.6,black2,255,true);
       profileDiamond(frame,mx,my,2.0,warm,255);
     };
     medallion(x+25,y+h/2);
     medallion(x+w-25,y+h/2);
 
-    // A restrained animated metallic glint. Large and sparse = readable after
-    // Discord compression, rather than a field of tiny sparkles.
-    const glints=[
-      [x+150,y+22,3.0],[x+w/2+105,y+22,3.0],
-      [x+150,y+h-22,3.0],[x+w/2+105,y+h-22,3.0]
-    ];
-    glints.forEach(([gx,gy,r],i)=>{
-      const q=Math.max(0,Math.sin(p+i*1.7));
-      if(q>0.55) profileSmoothCircle(frame,gx,gy,r*(0.8+0.25*q),warm,150+Math.round(q*90),true);
+    // VISIBLE ANIMATED METAL SHINE. The highlight travels around the frame over
+    // the six GIF frames, making the Royal Gold skin visibly animated in Discord.
+    const sweep=Math.floor((phase%1)*4);
+    const shineAlpha=185+Math.round(45*(0.5+0.5*Math.sin(p*Math.PI*2)));
+    const shine=[255,241,170];
+    const shineTop=[x+65, x+w-65, x+65, x+w-65][sweep];
+    const shineBottom=[x+w-65, x+65, x+w-65, x+65][sweep];
+
+    // Moving top/bottom metal bars.
+    profileSmoothLine(frame,shineTop,y+22,shineTop+34,y+22,4.0,shine,shineAlpha);
+    profileSmoothLine(frame,shineBottom,y+h-22,shineBottom-34,y+h-22,4.0,shine,shineAlpha);
+
+    // A second moving highlight crosses the side rails in the opposite direction.
+    const sideY=y+65+((phase* (h-130))%(h-130));
+    profileSmoothLine(frame,x+22,sideY,x+22,sideY+30,4.0,shine,shineAlpha);
+    const sideY2=y+h-65-((phase* (h-130))%(h-130));
+    profileSmoothLine(frame,x+w-22,sideY2,x+w-22,sideY2-30,4.0,shine,shineAlpha);
+
+    // Four large corner glints pulse in sequence. These are intentionally few,
+    // bold, and gold so they survive Discord palette reduction.
+    const corners=[[x+14,y+14],[x+w-14,y+14],[x+w-14,y+h-14],[x+14,y+h-14]];
+    corners.forEach(([gx,gy],i)=>{
+      const q=Math.max(0,Math.sin((phase+i/4)*Math.PI*2));
+      if(q>0.12){
+        profileSmoothCircle(frame,gx,gy,3.0+2.2*q,[255,225,120],Math.round(150+100*q),true);
+      }
     });
   } else if(style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
