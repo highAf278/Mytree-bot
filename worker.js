@@ -22615,42 +22615,34 @@ async function handleGift(env, interaction) {
   );
 }
 
-async function handleFree(env, interaction, guess, targetId) {
+async function handleFree(env, interaction, guess) {
   const normalized = String(guess || "").trim().toLowerCase();
   const user = getUserFromInteraction(interaction);
   if (!user) return;
 
-  // GOLD is an owner-issued gift code. The owner chooses the recipient with /free.
+  // GOLD is a public self-claim code. Anyone can enter GOLD once to receive Royal Gold.
   if (normalized !== "gold") {
     await sendText(env, interaction, "🎁 **FREE GIFT**\n\n❌ That code isn't active.");
     return;
   }
 
-  if (!(await requireOwner(env, interaction))) return;
-
-  const recipientId = String(targetId || "").trim();
-  if (!recipientId) {
-    await sendText(env, interaction, "❌ Choose the person who should receive the **GOLD** frame.");
-    return;
-  }
-
-  const recipient = await getPlayer(env, recipientId);
-  updatePlayerIdentity(recipient, interaction);
-  recipient.inventory = Array.isArray(recipient.inventory) ? recipient.inventory : [];
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  player.inventory = Array.isArray(player.inventory) ? player.inventory : [];
 
   const inventoryId = "profile_frame_royal_gold";
-  if (recipient.inventory.includes(inventoryId)) {
-    await sendText(env, interaction, `👑 <@${recipientId}> already owns **Royal Gold**.`);
+  if (player.inventory.includes(inventoryId)) {
+    await sendText(env, interaction, "👑 You already own the FREE **Royal Gold Profile Frame**!\n\nUse **/profile → Frames** to equip it.");
     return;
   }
 
-  recipient.inventory.push(inventoryId);
-  await savePlayer(env, recipient);
+  player.inventory.push(inventoryId);
+  await savePlayer(env, player);
 
   await sendText(
     env,
     interaction,
-    `👑 **ROYAL GOLD GIFTED!**\n\n<@${recipientId}> received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nThey can open **/profile → Frames** to equip it.`
+    `👑 **ROYAL GOLD UNLOCKED!**\n\nYou received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nOpen **/profile → Frames** to equip it. ✨`
   );
 }
 async function handleBlame(env, interaction) {
@@ -23061,7 +23053,7 @@ async function handleCommand(
   }
 
   if (name === "free") {
-    await handleFree(env, interaction, getOption(interaction, "guess"), getOption(interaction, "user"));
+    await handleFree(env, interaction, getOption(interaction, "guess"));
     return;
   }
 
@@ -25702,10 +25694,9 @@ const COMMANDS = [
 
   {
     name: "free",
-    description: "Enter a secret code to unlock a free Werewives gift",
+    description: "Enter the GOLD code to unlock the free Royal Gold profile frame",
     options: [
-      { type: 3, name: "guess", description: "Secret gift code", required: true },
-      { type: 6, name: "user", description: "Person receiving the gift", required: true }
+      { type: 3, name: "guess", description: "Secret gift code", required: true }
     ]
   },
 
@@ -26495,4 +26486,3 @@ export default {
     );
   }
 };
-
