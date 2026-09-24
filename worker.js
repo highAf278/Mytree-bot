@@ -655,7 +655,8 @@ function defaultPlayer() {
       decoration: null,
       effect: null,
       theme: "cherry",
-      tree: "cherry"
+      tree: "cherry",
+      frame: ""
     },
     dailyRiddleDay: "",
     dailyRiddleSolved: false,
@@ -734,12 +735,6 @@ function defaultPlayer() {
     courtGuilty: 0,
     courtNotGuilty: 0,
     surpriseAlertClaimed: false,
-    freeGiftClaimed: false,
-    freeGoldenPickleClaimed: false,
-    freeMidnightRiderClaimed: false,
-    freeBeansClaimed: false,
-    freeEggwardClaimed: false,
-    freeHedgyClaimed: false,
     shopPurchases: 0,
     treeChecks: 0,
     catItemBought: false,
@@ -1262,9 +1257,9 @@ async function renderProfileDirect(env,player){
   return await renderProfileDirectFrame(env,player,0);
 }
 
-async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif") {
+async function editOriginalResponseWithFile(env, interaction, content, filename, bytes, contentType = "image/gif", components = []) {
   const form = new FormData();
-  form.append("payload_json", JSON.stringify({ content, attachments: [{ id: 0, filename }] }));
+  form.append("payload_json", JSON.stringify({ content, components, attachments: [{ id: 0, filename }] }));
   form.append("files[0]", new Blob([bytes], { type: contentType }), filename);
   return fetch(
     `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
@@ -1335,20 +1330,26 @@ async function handleProfile(env, interaction) {
   try{
     // Direct Worker-side GIF rendering: no Browser Rendering/WebSocket dependency.
     const gif=await renderProfileDirectAnimated(env,player);
+    const profileComponents = targetId === user.id
+      ? [row(button("👑 Frames", `profile_frames:${user.id}`, 2))]
+      : [];
     const response=await editOriginalResponseWithFile(
       env,interaction,
       `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,
-      "werewives-profile.gif",gif,"image/gif"
+      "werewives-profile.gif",gif,"image/gif",profileComponents
     );
     if(!response.ok)throw new Error(`Profile upload failed: ${response.status} ${await response.text()}`);
   }catch(error){
     console.error("Profile animated direct render failed",error);
     try{
       const png=await renderProfileDirect(env,player);
+      const profileComponents = targetId === user.id
+        ? [row(button("👑 Frames", `profile_frames:${user.id}`, 2))]
+        : [];
       const response=await editOriginalResponseWithFile(
         env,interaction,
         `🌸 **${escapeHTML(player.displayName||player.username||"Werewife")}**'s Profile\n🏷️ ${escapeHTML(title)}\n✨ Name Effect: ${escapeHTML(effect)}`,
-        "werewives-profile.png",png,"image/png"
+        "werewives-profile.png",png,"image/png",profileComponents
       );
       if(!response.ok)throw new Error(`Profile fallback upload failed: ${response.status} ${await response.text()}`);
     }catch(fallbackError){
@@ -3759,7 +3760,7 @@ function drawProfileEffectParticles(frame,effectId,phase){
 }
 
 function profileFrameKey(player){
-  return String(player.storeTestFrame||player.equippedFrame||"").trim();
+  return String(player.equipped?.frame || player.equippedFrame || player.storeTestFrame || "").trim();
 }
 function profileBadgeKeys(player){
   const test=Array.isArray(player.storeTestBadges)?player.storeTestBadges:[];
@@ -7762,6 +7763,68 @@ async function buyItem(
    CUSTOMIZE
 ========================================================= */
 
+async function showProfileFrames(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || user.id !== targetId) {
+    await sendText(env, interaction, "❌ You can only equip profile frames on your own profile.");
+    return;
+  }
+
+  const player = await getPlayer(env, user.id);
+  const owned = [];
+  if (player.inventory.includes("profile_frame_royal_gold")) owned.push("royal_gold");
+
+  const rows = [];
+  for (const frameId of owned) {
+    const frame = PROFILE_FRAMES[frameId];
+    rows.push(row(button(
+      player.equipped?.frame === frameId ? `👑 ${frame.name} Equipped` : `👑 ${frame.name}`,
+      `equip_frame_${frameId}`,
+      player.equipped?.frame === frameId ? 3 : 2
+    )));
+  }
+
+  if (player.equipped?.frame) {
+    rows.push(row(button("❌ Remove Frame", "equip_frame_none", 2)));
+  }
+  rows.push(row(button("⬅️ Back to Profile", `profile_back:${user.id}`, 2)));
+
+  await sendText(
+    env,
+    interaction,
+    `👑 **PROFILE FRAMES**\n\n${owned.length ? "Choose a frame to equip on your profile." : "You don't own any profile frames yet."}`,
+    rows
+  );
+}
+
+async function equipProfileFrame(env, interaction, frameId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+
+  if (frameId === "none") {
+    player.equipped = { ...player.equipped, frame: "" };
+    await savePlayer(env, player);
+    await sendText(env, interaction, "👑 Profile frame removed. Your profile is back to the default frame.");
+    return;
+  }
+
+  if (!PROFILE_FRAMES[frameId]) {
+    await sendText(env, interaction, "❌ That profile frame doesn't exist.");
+    return;
+  }
+
+  const inventoryId = `profile_frame_${frameId}`;
+  if (!player.inventory.includes(inventoryId)) {
+    await sendText(env, interaction, "❌ You don't own that profile frame.");
+    return;
+  }
+
+  player.equipped = { ...player.equipped, frame: frameId };
+  await savePlayer(env, player);
+  await sendText(env, interaction, `👑 **${PROFILE_FRAMES[frameId].name}** is now equipped on your profile!\n\nUse **/profile** to see it. ✨`);
+}
+
 async function showCustomize(
   env,
   interaction
@@ -8861,6 +8924,7 @@ const INVENTORY_CATEGORIES = [
   ["backgrounds", "🖼️ Backgrounds"],
   ["effects", "✨ Effects"],
   ["decorations", "🎀 Decorations"],
+  ["frames", "👑 Frames"],
   ["gifts", "🎁 Gift Sets"]
 ];
 
@@ -8869,6 +8933,7 @@ const INVENTORY_CATEGORY_IDS = {
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
   effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "beans_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration"],
+  frames: ["profile_frame_royal_gold"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
 
@@ -8900,7 +8965,7 @@ async function showInventoryCategory(env, interaction, category, page = 0) {
   page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
   const pageItems = owned.slice(page * pageSize, page * pageSize + pageSize);
   const lines = pageItems.map(id => {
-    const label = id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || SHOP_ITEMS[id]?.name || id);
+    const label = id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || (id === "profile_frame_royal_gold" ? "👑 Royal Gold Profile Frame" : SHOP_ITEMS[id]?.name || id));
     return `• ${label} — ID: \`${id}\``;
   });
   const rows = [];
@@ -11185,6 +11250,27 @@ async function handleComponent(
       buyMap[id]
     );
 
+    return;
+  }
+
+  if (id.startsWith("profile_frames:")) {
+    const targetId = id.split(":")[1] || "";
+    await showProfileFrames(env, interaction, targetId);
+    return;
+  }
+
+  if (id === "equip_frame_none") {
+    await equipProfileFrame(env, interaction, "none");
+    return;
+  }
+
+  if (id.startsWith("equip_frame_")) {
+    await equipProfileFrame(env, interaction, id.slice("equip_frame_".length));
+    return;
+  }
+
+  if (id.startsWith("profile_back:")) {
+    await handleProfile(env, interaction);
     return;
   }
 
@@ -22529,60 +22615,43 @@ async function handleGift(env, interaction) {
   );
 }
 
-async function handleFree(env, interaction, guess) {
-  const normalized=String(guess||"").trim().toLowerCase();
-  const user=getUserFromInteraction(interaction); if(!user)return;
+async function handleFree(env, interaction, guess, targetId) {
+  const normalized = String(guess || "").trim().toLowerCase();
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
 
-  // PRIVATE GIFT CODE: BEANS. No hint is ever shown for this code.
-  if(normalized==="beans"){
-    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
-    if(player.freeBeansClaimed){await sendText(env,interaction,"🫘💥 You already claimed the FREE **Bean Burst Effect**! ✨");return;}
-    if(!player.inventory.includes("beans_effect"))player.inventory.push("beans_effect");
-    player.freeBeansClaimed=true;
-    await savePlayer(env,player);
-    await sendText(env,interaction,"🫘💥 **BEAN BURST UNLOCKED!**\n\nYou entered the secret code and received the FREE **Bean Burst Effect**!\n\n🫘 Beans fall from the sky...\n💥 Then they explode into sparkles! ✨\n\nEnjoy your extremely bean-y gift. 😭🫘✨");
+  // GOLD is an owner-issued gift code. The owner chooses the recipient with /free.
+  if (normalized !== "gold") {
+    await sendText(env, interaction, "🎁 **FREE GIFT**\n\n❌ That code isn't active.");
     return;
   }
 
-  // FREE GIFT CODE: EGGWARD. Unlocks the Eggward decoration.
-  if(normalized==="eggward"){
-    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
-    if(player.freeEggwardClaimed){await sendText(env,interaction,"🥚 You already claimed the FREE **Eggward Decoration**! ✨");return;}
-    if(!player.inventory.includes("eggward_decoration"))player.inventory.push("eggward_decoration");
-    player.freeEggwardClaimed=true;
-    await savePlayer(env,player);
-    await sendText(env,interaction,"🥚👁️ **EGGWARD UNLOCKED!**\n\nYou entered the secret code and received the FREE **Eggward Decoration**!\n\n🥚 Eggward is ready to stare into everyone's soul from your tree. 😭✨");
+  if (!(await requireOwner(env, interaction))) return;
+
+  const recipientId = String(targetId || "").trim();
+  if (!recipientId) {
+    await sendText(env, interaction, "❌ Choose the person who should receive the **GOLD** frame.");
     return;
   }
 
-  // FREE GIFT CODE: HEDGY. Unlocks the Hedgy decoration.
-  if(normalized==="hedgy"){
-    const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
-    if(player.freeHedgyClaimed){await sendText(env,interaction,"🦔 You already claimed the FREE **Hedgy Decoration**! ✨");return;}
-    if(!player.inventory.includes("hedgy_decoration"))player.inventory.push("hedgy_decoration");
-    player.freeHedgyClaimed=true;
-    await savePlayer(env,player);
-    await sendText(env,interaction,"🦔🌸 **HEDGY UNLOCKED!**\n\nYou entered the secret code and received the FREE **Hedgy Decoration**!\n\n🦔💗 Your adorable little Hedgy is ready for tree duty! ✨");
+  const recipient = await getPlayer(env, recipientId);
+  updatePlayerIdentity(recipient, interaction);
+  recipient.inventory = Array.isArray(recipient.inventory) ? recipient.inventory : [];
+
+  const inventoryId = "profile_frame_royal_gold";
+  if (recipient.inventory.includes(inventoryId)) {
+    await sendText(env, interaction, `👑 <@${recipientId}> already owns **Royal Gold**.`);
     return;
   }
 
-  if(normalized!=="tanner"&&normalized!=="bob"){
-    await sendText(env,interaction,"🎁 **FREE GIFT**\n\n❌ Nope! That code isn't active. 😈");
-    return;
-  }
+  recipient.inventory.push(inventoryId);
+  await savePlayer(env, recipient);
 
-  const player=await getPlayer(env,user.id); updatePlayerIdentity(player,interaction); player.inventory=Array.isArray(player.inventory)?player.inventory:[];
-  const isTanner=normalized==="tanner";
-  const claimKey=isTanner?"freeGoldenPickleClaimed":"freeMidnightRiderClaimed";
-  if(player[claimKey]){await sendText(env,interaction,`🎁 You already claimed the FREE **${isTanner?"Golden Pickle":"Midnight Rider"}** gift! 💗`);return;}
-  const giftIds=isTanner?["golden_pickle_tree","golden_pickle_background","golden_pickle_effect"]:["midnight_rider_tree","midnight_rider_background","midnight_rider_effect"];
-  for(const id of giftIds)if(!player.inventory.includes(id))player.inventory.push(id);
-  player[claimKey]=true;
-  /* Keep the old flag for backwards compatibility, but do not use it to block the other code. */
-  player.freeGiftClaimed=true;
-  await savePlayer(env,player);
-  if(isTanner)await sendText(env,interaction,"🥒✨ **GOLDEN PICKLE UNLOCKED!**\n\nYou guessed **TANNER** and received the FREE **Golden Pickle Set**!\n\n🌳 Golden Pickle Tree\n🖼️ Golden Pickle Background\n✨ Golden Pickle Effect\n\n✨ **You are golden pickle hoe ✨**");
-  else await sendText(env,interaction,"🏍️🌙 **MIDNIGHT RIDER UNLOCKED!**\n\nYou guessed **BOB** and received the FREE **Midnight Rider Set**!\n\n🌳 Midnight Rider Tree\n🖼️ Midnight Rider Background\n✨ Midnight Rider Effect");
+  await sendText(
+    env,
+    interaction,
+    `👑 **ROYAL GOLD GIFTED!**\n\n<@${recipientId}> received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nThey can open **/profile → Frames** to equip it.`
+  );
 }
 async function handleBlame(env, interaction) {
   if (!interaction.guild_id) {
@@ -22992,7 +23061,7 @@ async function handleCommand(
   }
 
   if (name === "free") {
-    await handleFree(env, interaction, getOption(interaction, "guess"));
+    await handleFree(env, interaction, getOption(interaction, "guess"), getOption(interaction, "user"));
     return;
   }
 
@@ -25635,7 +25704,8 @@ const COMMANDS = [
     name: "free",
     description: "Enter a secret code to unlock a free Werewives gift",
     options: [
-      { type: 3, name: "guess", description: "Your secret gift code", required: true }
+      { type: 3, name: "guess", description: "Secret gift code", required: true },
+      { type: 6, name: "user", description: "Person receiving the gift", required: true }
     ]
   },
 
@@ -26143,6 +26213,9 @@ export default {
       interaction.type === 3 &&
       (
         customId === "customize" ||
+        customId.startsWith("profile_frames:") ||
+        customId.startsWith("profile_back:") ||
+        customId.startsWith("equip_frame_") ||
         customId === "custom_effects" ||
         customId.startsWith("custom_effects_page_") ||
         customId.startsWith("equip_")
@@ -26422,3 +26495,4 @@ export default {
     );
   }
 };
+
