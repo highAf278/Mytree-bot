@@ -4435,21 +4435,49 @@ function drawProfileFrame(frame, frameId, phase=0){
     crownPoint(cx,crownBaseY-23);
     crownPoint(cx+20,crownBaseY-18);
 
-    // Crown jewels pulse subtly instead of staying static.
-    const crownPulse=0.78+0.22*(0.5+0.5*Math.sin(p*Math.PI*2));
-    profileSmoothCircle(frame,cx,crownBaseY-2,3.1,[255,235,150],Math.round(190+65*crownPulse),true);
-    profileSmoothCircle(frame,cx-15,crownBaseY-2,2.1,[255,210,80],Math.round(175+65*crownPulse),true);
-    profileSmoothCircle(frame,cx+15,crownBaseY-2,2.1,[255,210,80],Math.round(175+65*crownPulse),true);
+    // ROYAL GEM SET — exactly two rubies and two sapphires, kept large and
+    // high-contrast so Discord does not turn them into colored specks.
+    // Rubies = deep royal red; sapphires = dark royal blue. The center of the
+    // crown stays gold so the crest still reads as a gold crown first.
+    const rubyDark=[92,12,20], ruby=[168,24,36], rubyHi=[255,92,102];
+    const sapphireDark=[8,24,72], sapphire=[24,62,145], sapphireHi=[92,145,255];
+    const gemPulse=0.82+0.18*(0.5+0.5*Math.sin(p*Math.PI*2));
 
-    // Side heraldic medallions: large enough to remain visible in Discord.
+    const royalGem=(gx,gy,kind,scale=1)=>{
+      const dark=kind==='ruby'?rubyDark:sapphireDark;
+      const mid=kind==='ruby'?ruby:sapphire;
+      const hiGem=kind==='ruby'?rubyHi:sapphireHi;
+      const pulseA=Math.round(205+45*gemPulse);
+      // Dark metal bezel first: this keeps the gem legible against pink panels.
+      profileSmoothCircle(frame,gx,gy,5.8*scale,black2,255,true);
+      profileSmoothCircle(frame,gx,gy,4.5*scale,goldDark,255,true);
+      profileSmoothCircle(frame,gx,gy,3.65*scale,dark,255,true);
+      profileSmoothCircle(frame,gx,gy+0.25*scale,2.75*scale,mid,pulseA,true);
+      profileSmoothCircle(frame,gx-1.0*scale,gy-1.05*scale,0.9*scale,hiGem,Math.round(150+70*gemPulse),true);
+    };
+
+    // Two rubies flank the crown band.
+    royalGem(cx-16,crownBaseY-2,'ruby',0.92);
+    royalGem(cx+16,crownBaseY-2,'ruby',0.92);
+
+    // Two sapphires anchor the left/right heraldic medallions.
     const medallion=(mx,my)=>{
-      profileSmoothCircle(frame,mx,my,7.0,black,255,true);
-      profileSmoothCircle(frame,mx,my,5.6,gold,255,true);
-      profileSmoothCircle(frame,mx,my,2.6,black2,255,true);
-      profileDiamond(frame,mx,my,2.0,warm,255);
+      profileSmoothCircle(frame,mx,my,8.5,black,255,true);
+      profileSmoothCircle(frame,mx,my,7.0,gold,255,true);
+      royalGem(mx,my,'sapphire',0.92);
     };
     medallion(x+25,y+h/2);
     medallion(x+w-25,y+h/2);
+
+    // GEM ANIMATION: a restrained traveling glint makes the ruby/sapphire set
+    // visibly alive without turning the frame into a glitter effect.
+    const gemGlint=Math.max(0,Math.sin(p*Math.PI*2));
+    if(gemGlint>0.12){
+      profileSmoothCircle(frame,cx-16-0.9*gemGlint,crownBaseY-3-0.9*gemGlint,1.0,[255,235,235],Math.round(150+95*gemGlint),true);
+      profileSmoothCircle(frame,cx+16-0.9*gemGlint,crownBaseY-3-0.9*gemGlint,1.0,[255,235,235],Math.round(150+95*gemGlint),true);
+      profileSmoothCircle(frame,x+25-0.9*gemGlint,y+h/2-0.9*gemGlint,1.0,[185,215,255],Math.round(150+95*gemGlint),true);
+      profileSmoothCircle(frame,x+w-25-0.9*gemGlint,y+h/2-0.9*gemGlint,1.0,[185,215,255],Math.round(150+95*gemGlint),true);
+    }
 
     // VISIBLE ANIMATED METAL SHINE. The highlight travels around the frame over
     // the six GIF frames, making the Royal Gold skin visibly animated in Discord.
