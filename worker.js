@@ -19076,6 +19076,19 @@ async function startHeistNight(
   game,
   openingText = ""
 ) {
+  /* Never let an in-flight resolver restart a heist that was ended. */
+  if (!game || game.cancelled || game.status === "ended") return false;
+
+  const currentState = await getGuildState(env, game.guildId);
+  if (
+    !currentState.heist ||
+    currentState.heist.id !== game.id ||
+    currentState.heist.cancelled ||
+    currentState.heist.status === "ended"
+  ) {
+    return false;
+  }
+
   game.status = "night";
   game.round += 1;
   game.phaseEndsAt =
@@ -19093,6 +19106,19 @@ async function startHeistNight(
     player.cannotVote = false;
   }
 
+  /* Persist the new phase before any network awaits. If /heist end wins
+     the race, it clears this state and later checks will refuse to revive it. */
+  const state = await getGuildState(env, game.guildId);
+  if (
+    !state.heist ||
+    state.heist.id !== game.id ||
+    state.heist.cancelled ||
+    state.heist.status === "ended"
+  ) {
+    return false;
+  }
+  state.heist = game;
+  await saveGuildState(env, game.guildId, state);
 
   const intro =
     openingText ||
@@ -19108,11 +19134,6 @@ async function startHeistNight(
     intro,
     heistNightOpenButton(game)
   );
-
-
-  const state = await getGuildState(env, game.guildId);
-  state.heist = game;
-  await saveGuildState(env, game.guildId, state);
 
   return true;
 }
@@ -19508,11 +19529,20 @@ async function resolveHeistNight(
   env,
   game
 ) {
+  if (!game || game.cancelled || game.status !== "night") return;
+
+  /* Re-read KV so a timer/action holding an older object cannot resolve a
+     phase after /heist end has already cleared this game. */
+  const currentState = await getGuildState(env, game.guildId);
   if (
-    game.status !== "night"
+    !currentState.heist ||
+    currentState.heist.id !== game.id ||
+    currentState.heist.cancelled ||
+    currentState.heist.status !== "night"
   ) {
     return;
   }
+  game = currentState.heist;
 
   const alive =
     heistAlivePlayers(game);
@@ -20245,6 +20275,17 @@ async function resolveHeistNight(
     HEIST_VOTE_DURATION;
   game.votes = {};
 
+  const phaseState = await getGuildState(env, game.guildId);
+  if (
+    !phaseState.heist ||
+    phaseState.heist.id !== game.id ||
+    phaseState.heist.cancelled
+  ) {
+    return;
+  }
+  phaseState.heist = game;
+  await saveGuildState(env, game.guildId, phaseState);
+
   await sendHeistPrivateResults(
     env,
     game
@@ -20258,30 +20299,31 @@ async function resolveHeistNight(
     heistVoteButtons(game)
   );
 
-  const latestState =
-    await getGuildState(
-      env,
-      game.guildId
-    );
-
-  latestState.heist = game;
-
-  await saveGuildState(
-    env,
-    game.guildId,
-    latestState
-  );
+  /* Private result delivery may update the in-memory object. Persist those
+     harmless player-result fields only if this exact game is still active. */
+  const latestState = await getGuildState(env, game.guildId);
+  if (latestState.heist?.id === game.id && !latestState.heist.cancelled) {
+    latestState.heist = game;
+    await saveGuildState(env, game.guildId, latestState);
+  }
 }
 
 async function resolveHeistVote(
   env,
   game
 ) {
+  if (!game || game.cancelled || game.status !== "voting") return;
+
+  const currentState = await getGuildState(env, game.guildId);
   if (
-    game.status !== "voting"
+    !currentState.heist ||
+    currentState.heist.id !== game.id ||
+    currentState.heist.cancelled ||
+    currentState.heist.status !== "voting"
   ) {
     return;
   }
+  game = currentState.heist;
 
   const alive =
     heistAlivePlayers(game);
@@ -20658,6 +20700,15 @@ async function finishHeist(
   game.endedReason = reason || "The heist ended.";
   game.phaseEndsAt = 0;
 
+  /* Mark the heist ended in KV BEFORE any network/payout awaits. This is the
+     important part: an older timer invocation must see no active game and
+     must never be able to resurrect Night/Day after /heist end. */
+  const endedState = await getGuildState(env, game.guildId);
+  if (endedState.heist?.id === game.id) {
+    endedState.heist = null;
+    await saveGuildState(env, game.guildId, endedState);
+  }
+
   const thief =
     Object.values(game.players).find(
       player => player.role === "thief"
@@ -20745,12 +20796,6 @@ async function finishHeist(
   );
 
 
-  const latestState = await getGuildState(env, game.guildId);
-  if (latestState.heist?.id === game.id) {
-    latestState.heist = null;
-    await saveGuildState(env, game.guildId, latestState);
-  }
-
   game.status = "ended";
 }
 
@@ -20794,6 +20839,13 @@ async function processHeistTimers(
       if (!game) continue;
 
       if (
+        game.cancelled ||
+        game.status === "ended"
+      ) {
+        continue;
+      }
+
+      if (
         game.status === "night" &&
         Date.now() >=
           Number(game.phaseEndsAt || 0)
@@ -20802,12 +20854,6 @@ async function processHeistTimers(
           env,
           game
         );
-
-        const refreshed = await getGuildState(env, guildId);
-        if (refreshed.heist?.id === game.id) {
-          refreshed.heist = game;
-          await saveGuildState(env, guildId, refreshed);
-        }
       } else if (
         game.status === "voting" &&
         Date.now() >=
@@ -20817,12 +20863,6 @@ async function processHeistTimers(
           env,
           game
         );
-
-        const refreshed = await getGuildState(env, guildId);
-        if (refreshed.heist?.id === game.id) {
-          refreshed.heist = game;
-          await saveGuildState(env, guildId, refreshed);
-        }
       }
     } catch (error) {
       console.error(
@@ -21407,17 +21447,17 @@ async function handleHeistEnd(
 
   game.cancelled = true;
 
+  /* Clear the persistent active game FIRST. finishHeist can then safely send
+     the closing message without leaving a window where an old timer can
+     bring the heist back. */
+  state.heist = null;
+  await saveGuildState(env, interaction.guild_id, state);
+
   await finishHeist(
     env,
     game,
     "🛑 The heist was ended by the host."
   );
-
-  const latestState = await getGuildState(env, interaction.guild_id);
-  if (latestState.heist?.id === game.id) {
-    latestState.heist = null;
-    await saveGuildState(env, interaction.guild_id, latestState);
-  }
 
   await sendText(
     env,
