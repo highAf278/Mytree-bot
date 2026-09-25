@@ -9156,6 +9156,40 @@ async function handleBirthdayCommand(env, interaction) {
   const guildId = interaction.guild_id;
   const user = getUserFromInteraction(interaction);
   if (!guildId || !user) return sendText(env, interaction, "❌ Birthday features can only be used inside a server.");
+
+  // DIRECT TODAY CHECK: /birthday must be able to recover the event from the
+  // user's saved birthday even if a background timer previously overwrote the
+  // guild birthday registry. The player's birthday record is the source of
+  // truth for whether this user's birthday is today.
+  const currentPlayer = await getPlayer(env, user.id);
+  if (currentPlayer.birthdayUnlocked && currentPlayer.birthdayMonth && currentPlayer.birthdayDay && isBirthdayDate(new Date(), currentPlayer.birthdayMonth, currentPlayer.birthdayDay)) {
+    const state = await getGuildState(env, guildId);
+    const key = birthdayTodayKey();
+    const name = currentPlayer.displayName || currentPlayer.username || user.global_name || user.username || "Werewife";
+    if (!state.birthday || state.birthday.activeDate !== key) {
+      state.birthday = {
+        active: true,
+        activeDate: key,
+        birthdayIds: [user.id],
+        birthdayNames: [name],
+        announced: false,
+        nextFrightHuntAt: Date.now(),
+        huntItems: [],
+        serverEvents: {},
+        bingoBoards: {},
+        games: {},
+        lastTheme: "spooky",
+        manualTestBirthdayIds: [user.id]
+      };
+    } else {
+      state.birthday.active = true;
+      state.birthday.birthdayIds = Array.from(new Set([...(state.birthday.birthdayIds || []), user.id]));
+      state.birthday.birthdayNames = Array.from(new Set([...(state.birthday.birthdayNames || []), name]));
+      state.birthday.manualTestBirthdayIds = Array.from(new Set([...(state.birthday.manualTestBirthdayIds || []), user.id]));
+    }
+    await saveGuildState(env, guildId, state);
+  }
+
   const { state, people } = await ensureBirthdayEvent(env, guildId);
   if (!people.length) return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(false));
   return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(true));
