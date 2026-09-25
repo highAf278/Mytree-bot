@@ -9091,18 +9091,19 @@ async function ensureBirthdayEvent(env, guildId) {
   const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
     ? state.birthday.manualTestBirthdayIds.filter(Boolean)
     : [];
-  // If this guild already recorded birthday IDs for TODAY, keep using them
-  // even if a timer briefly flipped `active` false. The saved birthday registry
-  // is authoritative for the current calendar date.
-  const activeIds = state.birthday?.activeDate === key
+  // IMPORTANT: if today's birthday was previously activated and then a
+  // background pass accidentally flipped `active` to false, the saved
+  // birthday registry must still be able to revive it. The old check required
+  // active=true before using the fallback IDs, which made a birthday that had
+  // been closed once impossible to reopen on the same calendar day.
+  const registryIds = state.birthday?.activeDate === key
     ? (Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [])
     : [];
 
-  // A birthday that was explicitly activated today is authoritative. Do not
-  // close the party merely because Discord's member lookup temporarily fails
-  // or because the player record has not been indexed by the member scan yet.
-  // The birthday-set command stores the user IDs directly in guild state.
-  const fallbackIds = Array.from(new Set([...manualIds, ...activeIds]));
+  // A birthday explicitly saved for today is authoritative. Do not depend on
+  // Discord's member-list scan to rediscover it, and do not let a stale active
+  // flag prevent recovery.
+  const fallbackIds = Array.from(new Set([...manualIds, ...registryIds]));
   if (!people.length && state.birthday?.activeDate === key && fallbackIds.length) {
     people = [];
     for (const id of fallbackIds) {
@@ -9155,30 +9156,9 @@ async function handleBirthdayCommand(env, interaction) {
   const guildId = interaction.guild_id;
   const user = getUserFromInteraction(interaction);
   if (!guildId || !user) return sendText(env, interaction, "❌ Birthday features can only be used inside a server.");
-
-  // Fast authoritative check for the person actually opening /birthday.
-  // This guarantees that a saved birthday for TODAY can activate the party
-  // even if Discord's member-list scan is incomplete or a timer left the
-  // guild registry temporarily inactive.
-  const me = await getPlayer(env, user.id);
-  if (me?.birthdayMonth && me?.birthdayDay && isBirthdayDate(new Date(), me.birthdayMonth, me.birthdayDay)) {
-    const state = await getGuildState(env, guildId);
-    const key = birthdayTodayKey();
-    const targetName = me.displayName || me.username || user.global_name || user.username || "Werewife";
-    if (!state.birthday || state.birthday.activeDate !== key) {
-      state.birthday = { active:true, activeDate:key, birthdayIds:[user.id], birthdayNames:[targetName], announced:false, nextFrightHuntAt:Date.now(), huntItems:[], serverEvents:{}, bingoBoards:{}, games:{}, lastTheme:"spooky", manualTestBirthdayIds:[user.id] };
-    } else {
-      state.birthday.active = true;
-      state.birthday.birthdayIds = Array.from(new Set([...(state.birthday.birthdayIds||[]), user.id]));
-      state.birthday.birthdayNames = Array.from(new Set([...(state.birthday.birthdayNames||[]), targetName]));
-      state.birthday.manualTestBirthdayIds = Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]), user.id]));
-    }
-    await saveGuildState(env, guildId, state);
-  }
-
-  const ensured = await ensureBirthdayEvent(env, guildId);
-  if (!ensured.people.length) return sendText(env, interaction, birthdayMainText(ensured.state, ensured.people), birthdayMenuComponents(false));
-  return sendText(env, interaction, birthdayMainText(ensured.state, ensured.people), birthdayMenuComponents(true));
+  const { state, people } = await ensureBirthdayEvent(env, guildId);
+  if (!people.length) return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(false));
+  return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(true));
 }
 
 async function handleBirthdayGamesCommand(env, interaction) {
