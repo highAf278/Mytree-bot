@@ -9072,7 +9072,7 @@ async function getBirthdayPeopleForGuild(env, guildId) {
   for (const member of members) {
     const p = await getPlayer(env, member.id);
     updatePlayerIdentity(p, { member: { user: { id: member.id, username: member.username, global_name: member.displayName } } });
-    if (p.birthdayMonth && p.birthdayDay && isBirthdayDate(new Date(), p.birthdayMonth, p.birthdayDay)) people.push(p);
+    if (p.birthdayUnlocked && p.birthdayMonth && p.birthdayDay && isBirthdayDate(new Date(), p.birthdayMonth, p.birthdayDay)) people.push(p);
   }
   return people;
 }
@@ -9113,10 +9113,10 @@ async function ensureBirthdayEvent(env, guildId) {
   }
 
   if (!people.length) {
-    if (state.birthday?.activeDate === key && state.birthday?.active && !fallbackIds.length) {
-      state.birthday.active = false;
-      await saveGuildState(env, guildId, state);
-    }
+    // Do NOT deactivate a birthday for the current calendar day here.
+    // Background member/KV lookups can temporarily return no players, and
+    // writing active=false here can race with /birthday-set and erase a
+    // perfectly valid birthday. The separate expiry pass handles old dates.
     return { state, people: [] };
   }
   if (!state.birthday || state.birthday.activeDate !== key) {
@@ -10247,7 +10247,7 @@ async function forceBirthdayServerEvent(env,interaction){
   return sendText(env,interaction,`🧪 **Birthday server event forced:** ${action}\n\nThe event announcement was sent and the matching server Bingo square was marked.`);
 }
 
-async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);const key=birthdayTodayKey();if(!people.length){if(state.birthday?.activeDate===key&&state.birthday.active){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};await saveGuildState(env,guildId,state);}continue;}if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
+async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);if(!people.length)continue;if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
 
 async function expireBirthdayEventState(env){const key=birthdayTodayKey();for(const guildId of await getKnownGuildIds(env)){const state=await getGuildState(env,guildId);if(state.birthday?.active&&state.birthday.activeDate!==key){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};state.birthday.bingoBoards={};await saveGuildState(env,guildId,state);}}}
 
