@@ -9091,17 +9091,18 @@ async function ensureBirthdayEvent(env, guildId) {
   const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
     ? state.birthday.manualTestBirthdayIds.filter(Boolean)
     : [];
-  // If today's birthday registry exists, its IDs are authoritative even if
-  // an earlier timer pass accidentally flipped `active` to false. The registry
-  // is keyed by today's Eastern date, so it cannot resurrect an old birthday.
-  const todayIds = state.birthday?.activeDate === key
+  // If this guild already recorded birthday IDs for TODAY, keep using them
+  // even if a timer briefly flipped `active` false. The saved birthday registry
+  // is authoritative for the current calendar date.
+  const activeIds = state.birthday?.activeDate === key
     ? (Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [])
     : [];
 
-  // A birthday that was explicitly saved/activated today is authoritative.
-  // Do not close the party merely because Discord's member lookup temporarily
-  // fails or because the player record has not been indexed by the member scan.
-  const fallbackIds = Array.from(new Set([...manualIds, ...todayIds]));
+  // A birthday that was explicitly activated today is authoritative. Do not
+  // close the party merely because Discord's member lookup temporarily fails
+  // or because the player record has not been indexed by the member scan yet.
+  // The birthday-set command stores the user IDs directly in guild state.
+  const fallbackIds = Array.from(new Set([...manualIds, ...activeIds]));
   if (!people.length && state.birthday?.activeDate === key && fallbackIds.length) {
     people = [];
     for (const id of fallbackIds) {
@@ -9154,9 +9155,30 @@ async function handleBirthdayCommand(env, interaction) {
   const guildId = interaction.guild_id;
   const user = getUserFromInteraction(interaction);
   if (!guildId || !user) return sendText(env, interaction, "❌ Birthday features can only be used inside a server.");
-  const { state, people } = await ensureBirthdayEvent(env, guildId);
-  if (!people.length) return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(false));
-  return sendText(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(true));
+
+  // Fast authoritative check for the person actually opening /birthday.
+  // This guarantees that a saved birthday for TODAY can activate the party
+  // even if Discord's member-list scan is incomplete or a timer left the
+  // guild registry temporarily inactive.
+  const me = await getPlayer(env, user.id);
+  if (me?.birthdayMonth && me?.birthdayDay && isBirthdayDate(new Date(), me.birthdayMonth, me.birthdayDay)) {
+    const state = await getGuildState(env, guildId);
+    const key = birthdayTodayKey();
+    const targetName = me.displayName || me.username || user.global_name || user.username || "Werewife";
+    if (!state.birthday || state.birthday.activeDate !== key) {
+      state.birthday = { active:true, activeDate:key, birthdayIds:[user.id], birthdayNames:[targetName], announced:false, nextFrightHuntAt:Date.now(), huntItems:[], serverEvents:{}, bingoBoards:{}, games:{}, lastTheme:"spooky", manualTestBirthdayIds:[user.id] };
+    } else {
+      state.birthday.active = true;
+      state.birthday.birthdayIds = Array.from(new Set([...(state.birthday.birthdayIds||[]), user.id]));
+      state.birthday.birthdayNames = Array.from(new Set([...(state.birthday.birthdayNames||[]), targetName]));
+      state.birthday.manualTestBirthdayIds = Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]), user.id]));
+    }
+    await saveGuildState(env, guildId, state);
+  }
+
+  const ensured = await ensureBirthdayEvent(env, guildId);
+  if (!ensured.people.length) return sendText(env, interaction, birthdayMainText(ensured.state, ensured.people), birthdayMenuComponents(false));
+  return sendText(env, interaction, birthdayMainText(ensured.state, ensured.people), birthdayMenuComponents(true));
 }
 
 async function handleBirthdayGamesCommand(env, interaction) {
