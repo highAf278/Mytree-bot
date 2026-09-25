@@ -9091,16 +9091,18 @@ async function ensureBirthdayEvent(env, guildId) {
   const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
     ? state.birthday.manualTestBirthdayIds.filter(Boolean)
     : [];
-  const activeIds = state.birthday?.activeDate === key && state.birthday?.active
+  // If today's birthday registry exists, its IDs are authoritative even if
+  // an earlier timer pass accidentally flipped `active` to false. The registry
+  // is keyed by today's Eastern date, so it cannot resurrect an old birthday.
+  const todayIds = state.birthday?.activeDate === key
     ? (Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [])
     : [];
 
-  // A birthday that was explicitly activated today is authoritative. Do not
-  // close the party merely because Discord's member lookup temporarily fails
-  // or because the player record has not been indexed by the member scan yet.
-  // The birthday-set command stores the user IDs directly in guild state.
-  const fallbackIds = Array.from(new Set([...manualIds, ...activeIds]));
-  if (!people.length && state.birthday?.activeDate === key && state.birthday?.active && fallbackIds.length) {
+  // A birthday that was explicitly saved/activated today is authoritative.
+  // Do not close the party merely because Discord's member lookup temporarily
+  // fails or because the player record has not been indexed by the member scan.
+  const fallbackIds = Array.from(new Set([...manualIds, ...todayIds]));
+  if (!people.length && state.birthday?.activeDate === key && fallbackIds.length) {
     people = [];
     for (const id of fallbackIds) {
       const p = await getPlayer(env, id);
