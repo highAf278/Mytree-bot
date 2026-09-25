@@ -9089,18 +9089,30 @@ async function ensureBirthdayEvent(env, guildId) {
   // directly in guild state. This prevents the birthday party from vanishing
   // when Discord member lookup or an older player record cannot be re-read.
   const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
-    ? state.birthday.manualTestBirthdayIds
+    ? state.birthday.manualTestBirthdayIds.filter(Boolean)
     : [];
-  if (!people.length && state.birthday?.activeDate === key && state.birthday?.active && manualIds.length) {
+  const activeIds = state.birthday?.activeDate === key && state.birthday?.active
+    ? (Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [])
+    : [];
+
+  // A birthday that was explicitly activated today is authoritative. Do not
+  // close the party merely because Discord's member lookup temporarily fails
+  // or because the player record has not been indexed by the member scan yet.
+  // The birthday-set command stores the user IDs directly in guild state.
+  const fallbackIds = Array.from(new Set([...manualIds, ...activeIds]));
+  if (!people.length && state.birthday?.activeDate === key && state.birthday?.active && fallbackIds.length) {
     people = [];
-    for (const id of manualIds) {
+    for (const id of fallbackIds) {
       const p = await getPlayer(env, id);
       if (p?.userId) people.push(p);
     }
   }
 
   if (!people.length) {
-    if (state.birthday?.activeDate === key) { state.birthday.active = false; await saveGuildState(env, guildId, state); }
+    if (state.birthday?.activeDate === key && state.birthday?.active && !fallbackIds.length) {
+      state.birthday.active = false;
+      await saveGuildState(env, guildId, state);
+    }
     return { state, people: [] };
   }
   if (!state.birthday || state.birthday.activeDate !== key) {
@@ -9197,6 +9209,12 @@ async function handleBirthdaySet(env, interaction) {
   targetPlayer.birthdayMonth=month;
   targetPlayer.birthdayDay=day;
   targetPlayer.birthdayUnlocked=true;
+
+  // Persist the birthday immediately. Previously the fields were changed only
+  // on the in-memory player object, so a later getPlayer() could reload the
+  // old birthday and make today's activation disappear.
+  await savePlayer(env, targetPlayer, requestedUserId);
+
   // If the saved date is TODAY, immediately seed the guild birthday registry.
   // This makes the party activation survive the next /birthday/button request.
   if (interaction.guild_id && isBirthdayDate(new Date(), month, day)) {
@@ -9212,6 +9230,11 @@ async function handleBirthdaySet(env, interaction) {
       state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),targetName]));
       state.birthday.manualTestBirthdayIds=Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]),requestedUserId]));
     }
+    // Keep the explicit registry even when today's event already existed.
+    // This makes the activation survive member-list lookup failures.
+    state.birthday.manualTestBirthdayIds=Array.from(new Set([...(state.birthday.manualTestBirthdayIds||[]),requestedUserId]));
+    state.birthday.birthdayIds=Array.from(new Set([...(state.birthday.birthdayIds||[]),requestedUserId]));
+    state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),targetName]));
     await saveGuildState(env,guildId,state);
   }
 
