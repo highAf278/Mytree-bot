@@ -9080,30 +9080,86 @@ async function getBirthdayPeopleForGuild(env, guildId) {
 function birthdayPersonId(state, userId) { return Array.isArray(state?.birthday?.birthdayIds) && state.birthday.birthdayIds.includes(userId); }
 function birthdayName(state) { return state?.birthday?.birthdayNames?.length ? state.birthday.birthdayNames.join(", ") : "the birthday Werewife"; }
 
+async function getBirthdayRegistry(env, guildId) {
+  if (!guildId) return null;
+  try {
+    const raw = await env.TREE_DATA.get(`birthday:${guildId}`);
+    if (!raw) return null;
+    const registry = JSON.parse(raw);
+    return registry && typeof registry === "object" ? registry : null;
+  } catch (error) {
+    console.error(`Birthday registry read failed for guild ${guildId}:`, error);
+    return null;
+  }
+}
+
+async function saveBirthdayRegistry(env, guildId, registry) {
+  if (!guildId || !registry) return;
+  await env.TREE_DATA.put(`birthday:${guildId}`, JSON.stringify(registry));
+}
+
 async function ensureBirthdayEvent(env, guildId) {
   const state = await getGuildState(env, guildId);
   let people = await getBirthdayPeopleForGuild(env, guildId);
   const key = birthdayTodayKey();
 
-  // TEST/RECOVERY SAFETY: /birthday-set for today's date records the user
-  // directly in guild state. This prevents the birthday party from vanishing
-  // when Discord member lookup or an older player record cannot be re-read.
+  // The birthday registry has its own KV record. Guild state is shared by many
+  // unrelated features, so a stale save from another feature can overwrite
+  // state.birthday after /birthday-set succeeds. The dedicated registry is the
+  // authoritative activation record for today's birthday.
+  const dedicatedRegistry = await getBirthdayRegistry(env, guildId);
+  const dedicatedIds = dedicatedRegistry?.activeDate === key
+    ? (Array.isArray(dedicatedRegistry.birthdayIds) ? dedicatedRegistry.birthdayIds.filter(Boolean) : [])
+    : [];
+
+  if (dedicatedIds.length) {
+    state.birthday = {
+      ...(state.birthday || {}),
+      active: true,
+      activeDate: key,
+      birthdayIds: dedicatedIds,
+      birthdayNames: Array.isArray(dedicatedRegistry.birthdayNames)
+        ? dedicatedRegistry.birthdayNames
+        : [],
+      announced: Boolean(state.birthday?.activeDate === key && state.birthday?.announced),
+      nextFrightHuntAt: state.birthday?.activeDate === key
+        ? Number(state.birthday.nextFrightHuntAt || Date.now())
+        : Date.now(),
+      huntItems: state.birthday?.activeDate === key && Array.isArray(state.birthday.huntItems) ? state.birthday.huntItems : [],
+      serverEvents: state.birthday?.activeDate === key && state.birthday.serverEvents ? state.birthday.serverEvents : {},
+      bingoBoards: state.birthday?.activeDate === key && state.birthday.bingoBoards ? state.birthday.bingoBoards : {},
+      games: state.birthday?.activeDate === key && state.birthday.games ? state.birthday.games : {},
+      lastTheme: state.birthday?.activeDate === key ? (state.birthday.lastTheme || "spooky") : "spooky",
+      manualTestBirthdayIds: dedicatedIds
+    };
+    // Rehydrate the shared state immediately so the rest of the birthday
+    // feature sees the same active event.
+    await saveGuildState(env, guildId, state);
+
+    people = [];
+    for (const id of dedicatedIds) {
+      const p = await getPlayer(env, id);
+      if (p?.userId) people.push(p);
+    }
+  }
+
+  // Legacy/recovery IDs kept in the guild state are still supported for
+  // birthdays that were activated before the dedicated registry existed.
   const manualIds = Array.isArray(state.birthday?.manualTestBirthdayIds)
     ? state.birthday.manualTestBirthdayIds.filter(Boolean)
     : [];
-  // IMPORTANT: if today's birthday was previously activated and then a
-  // background pass accidentally flipped `active` to false, the saved
-  // birthday registry must still be able to revive it. The old check required
-  // active=true before using the fallback IDs, which made a birthday that had
-  // been closed once impossible to reopen on the same calendar day.
   const registryIds = state.birthday?.activeDate === key
     ? (Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [])
     : [];
-
-  // A birthday explicitly saved for today is authoritative. Do not depend on
-  // Discord's member-list scan to rediscover it, and do not let a stale active
-  // flag prevent recovery.
   const fallbackIds = Array.from(new Set([...manualIds, ...registryIds]));
+
+  if (!people.length && state.birthday?.activeDate === key && fallbackIds.length) {
+    people = [];
+    for (const id of fallbackIds) {
+      const p = await getPlayer(env, id);
+      if (p?.userId) people.push(p);
+    }
+  }
   if (!people.length && state.birthday?.activeDate === key && fallbackIds.length) {
     people = [];
     for (const id of fallbackIds) {
@@ -9274,6 +9330,11 @@ async function handleBirthdaySet(env, interaction) {
     state.birthday.birthdayIds=Array.from(new Set([...(state.birthday.birthdayIds||[]),requestedUserId]));
     state.birthday.birthdayNames=Array.from(new Set([...(state.birthday.birthdayNames||[]),targetName]));
     await saveGuildState(env,guildId,state);
+    await saveBirthdayRegistry(env,guildId,{
+      activeDate:key,
+      birthdayIds:Array.from(new Set([...(state.birthday.birthdayIds||[]),requestedUserId])),
+      birthdayNames:Array.from(new Set([...(state.birthday.birthdayNames||[]),targetName]))
+    });
   }
 
   if (isOwner && previousBirthday) {
@@ -10283,7 +10344,23 @@ async function forceBirthdayServerEvent(env,interaction){
 
 async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);if(!people.length)continue;if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
 
-async function expireBirthdayEventState(env){const key=birthdayTodayKey();for(const guildId of await getKnownGuildIds(env)){const state=await getGuildState(env,guildId);if(state.birthday?.active&&state.birthday.activeDate!==key){state.birthday.active=false;state.birthday.huntItems=[];state.birthday.games={};state.birthday.bingoBoards={};await saveGuildState(env,guildId,state);}}}
+async function expireBirthdayEventState(env){
+  const key=birthdayTodayKey();
+  for(const guildId of await getKnownGuildIds(env)){
+    const state=await getGuildState(env,guildId);
+    const registry=await getBirthdayRegistry(env,guildId);
+    if(registry?.activeDate&&registry.activeDate!==key){
+      await env.TREE_DATA.delete(`birthday:${guildId}`);
+    }
+    if(state.birthday?.active&&state.birthday.activeDate!==key){
+      state.birthday.active=false;
+      state.birthday.huntItems=[];
+      state.birthday.games={};
+      state.birthday.bingoBoards={};
+      await saveGuildState(env,guildId,state);
+    }
+  }
+}
 
 /* =========================================================
    ANNOUNCEMENTS COMMAND
