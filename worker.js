@@ -9024,13 +9024,12 @@ const BIRTHDAY_BINGO_PERSONAL = [
   ["candle_lit", "🕯️ Claim a Candle from Fright Hunt"],
   ["earn_candy", "✨ Earn Birthday Candies"],
   ["send_gift", "🎁 Send a birthday gift"],
-  ["receive_gift", "🎁 Receive a birthday gift"],
   ["trickster", "🦝 Use Birthday Trickster"],
   ["cupcake", "🧁 Complete Wicked Cupcake Tower"],
   ["bakery", "🦇 Complete Batty Cake Bakery"],
   ["roulette", "🎃 Play Pumpkin Roulette"],
   ["curse", "👻 Complete The Birthday Curse"],
-  ["wish", "🌙 Birthday Wish Ritual Is Performed"],
+  ["wish", "🌙 Perform Birthday Wish Ritual"],
   ["hundred_candy", "🎟️ Reach 100+ Birthday Candies"],
   ["say_name", "🎂 Mention a birthday person's name"],
   ["black_heart", "🖤 Use a black-heart item"],
@@ -9408,12 +9407,7 @@ function birthdayGiftCostOK(p,id){ const g=BIRTHDAY_GIFTS[id]; if(!g)return fals
 async function showBirthdayCollection(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const c=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];const names={midnight_keepsake:"🦇 Midnight Keepsake",moonlit_relic:"🌙 Moonlit Birthday Relic",cursed_birthday_cake:"🦇🎂 Cursed Birthday Cake",midnight_heart_cupcake:"🖤🧁 Midnight Heart Cupcake"};return sendText(env,interaction,`🎂✨ **BIRTHDAY COLLECTION**\n\n${c.length?c.map(x=>`• ${names[x]||x}`).join("\n"):"Your collection is empty... for now. 👀"}`,[row(button("🎂 Birthday Menu","birthday:home",2))]);}
 
 async function showBirthdayGifts(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];if(!gifts.length)return sendText(env,interaction,"🎁 **CURSED BIRTHDAY GIFTS**\n\nYou have no unopened birthday gifts.", [row(button("🎂 Birthday Menu","birthday:home",2))]);return sendText(env,interaction,`🎁 **YOUR UNOPENED BIRTHDAY GIFTS**\n\n${gifts.map((g,i)=>`${i+1}. ${BIRTHDAY_GIFTS[g.type]?.name||g.type} — ${BIRTHDAY_GIFTS[g.type]?.rarity||"Gift"}`).join("\n")}`,[...gifts.map(g=>row(button(`🎁 Open ${BIRTHDAY_GIFTS[g.type]?.name||g.type}`,`birthday:open:${g.id}`,1))),row(button("🎂 Birthday Menu","birthday:home",2))]);}
-async function openBirthdayGift(env,interaction,id){const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p);if(def.reward.sparkles)await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");
-  const state=await getGuildState(env,interaction.guild_id);
-  if(Array.isArray(state.birthday?.birthdayIds)&&state.birthday.birthdayIds.includes(uid)){
-    await markBingoAction(env,interaction.guild_id,uid,"receive_gift");
-  }
-  return sendText(env,interaction,msg);}
+async function openBirthdayGift(env,interaction,id){const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p);if(def.reward.sparkles)await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,msg);}
 
 async function handleBirthdayGift(env,interaction){
   const {people}=await ensureBirthdayEvent(env,interaction.guild_id); if(!people.length)return sendText(env,interaction,"🔒 Birthday gifting is closed.");
@@ -9431,7 +9425,6 @@ async function handleBirthdayGift(env,interaction){
   sender.birthdayGiftSends=(sender.birthdayGiftSends||0)+1; const senderCandy=randomInt(gift.sender[0],gift.sender[1]); sender.birthdayCandies+=senderCandy;
   await savePlayer(env,sender,user.id); await savePlayer(env,recipient,target);
   await markBingoAction(env,interaction.guild_id,sender.userId,"send_gift");
-  await markBingoAction(env,interaction.guild_id,recipient.userId,"receive_gift");
   await sendText(env,interaction,`🎁 **GIFT SENT!**\n\nYou sent ${gift.name} to <@${target}>.\n🎟️ You earned **${senderCandy} Birthday Candies** for gifting.\n🎁 Gifts sent: **${sender.birthdayGiftSends}/2**`);
   await sendUserDM(env,target,`🎂🎁 **A birthday gift arrived!**\n\n<@${user.id}> sent you **${gift.name}** (${gift.rarity}). ✨`);
 }
@@ -9684,17 +9677,9 @@ async function claimBirthdayHunt(env,interaction,id){
   return sendText(env,interaction,`🎃✨ **YOU FOUND IT!**\n\n${item.emoji} ${item.name}\n🎟️ **+${item.reward} Birthday Candies!**`);
 }
 
-function bingoBoard(isBirthdayPerson=false){
-  const personalSquares=BIRTHDAY_BINGO_PERSONAL.filter(([id])=>
-    id!=="send_gift" && id!=="receive_gift"
-  );
-  personalSquares.push(
-    isBirthdayPerson
-      ? ["receive_gift", "🎁 Receive a birthday gift"]
-      : ["send_gift", "🎁 Send a birthday gift"]
-  );
+function bingoBoard(){
   const pool=[
-    ...personalSquares.map(x=>({id:x[0],label:x[1],server:false})),
+    ...BIRTHDAY_BINGO_PERSONAL.map(x=>({id:x[0],label:x[1],server:false})),
     ...BIRTHDAY_SERVER_SQUARES.map(id=>({
       id,
       label:{pumpkin_appears:"🎃 A Pumpkin Appears",ghost_appears:"👻 A Ghost Appears",bat_swarm:"🦇 A Bat Swarm Appears",boo_cannon:"💥🎃 The Birthday Boo Cannon Is Fired"}[id],
@@ -9709,7 +9694,6 @@ function bingoBoard(isBirthdayPerson=false){
 function birthdayBingoCanonicalLabels(){
   const labels={};
   for(const [id,label] of BIRTHDAY_BINGO_PERSONAL)labels[id]=label;
-  labels.receive_gift="🎁 Receive a birthday gift";
   labels.pumpkin_appears="🎃 A Pumpkin Appears";
   labels.ghost_appears="👻 A Ghost Appears";
   labels.bat_swarm="🦇 A Bat Swarm Appears";
@@ -9717,16 +9701,11 @@ function birthdayBingoCanonicalLabels(){
   labels.free="🕯️ Birthday Candle";
   return labels;
 }
-function migrateBirthdayBingoBoard(b,isBirthdayPerson=false){
+function migrateBirthdayBingoBoard(b){
   if(!b||!Array.isArray(b.cells))return false;
   const labels=birthdayBingoCanonicalLabels();
   const legacy={bat_item:"birthday_shop",game_win:"boss_win"};
   const valid=new Set([...Object.keys(labels)].filter(id=>id!=="free"));
-  // The birthday person cannot complete “Send a birthday gift” because
-  // self-gifting is blocked. Give their Bingo board the reciprocal
-  // “Receive a birthday gift” square instead.
-  const giftId=isBirthdayPerson?"receive_gift":"send_gift";
-  const otherGiftId=isBirthdayPerson?"send_gift":"receive_gift";
   const used=new Set();
   let changed=false;
   for(const cell of b.cells){
@@ -9736,7 +9715,6 @@ function migrateBirthdayBingoBoard(b,isBirthdayPerson=false){
       continue;
     }
     let nextId=legacy[cell.id]||cell.id;
-    if(nextId===otherGiftId && !used.has(giftId)) nextId=giftId;
     if(!valid.has(nextId)||used.has(nextId)){
       nextId=[...valid].find(id=>!used.has(id));
     }
@@ -9747,6 +9725,7 @@ function migrateBirthdayBingoBoard(b,isBirthdayPerson=false){
   return changed;
 }
 function bingoText(b){
+  migrateBirthdayBingoBoard(b);
   const lines=[];
   for(let r=0;r<5;r++)lines.push(b.cells.slice(r*5,r*5+5).map(c=>c.marked?`🟩 ${c.label}`:`⬜ ${c.label}`).join("\n"));
   return `🎂🎃 **HALLOWEEN BIRTHDAY BINGO**\n\n${lines.join("\n────────────\n")}\n\n🏆 1 line: 50 🍬 | 2: 100 🍬 | 3: 150 🍬 | 4: 200 🍬 | Full board: +500 🍬`;
@@ -9813,23 +9792,8 @@ async function syncBirthdayBingoProgress(env,guildId,userId){
   // Backfill accomplishments from current saved state.
   if(Number(p.birthdayCandies||0)>0)actions.add("earn_candy");
   if(Number(p.birthdayCandies||0)>=100)actions.add("hundred_candy");
-  const isBirthdayPerson=Array.isArray(state.birthday?.birthdayIds) && state.birthday.birthdayIds.includes(userId);
-  if(isBirthdayPerson){
-    if((Array.isArray(p.birthdayGifts)&&p.birthdayGifts.length>0) || actions.has("receive_gift")) actions.add("receive_gift");
-  }else if(Number(p.birthdayGiftSends||0)>0){
-    actions.add("send_gift");
-  }
+  if(Number(p.birthdayGiftSends||0)>0)actions.add("send_gift");
   if(p.birthdayWishUsedDate===date)actions.add("wish");
-  if(!state.birthday?.birthdayIds?.includes(userId)){
-    const birthdayIds=Array.isArray(state.birthday?.birthdayIds)?state.birthday.birthdayIds:[];
-    for(const birthdayId of birthdayIds){
-      const birthdayPlayer=await getPlayer(env,birthdayId);
-      if(birthdayPlayer.birthdayWishUsedDate===date){
-        actions.add("wish");
-        break;
-      }
-    }
-  }
   if(p.birthdayTricksterLast)actions.add("trickster");
 
   const collection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];
@@ -9890,17 +9854,24 @@ async function startBirthdayBingo(env,interaction){
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Bingo is closed.");
   const uid=getUserFromInteraction(interaction).id;
   state.birthday.bingoBoards=state.birthday.bingoBoards||{};
-  const isBirthdayPerson=Array.isArray(state.birthday?.birthdayIds) && state.birthday.birthdayIds.includes(uid);
   if(!state.birthday.bingoBoards[uid]){
-    state.birthday.bingoBoards[uid]={cells:bingoBoard(isBirthdayPerson),linesPaid:0,fullPaid:false};
+    state.birthday.bingoBoards[uid]={cells:bingoBoard(),linesPaid:0,fullPaid:false};
     await saveGuildState(env,interaction.guild_id,state);
-  }else if(migrateBirthdayBingoBoard(state.birthday.bingoBoards[uid],isBirthdayPerson)){
+  }else if(migrateBirthdayBingoBoard(state.birthday.bingoBoards[uid])){
     await saveGuildState(env,interaction.guild_id,state);
   }
   await syncBirthdayBingoProgress(env,interaction.guild_id,uid);
   const refreshed=await getGuildState(env,interaction.guild_id);
   const b=refreshed.birthday.bingoBoards[uid];
-  const response=await sendText(env,interaction,bingoText(b),bingoButtons(b));
+  const justCompleted=Boolean(b.fullPaid&&b.cells.every(c=>c.marked)&&!b.completionMessageShown);
+  if(justCompleted){
+    b.completionMessageShown=true;
+    await saveGuildState(env,interaction.guild_id,refreshed);
+  }
+  const message=justCompleted
+    ? `${bingoText(b)}\n\n🎉🎂 **BIRTHDAY BINGO COMPLETE!** 🎂🎉\nYou completed the entire board!\n🍬 **+500 Birthday Candies!**\n✨ You absolute birthday menace.`
+    : bingoText(b);
+  const response=await sendText(env,interaction,message,bingoButtons(b));
   // Save the actual Discord message id before returning so later
   // accomplishments can reliably update this exact Bingo board.
   await saveBirthdayBingoMessageRef(env,interaction,uid);
@@ -9909,20 +9880,24 @@ async function startBirthdayBingo(env,interaction){
 async function applyBirthdayBingoReward(env,userId,b){
   const lines=bingoWinLines(b.cells);
   const paid=Number(b.linesPaid||0);
-  if(lines<=paid)return;
-  const newlyPaid=Math.min(lines,4)-paid;
-  if(newlyPaid>0){
-    const p=await getPlayer(env,userId);
-    p.birthdayCandies=(Number(p.birthdayCandies)||0)+newlyPaid*50;
-    await savePlayer(env,p);
+  const fullBoard=b.cells.every(c=>c.marked);
+  if(lines>paid){
+    const newlyPaid=Math.min(lines,4)-paid;
+    if(newlyPaid>0){
+      const p=await getPlayer(env,userId);
+      p.birthdayCandies=(Number(p.birthdayCandies)||0)+newlyPaid*50;
+      await savePlayer(env,p);
+    }
+    b.linesPaid=lines;
   }
-  b.linesPaid=lines;
-  if(lines===5&&!b.fullPaid){
+  if(fullBoard&&!b.fullPaid){
     const p=await getPlayer(env,userId);
     p.birthdayCandies=(Number(p.birthdayCandies)||0)+500;
     b.fullPaid=true;
     await savePlayer(env,p);
+    return true;
   }
+  return false;
 }
 async function markBirthdayServerSquare(env,guildId,action){
   const state=await getGuildState(env,guildId);
@@ -10339,67 +10314,7 @@ async function handleBirthdayNameBingo(env,interaction){
   return sendText(env,interaction,`🎂✨ **Birthday shoutout!**\n\n${name} has been wished a spooky happy birthday!\n\n🎂 Your **Mention the birthday person's name** Bingo square has been checked if it is on your board.`);
 }
 
-async function birthdayWish(env,interaction){
-  const state=await getGuildState(env,interaction.guild_id);
-  if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Wish Ritual is closed.");
-  const uid=getUserFromInteraction(interaction).id;
-  if(!birthdayPersonId(state,uid))return sendText(env,interaction,"🕯️ Only the birthday person can perform the Birthday Wish Ritual.");
-  const p=await getPlayer(env,uid);
-  if(p.birthdayWishUsedDate===state.birthday.activeDate)return sendText(env,interaction,"🕯️ You've already performed your Birthday Wish Ritual today.");
-
-  const roll=Math.random();
-  let msg,reward;
-  if(roll<0.05){
-    p.sparkles+=10000;
-    p.birthdayCandies+=500;
-    msg="🌙✨ **JACKPOT!** 10,000 Sparkles + 500 Birthday Candies!";
-    reward="jackpot";
-  }else{
-    const r=Math.floor(Math.random()*3);
-    if(r===0){
-      p.sparkles+=3000;
-      msg="💰 **3,000 Sparkles!**";
-    }else if(r===1){
-      p.birthdayCandies+=300;
-      msg="🎟️ **300 Birthday Candies!**";
-    }else{
-      p.sparkles+=3000;
-      p.birthdayCandies+=300;
-      msg="💰🎟️ **3,000 Sparkles + 300 Birthday Candies!**";
-    }
-    reward="normal";
-  }
-
-  p.birthdayWishUsedDate=state.birthday.activeDate;
-  await savePlayer(env,p);
-
-  // The birthday person performs the ritual, but other players can have
-  // this event on their Bingo boards. Mark the birthday person's board
-  // normally, then mark the same square on every other active board.
-  await markBingoAction(env,interaction.guild_id,uid,"wish");
-  if(msg.includes("Sparkles"))await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");
-
-  const wishState=await getGuildState(env,interaction.guild_id);
-  const wishBoards=wishState.birthday?.bingoBoards||{};
-  for(const [boardUid,board] of Object.entries(wishBoards)){
-    if(boardUid===uid)continue;
-    const wishCell=Array.isArray(board.cells)?board.cells.find(c=>c.id==="wish"&&!c.marked):null;
-    if(wishCell){
-      wishCell.marked=true;
-      await applyBirthdayBingoReward(env,boardUid,board);
-    }
-  }
-  await saveGuildState(env,interaction.guild_id,wishState);
-  for(const boardUid of Object.keys(wishBoards)){
-    if(boardUid!==uid)await updateBirthdayBingoMessage(env,interaction.guild_id,boardUid);
-  }
-
-  return sendText(env,interaction,`🕯️🌙 **BIRTHDAY WISH RITUAL**
-
-The candle flickers... moonlight gathers... ✨
-
-${msg}`);
-}
+async function birthdayWish(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Wish Ritual is closed.");const uid=getUserFromInteraction(interaction).id;if(!birthdayPersonId(state,uid))return sendText(env,interaction,"🕯️ Only the birthday person can perform the Birthday Wish Ritual.");const p=await getPlayer(env,uid);if(p.birthdayWishUsedDate===state.birthday.activeDate)return sendText(env,interaction,"🕯️ You've already performed your Birthday Wish Ritual today.");const roll=Math.random();let msg,reward;if(roll<0.05){p.sparkles+=10000;p.birthdayCandies+=500;msg="🌙✨ **JACKPOT!** 10,000 Sparkles + 500 Birthday Candies!";reward="jackpot";}else{const r=Math.floor(Math.random()*3);if(r===0){p.sparkles+=3000;msg="💰 **3,000 Sparkles!**";}else if(r===1){p.birthdayCandies+=300;msg="🎟️ **300 Birthday Candies!**";}else{p.sparkles+=3000;p.birthdayCandies+=300;msg="💰🎟️ **3,000 Sparkles + 300 Birthday Candies!**";}reward="normal";}p.birthdayWishUsedDate=state.birthday.activeDate;await savePlayer(env,p);await markBingoAction(env,interaction.guild_id,uid,"wish");if(msg.includes("Sparkles"))await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,`🕯️🌙 **BIRTHDAY WISH RITUAL**\n\nThe candle flickers... moonlight gathers... ✨\n\n${msg}`);}
 
 async function birthdayCannon(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Boo Cannon is closed.");const uid=getUserFromInteraction(interaction).id;if(!birthdayPersonId(state,uid))return sendText(env,interaction,"💥 Only the birthday person can fire the Birthday Boo Cannon.");if(state.birthday.cannon?.active)return sendText(env,interaction,"💥 Your Birthday Boo Cannon is already firing!");state.birthday.cannon={active:true,userId:uid,endAt:Date.now()+60000,total:0,shots:0};await saveGuildState(env,interaction.guild_id,state);await markBirthdayServerSquare(env,interaction.guild_id,"boo_cannon");return sendText(env,interaction,`💥🎃 **BIRTHDAY BOO CANNON!**\n\nYou have **60 seconds**! Press the button as many times as possible.\n\nEvery successful shot awards **1–10 Birthday Candies**.`,[row(button("💥 FIRE!","birthday:firecannon",1),button("🎂 Birthday Menu","birthday:home",2))]);}
 async function fireBirthdayCannon(env,interaction){const state=await getGuildState(env,interaction.guild_id);const c=state.birthday?.cannon;const uid=getUserFromInteraction(interaction).id;if(!c?.active||c.userId!==uid)return sendText(env,interaction,"💥 The cannon isn't active for you.");if(Date.now()>=c.endAt){c.active=false;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`💥🎃 **TIME'S UP!**\n\nYou fired **${c.shots} shots** and earned **${c.total} Birthday Candies!**`);}const amount=randomInt(1,10);c.shots++;c.total+=amount;const p=await getPlayer(env,uid);p.birthdayCandies+=amount;await savePlayer(env,p);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`💥🎃 **BOOM! +${amount} Birthday Candies!**\n\n🎟️ Session total: **${c.total}**\n⏱️ Keep firing!`,[row(button("💥 FIRE AGAIN!","birthday:firecannon",1))]);}
