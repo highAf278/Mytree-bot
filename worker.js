@@ -8101,47 +8101,79 @@ function badgeIsOwned(player, badgeId) {
   return Array.isArray(player.unlockedBadges) && player.unlockedBadges.includes(badgeId);
 }
 
-async function showProfileBadges(env, interaction, targetId, page=0) {
-  const user=getUserFromInteraction(interaction);
-  if(!user || user.id!==targetId) return sendText(env,interaction,"❌ You can only manage badges on your own profile.");
-  const player=await getPlayer(env,user.id);
+async function buildProfileBadgesPayload(env, userId, page=0) {
+  const player=await getPlayer(env,userId);
   refreshProfileBadges(player);
-  await savePlayer(env,player,user.id);
+  await savePlayer(env,player,userId);
   const equipped=Array.isArray(player.equippedBadges)?player.equippedBadges.filter(id=>badgeIsOwned(player,id)):[];
   const legacy=String(player.equippedBadge||"").trim();
   if(!equipped.length && legacy && badgeIsOwned(player,legacy)) equipped.push(legacy);
   const badgeIds=Object.keys(PROFILE_BADGES), perPage=8;
   const totalPages=Math.max(1,Math.ceil(badgeIds.length/perPage));
-  const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1), pageIds=badgeIds.slice(safePage*perPage,safePage*perPage+perPage), rows=[];
+  const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1);
+  const pageIds=badgeIds.slice(safePage*perPage,safePage*perPage+perPage), rows=[];
   for(let i=0;i<pageIds.length;i+=2){
     const make=(id)=>{
       const owned=badgeIsOwned(player,id), on=equipped.includes(id);
-      return button(`${owned?(on?"🏅 ":"🔓 "):"🔒 "}${PROFILE_BADGES[id].name}${on?" ✓":""}`,`equip_badge:${id}`,owned?(on?3:2):2,owned);
+      return button(`${owned?(on?"🏅 ":"🔓 "):"🔒 "}${PROFILE_BADGES[id].name}${on?" ✓":""}`,`equip_badge:${id}`,owned?(on?3:2):2,!owned);
     };
-    const buttons=[make(pageIds[i])]; if(pageIds[i+1]) buttons.push(make(pageIds[i+1])); rows.push(row(...buttons));
+    const buttons=[make(pageIds[i])];
+    if(pageIds[i+1]) buttons.push(make(pageIds[i+1]));
+    rows.push(row(...buttons));
   }
-  const nav=[]; if(safePage>0) nav.push(button("⬅️ Previous",`profile_badges:${user.id}:${safePage-1}`,2)); if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badges:${user.id}:${safePage+1}`,2)); if(nav.length) rows.push(row(...nav));
-  rows.push(row(button("❌ Remove All Badges","unequip_badges",2),button("⬅️ Back to Profile",`profile_back:${user.id}`,2)));
-  await sendText(env,interaction,`🏅 **PROFILE BADGES**\n\n🔓 Unlocked badges can be equipped. 🔒 Locked badges show their requirement in the next step.\n\n**Equipped:** ${equipped.length?equipped.map(id=>PROFILE_BADGES[id].name).join(" • "):"None"}\n\nPage **${safePage+1}/${totalPages}**`,rows);
+  const nav=[];
+  if(safePage>0) nav.push(button("⬅️ Previous",`profile_badges:${userId}:${safePage-1}`,2));
+  if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badges:${userId}:${safePage+1}`,2));
+  if(nav.length) rows.push(row(...nav));
+  rows.push(row(button("❌ Remove All Badges","unequip_badges",2),button("⬅️ Back to Profile",`profile_back:${userId}`,2)));
+  return {
+    content:`🏅 **PROFILE BADGES**\n\n🔓 Unlocked badges can be equipped. 🔒 Locked badges cannot be equipped yet.\n\n**Equipped:** ${equipped.length?equipped.map(id=>PROFILE_BADGES[id].name).join(" • "):"None"}\n\nPage **${safePage+1}/${totalPages}**`,
+    components:rows,
+    flags:64
+  };
+}
+
+async function showProfileBadges(env, interaction, targetId, page=0) {
+  const user=getUserFromInteraction(interaction);
+  if(!user || user.id!==targetId) return sendText(env,interaction,"❌ You can only manage badges on your own profile.");
+  const payload=await buildProfileBadgesPayload(env,user.id,page);
+  return sendText(env,interaction,payload.content,payload.components);
+}
+
+async function toggleProfileBadgeData(env, userId, badgeId) {
+  if(!PROFILE_BADGES[badgeId]) return "❌ That badge doesn't exist.";
+  const player=await getPlayer(env,userId);
+  refreshProfileBadges(player);
+  if(!badgeIsOwned(player,badgeId)) return `🔒 **${PROFILE_BADGES[badgeId].name}** is still locked. Keep playing to unlock it!`;
+  let equipped=Array.isArray(player.equippedBadges)?player.equippedBadges.filter(id=>badgeIsOwned(player,id)):[];
+  const legacy=String(player.equippedBadge||"").trim();
+  if(!equipped.length&&legacy&&badgeIsOwned(player,legacy)) equipped.push(legacy);
+  if(equipped.includes(badgeId)) equipped=equipped.filter(id=>id!==badgeId);
+  else { if(equipped.length>=4) return "❌ You can equip a maximum of **4 badges**."; equipped.push(badgeId); }
+  player.equippedBadges=equipped.slice(0,4);
+  player.equippedBadge=player.equippedBadges[0]||"";
+  await savePlayer(env,player,userId);
+  return player.equippedBadges.includes(badgeId)?`🏅 **${PROFILE_BADGES[badgeId].name}** equipped!\n\nYou can display up to 4 badges on your profile.`:`🏅 **${PROFILE_BADGES[badgeId].name}** removed from your profile.`;
 }
 
 async function toggleProfileBadge(env, interaction, badgeId) {
-  const user=getUserFromInteraction(interaction); if(!user||!PROFILE_BADGES[badgeId]) return sendText(env,interaction,"❌ That badge doesn't exist.");
-  const player=await getPlayer(env,user.id); refreshProfileBadges(player);
-  if(!badgeIsOwned(player,badgeId)) return sendText(env,interaction,`🔒 **${PROFILE_BADGES[badgeId].name}** is still locked. Keep playing to unlock it!`);
-  let equipped=Array.isArray(player.equippedBadges)?player.equippedBadges.filter(id=>badgeIsOwned(player,id)):[];
-  const legacy=String(player.equippedBadge||"").trim(); if(!equipped.length&&legacy&&badgeIsOwned(player,legacy)) equipped.push(legacy);
-  if(equipped.includes(badgeId)) equipped=equipped.filter(id=>id!==badgeId);
-  else { if(equipped.length>=4) return sendText(env,interaction,"❌ You can equip a maximum of **4 badges**."); equipped.push(badgeId); }
-  player.equippedBadges=equipped.slice(0,4); player.equippedBadge=player.equippedBadges[0]||"";
-  await savePlayer(env,player,user.id);
-  return sendText(env,interaction,player.equippedBadges.includes(badgeId)?`🏅 **${PROFILE_BADGES[badgeId].name}** equipped!\n\nYou can display up to 4 badges on your profile.`:`🏅 **${PROFILE_BADGES[badgeId].name}** removed from your profile.`);
+  const user=getUserFromInteraction(interaction);
+  if(!user) return;
+  return sendText(env,interaction,await toggleProfileBadgeData(env,user.id,badgeId));
+}
+
+async function unequipAllProfileBadgesData(env, userId) {
+  const player=await getPlayer(env,userId);
+  player.equippedBadges=[];
+  player.equippedBadge="";
+  await savePlayer(env,player,userId);
+  return "🏅 All profile badges removed.";
 }
 
 async function unequipAllProfileBadges(env, interaction) {
-  const user=getUserFromInteraction(interaction); if(!user)return;
-  const player=await getPlayer(env,user.id); player.equippedBadges=[]; player.equippedBadge=""; await savePlayer(env,player,user.id);
-  return sendText(env,interaction,"🏅 All profile badges removed.");
+  const user=getUserFromInteraction(interaction);
+  if(!user)return;
+  return sendText(env,interaction,await unequipAllProfileBadgesData(env,user.id));
 }
 
 async function showProfileFrames(env, interaction, targetId) {
@@ -27722,6 +27754,32 @@ export default {
         customId.startsWith("equip_badge:") ||
         customId === "unequip_badges"
       );
+
+    // Badge interactions are handled with an IMMEDIATE private type-4 response.
+    // Do not defer these: Discord can otherwise leave the ephemeral component
+    // stuck on "MyTree is thinking..." if the later webhook edit is delayed.
+    if (isBadgeComponent) {
+      try {
+        const user=getUserFromInteraction(interaction);
+        if(!user){
+          return new Response(JSON.stringify({type:4,data:{content:"❌ Could not identify you.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+        }
+        let data;
+        if(customId.startsWith("profile_badges:")){
+          const parts=customId.split(":");
+          if((parts[1]||"")!==user.id) data={content:"❌ You can only manage badges on your own profile.",flags:64};
+          else data=await buildProfileBadgesPayload(env,user.id,Number(parts[2]||0));
+        } else if(customId.startsWith("equip_badge:")) {
+          data={content:await toggleProfileBadgeData(env,user.id,customId.slice("equip_badge:".length)),flags:64};
+        } else if(customId==="unequip_badges") {
+          data={content:await unequipAllProfileBadgesData(env,user.id),flags:64};
+        }
+        return new Response(JSON.stringify({type:4,data}),{status:200,headers:{"Content-Type":"application/json"}});
+      } catch(error) {
+        console.error("Badge immediate response error:",error);
+        return new Response(JSON.stringify({type:4,data:{content:`❌ Couldn't load badges: ${error?.message||"Unknown error"}`,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+      }
+    }
 
     const isCustomizeComponent =
       interaction.type === 3 &&
