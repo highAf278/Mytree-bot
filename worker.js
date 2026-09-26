@@ -27016,6 +27016,39 @@ async function processCourtTrashRelease(env){
   }
 
 
+ /* =========================================================
+   RACCOON RUMBLE TIMER
+========================================================= */
+
+async function processRumbleTimers(env) {
+  const rawGuilds = await env.TREE_DATA.list({ prefix: "guild:" });
+  for (const key of rawGuilds.keys || []) {
+    const guildId = String(key.name || "").slice(6);
+    if (!guildId) continue;
+    try {
+      const state = await getGuildState(env, guildId);
+      const game = state.rumble;
+      if (!game || game.status !== "playing" || !Number(game.phaseEndsAt || 0) || Date.now() < Number(game.phaseEndsAt)) continue;
+      // Missing choices become Lay Low. This makes abandoned phones harmless
+      // and prevents a Rumble from hanging forever.
+      for (const p of rumblePlayers(game)) {
+        if (!p.submitted) {
+          p.submitted = true;
+          p.action = "laylow";
+          p.targetId = null;
+          p.lateAutoChoice = true;
+        }
+      }
+      await saveGuildState(env, guildId, state);
+      await rumbleResolveRound(env, game);
+    } catch (error) {
+      console.error(`Raccoon Rumble timer failed for guild ${guildId}:`, error);
+    }
+  }
+}
+
+
+
 export default {
   async fetch(
     request,
@@ -27481,37 +27514,6 @@ export default {
     }
   },
 
-
- /* =========================================================
-   RACCOON RUMBLE TIMER
-========================================================= */
-
-async function processRumbleTimers(env) {
-  const rawGuilds = await env.TREE_DATA.list({ prefix: "guild:" });
-  for (const key of rawGuilds.keys || []) {
-    const guildId = String(key.name || "").slice(6);
-    if (!guildId) continue;
-    try {
-      const state = await getGuildState(env, guildId);
-      const game = state.rumble;
-      if (!game || game.status !== "playing" || !Number(game.phaseEndsAt || 0) || Date.now() < Number(game.phaseEndsAt)) continue;
-      // Missing choices become Lay Low. This makes abandoned phones harmless
-      // and prevents a Rumble from hanging forever.
-      for (const p of rumblePlayers(game)) {
-        if (!p.submitted) {
-          p.submitted = true;
-          p.action = "laylow";
-          p.targetId = null;
-          p.lateAutoChoice = true;
-        }
-      }
-      await saveGuildState(env, guildId, state);
-      await rumbleResolveRound(env, game);
-    } catch (error) {
-      console.error(`Raccoon Rumble timer failed for guild ${guildId}:`, error);
-    }
-  }
-}
 
  /* =======================================================
    SCHEDULED TASKS
