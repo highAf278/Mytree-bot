@@ -8104,7 +8104,6 @@ function badgeIsOwned(player, badgeId) {
 async function buildProfileBadgesPayload(env, userId, page=0) {
   const player=await getPlayer(env,userId);
   refreshProfileBadges(player);
-  await savePlayer(env,player,userId);
   const equipped=Array.isArray(player.equippedBadges)?player.equippedBadges.filter(id=>badgeIsOwned(player,id)):[];
   const legacy=String(player.equippedBadge||"").trim();
   if(!equipped.length && legacy && badgeIsOwned(player,legacy)) equipped.push(legacy);
@@ -27822,21 +27821,23 @@ export default {
       interaction.__deferred = true;
       interaction.__deferredUpdate = false;
       interaction.__deferredEphemeral = true;
-      ctx.waitUntil((async () => {
+      // The interaction is already acknowledged above with a complete private
+      // type-4 response.  Do the badge work in THIS request rather than
+      // relying on waitUntil().  That guarantees the @original response is
+      // edited before the worker invocation finishes.
+      try {
+        await handleComponent(env, interaction);
+      } catch (error) {
+        console.error("Badge component error:", error);
         try {
-          await handleComponent(env, interaction);
-        } catch (error) {
-          console.error("Badge component error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send badge error message:", editError);
-          }
+          await editOriginalResponse(env, interaction, {
+            content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
+            components: []
+          });
+        } catch (editError) {
+          console.error("Could not send badge error message:", editError);
         }
-      })());
+      }
       return new Response("OK", { status: 200 });
     }
 
