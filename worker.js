@@ -1402,7 +1402,7 @@ async function handleProfile(env, interaction) {
     const profileComponents = targetId === user.id
       ? [row(
           button("👑 Frames", `profile_frames:${user.id}`, 2),
-          button("🏅 Badges", `profile_badges:${user.id}:0`, 2)
+          button("🏅 Badges", `profile_badges:${user.id}:0:${profileBadgeMask(player)}:${profileBadgeMask(player,"equippedBadges")}`, 2)
         )]
       : [];
     const response=await editOriginalResponseWithFile(
@@ -1418,7 +1418,7 @@ async function handleProfile(env, interaction) {
       const profileComponents = targetId === user.id
         ? [row(
           button("👑 Frames", `profile_frames:${user.id}`, 2),
-          button("🏅 Badges", `profile_badges:${user.id}:0`, 2)
+          button("🏅 Badges", `profile_badges:${user.id}:0:${profileBadgeMask(player)}:${profileBadgeMask(player,"equippedBadges")}`, 2)
         )]
         : [];
       const response=await editOriginalResponseWithFile(
@@ -8099,6 +8099,52 @@ function refreshProfileBadges(player) {
 function badgeIsOwned(player, badgeId) {
   refreshProfileBadges(player);
   return Array.isArray(player.unlockedBadges) && player.unlockedBadges.includes(badgeId);
+}
+
+function profileBadgeMask(player, field="unlockedBadges") {
+  const ids=Object.keys(PROFILE_BADGES);
+  const list=Array.isArray(player?.[field]) ? player[field] : [];
+  let mask=0;
+  for(let i=0;i<ids.length;i++) if(list.includes(ids[i])) mask += 2 ** i;
+  return mask.toString(36);
+}
+
+function profileBadgeIdsFromMask(mask) {
+  const ids=Object.keys(PROFILE_BADGES);
+  const n=parseInt(String(mask||"0"),36);
+  if(!Number.isFinite(n)) return [];
+  const out=[];
+  for(let i=0;i<ids.length;i++) if(Math.floor(n/(2**i))%2===1) out.push(ids[i]);
+  return out;
+}
+
+function profileBadgeMenuFromMasks(userId,page,unlockedMask,equippedMask="0") {
+  const badgeIds=Object.keys(PROFILE_BADGES), perPage=8;
+  const totalPages=Math.max(1,Math.ceil(badgeIds.length/perPage));
+  const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1);
+  const unlocked=new Set(profileBadgeIdsFromMask(unlockedMask));
+  const equipped=new Set(profileBadgeIdsFromMask(equippedMask));
+  const pageIds=badgeIds.slice(safePage*perPage,safePage*perPage+perPage);
+  const rows=[];
+  for(let i=0;i<pageIds.length;i+=2){
+    const make=(id)=>{
+      const owned=unlocked.has(id), on=equipped.has(id);
+      return button(`${owned?(on?"🏅 ":"🔓 "):"🔒 "}${PROFILE_BADGES[id].name}${on?" ✓":""}`,`equip_badge:${id}`,owned?(on?3:2):2,!owned);
+    };
+    const buttons=[make(pageIds[i])];
+    if(pageIds[i+1]) buttons.push(make(pageIds[i+1]));
+    rows.push(row(...buttons));
+  }
+  const nav=[];
+  if(safePage>0) nav.push(button("⬅️ Previous",`profile_badges:${userId}:${safePage-1}:${unlockedMask}:${equippedMask}`,2));
+  if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badges:${userId}:${safePage+1}:${unlockedMask}:${equippedMask}`,2));
+  if(nav.length) rows.push(row(...nav));
+  rows.push(row(button("❌ Remove All Badges","unequip_badges",2),button("⬅️ Back to Profile",`profile_back:${userId}`,2)));
+  return {
+    content:`🏅 **PROFILE BADGES**\n\n🔓 Unlocked badges can be equipped. 🔒 Locked badges cannot be equipped yet.\n\n**Equipped:** ${equipped.size?[...equipped].filter(id=>PROFILE_BADGES[id]).map(id=>PROFILE_BADGES[id].name).join(" • "):"None"}\n\nPage **${safePage+1}/${totalPages}**`,
+    components:rows,
+    flags:64
+  };
 }
 
 async function buildProfileBadgesPayload(env, userId, page=0) {
@@ -27794,83 +27840,47 @@ export default {
       }
     }
 
-    // BADGE COMPONENTS: handle these BEFORE the generic interaction middleware.
-    // Badge menus are private. The initial response is returned directly to
-    // Discord; there is no defer/waitUntil/edit-original cycle here.
+    // BADGE COMPONENTS: use a fast initial response for the menu itself.
+    // The /profile command already loaded the player's badge state, so the
+    // profile_badges button carries compact base-36 masks for unlocked/equipped
+    // badges. This lets Discord receive the menu in the original response with
+    // ZERO KV reads and therefore cannot hit the 3-second interaction timeout.
     if (isBadgeComponent) {
       const user = getUserFromInteraction(interaction);
       if (!user) {
-        return new Response(JSON.stringify({
-          type: 4,
-          data: { content: "❌ I couldn't identify you.", flags: 64 }
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({type:4,data:{content:"❌ I couldn't identify you.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+      }
+      const jsonResponse=(data)=>new Response(JSON.stringify({type:4,data:{...data,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+
+      if (customId.startsWith("profile_badges:")) {
+        const parts=customId.split(":");
+        const targetId=parts[1]||"";
+        const page=Number(parts[2]||0);
+        const unlockedMask=parts[3]||"0";
+        const equippedMask=parts[4]||"0";
+        if(user.id!==targetId) return jsonResponse({content:"❌ You can only manage badges on your own profile.",components:[]});
+        return jsonResponse(profileBadgeMenuFromMasks(user.id,page,unlockedMask,equippedMask));
       }
 
-      const jsonResponse = (data) => new Response(JSON.stringify({ type: 4, data: { ...data, flags: 64 } }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-
-      const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error("badge operation timeout")), ms));
-
-      try {
-        if (customId.startsWith("profile_badges:")) {
-          const parts = customId.split(":");
-          const targetId = parts[1] || "";
-          const page = Number(parts[2] || 0);
-          if (user.id !== targetId) {
-            return jsonResponse({ content: "❌ You can only manage badges on your own profile.", components: [] });
-          }
-
+      // Equip/remove operations do require KV. A proper type-5 ephemeral ACK is
+      // returned immediately as the Worker response, then waitUntil performs the
+      // save and edits that same private response. This keeps Discord's 3-second
+      // acknowledgement deadline separate from the KV operation.
+      if (customId.startsWith("equip_badge:") || customId === "unequip_badges") {
+        const ack = new Response(JSON.stringify({type:5,data:{flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+        ctx.waitUntil((async()=>{
           try {
-            const payload = await Promise.race([
-              buildProfileBadgesPayload(env, user.id, page),
-              timeout(2200)
-            ]);
-            return jsonResponse({ content: payload.content, components: payload.components });
-          } catch (loadError) {
-            console.warn("Badge menu fell back to fast response:", loadError?.message || loadError);
-            const badgeIds = Object.keys(PROFILE_BADGES);
-            const perPage = 8;
-            const totalPages = Math.max(1, Math.ceil(badgeIds.length / perPage));
-            const safePage = Math.min(Math.max(Number(page) || 0, 0), totalPages - 1);
-            const pageIds = badgeIds.slice(safePage * perPage, safePage * perPage + perPage);
-            const rows = [];
-            for (let i = 0; i < pageIds.length; i += 2) {
-              const a = pageIds[i], b = pageIds[i + 1];
-              const buttons = [button(`🏅 ${PROFILE_BADGES[a].name}`, `equip_badge:${a}`, 2)];
-              if (b) buttons.push(button(`🏅 ${PROFILE_BADGES[b].name}`, `equip_badge:${b}`, 2));
-              rows.push(row(...buttons));
-            }
-            const nav = [];
-            if (safePage > 0) nav.push(button("⬅️ Previous", `profile_badges:${user.id}:${safePage - 1}`, 2));
-            if (safePage < totalPages - 1) nav.push(button("Next ➡️", `profile_badges:${user.id}:${safePage + 1}`, 2));
-            if (nav.length) rows.push(row(...nav));
-            rows.push(row(button("❌ Remove All Badges", "unequip_badges", 2), button("⬅️ Back to Profile", `profile_back:${user.id}`, 2)));
-            return jsonResponse({
-              content: `🏅 **PROFILE BADGES**\n\nTap a badge to check/equip it. Locked badges will tell you what you need to unlock them.\n\nPage **${safePage + 1}/${totalPages}**`,
-              components: rows
-            });
+            let content;
+            if(customId.startsWith("equip_badge:")) content=await toggleProfileBadgeData(env,user.id,customId.slice("equip_badge:".length));
+            else content=await unequipAllProfileBadgesData(env,user.id);
+            const r=await editOriginalResponse(env,interaction,{content,components:[]});
+            if(!r.ok) console.error("Badge private response edit failed:",r.status,await r.text());
+          } catch(error) {
+            console.error("Badge save error:",error);
+            try { await editOriginalResponse(env,interaction,{content:`❌ Couldn't update your badges: ${error?.message||"Unknown error"}`,components:[]}); } catch(e) { console.error("Badge error response failed:",e); }
           }
-        }
-
-        if (customId.startsWith("equip_badge:")) {
-          const badgeId = customId.slice("equip_badge:".length);
-          const content = await Promise.race([
-            toggleProfileBadgeData(env, user.id, badgeId),
-            timeout(2200)
-          ]);
-          return jsonResponse({ content });
-        }
-
-        const content = await Promise.race([
-          unequipAllProfileBadgesData(env, user.id),
-          timeout(2200)
-        ]);
-        return jsonResponse({ content });
-      } catch (error) {
-        console.error("Badge direct response error:", error);
-        return jsonResponse({ content: "❌ Couldn't complete that badge action in time. Please tap the badge button again.", components: [] });
+        })());
+        return ack;
       }
     }
 
