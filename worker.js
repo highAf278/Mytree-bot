@@ -8119,7 +8119,7 @@ function profileBadgeIdsFromMask(mask) {
 }
 
 function profileBadgeMenuFromMasks(userId,page,unlockedMask,equippedMask="0") {
-  const badgeIds=Object.keys(PROFILE_BADGES), perPage=8;
+  const badgeIds=Object.keys(PROFILE_BADGES), perPage=6;
   const totalPages=Math.max(1,Math.ceil(badgeIds.length/perPage));
   const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1);
   const unlocked=new Set(profileBadgeIdsFromMask(unlockedMask));
@@ -8153,7 +8153,7 @@ async function buildProfileBadgesPayload(env, userId, page=0) {
   const equipped=Array.isArray(player.equippedBadges)?player.equippedBadges.filter(id=>badgeIsOwned(player,id)):[];
   const legacy=String(player.equippedBadge||"").trim();
   if(!equipped.length && legacy && badgeIsOwned(player,legacy)) equipped.push(legacy);
-  const badgeIds=Object.keys(PROFILE_BADGES), perPage=8;
+  const badgeIds=Object.keys(PROFILE_BADGES), perPage=6;
   const totalPages=Math.max(1,Math.ceil(badgeIds.length/perPage));
   const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1);
   const pageIds=badgeIds.slice(safePage*perPage,safePage*perPage+perPage), rows=[];
