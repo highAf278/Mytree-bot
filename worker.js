@@ -27795,6 +27795,51 @@ export default {
       }
     }
 
+    // BADGE COMPONENTS: acknowledge immediately with a complete private
+    // type-4 response, then do the KV work in waitUntil(). This bypasses the
+    // general middleware chain (news/surprise/court/etc.), which can otherwise
+    // delay the badge handler long enough for Discord to keep showing
+    // “thinking…” or time out.
+    if (isBadgeComponent) {
+      const loading = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: 4,
+            data: {
+              content: "🏅 Loading your badges...",
+              flags: 64
+            }
+          })
+        }
+      );
+      if (!loading.ok) {
+        console.error("Badge initial response failed:", loading.status, await loading.text());
+        return new Response("OK", { status: 200 });
+      }
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = true;
+      ctx.waitUntil((async () => {
+        try {
+          await handleComponent(env, interaction);
+        } catch (error) {
+          console.error("Badge component error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send badge error message:", editError);
+          }
+        }
+      })());
+      return new Response("OK", { status: 200 });
+    }
+
     // Titles must return the actual menu in the initial Discord response.
     // Waiting on waitUntil() after sending a placeholder can leave some Discord
     // clients stuck on the loading message forever. Build the small menu here.
