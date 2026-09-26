@@ -736,6 +736,11 @@ function defaultPlayer() {
     equippedFrame: "",
     equippedBadge: "",
     equippedBadges: [],
+    badges: [],
+    lifetimeSparklesEarned: 0,
+    sparklesSpent: 0,
+    lastKnownSparkles: 0,
+    raccoonSparklesStolen: 0,
     storeTestFrame: "",
     storeTestBadge: "",
     storeTestBadges: [],
@@ -948,6 +953,51 @@ const PROFILE_BADGES = {
   raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon" }
 };
 
+const BADGE_RULES = {
+  vip: { description: "Awarded manually by the WereWives owner.", special: true },
+  big_spender: { description: "Spend 100,000 sparkles in the shop.", goal: 100000, progress: p => Number(p.sparklesSpent || 0) },
+  color_chaos_champion: { description: "Win 25 Color Chaos games.", goal: 25, progress: p => Number(p.pastelWins || 0) },
+  sparkle_hoarder: { description: "Have 50,000 sparkles at once.", goal: 50000, progress: p => Number(p.sparkles || 0) },
+  tree_keeper: { description: "Water your tree 100 times.", goal: 100, progress: p => Number(p.waterCount || 0) },
+  royalty: { description: "Own 5 profile frames.", goal: 5, progress: p => Number((p.inventory || []).filter(id => String(id).startsWith("profile_frame_")).length) },
+  diva: { description: "Own 10 cosmetics.", goal: 10, progress: p => Number((p.inventory || []).filter(id => id !== "pink_sky_background").length) },
+  butterfly_baby: { description: "Own the Butterfly effect.", goal: 1, progress: p => (p.inventory || []).includes("butterflies_effect") ? 1 : 0 },
+  raccoon_royalty: { description: "Successfully rob players 10 times.", goal: 10, progress: p => Number(p.raccoonWins || 0) },
+  toxic: { description: "Get caught bluffing 10 times in Coup.", goal: 10, progress: p => Number(p.coupBluffsCaught || 0) },
+  money_magnet: { description: "Earn 100,000 sparkles total.", goal: 100000, progress: p => Number(p.lifetimeSparklesEarned || 0) },
+  main_character: { description: "Reach Level 25.", goal: 25, progress: p => Number(p.level || 1) },
+  king: { description: "Win 50 games across WereWives games.", goal: 50, progress: p => totalProfileWins(p) },
+  alpha: { description: "Win 25 Coup games.", goal: 25, progress: p => Number(p.coupWins || 0) },
+  cool_guy: { description: "Own 5 animated effects.", goal: 5, progress: p => Number((p.inventory || []).filter(id => /animated_effect$/.test(String(id))).length) },
+  bad_influence: { description: "Successfully steal 25,000 sparkles through Raccoon crime.", goal: 25000, progress: p => Number(p.raccoonSparklesStolen || 0) },
+  speed_demon: { description: "Win 10 Color Chaos games without quitting any.", goal: 10, progress: p => (Number(p.pastelWins || 0) >= 10 && Number(p.pastelQuits || 0) === 0) ? 10 : Math.min(10, Number(p.pastelWins || 0)) },
+  raccoon_boss: { description: "Successfully rob players 25 times.", goal: 25, progress: p => Number(p.raccoonWins || 0) },
+  millionaire: { description: "Reach 1,000,000 sparkles at once.", goal: 1000000, progress: p => Number(p.sparkles || 0) }
+};
+
+function totalProfileWins(p) {
+  return Number(p.pastelWins||0)+Number(p.chaosIslandWins||0)+Number(p.heistWins||0)+Number(p.battleWins||0)+Number(p.experimentSuccesses||0)+Number(p.rumbleWins||0)+Number(p.coupWins||0);
+}
+
+function updateProfileBadges(player) {
+  if (!Array.isArray(player.badges)) player.badges = [];
+  const before = player.badges.length;
+  for (const [id, rule] of Object.entries(BADGE_RULES)) {
+    if (rule.special) continue;
+    if (player.badges.includes(id)) continue;
+    const progress = Number(rule.progress?.(player) || 0);
+    if (progress >= Number(rule.goal || 1)) player.badges.push(id);
+  }
+  // Millionaire unlocks a permanent badge + title + name effect.
+  if (player.badges.includes("millionaire")) {
+    unlockOwnedTitle(player, "millionaire");
+    if (!Array.isArray(player.unlockedNameEffects)) player.unlockedNameEffects = [];
+    if (!player.unlockedNameEffects.includes("millionaire")) player.unlockedNameEffects.push("millionaire");
+  }
+  if (player.equippedBadges?.length) player.equippedBadges = [...new Set(player.equippedBadges.filter(id => player.badges.includes(id)))].slice(0,4);
+  return player.badges.length !== before;
+}
+
 const NAME_EFFECTS = {
   rainbow: { name: "🌈 Rainbow", requirement: "Own 10 or more shop items." },
   starlight: { name: "✨ Starlight", requirement: "Reach 50,000 sparkles." },
@@ -965,7 +1015,8 @@ const NAME_EFFECTS = {
   frostbite: { name: "❄️ Frostbite", requirement: "Win 25 Color Chaos games." },
   golden: { name: "💛✨ Golden", requirement: "Reach 100,000 sparkles." },
   spooky: { name: "👻 Spooky", requirement: "Own the complete Halloween set." },
-  black_ice: { name: "🧊 Black Ice", requirement: "Own the complete Black Ice limited set." }
+  black_ice: { name: "🧊 Black Ice", requirement: "Own the complete Black Ice limited set." },
+  millionaire: { name: "💰 Millionaire", requirement: "Reach 1,000,000 sparkles." }
 };
 
 function unlockOwnedTitle(player, id) {
@@ -1103,7 +1154,7 @@ function profileCardHTML(player, phase = 0) {
     inferno:["✦","·","✦","·"], green_glow:["✦","·","✦","·"], candy_rush:["✦","·","✧","✦"], cosmic:["✦","✧","·","★"],
     firework:["✦","·","✧","★"], royal_blood:["✦","·","★","✦"], enchanted:["✧","✦","·","★"],
     royal_purple:["✦","·","✧","★"], butterflies:["✧","·","✦","✧"], shadow:["·","✦","·","★"],
-    frostbite:["✧","·","✦","✧"], golden:["✦","·","★","✦"], spooky:["✦","·","✧","★"], black_ice:["❄","✦","·","❄"]
+    frostbite:["✧","·","✦","✧"], golden:["✦","·","★","✦"], millionaire:["💰","✦","·","💰"], spooky:["✦","·","✧","★"], black_ice:["❄","✦","·","❄"]
   };
   const particleSet=particleMap[effectId]||[];
   const particles=particleSet.length?particleSet.map((symbol,i)=>`<span class="particle p${i}" style="left:${18+i*24}%;top:${18+(i%2)*58}%">${symbol}</span>`).join(""):"";
@@ -1408,7 +1459,10 @@ async function handleProfile(env, interaction) {
     // Direct Worker-side GIF rendering: no Browser Rendering/WebSocket dependency.
     const gif=await renderProfileDirectAnimated(env,player);
     const profileComponents = targetId === user.id
-      ? [row(button("👑 Frames", `profile_frames:${user.id}`, 2))]
+      ? [row(
+          button("👑 Frames", `profile_frames:${user.id}`, 2),
+          button("🏅 Badges", `profile_badges:${user.id}`, 2)
+        )]
       : [];
     const response=await editOriginalResponseWithFile(
       env,interaction,
@@ -1421,7 +1475,10 @@ async function handleProfile(env, interaction) {
     try{
       const png=await renderProfileDirect(env,player);
       const profileComponents = targetId === user.id
-        ? [row(button("👑 Frames", `profile_frames:${user.id}`, 2))]
+        ? [row(
+            button("👑 Frames", `profile_frames:${user.id}`, 2),
+            button("🏅 Badges", `profile_badges:${user.id}`, 2)
+          )]
         : [];
       const response=await editOriginalResponseWithFile(
         env,interaction,
@@ -1435,6 +1492,101 @@ async function handleProfile(env, interaction) {
     }
   }
 }
+function badgeProgressText(id, player) {
+  const rule = BADGE_RULES[id];
+  if (!rule) return "";
+  if (rule.special) return "Owner awarded";
+  const progress = Math.min(Number(rule.goal || 1), Number(rule.progress?.(player) || 0));
+  return `${progress.toLocaleString()}/${Number(rule.goal || 1).toLocaleString()}`;
+}
+
+function badgeUnlocked(player, id) {
+  return Array.isArray(player.badges) && player.badges.includes(id);
+}
+
+function badgeMenuComponents(player, page=0) {
+  const ids = Object.keys(PROFILE_BADGES);
+  const size = 5;
+  const pageCount = Math.max(1, Math.ceil(ids.length / size));
+  const current = Math.max(0, Math.min(Number(page)||0, pageCount-1));
+  const slice = ids.slice(current*size, current*size+size);
+  const rows = [];
+  for (const id of slice) {
+    const b = PROFILE_BADGES[id];
+    const owned = badgeUnlocked(player,id);
+    const equipped = Array.isArray(player.equippedBadges) && player.equippedBadges.includes(id);
+    const label = `${owned ? (equipped ? "⭐" : "🏅") : "🔒"} ${b.name.replace(/^\S+\s/,"")}`.slice(0,80);
+    rows.push(row(button(label, `badge:toggle:${id}`, equipped ? 3 : (owned ? 2 : 2), !owned)));
+  }
+  const nav=[];
+  if(current>0) nav.push(button("⬅️ Previous",`badge:page:${current-1}`,2));
+  nav.push(button(`🏅 ${current+1}/${pageCount}`,"badge:page:current",2,true));
+  if(current<pageCount-1) nav.push(button("Next ➡️",`badge:page:${current+1}`,2));
+  rows.push(row(...nav));
+  rows.push(row(button("⬅️ Back to Profile","badge:back",2)));
+  return rows;
+}
+
+async function showProfileBadges(env, interaction, targetId, page=0) {
+  const user=getUserFromInteraction(interaction);
+  if(!user || user.id!==targetId) return sendText(env,interaction,"❌ You can only manage badges on your own profile.");
+  const player=await getPlayer(env,user.id);
+  updateProfileBadges(player);
+  await savePlayer(env,player,user.id);
+  const ids=Object.keys(PROFILE_BADGES);
+  const unlocked=ids.filter(id=>badgeUnlocked(player,id)).length;
+  const equipped=Array.isArray(player.equippedBadges)?player.equippedBadges:[];
+  const start=Math.max(0,Math.min(Number(page)||0,Math.ceil(ids.length/5)-1))*5;
+  const slice=ids.slice(start,start+5);
+  const lines=slice.map(id=>{
+    const b=PROFILE_BADGES[id], rule=BADGE_RULES[id], owned=badgeUnlocked(player,id), eq=equipped.includes(id);
+    const status=owned ? (eq ? "⭐ Equipped" : "✅ Unlocked") : "🔒 Locked";
+    const prog=rule?.special ? "Owner awarded" : `Progress: **${badgeProgressText(id,player)}**`;
+    return `${status} **${b.name}**\n> ${rule?.description || "Achievement badge."}\n> ${prog}`;
+  });
+  const pageCount=Math.max(1,Math.ceil(ids.length/5));
+  return sendText(env,interaction,`🏅 **BADGE COLLECTION**\n\nUnlocked: **${unlocked}/${ids.length}**\nEquipped: **${equipped.length}/4**\n\n${lines.join("\n\n")}\n\n💡 Tap an unlocked badge to equip/unequip it. You can display up to **4** badges on your profile.\n📖 Locked badges always show exactly how to unlock them.`,badgeMenuComponents(player,page));
+}
+
+async function handleBadgeToggle(env,interaction,badgeId){
+  const user=getUserFromInteraction(interaction); if(!user)return;
+  const player=await getPlayer(env,user.id);
+  updateProfileBadges(player);
+  if(!badgeUnlocked(player,badgeId)) return showProfileBadges(env,interaction,user.id,0);
+  if(!Array.isArray(player.equippedBadges)) player.equippedBadges=[];
+  const idx=player.equippedBadges.indexOf(badgeId);
+  if(idx>=0) player.equippedBadges.splice(idx,1);
+  else {
+    if(player.equippedBadges.length>=4) return sendText(env,interaction,"🏅 You can display up to **4 badges**. Unequip one first.",badgeMenuComponents(player,0));
+    player.equippedBadges.push(badgeId);
+  }
+  player.equippedBadge=player.equippedBadges[0]||"";
+  await savePlayer(env,player,user.id);
+  return showProfileBadges(env,interaction,user.id,Math.floor(Object.keys(PROFILE_BADGES).indexOf(badgeId)/5));
+}
+
+async function handleBadgeOwnerCommand(env,interaction,sub){
+  if(!(await requireOwner(env,interaction))) return;
+  const targetId=String(getOption(interaction,"user")||"");
+  const badgeId=String(getOption(interaction,"badge")||"");
+  if(!targetId || badgeId!=="vip") return sendText(env,interaction,"❌ The only manually managed badge right now is **VIP**.");
+  const player=await getPlayer(env,targetId);
+  if(!Array.isArray(player.badges)) player.badges=[];
+  if(sub==="give") {
+    if(!player.badges.includes("vip")) player.badges.push("vip");
+    await savePlayer(env,player,targetId);
+    return sendText(env,interaction,`💎 **VIP awarded!** <@${targetId}> now has the VIP badge.`);
+  }
+  if(sub==="remove") {
+    player.badges=player.badges.filter(id=>id!=="vip");
+    player.equippedBadges=(player.equippedBadges||[]).filter(id=>id!=="vip");
+    player.equippedBadge=player.equippedBadges[0]||"";
+    await savePlayer(env,player,targetId);
+    return sendText(env,interaction,`💎 **VIP removed** from <@${targetId}>.`);
+  }
+  return sendText(env,interaction,"❌ Unknown badge action.");
+}
+
 async function handleProfileColor(env,interaction,value){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);await refreshPunishmentState(env,player);if(Number(player.raccoonCourtTreeUntil||0)>Date.now())return sendText(env,interaction,`💩🌳 Your Stink Tree sentence is active for **${punishmentTimeText(player.raccoonCourtTreeUntil)}** more. Panel customization is locked.`);const v=String(value||"").trim();if(v.toLowerCase()==="reset"){player.profileColor="#ffd9ef";await savePlayer(env,player);return sendText(env,interaction,"🎨 Profile background reset to the default color. 💗");}if(!/^#[0-9a-fA-F]{6}$/.test(v))return sendText(env,interaction,"❌ Use a 6-digit HEX color like `#FFB6E6`, or use `reset`.");player.profileColor=v.toUpperCase();await savePlayer(env,player);await sendText(env,interaction,`🎨 Your profile background is now **${player.profileColor}**!`);}
 
 async function handleNameEffectEquip(env,interaction,effectId){
@@ -2076,8 +2228,20 @@ async function handleTitlesMenu(env, interaction) {
 }
 
 async function savePlayer(env, player, ownerId = null) {
+  // Track lifetime earnings without rewriting every sparkle reward path.
+  // We compare against the last saved balance, so rewards from games,
+  // achievements, gifts, chaos events, etc. are all counted automatically.
+  const currentSparkles = Number(player.sparkles || 0);
+  const lastSparkles = Number.isFinite(Number(player.lastKnownSparkles))
+    ? Number(player.lastKnownSparkles)
+    : currentSparkles;
+  if (currentSparkles > lastSparkles) {
+    player.lifetimeSparklesEarned = Number(player.lifetimeSparklesEarned || 0) + (currentSparkles - lastSparkles);
+  }
+  player.lastKnownSparkles = currentSparkles;
   updateAchievements(player);
   unlockNameEffects(player);
+  updateProfileBadges(player);
   if (Array.isArray(player.inventory) && player.inventory.filter(id => id !== "pink_sky_background").length >= 10) unlockOwnedTitle(player, "collector");
   if (Number(player.birthdayCandies || 0) > 0) player.birthdayCandyDate = easternDateKey();
 
@@ -3421,7 +3585,7 @@ function drawBitmapText(frame,text,x,y,scale=3,rgb=[42,32,48],maxWidth=null){
 }
 function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(text).toUpperCase())n+=ch===" "?3*scale:6*scale;return Math.max(0,n-scale);}
 function profileEffectColor(id){
-  const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],black_ice:[110,201,238],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
+  const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],black_ice:[110,201,238],millionaire:[255,220,80],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
 }
 function profileEffectColors(id){
   return {
@@ -3441,7 +3605,8 @@ function profileEffectColors(id){
     frostbite:[[255,255,255],[190,240,255],[105,210,255],[220,250,255]],
     golden:[[255,255,230],[255,220,85],[255,245,150],[220,165,35]],
     spooky:[[255,255,255],[215,165,255],[255,160,90],[155,110,255]],
-    black_ice:[[245,253,255],[185,239,255],[95,195,235],[45,86,120]]
+    black_ice:[[245,253,255],[185,239,255],[95,195,235],[45,86,120]],
+    millionaire:[[255,250,190],[255,220,80],[255,185,35],[255,240,150]]
   }[id] || [profileEffectColor(id)];
 }
 function profileEffectColorAt(id,index,phase){
@@ -3695,6 +3860,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   else if(effectId==="shadow") baseY+=Math.round(Math.sin(t*0.7)*1.5);
   else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
   else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
+  else if(effectId==="millionaire") baseY+=Math.round(Math.sin(t*0.9)*0.5);
   else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
   else if(effectId==="black_ice") baseY+=Math.round(Math.sin(t*0.35)*0.25);
 
@@ -3758,6 +3924,10 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       const glint=(Math.sin(t*2+charIndex*0.9)>0.72);
       color=glint?[255,255,225]:[210,150,20];
       yy+=Math.round(Math.sin(t*1.2+charIndex*0.25));
+    } else if(effectId==="millionaire") {
+      const glint=(Math.sin(t*2.4+charIndex*0.75)>0.68);
+      color=glint?[255,255,235]:(charIndex%3===0?[255,225,90]:charIndex%3===1?[255,195,45]:[220,145,20]);
+      yy+=Math.round(Math.sin(t*0.8+charIndex*0.2)*0.5);
     } else if(effectId==="spooky"){
       yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
       xx+=Math.round(Math.sin(t+charIndex*0.35));
@@ -8011,6 +8181,7 @@ async function buyItem(
 
   player.sparkles -=
     item.price;
+  player.sparklesSpent = Number(player.sparklesSpent || 0) + Number(item.price || 0);
 
   player.inventory.push(
     itemId
@@ -12414,6 +12585,22 @@ async function handleComponent(
     );
 
     return;
+  }
+
+  if (id.startsWith("profile_badges:")) {
+    const targetId=id.split(":")[1]||"";
+    return showProfileBadges(env,interaction,targetId,0);
+  }
+  if (id === "badge:back") {
+    return handleProfile(env,interaction);
+  }
+  if (id.startsWith("badge:page:")) {
+    const page=Number(id.split(":")[2]||0);
+    const user=getUserFromInteraction(interaction);
+    return user ? showProfileBadges(env,interaction,user.id,page) : null;
+  }
+  if (id.startsWith("badge:toggle:")) {
+    return handleBadgeToggle(env,interaction,id.split(":")[2]||"");
   }
 
   if (id.startsWith("profile_frames:")) {
@@ -19141,6 +19328,7 @@ const SOLO_TITLES = {
   golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
   frostborn: { name: "Frostborn", description: "Own the complete Black Ice limited set." },
+  millionaire: { name: "Millionaire", description: "Reach 1,000,000 sparkles at once." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
   court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
   court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" },
@@ -23702,6 +23890,7 @@ async function handleRaccoon(env, interaction) {
     ];
     result = successResponses[randomInt(0, successResponses.length - 1)];
     player.sparkles += stolen;
+    player.raccoonSparklesStolen = Number(player.raccoonSparklesStolen || 0) + stolen;
     player.raccoonWins = Number(player.raccoonWins || 0) + 1;
     target.sparkles = Math.max(0, Number(target.sparkles || 0) - stolen);
   }
@@ -24806,6 +24995,11 @@ async function handleCommand(
   if (name === "court-leaderboard") { await handleCourtLeaderboard(env, interaction); return; }
 
   if (name === "profile") { await handleProfile(env, interaction); return; }
+  if (name === "badge") {
+    const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "";
+    await handleBadgeOwnerCommand(env, interaction, sub);
+    return;
+  }
   if (name === "storetest") { await handleStoreTest(env, interaction); return; }
   if (name === "panel") { const sub = interaction.data?.options?.find(option => option.type === 1)?.name; if (sub === "color") await handleProfileColor(env, interaction, (interaction.data?.options?.find(option => option.type === 1)?.options?.find(option => option.name === "hex")?.value ?? null)); return; }
   if (name === "present") { await handlePresentItem(env, interaction, getOption(interaction,"user"), getOption(interaction,"item")); return; }
@@ -27372,6 +27566,31 @@ const COMMANDS = [
   },
 
   {
+    name: "badge",
+    description: "Owner: manage special profile badges",
+    options: [
+      {
+        type: 1,
+        name: "give",
+        description: "Award a special badge",
+        options: [
+          { type: 6, name: "user", description: "Player receiving the badge", required: true },
+          { type: 3, name: "badge", description: "Badge to award", required: true, choices: [{ name: "💎 VIP", value: "vip" }] }
+        ]
+      },
+      {
+        type: 1,
+        name: "remove",
+        description: "Remove a special badge",
+        options: [
+          { type: 6, name: "user", description: "Player losing the badge", required: true },
+          { type: 3, name: "badge", description: "Badge to remove", required: true, choices: [{ name: "💎 VIP", value: "vip" }] }
+        ]
+      }
+    ]
+  },
+
+  {
     name: "profile",
     description: "View a Werewives player profile",
     options: [{ type: 6, name: "user", description: "Player whose profile to view", required: false }]
@@ -28159,6 +28378,8 @@ export default {
       (
         customId === "customize" ||
         customId.startsWith("profile_frames:") ||
+        customId.startsWith("profile_badges:") ||
+        customId.startsWith("badge:") ||
         customId.startsWith("profile_back:") ||
         customId.startsWith("equip_frame_") ||
         customId === "custom_effects" ||
