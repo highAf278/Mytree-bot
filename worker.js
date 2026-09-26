@@ -935,7 +935,7 @@ const PROFILE_BADGES = {
   bad_influence: { name: "😈 Bad Influence", label: "BAD INFLUENCE", icon: "BI", style: "danger" },
   speed_demon: { name: "⚡ Speed Demon", label: "SPEED DEMON", icon: "SD", style: "speed" },
   raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon_boss" },
-  diamond_darling: { name: "💎 Diamond Darling", label: "DIAMOND DARLING", icon: "DD", style: "diamond_darling" },
+  diamond_darling: { name: "🧊 Black Ice Collector", label: "BLACK ICE COLLECTOR", icon: "BI", style: "black_ice" },
   millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" }
 };
 
@@ -4908,186 +4908,156 @@ function drawProfileFrame(frame, frameId, phase=0){
 function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   if(!badgeId || !PROFILE_BADGES[badgeId]) return;
   const b=PROFILE_BADGES[badgeId];
+  const r=Math.max(11,Math.round(size/2));
+
+  // BADGE VISUAL V3:
+  // Clean black enamel badges. The old version's black square silhouette is
+  // intentional: at profile size, a simple black field + one strong emblem
+  // reads much better than a busy multicolor center.
+  const outer=profileFill;
+  const black=[4,5,9];
+  const white=[248,248,255];
+  const soft=[175,180,195];
   const palettes={
-    vip_luxury:[[170,95,255],[255,225,120]], spender:[[45,180,245],[255,225,100]],
-    rainbow:[[255,85,175],[90,220,255]], sparkle:[[255,190,65],[255,245,150]],
-    green:[[75,200,105],[205,255,180]], frame_royal:[[155,80,255],[255,215,95]],
-    diva:[[255,75,175],[255,205,240]], butterfly:[[150,95,255],[120,225,255]],
-    raccoon_robber:[[145,100,70],[245,205,135]], toxic:[[80,225,75],[210,255,110]],
-    tycoon:[[55,185,105],[255,220,75]], star:[[255,175,45],[255,240,135]],
-    king:[[75,75,105],[255,215,80]], alpha:[[95,125,170],[205,235,255]],
-    cool:[[45,165,235],[175,240,255]], danger:[[225,65,85],[255,165,130]],
-    speed:[[70,200,255],[235,250,255]], raccoon_boss:[[110,75,55],[255,200,80]],
-    diamond_darling:[[70,175,255],[225,250,255]], millionaire:[[185,135,45],[255,235,125]]
+    vip_luxury:[[235,235,255],[255,255,255]],
+    spender:[[245,195,70],[255,240,150]],
+    rainbow:[[255,100,190],[90,205,255]],
+    sparkle:[[255,220,75],[255,255,255]],
+    green:[[85,220,120],[205,255,185]],
+    frame_royal:[[175,110,255],[255,220,120]],
+    diva:[[255,105,190],[255,220,245]],
+    butterfly:[[120,185,255],[205,145,255]],
+    raccoon_robber:[[205,160,115],[245,220,170]],
+    toxic:[[105,245,85],[210,255,125]],
+    tycoon:[[80,205,125],[255,225,80]],
+    star:[[255,195,65],[255,245,155]],
+    king:[[255,210,80],[255,245,175]],
+    alpha:[[170,195,220],[245,250,255]],
+    cool:[[80,190,255],[190,240,255]],
+    danger:[[245,75,95],[255,170,150]],
+    speed:[[80,215,255],[225,250,255]],
+    raccoon_boss:[[225,175,90],[255,225,130]],
+    black_ice:[[100,190,255],[225,250,255]],
+    millionaire:[[255,195,60],[255,240,145]]
   };
-  const [base,hi]=palettes[b.style]||[[150,150,165],[255,255,255]];
-  const r=Math.max(15,Math.round(size/2));
+  const [base,hi]=palettes[b.style]||[[180,190,210],[255,255,255]];
+
+  // Crisp white frame + true black center, matching the original badge look.
+  profileFill(frame,cx-r-2,cy-r-2,r*2+4,r*2+4,255,255,255,255);
+  profileFill(frame,cx-r,cy-r,r*2,r*2,black[0],black[1],black[2],255);
+  profileFill(frame,cx-r+2,cy-r+2,r*2-4,2,soft[0],soft[1],soft[2],120);
+
   const p=phase*Math.PI*2;
+  const glintX=cx+Math.round(Math.cos(p+cx*.01)*(r-5));
+  const glintY=cy+Math.round(Math.sin(p+cx*.01)*(r-5));
 
-  // Keep the original collectible look: bright outer frame, jewel-tone rim,
-  // BLACK enamel center. The emblem itself stays simple so it reads at 24px.
-  profileSmoothRoundedRect(frame,cx-r-3,cy-r-3,r*2+6,r*2+6,6,[255,255,255],205,1.2);
-  profileSmoothRoundedRect(frame,cx-r-1,cy-r-1,r*2+2,r*2+2,5,base,255,2.0);
-  profileSmoothRoundedRect(frame,cx-r+3,cy-r+3,r*2-6,r*2-6,4,[10,10,16],255,1.0);
-  profileSmoothLine(frame,cx-r+6,cy-r+5,cx+r-6,cy-r+5,0.8,[255,255,255],115);
-  profileSmoothLine(frame,cx-r+5,cy+r-5,cx+r-5,cy+r-5,0.8,hi,95);
-
-  const glintX=cx+Math.round(Math.cos(p+cx*.017)*(r-7));
-  const glintY=cy+Math.round(Math.sin(p+cx*.017)*(r-7));
-  const star=(x,y,rr=2.2,a=220)=>profileSmoothStar(frame,x,y,rr,hi,a);
-  const line=(x1,y1,x2,y2,w=1.2,a=245)=>profileSmoothLine(frame,x1,y1,x2,y2,w,hi,a);
-  const dot=(x,y,rr=1.5,a=240)=>profileSmoothCircle(frame,x,y,rr,hi,a,true);
-
-  if(b.style==='vip_luxury'){
-    // Crown + jewel. VIP gets a luxury crest rather than another diamond.
-    profileSmoothLine(frame,cx-10,cy-4,cx-7,cy+5,1.8,hi,250);
-    profileSmoothLine(frame,cx-7,cy+5,cx+7,cy+5,1.8,hi,250);
-    profileSmoothLine(frame,cx+7,cy+5,cx+10,cy-4,1.8,hi,250);
-    profileSmoothLine(frame,cx-10,cy-4,cx-4,cy,1.8,hi,250);
-    profileSmoothLine(frame,cx-4,cy,cx,cy-6,1.8,hi,250);
-    profileSmoothLine(frame,cx,cy-6,cx+4,cy,1.8,hi,250);
-    profileSmoothLine(frame,cx+4,cy,cx+10,cy-4,1.8,hi,250);
-    profileSmoothCircle(frame,cx,cy-1,3.2,base,245,true);
-    drawBitmapText(frame,'VIP',cx-7,cy+7,0.72,hi,245);
-  } else if(b.style==='diamond_darling'){
-    // Large faceted jewelry diamond: unmistakably different from VIP.
-    profileSmoothLine(frame,cx,cy-12,cx+10,cy-3,1.7,hi,255);
-    profileSmoothLine(frame,cx+10,cy-3,cx+5,cy+8,1.7,hi,255);
-    profileSmoothLine(frame,cx+5,cy+8,cx,cy+12,1.7,hi,255);
-    profileSmoothLine(frame,cx,cy+12,cx-5,cy+8,1.7,hi,255);
-    profileSmoothLine(frame,cx-5,cy+8,cx-10,cy-3,1.7,hi,255);
-    profileSmoothLine(frame,cx-10,cy-3,cx,cy-12,1.7,hi,255);
-    profileSmoothLine(frame,cx-10,cy-3,cx+10,cy-3,1.1,hi,230);
-    profileSmoothLine(frame,cx,cy-12,cx-2,cy+1,1.0,hi,210);
-    profileSmoothLine(frame,cx,cy-12,cx+3,cy+1,1.0,hi,210);
-    profileSmoothLine(frame,cx-10,cy-3,cx,cy+12,1.0,hi,190);
-    profileSmoothLine(frame,cx+10,cy-3,cx,cy+12,1.0,hi,190);
-    star(cx+8,cy-9,1.5,220);
-  } else if(b.style==='spender'){
-    profileSmoothRoundedRect(frame,cx-11,cy-7,22,14,2,hi,255,1.4);
-    profileSmoothLine(frame,cx-10,cy-2,cx+10,cy-2,1.2,base,245);
-    profileSmoothRoundedRect(frame,cx-7,cy+1,7,4,1,base,230,0.8);
-    drawBitmapText(frame,'$',cx-3,cy-7,1.0,base,255);
-  } else if(b.style==='rainbow'){
-    const cols=[[255,85,115],[255,190,70],[100,225,125],[90,185,255],[175,100,245]];
-    for(let i=0;i<5;i++) profileSmoothLine(frame,cx-11,cy-9+i*4.5,cx+11,cy-9+i*4.5,2.5,cols[i],245);
-    profileSmoothLine(frame,cx-10,cy-10,cx+10,cy-10,1.0,[255,255,255],170);
-  } else if(b.style==='sparkle'){
-    // Three different-size sparkles = hoarding, not one generic star.
-    profileSmoothStar(frame,cx,cy,7.5,hi,250);
-    profileSmoothStar(frame,cx-8,cy+7,3.2,base,245);
-    profileSmoothStar(frame,cx+8,cy-7,3.2,hi,220);
-    dot(cx+8,cy+8,1.4,210);
-  } else if(b.style==='green'){
-    profileSmoothLine(frame,cx,cy+9,cx,cy-2,2.0,hi,255);
-    profileSmoothCircle(frame,cx-6,cy-3,6.0,hi,240,true);
-    profileSmoothCircle(frame,cx+5,cy-6,6.5,hi,240,true);
-    profileSmoothCircle(frame,cx+1,cy-10,6.2,hi,240,true);
-    line(cx-8,cy+8,cx+8,cy+8,1.5,230);
-  } else if(b.style==='frame_royal'){
-    profileSmoothRoundedRect(frame,cx-10,cy-9,20,18,2,hi,250,1.5);
-    profileSmoothRoundedRect(frame,cx-5,cy-5,10,10,1,base,230,1.0);
-    profileSmoothStar(frame,cx,cy-11,4.0,hi,255);
-    dot(cx-7,cy+7,1.3); dot(cx+7,cy+7,1.3);
-  } else if(b.style==='diva'){
-    profileSmoothRoundedRect(frame,cx-9,cy-10,18,20,5,hi,250,1.5);
-    profileSmoothRoundedRect(frame,cx-6,cy-7,12,14,3,base,235,1.0);
-    profileSmoothLine(frame,cx-3,cy-4,cx+4,cy+5,1.0,hi,190);
-    star(cx+6,cy-7,1.8,220);
-  } else if(b.style==='butterfly'){
-    // Clean symmetrical butterfly silhouette.
-    profileSmoothCircle(frame,cx-6,cy-4,5.8,hi,245,true);
-    profileSmoothCircle(frame,cx+6,cy-4,5.8,hi,245,true);
-    profileSmoothCircle(frame,cx-5,cy+5,4.5,base,245,true);
-    profileSmoothCircle(frame,cx+5,cy+5,4.5,base,245,true);
-    profileSmoothLine(frame,cx,cy-8,cx,cy+9,2.0,hi,255);
-    profileSmoothLine(frame,cx-1,cy-8,cx-5,cy-12,0.8,hi,220);
-    profileSmoothLine(frame,cx+1,cy-8,cx+5,cy-12,0.8,hi,220);
-    dot(cx-5,cy-12,1.0); dot(cx+5,cy-12,1.0);
-  } else if(b.style==='raccoon_robber'||b.style==='raccoon_boss'){
-    profileSmoothCircle(frame,cx,cy+1,9.5,hi,245,true);
-    profileSmoothLine(frame,cx-8,cy-3,cx-5,cy-10,1.8,hi,245);
-    profileSmoothLine(frame,cx+8,cy-3,cx+5,cy-10,1.8,hi,245);
-    profileSmoothLine(frame,cx-8,cy-1,cx+8,cy-1,2.4,base,245);
-    dot(cx-4,cy-1,1.6,255); dot(cx+4,cy-1,1.6,255);
-    profileSmoothCircle(frame,cx,cy+5,2.0,base,245,true);
-    if(b.style==='raccoon_robber'){ profileSmoothRoundedRect(frame,cx+6,cy+5,8,5,1,hi,245,1); }
-    else { profileSmoothStar(frame,cx,cy+10,3.4,hi,245); }
-  } else if(b.style==='toxic'){
-    profileSmoothCircle(frame,cx,cy,10.5,hi,245,true);
-    profileSmoothCircle(frame,cx,cy,3.0,base,255,true);
-    for(let i=0;i<3;i++){
-      const a=i*Math.PI*2/3-Math.PI/2;
-      profileSmoothLine(frame,cx+Math.cos(a)*4,cy+Math.sin(a)*4,cx+Math.cos(a)*9,cy+Math.sin(a)*9,2.4,base,245);
-    }
-  } else if(b.style==='tycoon'){
-    profileSmoothRoundedRect(frame,cx-9,cy-6,18,13,2,hi,250,1.2);
-    profileSmoothLine(frame,cx-8,cy-2,cx+8,cy-2,1.2,base,230);
-    profileSmoothCircle(frame,cx,cy-2,3.0,base,245,true);
-    drawBitmapText(frame,'$',cx-3,cy-5,0.9,hi,255);
-    star(cx+9,cy+8,1.7,210);
-  } else if(b.style==='star'){
-    profileSmoothStar(frame,cx,cy,10,hi,255);
-    profileSmoothStar(frame,cx,cy,4.3,base,245);
-    star(cx+9,cy-8,1.8,220);
-  } else if(b.style==='king'){
-    profileSmoothLine(frame,cx-10,cy-2,cx-7,cy+7,1.8,hi,255);
-    profileSmoothLine(frame,cx-7,cy+7,cx+7,cy+7,1.8,hi,255);
-    profileSmoothLine(frame,cx+7,cy+7,cx+10,cy-2,1.8,hi,255);
-    profileSmoothLine(frame,cx-10,cy-2,cx-4,cy+2,1.8,hi,255);
-    profileSmoothLine(frame,cx-4,cy+2,cx,cy-6,1.8,hi,255);
-    profileSmoothLine(frame,cx,cy-6,cx+4,cy+2,1.8,hi,255);
-    profileSmoothLine(frame,cx+4,cy+2,cx+10,cy-2,1.8,hi,255);
-    dot(cx,cy-1,2.0,245);
-  } else if(b.style==='alpha'){
-    // Strong wolf-like ears and muzzle silhouette.
-    profileSmoothLine(frame,cx-10,cy-1,cx-7,cy-10,2.0,hi,250);
-    profileSmoothLine(frame,cx-7,cy-10,cx-1,cy-5,1.8,hi,250);
-    profileSmoothLine(frame,cx-1,cy-5,cx+1,cy-5,1.8,hi,250);
-    profileSmoothLine(frame,cx+1,cy-5,cx+7,cy-10,1.8,hi,250);
-    profileSmoothLine(frame,cx+7,cy-10,cx+10,cy-1,2.0,hi,250);
-    profileSmoothCircle(frame,cx,cy+2,8.5,base,230,true);
-    dot(cx-3,cy,1.2,255); dot(cx+3,cy,1.2,255);
-    profileSmoothLine(frame,cx-3,cy+7,cx,cy+9,1.2,hi,220);
-    profileSmoothLine(frame,cx+3,cy+7,cx,cy+9,1.2,hi,220);
-  } else if(b.style==='cool'){
-    profileSmoothRoundedRect(frame,cx-11,cy-5,9,6,2,hi,250,1.4);
-    profileSmoothRoundedRect(frame,cx+2,cy-5,9,6,2,hi,250,1.4);
-    profileSmoothLine(frame,cx-2,cy-2,cx+2,cy-2,1.4,hi,250);
-    profileSmoothLine(frame,cx-7,cy+5,cx+7,cy+5,1.0,base,190);
-  } else if(b.style==='danger'){
-    profileSmoothStar(frame,cx,cy,9,hi,245);
-    profileSmoothStar(frame,cx,cy,4.0,base,255);
-    dot(cx-9,cy-8,1.2); dot(cx+9,cy+8,1.2);
-  } else if(b.style==='speed'){
-    profileSmoothLine(frame,cx-11,cy+6,cx+2,cy-6,2.5,hi,255);
-    profileSmoothLine(frame,cx-10,cy+11,cx-1,cy+2,1.8,hi,220);
-    profileSmoothLine(frame,cx-1,cy-7,cx+7,cy-7,1.8,hi,245);
-    profileSmoothLine(frame,cx+7,cy-7,cx+3,cy-1,1.8,hi,245);
-    profileSmoothLine(frame,cx+3,cy-1,cx+10,cy-1,1.8,hi,245);
-    star(cx+8,cy+8,1.7,210);
-  } else if(b.style==='raccoon_boss'){
-    // This branch is intentionally after the shared raccoon branch above;
-    // it gives the boss a crown without changing the robber silhouette.
-    profileSmoothCircle(frame,cx,cy+1,9.5,hi,245,true);
-    profileSmoothLine(frame,cx-8,cy-3,cx-5,cy-10,1.8,hi,245);
-    profileSmoothLine(frame,cx+8,cy-3,cx+5,cy-10,1.8,hi,245);
-    profileSmoothLine(frame,cx-8,cy-1,cx+8,cy-1,2.4,base,245);
-    dot(cx-4,cy-1,1.6,255); dot(cx+4,cy-1,1.6,255);
-    profileSmoothLine(frame,cx-7,cy-10,cx-3,cy-13,1.3,hi,245);
-    profileSmoothLine(frame,cx-3,cy-13,cx,cy-9,1.3,hi,245);
-    profileSmoothLine(frame,cx,cy-9,cx+3,cy-13,1.3,hi,245);
-    profileSmoothLine(frame,cx+3,cy-13,cx+7,cy-10,1.3,hi,245);
-  } else if(b.style==='millionaire'){
-    profileSmoothCircle(frame,cx,cy,10,hi,250,true);
-    profileSmoothCircle(frame,cx,cy,7,base,245,true);
-    drawBitmapText(frame,'M',cx-4,cy-5,1.0,hi,255);
-    star(cx+9,cy-8,1.5,220);
+  if(b.style==="vip_luxury"){
+    // A clean diamond crest — VIP is the only badge with a jewel + tiny crown.
+    profileDiamond(frame,cx,cy+2,Math.max(7,Math.round(r*.43)),base,255);
+    profileFill(frame,cx-3,cy-12,6,3,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-7,cy-9,5,3,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx+2,cy-9,5,3,hi[0],hi[1],hi[2],255);
+    profileStar(frame,cx,cy+2,Math.max(3,r*.18),hi,255);
+  } else if(b.style==="spender"){
+    profileFill(frame,cx-9,cy-7,18,14,base[0],base[1],base[2],255);
+    profileFill(frame,cx-7,cy-5,14,2,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-2,cy-2,4,7,black[0],black[1],black[2],255);
+    profileFill(frame,cx-5,cy,10,3,black[0],black[1],black[2],255);
+  } else if(b.style==="rainbow"){
+    // Three clean rainbow arcs/stripes, not a blocky rainbow rectangle.
+    profileSmoothLine(frame,cx-10,cy+7,cx,cy-8,2.5,[255,90,165],255);
+    profileSmoothLine(frame,cx-5,cy+9,cx+5,cy-9,2.5,[255,210,75],255);
+    profileSmoothLine(frame,cx,cy+9,cx+10,cy-7,2.5,[90,205,255],255);
+    profileStar(frame,cx,cy,3,hi,230);
+  } else if(b.style==="sparkle"){
+    profileStar(frame,cx,cy,Math.max(8,Math.round(r*.48)),base,255);
+    profileStar(frame,cx-7,cy+7,2,hi,230);
+    profileStar(frame,cx+8,cy-7,2,hi,230);
+  } else if(b.style==="green"){
+    profileFill(frame,cx-2,cy-10,4,19,base[0],base[1],base[2],255);
+    profileFill(frame,cx-10,cy-7,9,8,base[0],base[1],base[2],245);
+    profileFill(frame,cx+1,cy-5,9,8,hi[0],hi[1],hi[2],245);
+    profileFill(frame,cx-7,cy+2,8,7,hi[0],hi[1],hi[2],235);
+  } else if(b.style==="frame_royal"){
+    profileSmoothRoundedRect(frame,cx-9,cy-9,18,18,2,base,255,1.2);
+    profileSmoothRoundedRect(frame,cx-5,cy-5,10,10,1,black,255,1);
+    profileStar(frame,cx,cy-11,4,hi,255);
+  } else if(b.style==="diva"){
+    profileSmoothRoundedRect(frame,cx-9,cy-9,18,18,3,base,255,1.2);
+    profileSmoothRoundedRect(frame,cx-6,cy-6,12,12,2,black,255,1);
+    profileFill(frame,cx-1,cy-5,2,10,hi[0],hi[1],hi[2],220);
+    profileStar(frame,cx+7,cy-7,2,hi,255);
+  } else if(b.style==="butterfly"){
+    // Four clear wings + narrow body. No filled square behind it.
+    profileFill(frame,cx-3,cy-7,6,14,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-11,cy-8,7,8,base[0],base[1],base[2],255);
+    profileFill(frame,cx+4,cy-8,7,8,base[0],base[1],base[2],255);
+    profileFill(frame,cx-10,cy+1,7,8,hi[0],hi[1],hi[2],230);
+    profileFill(frame,cx+3,cy+1,7,8,hi[0],hi[1],hi[2],230);
+    profileFill(frame,cx-1,cy-11,2,4,white[0],white[1],white[2],220);
+    profileFill(frame,cx+0,cy-12,3,2,white[0],white[1],white[2],200);
+  } else if(b.style==="raccoon_robber" || b.style==="raccoon_boss"){
+    profileFill(frame,cx-8,cy-5,16,12,base[0],base[1],base[2],255);
+    profileFill(frame,cx-7,cy-10,5,5,base[0],base[1],base[2],255);
+    profileFill(frame,cx+2,cy-10,5,5,base[0],base[1],base[2],255);
+    profileFill(frame,cx-7,cy-1,14,5,hi[0],hi[1],hi[2],220);
+    profileFill(frame,cx-4,cy,2,2,black[0],black[1],black[2],255);
+    profileFill(frame,cx+2,cy,2,2,black[0],black[1],black[2],255);
+    if(b.style==="raccoon_robber") profileFill(frame,cx+8,cy+5,7,5,hi[0],hi[1],hi[2],255);
+    else profileStar(frame,cx,cy+9,3,hi,255);
+  } else if(b.style==="toxic"){
+    profileStar(frame,cx,cy,9,base,255);
+    profileFill(frame,cx-2,cy-7,4,14,black[0],black[1],black[2],255);
+    profileFill(frame,cx-7,cy-2,14,4,black[0],black[1],black[2],255);
+    profileStar(frame,cx,cy,2,hi,255);
+  } else if(b.style==="tycoon"){
+    profileFill(frame,cx-9,cy-7,18,14,base[0],base[1],base[2],255);
+    profileFill(frame,cx-6,cy-10,12,4,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-2,cy-4,4,8,black[0],black[1],black[2],255);
+  } else if(b.style==="millionaire"){
+    profileSmoothCircle(frame,cx,cy,9,base,255,true);
+    profileSmoothCircle(frame,cx,cy,6,black,255,true);
+    profileFill(frame,cx-1,cy-5,2,10,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-4,cy-1,8,2,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="star"){
+    profileStar(frame,cx,cy,9,base,255);
+    profileStar(frame,cx,cy,4,hi,255);
+  } else if(b.style==="king"){
+    profileFill(frame,cx-10,cy-4,20,8,base[0],base[1],base[2],255);
+    profileFill(frame,cx-8,cy-10,5,7,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-2,cy-13,5,10,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx+5,cy-10,5,7,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="alpha"){
+    profileFill(frame,cx-9,cy-3,18,10,base[0],base[1],base[2],255);
+    profileFill(frame,cx-7,cy-9,5,7,base[0],base[1],base[2],255);
+    profileFill(frame,cx+2,cy-9,5,7,base[0],base[1],base[2],255);
+    profileFill(frame,cx-4,cy-1,3,3,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx+1,cy-1,3,3,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="cool"){
+    profileFill(frame,cx-11,cy-5,9,5,base[0],base[1],base[2],255);
+    profileFill(frame,cx+2,cy-5,9,5,base[0],base[1],base[2],255);
+    profileFill(frame,cx-2,cy-2,4,3,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="danger"){
+    profileStar(frame,cx,cy,9,base,255);
+    profileFill(frame,cx-1,cy-7,2,8,black[0],black[1],black[2],255);
+    profileFill(frame,cx-1,cy+3,2,2,black[0],black[1],black[2],255);
+  } else if(b.style==="speed"){
+    profileFill(frame,cx-9,cy+5,18,3,base[0],base[1],base[2],255);
+    profileFill(frame,cx-6,cy,15,3,hi[0],hi[1],hi[2],255);
+    profileStar(frame,cx+5,cy-5,6,hi,255);
+  } else if(b.style==="black_ice"){
+    // Faceted collector crystal, kept distinct from the VIP diamond.
+    profileFill(frame,cx-2,cy-11,4,22,base[0],base[1],base[2],255);
+    profileFill(frame,cx-8,cy-5,16,10,hi[0],hi[1],hi[2],230);
+    profileFill(frame,cx-5,cy-8,10,16,base[0],base[1],base[2],220);
+    profileFill(frame,cx-1,cy-9,2,18,white[0],white[1],white[2],170);
   } else {
-    profileSmoothStar(frame,cx,cy,8,hi,245);
+    profileFill(frame,cx-7,cy-7,14,14,base[0],base[1],base[2],255);
+    drawBitmapText(frame,b.icon.slice(0,2),cx-5,cy-3,1,black,255);
   }
 
-  star(glintX,glintY,2.0,175);
+  // One restrained animated glint, matching the old badge aesthetic.
+  profileStar(frame,glintX,glintY,1.7,white,190);
 }
 function drawProfileBadges(frame,badgeIds,phase=0){
   if(!Array.isArray(badgeIds)||!badgeIds.length) return;
