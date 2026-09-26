@@ -27794,66 +27794,80 @@ export default {
       }
     }
 
-    // BADGE COMPONENTS: acknowledge the button IMMEDIATELY, then do the
-    // KV work and edit that same private response. The important part is that
-    // Discord receives the type-5 callback before getPlayer()/savePlayer().
-    // Do NOT put the slow work before the callback and do NOT rely on
-    // waitUntil() for the response edit.
+    // BADGE COMPONENTS: Discord must receive the acknowledgement as the
+    // HTTP response to THIS incoming interaction request. Do not POST a
+    // second callback request to Discord from inside the Worker; doing that
+    // can leave the client spinner alive even though the callback endpoint
+    // was contacted. Return type 5 immediately, then finish the private menu
+    // with the interaction webhook in waitUntil().
     if (isBadgeComponent) {
-      try {
-        const ack = await fetch(
-          `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: 5,
-              data: { flags: 64 }
-            })
-          }
-        );
-
-        if (!ack.ok) {
-          console.error("Badge initial ACK failed:", ack.status, await ack.text());
-          return new Response("OK", { status: 200 });
-        }
-
-        interaction.__deferred = true;
-        interaction.__deferredUpdate = false;
-        interaction.__deferredEphemeral = true;
-
-        // The interaction is already acknowledged, so this work is no longer
-        // constrained by Discord's 3-second initial-response window.
-        if (customId.startsWith("profile_badges:")) {
-          const parts = customId.split(":");
-          const targetId = parts[1] || "";
-          const page = Number(parts[2] || 0);
-          await showProfileBadges(env, interaction, targetId, page);
-          return new Response("OK", { status: 200 });
-        }
-
-        if (customId.startsWith("equip_badge:")) {
-          const badgeId = customId.slice("equip_badge:".length);
-          await toggleProfileBadge(env, interaction, badgeId);
-          return new Response("OK", { status: 200 });
-        }
-
-        if (customId === "unequip_badges") {
-          await unequipAllProfileBadges(env, interaction);
-          return new Response("OK", { status: 200 });
-        }
-      } catch (error) {
-        console.error("Badge interaction error:", error);
+      ctx.waitUntil((async () => {
         try {
-          await editOriginalResponse(env, interaction, {
-            content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
-            components: []
-          });
-        } catch (editError) {
-          console.error("Could not edit badge error response:", editError);
+          const user = getUserFromInteraction(interaction);
+          if (!user) throw new Error("Could not identify the Discord user.");
+
+          const appId = interaction.application_id || env.CLIENT_ID;
+          let data;
+
+          if (customId.startsWith("profile_badges:")) {
+            const parts = customId.split(":");
+            const targetId = parts[1] || "";
+            const page = Number(parts[2] || 0);
+            if (user.id !== targetId) {
+              data = { content: "❌ You can only manage badges on your own profile.", components: [] };
+            } else {
+              const payload = await buildProfileBadgesPayload(env, user.id, page);
+              data = { content: payload.content, components: payload.components };
+            }
+          } else if (customId.startsWith("equip_badge:")) {
+            const badgeId = customId.slice("equip_badge:".length);
+            const content = await toggleProfileBadgeData(env, user.id, badgeId);
+            data = { content, components: [] };
+          } else {
+            const content = await unequipAllProfileBadgesData(env, user.id);
+            data = { content, components: [] };
+          }
+
+          const edit = await fetch(
+            `https://discord.com/api/v10/webhooks/${appId}/${interaction.token}/messages/@original`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data)
+            }
+          );
+          if (!edit.ok) {
+            const detail = await edit.text();
+            console.error("Badge deferred edit failed:", edit.status, detail);
+            // A follow-up gives the user a visible result even if editing the
+            // deferred original fails for an unexpected Discord/API reason.
+            await fetch(`https://discord.com/api/v10/webhooks/${appId}/${interaction.token}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...data, flags: 64 })
+            }).catch(()=>null);
+          }
+        } catch (error) {
+          console.error("Badge interaction error:", error);
+          const appId = interaction.application_id || env.CLIENT_ID;
+          await fetch(
+            `https://discord.com/api/v10/webhooks/${appId}/${interaction.token}/messages/@original`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
+                components: []
+              })
+            }
+          ).catch(()=>null);
         }
-        return new Response("OK", { status: 200 });
-      }
+      })());
+
+      return new Response(
+        JSON.stringify({ type: 5, data: { flags: 64 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     // Titles must return the actual menu in the initial Discord response.
