@@ -27794,51 +27794,76 @@ export default {
       }
     }
 
-    // BADGE COMPONENTS: acknowledge immediately with a complete private
-    // type-4 response, then do the KV work in waitUntil(). This bypasses the
-    // general middleware chain (news/surprise/court/etc.), which can otherwise
-    // delay the badge handler long enough for Discord to keep showing
-    // “thinking…” or time out.
+    // BADGE COMPONENTS: return the actual private badge response as the
+    // interaction's FIRST response. Do not send a loading placeholder and
+    // then PATCH @original; that was leaving the placeholder stuck in some
+    // Workers invocations. Badge menus are lightweight enough to build here,
+    // and this completely bypasses the generic middleware chain.
     if (isBadgeComponent) {
-      const loading = await fetch(
-        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: 4,
-            data: {
-              content: "🏅 Loading your badges...",
-              flags: 64
-            }
-          })
-        }
-      );
-      if (!loading.ok) {
-        console.error("Badge initial response failed:", loading.status, await loading.text());
-        return new Response("OK", { status: 200 });
-      }
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = true;
-      // The interaction is already acknowledged above with a complete private
-      // type-4 response.  Do the badge work in THIS request rather than
-      // relying on waitUntil().  That guarantees the @original response is
-      // edited before the worker invocation finishes.
       try {
-        await handleComponent(env, interaction);
-      } catch (error) {
-        console.error("Badge component error:", error);
-        try {
-          await editOriginalResponse(env, interaction, {
-            content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
-            components: []
+        if (customId.startsWith("profile_badges:")) {
+          const parts = customId.split(":");
+          const targetId = parts[1] || "";
+          const page = Number(parts[2] || 0);
+          const payload = await buildProfileBadgesPayload(env, targetId, page);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: payload
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
           });
-        } catch (editError) {
-          console.error("Could not send badge error message:", editError);
         }
+
+        if (customId.startsWith("equip_badge:")) {
+          const badgeId = customId.slice("equip_badge:".length);
+          const user = getUserFromInteraction(interaction);
+          if (!user) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: "❌ I couldn't identify you.", flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
+          }
+          const content = await toggleProfileBadgeData(env, user.id, badgeId);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: { content, flags: 64 }
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        if (customId === "unequip_badges") {
+          const user = getUserFromInteraction(interaction);
+          if (!user) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: "❌ I couldn't identify you.", flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
+          }
+          const content = await unequipAllProfileBadgesData(env, user.id);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: { content, flags: 64 }
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+      } catch (error) {
+        console.error("Badge initial response error:", error);
+        return new Response(JSON.stringify({
+          type: 4,
+          data: {
+            content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
+            flags: 64
+          }
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
       }
-      return new Response("OK", { status: 200 });
     }
 
     // Titles must return the actual menu in the initial Discord response.
