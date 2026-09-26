@@ -27755,31 +27755,11 @@ export default {
         customId === "unequip_badges"
       );
 
-    // Badge interactions are handled with an IMMEDIATE private type-4 response.
-    // Do not defer these: Discord can otherwise leave the ephemeral component
-    // stuck on "MyTree is thinking..." if the later webhook edit is delayed.
-    if (isBadgeComponent) {
-      try {
-        const user=getUserFromInteraction(interaction);
-        if(!user){
-          return new Response(JSON.stringify({type:4,data:{content:"❌ Could not identify you.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-        }
-        let data;
-        if(customId.startsWith("profile_badges:")){
-          const parts=customId.split(":");
-          if((parts[1]||"")!==user.id) data={content:"❌ You can only manage badges on your own profile.",flags:64};
-          else data=await buildProfileBadgesPayload(env,user.id,Number(parts[2]||0));
-        } else if(customId.startsWith("equip_badge:")) {
-          data={content:await toggleProfileBadgeData(env,user.id,customId.slice("equip_badge:".length)),flags:64};
-        } else if(customId==="unequip_badges") {
-          data={content:await unequipAllProfileBadgesData(env,user.id),flags:64};
-        }
-        return new Response(JSON.stringify({type:4,data}),{status:200,headers:{"Content-Type":"application/json"}});
-      } catch(error) {
-        console.error("Badge immediate response error:",error);
-        return new Response(JSON.stringify({type:4,data:{content:`❌ Couldn't load badges: ${error?.message||"Unknown error"}`,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-      }
-    }
+    // Badge interactions are PRIVATE and may perform KV reads/writes.
+    // Let the generic interaction path send the ephemeral type-5 ACK immediately,
+    // then let the handler build/edit the private badge menu. Do NOT build the
+    // badge payload before the initial ACK, because getPlayer/savePlayer can
+    // exceed Discord's 3-second interaction window.
 
     const isCustomizeComponent =
       interaction.type === 3 &&
