@@ -27468,60 +27468,6 @@ export default {
       return showBirthdayCurseModal(env, interaction);
     }
 
-    // Raccoon Rumble buttons need an immediate complete response. The private
-    // menu can involve KV reads and Discord message editing; never leave Discord
-    // waiting on the generic deferred "Bot is thinking..." state.
-    if (interaction.type === 3 && customId.startsWith("rumble:")) {
-      if (customId.startsWith("rumble:howto:")) {
-        return new Response(JSON.stringify({
-          type: 4,
-          data: { content: rumbleHowToPlayText(), flags: 64 }
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      const ack = await fetch(
-        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: 4,
-            data: { content: "🦝💥 Loading your private Rumble menu..." }
-          })
-        }
-      );
-
-      if (!ack.ok) {
-        console.error("Raccoon Rumble initial response failed:", ack.status, await ack.text());
-        return new Response("OK", { status: 200 });
-      }
-
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = false;
-
-      ctx.waitUntil((async () => {
-        try {
-          await handleComponent(env, interaction);
-        } catch (error) {
-          console.error("Raccoon Rumble component error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ Couldn't load Raccoon Rumble: ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Rumble error:", editError);
-          }
-        }
-      })());
-
-      return new Response("OK", { status: 200 });
-    }
-
     if (relevant) {
       let update = false;
       let ephemeral = false;
@@ -27561,9 +27507,18 @@ export default {
         if (sub === "create") ephemeral = false;
       } else if (isRumbleComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
-        // Lobby buttons update the public lobby; choices/status remain private.
-        if (["join", "leave", "start"].includes(action)) update = true;
-        else ephemeral = true;
+        // The initial Open My Actions button creates the one private menu.
+        // Once that private menu exists, all of its buttons MUST use a type-6
+        // update ACK so Discord edits that same ephemeral message instead of
+        // creating a brand-new message on every click.
+        // Lobby buttons still update the public lobby; status/end remain private.
+        if (["join", "leave", "start"].includes(action)) {
+          update = true;
+        } else if (["choose", "target", "action"].includes(action)) {
+          update = true;
+        } else {
+          ephemeral = true;
+        }
       } else if (isExperimentComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
         if (action === "vote" || action === "clue" || action === "status") ephemeral = true;
