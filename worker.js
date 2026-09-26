@@ -4910,165 +4910,181 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   const b=PROFILE_BADGES[badgeId];
   const r=Math.max(10,Math.round(size/2));
 
-  // The badge shell stays on the real profile canvas. The ART is rendered on a
-  // 5x supersampled 100x100 canvas and then averaged down into the 20x20 black
-  // enamel center. This gives tiny objects real curves, facets and highlights
-  // instead of forcing every detail into a handful of pixels.
-  const black=[2,3,7], white=[255,255,255], silver=[205,211,225];
+  // LOCKED BADGE SHELL: the user's preferred black enamel look.
+  const black=[1,2,5], white=[255,255,255], silver=[205,211,225];
   const palettes={
-    vip_luxury:[[221,122,255],[255,232,255]], spender:[[245,184,42],[255,236,145]],
-    rainbow:[[255,70,170],[105,220,255]], sparkle:[[255,211,58],[255,249,180]],
-    green:[[67,200,94],[188,255,176]], frame_royal:[[177,94,255],[255,216,105]],
-    diva:[[255,91,188],[255,211,241]], butterfly:[[70,192,255],[203,126,255]],
-    raccoon_robber:[[181,126,84],[246,211,153]], toxic:[[91,238,73],[221,255,125]],
-    tycoon:[[64,194,119],[255,221,74]], star:[[255,184,50],[255,241,153]],
-    king:[[255,201,57],[255,240,150]], alpha:[[145,181,218],[242,251,255]],
-    cool:[[64,175,255],[192,242,255]], danger:[[237,55,91],[255,169,150]],
-    speed:[[55,210,255],[227,252,255]], raccoon_boss:[[220,154,74],[255,226,126]],
-    black_ice:[[75,190,255],[229,250,255]], millionaire:[[255,196,45],[255,241,145]]
+    vip_luxury:[[205,92,255],[255,235,255]], spender:[[246,181,38],[255,235,150]],
+    rainbow:[[255,70,170],[105,220,255]], sparkle:[[255,208,48],[255,249,180]],
+    green:[[68,205,95],[190,255,178]], frame_royal:[[175,92,255],[255,216,105]],
+    diva:[[255,92,188],[255,214,241]], butterfly:[[65,190,255],[207,130,255]],
+    raccoon_robber:[[190,130,84],[255,215,158]], toxic:[[92,238,72],[222,255,128]],
+    tycoon:[[55,194,116],[255,221,72]], star:[[255,184,45],[255,242,155]],
+    king:[[255,201,56],[255,241,155]], alpha:[[145,184,225],[244,252,255]],
+    cool:[[62,175,255],[195,244,255]], danger:[[238,55,92],[255,171,153]],
+    speed:[[55,211,255],[230,253,255]], raccoon_boss:[[222,153,72],[255,228,130]],
+    black_ice:[[72,190,255],[232,251,255]], millionaire:[[255,195,42],[255,241,145]]
   };
   const [base,hi]=palettes[b.style]||[[190,195,210],[255,255,255]];
 
-  // Black enamel bezel + restrained glints. This is intentionally the same
-  // visual shell that worked in the user's preferred version.
   profileFill(frame,cx-r-2,cy-r-2,r*2+4,r*2+4,white[0],white[1],white[2],255);
   profileFill(frame,cx-r,cy-r,r*2,r*2,black[0],black[1],black[2],255);
-  profileSmoothLine(frame,cx-r+3,cy-r+2,cx+r-3,cy-r+2,1,silver,150);
-  profileSmoothLine(frame,cx-r+2,cy-r+3,cx-r+2,cy+r-3,1,silver,100);
+  profileSmoothLine(frame,cx-r+2,cy-r+2,cx+r-2,cy-r+2,1,silver,150);
+  profileSmoothLine(frame,cx-r+2,cy-r+2,cx-r+2,cy+r-2,1,silver,100);
 
-  // Render the emblem on a real 500x500 supersampled canvas.
-  // V6 accidentally allocated only 100x100 while scaling every drawing coordinate by 5,
-  // so almost all artwork was written outside the canvas and only the black fill survived.
+  // Work large, but design for the final 20px size. 5x supersampling means
+  // a 5px source stroke becomes roughly one crisp visible pixel in Discord.
   const AW=500, AH=500, S=5, DS=25;
   const art={width:AW,height:AH,data:new Uint8ClampedArray(AW*AH*4)};
   for(let i=0;i<art.data.length;i+=4){art.data[i]=black[0];art.data[i+1]=black[1];art.data[i+2]=black[2];art.data[i+3]=255;}
-  const X=v=>v*S, C=(v)=>v*S;
+  const X=v=>v*S;
   const F=(x,y,w,h,c=base,a=255)=>profileFill(art,X(x),X(y),X(w),X(h),c[0],c[1],c[2],a);
-  const L=(x1,y1,x2,y2,w=1,c=base,a=255)=>profileSmoothLine(art,X(x1),X(y1),X(x2),X(y2),X(w),c,a);
+  const L=(x1,y1,x2,y2,w=4,c=base,a=255)=>profileSmoothLine(art,X(x1),X(y1),X(x2),X(y2),X(w),c,a);
   const O=(x,y,rr,c=hi,a=255,fill=true,w=1)=>profileSmoothCircle(art,X(x),X(y),X(rr),c,a,fill,X(w));
-  const RR=(x,y,w,h,rr,c=base,a=255,lw=1)=>profileSmoothRoundedRect(art,X(x),X(y),X(w),X(h),X(rr),c,a,X(lw));
-  const D=(x,y,ss,c=base,a=255)=>profileDiamond(art,X(x),X(y),X(ss),c,a);
+  const RR=(x,y,w,h,rr,c=base,a=255,lw=3)=>profileSmoothRoundedRect(art,X(x),X(y),X(w),X(h),X(rr),c,a,X(lw));
   const ST=(x,y,rr,c=hi,a=255)=>profileSmoothStar(art,X(x),X(y),X(rr),c,a);
   const P=(x,y,rx,ry,c=base,a=255,rot=0)=>profileSmoothPetal(art,X(x),X(y),X(rx),X(ry),c,a,rot);
+  const POLY=(pts,c=base,a=255)=>{
+    const q=pts.map(([x,y])=>[X(x),X(y)]);
+    let minY=AH-1,maxY=0;
+    for(const [,y] of q){minY=Math.max(0,Math.floor(Math.min(minY,y)));maxY=Math.min(AH-1,Math.ceil(Math.max(maxY,y)));}
+    for(let yy=minY;yy<=maxY;yy++){
+      const xs=[];
+      for(let i=0,j=q.length-1;i<q.length;j=i++){
+        const [xi,yi]=q[i],[xj,yj]=q[j];
+        if((yi>yy)!==(yj>yy)){const x=xi+(yy-yi)*(xj-xi)/(yj-yi);xs.push(x);}
+      }
+      xs.sort((a,b)=>a-b);
+      for(let k=0;k+1<xs.length;k+=2){
+        const x0=Math.max(0,Math.ceil(xs[k])), x1=Math.min(AW-1,Math.floor(xs[k+1]));
+        if(x1>=x0) profileFill(art,x0,yy,x1-x0+1,1,c[0],c[1],c[2],a);
+      }
+    }
+  };
 
-  // --- high-resolution emblem artwork ---
   if(b.style==='vip_luxury'){
-    // Jewel + crown. The diamond has four real facet planes and a bright table.
-    L(28,36,38,25,2,base); L(38,25,50,19,2,hi); L(50,19,62,25,2,hi); L(62,25,72,36,2,base);
-    L(28,36,50,78,2,base); L(72,36,50,78,2,base); L(28,36,72,36,2,hi);
-    L(38,25,50,36,1.4,white,220); L(62,25,50,36,1.4,white,220); L(50,36,50,75,1.5,hi,230);
-    F(31,27,8,6,base); F(46,18,8,8,hi); F(61,27,8,6,base);
-    L(31,35,69,35,2,base); L(35,35,40,44,1.4,hi); L(65,35,60,44,1.4,hi);
-    O(25,78,2,hi,230); O(75,78,2,hi,230);
+    // Luxury crest: a bold faceted gem under a crown. The silhouette stays bright.
+    POLY([[24,38],[35,23],[50,17],[65,23],[76,38],[67,78],[50,88],[33,78]],base,255);
+    POLY([[24,38],[50,38],[50,88],[33,78]],hi,245);
+    POLY([[50,38],[76,38],[67,78],[50,88]],base,245);
+    L(24,38,76,38,5,white,220); L(35,23,50,38,4,white,190); L(65,23,50,38,4,white,190); L(50,38,50,86,4,hi,230);
+    POLY([[29,28],[38,14],[47,27],[50,15],[55,27],[62,14],[71,28],[68,37],[32,37]],hi,255);
+    O(38,21,3,white,230); O(50,19,3,white,240); O(62,21,3,white,230);
+    ST(79,79,6,white,230);
   } else if(b.style==='spender'){
-    RR(17,28,66,44,7,base,255,1.5); F(20,31,60,9,hi); RR(27,45,18,17,3,hi,255,1);
-    L(30,49,42,49,1,white,220); L(30,53,42,53,1,white,160); L(55,54,74,54,2,white,200);
-    L(64,39,76,31,1.5,white,190); L(68,43,80,35,1.2,white,130);
-    O(77,64,2,white,200);
+    RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
+    // Card chip and contactless marks.
+    RR(27,51,13,11,2,white,230,2); L(29,54,38,54,2,base,230); L(29,58,38,58,2,base,230);
+    L(57,55,78,55,4,white,220); L(57,64,72,64,4,white,160); O(80,39,3,white,230);
+    ST(20,79,5,hi,230);
   } else if(b.style==='rainbow'){
-    const cols=[[255,70,155],[255,178,55],[255,239,80],[85,220,135],[70,180,255],[175,100,255]];
-    for(let i=0;i<6;i++) P(50,57,31-i*2,28-i*2,cols[i],235,0);
-    // cover the lower halves to create a clean arcing ribbon on black
-    F(15,60,70,28,black,255); F(18,58,64,3,black,255);
-    for(let i=0;i<6;i++) L(20+i*10,58,28+i*10,30,3,cols[i],235);
-    ST(50,50,10,white,255); O(27,28,2,cols[0],220); O(75,72,2,cols[5],220);
+    const cols=[[255,70,155],[255,174,55],[255,238,70],[74,222,130],[65,177,255],[176,100,255]];
+    // Six bright nested arcs. The black center below them keeps the rainbow readable.
+    for(let i=0;i<6;i++){
+      const x=24+i*4, y=76-i*4, w=52-i*8;
+      L(x,y,x+10,y-30,6,cols[i],245); L(x+10,y-30,x+w-10,y-30,6,cols[i],245); L(x+w-10,y-30,x+w,y,6,cols[i],245);
+    }
+    ST(50,57,10,white,250); O(23,31,3,cols[0],230); O(77,31,3,cols[5],230);
   } else if(b.style==='sparkle'){
-    ST(50,50,25,base,255); ST(50,50,13,hi,255);
-    ST(24,69,8,hi,235); ST(76,31,8,white,220); ST(24,30,6,base,210); ST(76,72,6,base,220);
-    O(39,80,2,hi,210); O(61,80,2,hi,210); O(50,18,2,white,220);
+    ST(50,50,31,base,255); ST(50,50,21,hi,255); ST(50,50,9,white,240);
+    ST(25,30,8,hi,245); ST(75,29,7,white,235); ST(25,72,8,base,240); ST(76,73,7,hi,235);
+    O(40,78,3,white,220); O(60,80,3,hi,220);
   } else if(b.style==='green'){
-    F(46,54,8,28,base); P(50,40,25,17,hi,245); P(33,53,22,16,base,245); P(67,55,22,16,base,245);
-    P(50,62,26,15,base,245); L(39,75,47,69,1.6,hi); L(53,69,62,76,1.6,hi);
-    O(31,36,2,hi,220); O(68,39,2,base,220); O(42,51,2,hi,210); O(61,55,2,hi,200);
+    F(45,59,10,27,base); F(42,82,16,5,hi);
+    P(50,34,27,18,hi,250); P(34,51,24,18,base,250); P(66,51,24,18,base,250); P(50,66,29,18,base,250);
+    O(34,36,3,white,220); O(66,39,3,hi,220); O(43,53,3,hi,220); O(59,59,3,white,190);
   } else if(b.style==='frame_royal'){
-    RR(18,24,64,59,7,base,255,2); RR(27,33,46,40,3,black,255,1.5);
-    O(23,29,4,hi); O(77,29,4,hi); O(23,78,4,hi); O(77,78,4,hi);
-    F(30,19,8,10,hi); F(46,13,8,16,hi); F(62,19,8,10,hi);
-    L(30,29,70,29,2,white,190); L(32,77,68,77,2,white,180);
-    L(32,37,68,37,1,hi,150); L(32,69,68,69,1,hi,150);
+    RR(14,19,72,69,7,base,255,5); RR(24,29,52,48,4,black,255,4);
+    // Crown perched on the frame.
+    POLY([[29,27],[34,12],[45,25],[50,9],[55,25],[66,12],[71,27],[66,34],[34,34]],hi,255);
+    O(34,21,3,white,230); O(50,16,3,white,240); O(66,21,3,white,230);
+    O(20,24,4,hi); O(80,24,4,hi); O(20,78,4,hi); O(80,78,4,hi);
+    L(29,39,71,39,4,white,190); L(29,69,71,69,4,white,170);
   } else if(b.style==='diva'){
-    RR(18,22,64,58,18,base,255,2); RR(28,31,44,38,12,black,255,1.5);
-    L(33,38,55,54,2,hi,230); L(43,59,67,39,2,white,180); L(31,66,43,59,1.5,hi,180);
-    O(79,21,5,hi,245); ST(22,79,6,base,220); F(73,74,8,5,base);
+    // Compact mirror with handle and shine.
+    O(48,48,30,base,255); O(48,48,23,black,255); O(48,48,20,hi,220); O(48,48,16,black,255);
+    L(63,68,78,84,6,base); L(67,72,82,87,3,hi); ST(30,28,7,white,230); ST(72,27,5,hi,230);
+    L(37,40,58,54,3,white,180); L(43,58,59,45,3,hi,160);
   } else if(b.style==='butterfly'){
-    // Four wing lobes, wing veins, body, antennae and tiny wing-edge sparkles.
+    // KEEP THIS silhouette: it is the benchmark that finally reads correctly at 20px.
     P(32,39,20,24,base,255,-.35); P(68,39,20,24,base,255,.35);
     P(35,65,18,19,hi,245,.28); P(65,65,18,19,hi,245,-.28);
     O(50,51,4,hi,255); F(47,49,6,27,hi); O(50,47,4,white,210);
-    L(46,42,36,30,1.5,white,210); L(54,42,64,30,1.5,white,210);
-    L(44,52,30,45,1.4,hi,210); L(56,52,70,45,1.4,hi,210);
-    L(44,61,34,66,1.4,base,220); L(56,61,66,66,1.4,base,220);
-    L(48,44,42,29,1,white,180); L(52,44,58,29,1,white,180);
-    L(48,45,40,22,1,white,180); L(52,45,60,22,1,white,180);
+    L(46,42,36,30,4,white,210); L(54,42,64,30,4,white,210);
+    L(44,52,30,45,4,hi,210); L(56,52,70,45,4,hi,210);
+    L(44,61,34,66,4,base,220); L(56,61,66,66,4,base,220);
+    L(48,44,40,24,3,white,180); L(52,44,60,24,3,white,180);
     O(39,20,2,hi,230); O(61,20,2,hi,230); O(27,38,2,white,180); O(73,38,2,white,180);
   } else if(b.style==='raccoon_robber' || b.style==='raccoon_boss'){
-    P(31,31,14,18,base,255,-.15); P(69,31,14,18,base,255,.15);
-    O(50,52,28,base,255); P(50,67,21,13,hi,230);
-    P(38,49,15,8,black,255,0); P(62,49,15,8,black,255,0);
-    O(42,49,3,white,255); O(58,49,3,white,255); O(42,49,1.2,black); O(58,49,1.2,black);
-    P(50,61,10,7,hi,255); O(50,60,2,black,255);
-    L(37,68,45,71,1.3,white,160); L(63,68,55,71,1.3,white,160);
-    O(29,30,3,hi,190); O(71,30,3,hi,190);
+    // Strong raccoon silhouette: ears + round head + mask + muzzle.
+    POLY([[24,38],[27,20],[40,29],[50,25],[60,29],[73,20],[76,38],[70,69],[61,82],[50,87],[39,82],[30,69]],base,255);
+    P(39,50,16,9,black,255,0); P(61,50,16,9,black,255,0);
+    O(41,49,4,white,255); O(59,49,4,white,255); O(41,49,2,black); O(59,49,2,black);
+    O(50,63,12,hi,255); O(50,61,4,black,255); L(44,72,50,75,3,white,170); L(56,72,50,75,3,white,170);
+    L(29,37,39,42,4,hi,200); L(71,37,61,42,4,hi,200);
     if(b.style==='raccoon_robber'){
-      RR(70,67,16,14,3,hi,245,1.2); L(73,69,83,77,1,white,210); O(79,72,2,white,190);
+      RR(68,67,20,18,3,hi,255,3); O(74,72,3,white,220); O(82,78,2,white,220);
     } else {
-      ST(80,75,9,hi,245); F(73,74,14,4,base,230);
+      ST(79,75,10,hi,250); F(69,73,20,5,base,240);
     }
   } else if(b.style==='toxic'){
-    O(50,50,31,base,255); O(50,50,25,black,255); O(50,50,7,base,255);
-    // Three radiation blades.
-    P(50,31,8,18,base,255,0); P(33,61,18,8,base,255,-2.1); P(67,61,18,8,base,255,2.1);
-    O(50,50,6,black,255); O(50,50,3,hi,255);
-    O(26,27,3,hi,220); O(74,27,3,hi,220);
+    // High-contrast radiation symbol.
+    O(50,50,32,base,255); O(50,50,27,black,255);
+    POLY([[47,47],[38,21],[47,18],[53,45]],base,255);
+    POLY([[53,47],[80,35],[84,44],[56,53]],base,255);
+    POLY([[48,54],[34,82],[26,77],[44,50]],base,255);
+    O(50,50,9,black,255); O(50,50,5,hi,255);
+    O(25,25,3,hi,230); O(75,25,3,white,220);
   } else if(b.style==='tycoon'){
-    RR(18,18,64,64,7,base,255,2); O(50,50,25,black,255); O(50,50,20,hi,255); O(50,50,17,black,255);
-    L(50,29,50,71,2,hi); L(29,50,71,50,2,hi); L(36,36,64,64,1.5,hi,220); L(64,36,36,64,1.5,hi,220);
-    RR(67,45,13,10,3,hi,255,1); O(23,23,3,hi); O(77,23,3,hi); O(23,77,3,hi); O(77,77,3,hi);
+    // Vault: door, spokes, center lock, corner bolts.
+    RR(14,14,72,72,9,base,255,5); O(50,50,29,black,255); O(50,50,24,hi,255); O(50,50,19,black,255);
+    L(50,23,50,77,5,hi); L(23,50,77,50,5,hi); L(31,31,69,69,4,hi,230); L(69,31,31,69,4,hi,230);
+    O(50,50,8,hi,255); O(50,50,4,black,255); O(23,23,4,white,220); O(77,23,4,white,220); O(23,77,4,white,220); O(77,77,4,white,220);
   } else if(b.style==='star'){
-    ST(50,50,31,base,255); ST(50,50,20,hi,255);
-    L(18,76,30,66,1.5,white,190); L(70,30,82,18,1.5,white,190); L(25,26,31,20,1.3,hi,220); L(72,76,80,82,1.3,hi,220);
-    O(21,20,2,hi,210); O(80,80,2,white,190);
+    ST(50,50,34,base,255); ST(50,50,23,hi,255); ST(50,50,10,white,235);
+    L(16,78,31,64,4,white,190); L(69,31,84,16,4,white,190); O(21,22,3,hi,220); O(79,79,3,white,210);
   } else if(b.style==='king'){
-    // Large crown with five points, gold band, jewels and a highlight.
-    F(18,48,64,25,base); F(20,67,60,9,hi); L(20,67,80,67,2,white,210);
-    L(20,48,29,26,2,hi); L(29,26,40,48,2,base); L(40,48,50,19,2,hi); L(50,19,60,48,2,base); L(60,48,71,26,2,hi); L(71,26,80,48,2,base);
-    O(29,29,3,white,220); O(50,22,3,white,230); O(71,29,3,white,220); O(32,61,3,hi); O(50,61,3,base); O(68,61,3,hi);
+    POLY([[15,48],[27,23],[40,45],[50,14],[60,45],[73,23],[85,48],[80,72],[20,72]],base,255);
+    F(20,61,60,14,hi); L(20,61,80,61,5,white,220);
+    O(27,30,4,white,230); O(50,20,4,white,240); O(73,30,4,white,230);
+    O(32,66,3,base); O(50,66,3,white,230); O(68,66,3,base);
   } else if(b.style==='alpha'){
-    P(35,30,14,22,base,255,-.12); P(65,30,14,22,base,255,.12); P(50,58,27,25,base,255);
-    L(28,48,42,44,2,hi,190); L(72,48,58,44,2,hi,190);
-    O(40,50,4,white,255); O(60,50,4,white,255); O(40,50,1.5,black); O(60,50,1.5,black);
-    P(50,66,12,9,hi,240); O(50,63,2.5,black); L(43,74,48,77,1,white,160); L(57,74,52,77,1,white,160);
-    L(35,63,27,68,1.4,white,150); L(65,63,73,68,1.4,white,150);
+    // Wolf face: ears, cheek silhouette, bright eyes and muzzle.
+    POLY([[20,27],[36,35],[50,27],[64,35],[80,27],[72,69],[61,84],[50,90],[39,84],[28,69]],base,255);
+    POLY([[25,31],[36,38],[30,55],[21,45]],hi,230); POLY([[75,31],[64,38],[70,55],[79,45]],hi,230);
+    P(39,52,14,9,black,255,0); P(61,52,14,9,black,255,0); O(41,52,4,white,255); O(59,52,4,white,255);
+    O(50,68,12,hi,255); O(50,66,4,black,255); L(44,76,50,79,3,white,170); L(56,76,50,79,3,white,170);
   } else if(b.style==='cool'){
-    RR(14,33,34,25,7,base,255,2); RR(52,33,34,25,7,base,255,2); L(48,43,52,43,2,hi); L(14,38,5,31,2,base); L(86,38,95,31,2,base);
-    L(22,39,40,50,1.7,white,220); L(60,39,78,50,1.7,white,220); L(25,52,38,43,1,hi,180); L(62,52,75,43,1,hi,180);
-    O(31,62,2,hi,180); O(69,62,2,hi,180);
+    // Sunglasses: two thick lenses, bridge, arms and reflective highlights.
+    RR(10,34,38,27,8,base,255,5); RR(52,34,38,27,8,base,255,5);
+    L(48,46,52,46,5,hi); L(10,40,2,34,5,base); L(90,40,98,34,5,base);
+    L(18,40,39,55,4,white,210); L(61,40,82,55,4,white,210); L(24,57,39,47,3,hi,180); L(61,47,76,57,3,hi,180);
   } else if(b.style==='danger'){
-    // Horned warning crest, with a crisp center symbol.
-    P(31,33,13,22,base,255,-.4); P(69,33,13,22,base,255,.4); ST(50,55,27,base,255);
-    F(46,39,8,28,black); F(38,52,24,8,black); O(50,63,4,hi,255);
-    L(25,74,35,67,1.5,hi,220); L(75,74,65,67,1.5,hi,220); O(28,27,3,hi,220); O(72,27,3,hi,220);
+    // Horned demon/imp crest with a bright center warning mark.
+    POLY([[25,31],[38,15],[43,34],[50,27],[57,34],[62,15],[75,31],[70,72],[50,87],[30,72]],base,255);
+    P(39,52,13,8,black,255,0); P(61,52,13,8,black,255,0); O(42,52,3,white,250); O(58,52,3,white,250);
+    F(47,40,6,27,hi); F(39,51,22,6,hi); O(50,68,3,black,255); ST(25,77,6,hi,220); ST(75,77,6,hi,220);
   } else if(b.style==='speed'){
-    // Layered lightning bolt with two long motion trails.
-    L(61,15,37,48,7,base); L(37,48,54,48,7,hi); L(54,48,39,86,7,base);
-    L(61,15,47,46,3,white,200); L(47,46,57,46,2,white,190);
-    L(13,72,31,62,2,white,200); L(9,61,29,55,2,base,200); L(69,25,84,17,2,hi,200); O(82,76,3,hi,210);
+    // Bold lightning bolt + three clearly separated speed trails.
+    POLY([[60,10],[31,48],[48,48],[36,91],[70,43],[53,43]],base,255);
+    POLY([[58,16],[39,47],[53,47],[43,70],[63,43],[50,43]],hi,245);
+    L(8,69,29,60,5,white,210); L(7,58,27,52,5,base,210); L(70,25,90,15,5,hi,210);
+    O(83,78,3,white,210);
   } else if(b.style==='black_ice'){
-    // Diamond Darling: a jewelry-grade faceted gemstone, NOT the VIP crest.
-    L(50,13,79,32,2,hi); L(79,32,68,77,2,base); L(68,77,32,77,2,hi); L(32,77,21,32,2,base); L(21,32,50,13,2,white,220);
-    L(21,32,50,36,2,hi); L(50,36,79,32,2,white,200); L(32,77,50,36,2,base); L(68,77,50,36,2,hi); L(50,13,50,36,1.5,white,230);
-    L(32,77,43,36,1.2,white,180); L(68,77,57,36,1.2,white,170);
-    L(29,31,50,20,1.5,white,170); L(51,17,73,30,1.3,hi,180); ST(82,20,5,white,230); O(22,76,2,hi,220);
+    // Diamond Darling: large jewelry gemstone with obvious facets.
+    POLY([[50,9],[82,31],[68,83],[32,83],[18,31]],base,255);
+    POLY([[18,31],[50,35],[32,83]],hi,245); POLY([[50,35],[82,31],[68,83]],base,245); POLY([[32,83],[50,35],[68,83]],hi,235);
+    L(18,31,82,31,5,white,225); L(50,9,50,35,4,white,235); L(32,83,50,35,4,white,180); L(68,83,50,35,4,white,190);
+    ST(78,18,6,white,235); O(24,78,3,hi,220);
   } else if(b.style==='millionaire'){
-    O(50,50,31,base,255); O(50,50,26,black,255); O(50,50,22,base,255); O(50,50,18,black,255);
-    L(37,66,37,36,2,hi); L(37,36,50,52,2,hi); L(50,52,63,36,2,hi); L(63,36,63,66,2,hi);
-    L(31,27,43,22,1.5,white,190); L(57,22,69,27,1.5,white,190); O(74,73,3,hi,220); O(25,72,2,white,180);
+    // Coin with raised rim and embossed M.
+    O(50,50,34,base,255); O(50,50,28,black,255); O(50,50,24,hi,255); O(50,50,20,black,255);
+    L(37,68,37,35,5,hi); L(37,35,50,53,5,hi); L(50,53,63,35,5,hi); L(63,35,63,68,5,hi);
+    L(31,24,43,19,4,white,200); L(57,19,69,24,4,white,200); O(76,73,3,hi,220); O(24,73,3,white,180);
   }
 
-  // Average the full 500x500 artwork down to the 20x20 enamel center.
-  // 25x25 source pixels contribute to each final pixel, preserving curves and facets.
-  const outW=20,outH=20;
-  const ox=Math.round(cx-outW/2), oy=Math.round(cy-outH/2);
+  // Average 25x25 source pixels into each final pixel. This is the key to keeping
+  // curves and filled silhouettes recognizable after Discord receives the profile PNG.
+  const outW=20,outH=20, ox=Math.round(cx-outW/2), oy=Math.round(cy-outH/2);
   for(let py=0;py<outH;py++) for(let px=0;px<outW;px++){
     let sr=0,sg=0,sb=0,sa=0,n=0;
     for(let yy=0;yy<DS;yy++) for(let xx=0;xx<DS;xx++){
@@ -5081,7 +5097,6 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     }
   }
 
-  // Tiny animated glint stays on the shell, never across the artwork center.
   const gx=cx+Math.round(Math.cos(phase*6.283+cx*.01)*(r-5));
   const gy=cy+Math.round(Math.sin(phase*6.283+cx*.01)*(r-5));
   profileSmoothStar(frame,gx,gy,1.25,white,145);
