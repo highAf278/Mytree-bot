@@ -3746,21 +3746,26 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       xx+=Math.round(Math.sin(t+charIndex*0.35));
       color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
     } else if(effectId==="black_ice"){
-      const sweep=(t*0.42 + charIndex/Math.max(1,str.length))%1;
+      // BLACK ICE V3: frozen-glass lettering. Keep the word still and readable;
+      // the animation comes from the moving reflection, not bouncing letters.
+      const sweep=(phase*1.15 + charIndex/Math.max(1,str.length))%1;
       const distance=Math.abs(sweep-0.5);
-      const glint=Math.max(0,1-distance*4.5);
-      if(glint>0.15) color=[255,255,255];
-      else if(charIndex%3===0) color=[225,249,255];
-      else if(charIndex%3===1) color=[116,205,239];
-      else color=[47,103,143];
-      yy+=Math.round(Math.sin(t*0.45+charIndex*0.18)*0.45);
+      const glint=Math.max(0,1-distance*7.0);
+      if(glint>0.22) color=[255,255,255];
+      else if(charIndex%4===0) color=[225,249,255];
+      else if(charIndex%4===1) color=[157,225,247];
+      else if(charIndex%4===2) color=[92,183,224];
+      else color=[64,125,165];
     }
 
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
     for(let ry=0;ry<7;ry++){
       const row=rows[ry];
       for(let rx=0;rx<5;rx++){
-        if(row[rx]==="1") profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
+        if(row[rx]==="1"){
+          if(effectId==="black_ice") profileFill(frame,xx+rx*drawScale+1,yy+ry*drawScale+1,drawScale,drawScale,35,83,112,235);
+          profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
+        }
       }
     }
     px+=5*drawScale+gap;
@@ -3917,26 +3922,29 @@ function drawProfileEffectParticles(frame,effectId,phase){
       break;
     }
     case "black_ice": {
-      const icy=[[245,253,255],[185,239,255],[95,195,235],[45,86,120]];
-      profileIceCrown(frame,548,135,5,icy[2],phase);
-      const shards=[
-        [350,139,7,-1.9,0.00],[390,132,5,-1.2,.13],[430,139,6,-1.7,.25],
-        [675,139,6,-1.4,.41],[715,132,5,-1.9,.56],[744,144,7,-1.25,.72],
-        [350,228,6,1.9,.18],[392,232,5,1.35,.34],[704,232,6,1.75,.61],[744,226,7,1.25,.82]
-      ];
-      shards.forEach(([x,y,s,a,o],i)=>{
-        const drift=Math.sin(p*0.7+o*8)*4;
-        const drop=Math.cos(p*0.55+o*7)*5;
-        profileIceShard(frame,Math.round(x+drift),Math.round(y+drop),s,icy[i%icy.length],205,a);
-        if(i%2===0) profileStar(frame,Math.round(x+drift+4),Math.round(y+drop-5),2,[255,255,255],190);
+      // BLACK ICE V3: every particle stays inside the title plaque. No huge
+      // shards wandering into the stats cards.
+      const icyWhite=[248,253,255], ice=[150,225,248], deep=[62,130,170];
+      profileIceCrown(frame,548,148,4,ice,phase);
+
+      // Frozen underline + moving white reflection.
+      profilePixelLine(frame,390,184,704,184,1,deep[0],deep[1],deep[2],180);
+      const glintX=Math.round(392 + ((phase*1.35)%1)*308);
+      profilePixelLine(frame,glintX-18,184,glintX+18,184,2,255,255,255,230);
+      profileStar(frame,glintX,184,2,icyWhite,230);
+
+      // Small crystals orbit the title instead of large random shards.
+      const pts=[[374,151,0.00],[404,181,0.18],[690,151,0.36],[721,181,0.54],[430,147,0.72],[650,187,0.90]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=Math.round(x+Math.sin(p*0.45+o*7)*3);
+        const yy=Math.round(y+Math.cos(p*0.55+o*6)*2);
+        const size=i%3===0?3:2;
+        profileSnowflake(frame,xx,yy,size,i%2?ice:icyWhite,Math.round(150+70*(0.5+0.5*Math.sin(p+o*8))));
       });
-      profileIceMist(frame,350,218,62,icy[1],phase,1);
-      profileIceMist(frame,746,146,62,icy[2],phase,-1);
-      for(let i=0;i<7;i++){
-        const x=390+i*48+Math.sin(p*0.55+i)*7;
-        const y=142+Math.sin(p*0.75+i*1.7)*15;
-        profileSnowflake(frame,Math.round(x),Math.round(y),2+(i%2),icy[(i+1)%icy.length],185);
-      }
+
+      // Very subtle frost wisps at the lower corners of the title box.
+      profileIceMist(frame,382,178,34,ice,phase,1);
+      profileIceMist(frame,714,178,34,ice,phase,-1);
       break;
     }
     case "spooky": {
