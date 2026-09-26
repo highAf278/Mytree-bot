@@ -11315,14 +11315,17 @@ function coupStatsText(p){
 function coupButton(label,custom_id,style=2,disabled=false){ return {type:2,style,label,custom_id,disabled}; }
 function coupComponents(game){
   if(!game) return [];
-  if(game.status==="lobby") return [[
+  if(game.status==="lobby") return [row(
     coupButton("🃏 Join","coup:join:"+game.id,3),
     coupButton("🚪 Leave","coup:leave:"+game.id,2),
     coupButton("▶️ Start","coup:start:"+game.id,1),
     coupButton("📖 Roles","coup:roles:"+game.id,2)
-  ]];
-  if(game.status==="playing") return [[coupButton("🎮 My Turn / Actions","coup:menu:"+game.id,1),coupButton("⚠️ Respond","coup:respond:"+game.id,game.pending?1:2, !game.pending),coupButton("📖 Roles","coup:roles:"+game.id,2)],[coupButton("📊 My Stats","coup:stats:"+game.id,2)]];
-  return [[coupButton("📖 Roles","coup:roles:"+game.id,2)]];
+  )];
+  if(game.status==="playing") return [
+    row(coupButton("🎮 My Turn / Actions","coup:menu:"+game.id,1),coupButton("⚠️ Respond","coup:respond:"+game.id,game.pending?1:2, !game.pending),coupButton("📖 Roles","coup:roles:"+game.id,2)),
+    row(coupButton("📊 My Stats","coup:stats:"+game.id,2))
+  ];
+  return [row(coupButton("📖 Roles","coup:roles:"+game.id,2))];
 }
 
 function coupPublicText(game){
@@ -11380,7 +11383,10 @@ async function coupCreate(env,interaction){
   const game=coupNewGame(interaction.guild_id,interaction.channel_id,user.id);
   game.players[user.id]=coupPlayerRecord(user,interaction);
   const msg=await sendChannelMessage(env,interaction.channel_id,coupPublicText(game),coupComponents(game));
-  game.messageId=msg?.id||null;
+  if(!msg?.id){
+    return sendText(env,interaction,"❌ I couldn't post the Coup lobby in this channel. Please make sure the bot has **View Channel**, **Send Messages**, and **Use Application Commands** permissions here, then try again.");
+  }
+  game.messageId=msg.id;
   await coupSave(env,interaction.guild_id,game);
   return sendText(env,interaction,"🃏 **Coup lobby created!** I posted the lobby in this channel. Get 3–6 players in and start it there.");
 }
@@ -11421,8 +11427,8 @@ function coupActionMenu(game,player){
     ["💥 Coup","coup"], ["🪦 Grave Rob","grave_rob"],
     ["🪤 Bounty","bounty"], ["🧨 Sabotage","sabotage"], ["🕯️ Possess","possess"]
   ];
-  for(let i=0;i<actions.length;i+=3) rows.push(actions.slice(i,i+3).map(([label,a])=>coupButton(label,`coup:act:${game.id}:${a}`,a==="coup"?4:2)));
-  rows.push([coupButton("📖 Roles","coup:roles:"+game.id,2),coupButton("📊 Stats","coup:stats:"+game.id,2)]);
+  for(let i=0;i<actions.length;i+=3) rows.push(row(...actions.slice(i,i+3).map(([label,a])=>coupButton(label,`coup:act:${game.id}:${a}`,a==="coup"?4:2))));
+  rows.push(row(coupButton("📖 Roles","coup:roles:"+game.id,2),coupButton("📊 Stats","coup:stats:"+game.id,2)));
   return rows;
 }
 
@@ -11433,7 +11439,7 @@ async function coupMenu(env,interaction,gameId){
   const p=game.players[user.id]; if(!p?.alive) return sendText(env,interaction,"❌ Eliminated players cannot act.");
   const must=coupMustCoup(p);
   const rows=coupActionMenu(game,p);
-  if(must){ rows[0]=[coupButton("💥 Coup — REQUIRED","coup:act:"+game.id+":coup",4)]; }
+  if(must){ rows[0]=row(coupButton("💥 Coup — REQUIRED","coup:act:"+game.id+":coup",4)); }
   return sendText(env,interaction,`🃏 **Your Coup turn**\n\n💰 Coins: **${p.coins}**\n❤️ Influence: **${p.influence.length}**${must?"\n\n⚠️ You have 10+ coins, so you **must Coup**.":""}`,rows);
 }
 
@@ -11470,9 +11476,9 @@ function coupChallengeComponents(game,pending){
   if(pending.action==="foreign_aid") first.push(coupButton("👑 Block Foreign Aid","coup:block:"+game.id+":duke",2));
   if(pending.action==="steal") first.push(coupButton("🏴‍☠️ Block Steal","coup:block:"+game.id+":captain",2),coupButton("🕵️ Block Steal","coup:block:"+game.id+":ambassador",2));
   if(pending.action==="assassinate") first.push(coupButton("💋 Block Assassination","coup:block:"+game.id+":contessa",2));
-  if(first.length) rows.push(first);
-  if(pending.targetId) rows.push([coupButton("🦹 Trickster / Respond","coup:respond:"+game.id,2)]);
-  rows.push([coupButton("📖 Roles","coup:roles:"+game.id,2),coupButton("🎮 Resolve / Continue","coup:resolve:"+game.id,3)]);
+  if(first.length) rows.push(row(...first));
+  if(pending.targetId) rows.push(row(coupButton("🦹 Trickster / Respond","coup:respond:"+game.id,2)));
+  rows.push(row(coupButton("📖 Roles","coup:roles:"+game.id,2),coupButton("🎮 Resolve / Continue","coup:resolve:"+game.id,3)));
   return rows;
 }
 async function coupChallengeMenu(env,interaction,game){ return sendText(env,interaction,`⚠️ **${coupRoleLabel(game.pending?.claimRole||"")} claim is pending.**\n\nOther players can challenge or block. The acting player can resolve the action when everyone is ready.`,coupChallengeComponents(game,game.pending)); }
@@ -11483,13 +11489,15 @@ async function coupRespondMenu(env,interaction,gameId){
   if(!user||!game.players[user.id]?.alive) return sendText(env,interaction,"❌ You are not an active player in this game.");
   const p=game.pending;
   const rows=[];
-  if(user.id!==p.actorId) rows.push([coupButton("🚨 Challenge","coup:challenge:"+game.id,4)]);
-  if(p.action==="foreign_aid") rows[0]?.push(coupButton("👑 Block Foreign Aid","coup:block:"+game.id+":duke",2));
-  if(p.action==="steal") rows[0]?.push(coupButton("🏴‍☠️ Block Steal","coup:block:"+game.id+":captain",2),coupButton("🕵️ Block Steal","coup:block:"+game.id+":ambassador",2));
-  if(p.action==="assassinate") rows[0]?.push(coupButton("💋 Block Assassination","coup:block:"+game.id+":contessa",2));
-  if(p.targetId===user.id && user.id!==p.actorId) rows.push([coupButton("🦹 Trickster — Redirect","coup:redirectmenu:"+game.id,1)]);
-  if(user.id===p.actorId) rows.push([coupButton("✅ Resolve","coup:resolve:"+game.id,3)]);
-  rows.push([coupButton("📖 Roles","coup:roles:"+game.id,2)]);
+  const first=[];
+  if(user.id!==p.actorId) first.push(coupButton("🚨 Challenge","coup:challenge:"+game.id,4));
+  if(p.action==="foreign_aid") first.push(coupButton("👑 Block Foreign Aid","coup:block:"+game.id+":duke",2));
+  if(p.action==="steal") first.push(coupButton("🏴‍☠️ Block Steal","coup:block:"+game.id+":captain",2),coupButton("🕵️ Block Steal","coup:block:"+game.id+":ambassador",2));
+  if(p.action==="assassinate") first.push(coupButton("💋 Block Assassination","coup:block:"+game.id+":contessa",2));
+  if(first.length) rows.push(row(...first));
+  if(p.targetId===user.id && user.id!==p.actorId) rows.push(row(coupButton("🦹 Trickster — Redirect","coup:redirectmenu:"+game.id,1)));
+  if(user.id===p.actorId) rows.push(row(coupButton("✅ Resolve","coup:resolve:"+game.id,3)));
+  rows.push(row(coupButton("📖 Roles","coup:roles:"+game.id,2)));
   return sendText(env,interaction,`⚠️ **${coupRoleLabel(p.claimRole||"")} claim pending.**\n${p.description}`,rows);
 }
 
@@ -11499,7 +11507,7 @@ async function coupRedirectMenu(env,interaction,gameId){
   if(!user||game.pending.targetId!==user.id||user.id===game.pending.actorId) return sendText(env,interaction,"❌ Trickster can only redirect an action that is targeting you.");
   const targets=Object.values(game.players).filter(p=>p.alive&&p.id!==user.id&&p.id!==game.pending.actorId);
   if(!targets.length) return sendText(env,interaction,"❌ There is nobody else to redirect the action to.");
-  const rows=[]; for(let i=0;i<targets.length;i+=3) rows.push(targets.slice(i,i+3).map(t=>coupButton(coupPlayerName(t),`coup:redirect:${gameId}:${t.id}`,2)));
+  const rows=[]; for(let i=0;i<targets.length;i+=3) rows.push(row(...targets.slice(i,i+3).map(t=>coupButton(coupPlayerName(t),`coup:redirect:${gameId}:${t.id}`,2))));
   return sendText(env,interaction,"🦹 **Choose where to redirect the action:**",rows);
 }
 
@@ -11582,7 +11590,7 @@ async function coupResolve(env,interaction,gameId){
   const pending=game.pending, actor=game.players[pending.actorId];
   if(pending.blockedBy){
     // A block can itself be challenged. Store a special pending block challenge phase.
-    if(!pending.blockChallenge){ pending.blockChallenge=true; await coupSave(env,interaction.guild_id,game); await coupEditBoard(env,game); return sendText(env,interaction,`🛡️ <@${pending.blockedBy.playerId}> claimed **${coupRoleLabel(pending.blockedBy.role)}**.\n\nYou may **Challenge the block** or accept it.`,[[coupButton("🚨 Challenge Block","coup:blockchallenge:"+game.id,4),coupButton("🛑 Accept Block","coup:blockaccept:"+game.id,2)],[coupButton("📖 Roles","coup:roles:"+game.id,2)]]); }
+    if(!pending.blockChallenge){ pending.blockChallenge=true; await coupSave(env,interaction.guild_id,game); await coupEditBoard(env,game); return sendText(env,interaction,`🛡️ <@${pending.blockedBy.playerId}> claimed **${coupRoleLabel(pending.blockedBy.role)}**.\n\nYou may **Challenge the block** or accept it.`,[row(coupButton("🚨 Challenge Block","coup:blockchallenge:"+game.id,4),coupButton("🛑 Accept Block","coup:blockaccept:"+game.id,2)),row(coupButton("📖 Roles","coup:roles:"+game.id,2))]); }
     return sendText(env,interaction,"🛡️ The block is waiting for a challenge decision.");
   }
   if(pending.claimRole){
@@ -11727,14 +11735,14 @@ async function handleComponent(
         if(act==="steal"||act==="assassinate"||act==="coup"||act==="bounty"||act==="sabotage"||act==="possess") {
           const user=getUserFromInteraction(interaction); const targets=Object.values(game?.players||{}).filter(p=>p.alive&&p.id!==user?.id);
           if(!targets.length) return sendText(env,interaction,"❌ No valid target.");
-          const rows=[]; for(let i=0;i<targets.length;i+=3) rows.push(targets.slice(i,i+3).map(t=>coupButton(coupPlayerName(t),`coup:target:${gameId}:${act}:${t.id}`,2)));
-          rows.push([coupButton("📖 Roles","coup:roles:"+gameId,2)]);
+          const rows=[]; for(let i=0;i<targets.length;i+=3) rows.push(row(...targets.slice(i,i+3).map(t=>coupButton(coupPlayerName(t),`coup:target:${gameId}:${act}:${t.id}`,2))));
+          rows.push(row(coupButton("📖 Roles","coup:roles:"+gameId,2)));
           return sendText(env,interaction,`🎯 **Choose a target for ${act.replaceAll("_"," ")}**`,rows);
         }
       }
       if(act==="grave_rob") {
         const dead=Object.values(game?.players||{}).filter(p=>p.alive===false);
-        const rows=[]; for(let i=0;i<dead.length;i+=3) rows.push(dead.slice(i,i+3).map(t=>coupButton("🪦 "+coupPlayerName(t),`coup:dead:${gameId}:${t.id}`,2)));
+        const rows=[]; for(let i=0;i<dead.length;i+=3) rows.push(row(...dead.slice(i,i+3).map(t=>coupButton("🪦 "+coupPlayerName(t),`coup:dead:${gameId}:${t.id}`,2))));
         return sendText(env,interaction,"🪦 **Choose a dead player to rob:**",rows);
       }
       return coupAction(env,interaction,gameId,act,null);
@@ -11744,7 +11752,7 @@ async function handleComponent(
       const game=await coupGetGame(env,interaction.guild_id), user=getUserFromInteraction(interaction), dead=game?.players?.[parts[3]];
       if(!game||!user||game.currentPlayerId!==user.id||!dead||dead.alive!==false) return sendText(env,interaction,"❌ Invalid Grave Robber target.");
       const cards=dead.revealed||[]; if(!cards.length) return sendText(env,interaction,"❌ That player has no revealed cards available.");
-      const rows=[cards.map((c,i)=>coupButton(coupRoleLabel(c),`coup:gravec:${gameId}:${dead.id}:${i}`,2))];
+      const rows=[row(...cards.map((c,i)=>coupButton(coupRoleLabel(c),`coup:gravec:${gameId}:${dead.id}:${i}`,2)))];
       return sendText(env,interaction,"🪦 **Choose the revealed card to take:**",rows);
     }
     if(action==="gravec") {
@@ -11752,7 +11760,7 @@ async function handleComponent(
       const p=user&&game?.players?.[user.id]; if(!game||!p||game.currentPlayerId!==user.id||!dead||dead.alive!==false) return sendText(env,interaction,"❌ Invalid Grave Robber selection.");
       const card=(dead.revealed||[])[idx]; if(!card) return sendText(env,interaction,"❌ That card is no longer available.");
       const ownRows=p.influence.map((c,i)=>coupButton(`Swap ${coupRoleLabel(c)}`,`coup:graveswap:${gameId}:${dead.id}:${idx}:${i}`,2));
-      return sendText(env,interaction,`🪦 You selected **${coupRoleLabel(card)}**. Choose which of your cards to swap away.`,[ownRows]);
+      return sendText(env,interaction,`🪦 You selected **${coupRoleLabel(card)}**. Choose which of your cards to swap away.`,[row(...ownRows)]);
     }
     if(action==="graveswap") {
       const game=await coupGetGame(env,interaction.guild_id), user=getUserFromInteraction(interaction), p=user&&game?.players?.[user.id], dead=game?.players?.[parts[3]], di=Number(parts[4]), pi=Number(parts[5]);
