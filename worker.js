@@ -3746,16 +3746,18 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       xx+=Math.round(Math.sin(t+charIndex*0.35));
       color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
     } else if(effectId==="black_ice"){
-      // BLACK ICE V3: frozen-glass lettering. Keep the word still and readable;
-      // the animation comes from the moving reflection, not bouncing letters.
-      const sweep=(phase*1.15 + charIndex/Math.max(1,str.length))%1;
+      // BLACK ICE V4: preserve the animated icy letter colors the user liked.
+      // The extra motion is a narrow frozen reflection that travels across the
+      // actual glyphs, plus tiny frost highlights on their upper edges.
+      const sweep=(phase*1.35 + charIndex/Math.max(1,str.length))%1;
       const distance=Math.abs(sweep-0.5);
-      const glint=Math.max(0,1-distance*7.0);
-      if(glint>0.22) color=[255,255,255];
-      else if(charIndex%4===0) color=[225,249,255];
-      else if(charIndex%4===1) color=[157,225,247];
-      else if(charIndex%4===2) color=[92,183,224];
-      else color=[64,125,165];
+      const glint=Math.max(0,1-distance*8.5);
+      const pulse=0.88+0.12*(0.5+0.5*Math.sin(t*1.3+charIndex*0.22));
+      if(glint>0.58) color=[255,255,255];
+      else if(charIndex%4===0) color=[Math.round(225*pulse),Math.round(249*pulse),255];
+      else if(charIndex%4===1) color=[Math.round(157*pulse),Math.round(225*pulse),247];
+      else if(charIndex%4===2) color=[Math.round(92*pulse),Math.round(183*pulse),224];
+      else color=[Math.round(64*pulse),Math.round(125*pulse),165];
     }
 
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
@@ -3763,8 +3765,20 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       const row=rows[ry];
       for(let rx=0;rx<5;rx++){
         if(row[rx]==="1"){
-          if(effectId==="black_ice") profileFill(frame,xx+rx*drawScale+1,yy+ry*drawScale+1,drawScale,drawScale,35,83,112,235);
+          if(effectId==="black_ice") {
+            // Crisp blue ice edge gives the bitmap letters a frozen/glass depth.
+            profileFill(frame,xx+rx*drawScale+1,yy+ry*drawScale+1,drawScale,drawScale,35,83,112,235);
+          }
           profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,color[0],color[1],color[2],255);
+          if(effectId==="black_ice" && ry===0){
+            // Tiny white frost cap on the upper edge of each glyph.
+            const capPulse=0.55+0.45*(0.5+0.5*Math.sin(t*1.5+charIndex*0.65));
+            profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,1,255,255,255,Math.round(110+105*capPulse));
+          }
+          if(effectId==="black_ice" && glint>0.72){
+            // A sharp moving reflection cuts through the letter itself.
+            profileFill(frame,xx+rx*drawScale,yy+ry*drawScale,drawScale,drawScale,255,255,255,Math.round(80+150*glint));
+          }
         }
       }
     }
@@ -3922,29 +3936,34 @@ function drawProfileEffectParticles(frame,effectId,phase){
       break;
     }
     case "black_ice": {
-      // BLACK ICE V3: every particle stays inside the title plaque. No huge
-      // shards wandering into the stats cards.
-      const icyWhite=[248,253,255], ice=[150,225,248], deep=[62,130,170];
-      profileIceCrown(frame,548,148,4,ice,phase);
-
-      // Frozen underline + moving white reflection.
-      profilePixelLine(frame,390,184,704,184,1,deep[0],deep[1],deep[2],180);
-      const glintX=Math.round(392 + ((phase*1.35)%1)*308);
-      profilePixelLine(frame,glintX-18,184,glintX+18,184,2,255,255,255,230);
-      profileStar(frame,glintX,184,2,icyWhite,230);
-
-      // Small crystals orbit the title instead of large random shards.
-      const pts=[[374,151,0.00],[404,181,0.18],[690,151,0.36],[721,181,0.54],[430,147,0.72],[650,187,0.90]];
-      pts.forEach(([x,y,o],i)=>{
-        const xx=Math.round(x+Math.sin(p*0.45+o*7)*3);
-        const yy=Math.round(y+Math.cos(p*0.55+o*6)*2);
-        const size=i%3===0?3:2;
-        profileSnowflake(frame,xx,yy,size,i%2?ice:icyWhite,Math.round(150+70*(0.5+0.5*Math.sin(p+o*8))));
+      // BLACK ICE V5: keep the animated icy title colors, but add a deliberate
+      // set of LARGE, readable snowflake decorations around the word. The
+      // flakes use the same white -> icy blue -> deep blue/black color family
+      // and gently shift through it with the title animation.
+      const snowPalette=[[248,253,255],[155,226,249],[82,164,205],[28,43,57]];
+      const pts=[
+        [372,137,0.00,7],[438,190,0.16,5],[505,132,0.30,6],
+        [585,190,0.46,7],[650,134,0.61,5],[716,188,0.76,7],
+        [747,150,0.91,5]
+      ];
+      pts.forEach(([x,y,o,size],i)=>{
+        const xx=Math.round(x+Math.sin(p*0.45+o*8)*5);
+        const yy=Math.round(y+Math.cos(p*0.55+o*7)*4);
+        const wave=(phase*1.15+o)%1;
+        const scaled=wave*snowPalette.length;
+        const a=Math.floor(scaled)%snowPalette.length;
+        const b=(a+1)%snowPalette.length;
+        const mix=scaled-Math.floor(scaled);
+        const c=[
+          Math.round(snowPalette[a][0]*(1-mix)+snowPalette[b][0]*mix),
+          Math.round(snowPalette[a][1]*(1-mix)+snowPalette[b][1]*mix),
+          Math.round(snowPalette[a][2]*(1-mix)+snowPalette[b][2]*mix)
+        ];
+        const alpha=Math.round(180+60*(0.5+0.5*Math.sin(p*1.35+o*9)));
+        profileSnowflake(frame,xx,yy,size,c,alpha);
+        // Small white center glint keeps the larger flakes crisp at Discord size.
+        if(i%2===0) profileStar(frame,xx,yy,2,[255,255,255],Math.min(245,alpha+30));
       });
-
-      // Very subtle frost wisps at the lower corners of the title box.
-      profileIceMist(frame,382,178,34,ice,phase,1);
-      profileIceMist(frame,714,178,34,ice,phase,-1);
       break;
     }
     case "spooky": {
