@@ -11075,13 +11075,59 @@ async function handleComponent(
     const parts = id.split(":");
     const action = parts[1];
     const gameId = parts[2];
+
+    if (action === "howto") {
+      return sendText(env, interaction, rumbleHowToPlayText());
+    }
     if (action === "join") return handleRumbleJoin(env, interaction, gameId);
     if (action === "leave") return handleRumbleLeave(env, interaction, gameId);
     if (action === "start") return handleRumbleStart(env, interaction, gameId);
     if (action === "status") return handleRumbleStatus(env, interaction, gameId);
     if (action === "end") return handleRumbleEnd(env, interaction, gameId);
     if (action === "open") return handleRumbleOpen(env, interaction, gameId, parts[3]);
-    if (action === "action") return handleRumbleAction(env, interaction, gameId, parts[3], parts[4], parts[5] || null);
+
+    if (action === "choose") {
+      const round = parts[3];
+      const chosenAction = parts[4];
+      const state = await getGuildState(env, interaction.guild_id);
+      const game = state.rumble;
+      const user = getUserFromInteraction(interaction);
+      const player = user && game?.players?.[user.id];
+      if (!game || game.id !== gameId || game.status !== "playing") {
+        return sendText(env, interaction, "❌ That Rumble is no longer active.");
+      }
+      if (!player) return sendText(env, interaction, "❌ You're not a player in this Rumble.");
+      if (Number(round) !== Number(game.round)) {
+        return sendText(env, interaction, "⏰ That action menu is from an older round.");
+      }
+      if (player.submitted) {
+        return sendEphemeralFollowup(env, interaction, "🔐 **Choice already locked!** Your double-click was ignored. 🦝");
+      }
+      if (!["rob", "spy", "sabotage"].includes(chosenAction)) {
+        return sendText(env, interaction, "❌ Unknown target action.");
+      }
+      return sendText(
+        env,
+        interaction,
+        `${rumbleActionLabel(chosenAction)} **Select a target:**`,
+        rumbleTargetComponents(game, player, chosenAction)
+      );
+    }
+
+    if (action === "target") {
+      return handleRumbleAction(
+        env,
+        interaction,
+        gameId,
+        parts[3],
+        parts[4],
+        parts[5] || null
+      );
+    }
+
+    if (action === "action") {
+      return handleRumbleAction(env, interaction, gameId, parts[3], parts[4], parts[5] || null);
+    }
     return;
   }
 
@@ -23339,7 +23385,7 @@ function rumbleLobbyText(game) {
   return [
     "🦝💥 **RACCOON RUMBLE**",
     "",
-    "Three players enter. Five rounds of suspicious decisions begin.",
+    "Three to six players enter. Five rounds of suspicious decisions begin.",
     "",
     `👥 Players: **${players.length}/${RUMBLE_MAX_PLAYERS}**`,
     list,
@@ -23363,32 +23409,60 @@ function rumbleLobbyComponents(game) {
     )
   ];
   if (game.hostId) rows.push(row(button("▶️ Start Rumble", `rumble:start:${game.id}`, 1)));
-  rows.push(row(button("🛑 End Rumble", `rumble:end:${game.id}`, 4)));
+  rows.push(row(
+    button("📖 How to Play", `rumble:howto:${game.id}`, 2),
+    button("🛑 End Rumble", `rumble:end:${game.id}`, 4)
+  ));
   return rows;
 }
 
 function rumbleActionComponents(game, player) {
-  const targets = rumbleTargetOptions(game, player.id);
-  const rows = [
+  // Discord allows at most 5 component rows in one message. Keep the main
+  // private menu compact: choose an action first, then choose a target.
+  return [
     row(
       button("💰 Grab +300", `rumble:action:${game.id}:${game.round}:grab`, 1),
       button("🛡️ Guard +100", `rumble:action:${game.id}:${game.round}:guard`, 2),
       button("🥔 Lay Low +75", `rumble:action:${game.id}:${game.round}:laylow`, 3)
+    ),
+    row(
+      button("🦝 Rob", `rumble:choose:${game.id}:${game.round}:rob`, 4),
+      button("🔎 Spy", `rumble:choose:${game.id}:${game.round}:spy`, 2),
+      button("🧨 Sabotage", `rumble:choose:${game.id}:${game.round}:sabotage`, 4)
+    ),
+    row(
+      button("📖 How to Play", `rumble:howto:${game.id}`, 2)
     )
   ];
-  // Every other player is a possible target. This scales automatically from
-  // 3 players (2 targets) all the way to 6 players (5 targets).
-  for (const target of targets) {
-    rows.push(row(button(`🦝 Rob ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:rob:${target.id}`, 4)));
+}
+
+function rumbleTargetComponents(game, player, action) {
+  const targets = rumbleTargetOptions(game, player.id);
+  const rows = [];
+
+  for (let i = 0; i < targets.length; i += 5) {
+    rows.push(
+      row(
+        ...targets.slice(i, i + 5).map(target =>
+          button(
+            `${action === "rob" ? "🦝" : action === "spy" ? "🔎" : "🧨"} ${rumbleName(target)}`,
+            `rumble:target:${game.id}:${game.round}:${action}:${target.id}`,
+            action === "sabotage" ? 4 : 2
+          )
+        )
+      )
+    );
   }
-  for (const target of targets) {
-    rows.push(row(button(`🔎 Spy ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:spy:${target.id}`, 2)));
-  }
-  for (const target of targets) {
-    rows.push(row(button(`🧨 Sabotage ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:sabotage:${target.id}`, 4)));
-  }
+
+  rows.push(
+    row(
+      button("↩️ Back to Actions", `rumble:open:${game.id}:${game.round}`, 2),
+      button("📖 How to Play", `rumble:howto:${game.id}`, 2)
+    )
+  );
   return rows;
 }
+
 
 function rumbleStandings(game) {
   return rumblePlayers(game)
@@ -27249,15 +27323,6 @@ export default {
     const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
     const isRumbleComponent = interaction.type === 3 && customId.startsWith("rumble:");
 
-    if (customId.startsWith("rumble:howto:")) {
-      const gameId = customId.split(":")[2];
-      const state = await getGuildState(env, interaction.guild_id);
-      const game = state.rumble;
-      if (!game || game.id !== gameId) {
-        return sendEphemeralFollowup(env, interaction, "❌ That Rumble is no longer active.");
-      }
-      return sendEphemeralFollowup(env, interaction, rumbleHowToPlayText());
-    }
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
@@ -27401,6 +27466,60 @@ export default {
     // clicked repeatedly.
     if (interaction.type === 3 && customId === "birthday:curseinput") {
       return showBirthdayCurseModal(env, interaction);
+    }
+
+    // Raccoon Rumble buttons need an immediate complete response. The private
+    // menu can involve KV reads and Discord message editing; never leave Discord
+    // waiting on the generic deferred "Bot is thinking..." state.
+    if (interaction.type === 3 && customId.startsWith("rumble:")) {
+      if (customId.startsWith("rumble:howto:")) {
+        return new Response(JSON.stringify({
+          type: 4,
+          data: { content: rumbleHowToPlayText(), flags: 64 }
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: 4,
+            data: { content: "🦝💥 Loading your private Rumble menu..." }
+          })
+        }
+      );
+
+      if (!ack.ok) {
+        console.error("Raccoon Rumble initial response failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = false;
+
+      ctx.waitUntil((async () => {
+        try {
+          await handleComponent(env, interaction);
+        } catch (error) {
+          console.error("Raccoon Rumble component error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Couldn't load Raccoon Rumble: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Rumble error:", editError);
+          }
+        }
+      })());
+
+      return new Response("OK", { status: 200 });
     }
 
     if (relevant) {
