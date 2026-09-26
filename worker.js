@@ -917,26 +917,26 @@ const PROFILE_FRAMES = {
 };
 
 const PROFILE_BADGES = {
-  vip: { name: "💎 VIP", label: "VIP", icon: "VIP", style: "diamond" },
-  big_spender: { name: "💳 Big Spender", label: "BIG SPENDER", icon: "$", style: "gold" },
+  vip: { name: "💎 VIP", label: "VIP", icon: "VIP", style: "vip_luxury" },
+  big_spender: { name: "💳 Big Spender", label: "BIG SPENDER", icon: "$", style: "spender" },
   color_chaos_champion: { name: "🌈 Color Chaos Champion", label: "COLOR CHAOS CHAMPION", icon: "CC", style: "rainbow" },
   sparkle_hoarder: { name: "✨ Sparkle Hoarder", label: "SPARKLE HOARDER", icon: "✦", style: "sparkle" },
   tree_keeper: { name: "🌳 Tree Keeper", label: "TREE KEEPER", icon: "TK", style: "green" },
-  royalty: { name: "👑 Royalty", label: "ROYALTY", icon: "R", style: "royal" },
-  diva: { name: "💅 Diva", label: "DIVA", icon: "D", style: "pink" },
+  royalty: { name: "👑 Frame Royalty", label: "FRAME ROYALTY", icon: "FR", style: "frame_royal" },
+  diva: { name: "💅 Diva", label: "DIVA", icon: "D", style: "diva" },
   butterfly_baby: { name: "🦋 Butterfly Baby", label: "BUTTERFLY BABY", icon: "B", style: "butterfly" },
-  raccoon_royalty: { name: "🦝 Raccoon Royalty", label: "RACCOON ROYALTY", icon: "RR", style: "raccoon" },
+  raccoon_royalty: { name: "🦝 Raccoon Robber", label: "RACCOON ROBBER", icon: "RR", style: "raccoon_robber" },
   toxic: { name: "☢️ Toxic", label: "TOXIC", icon: "X", style: "toxic" },
-  money_magnet: { name: "💰 Money Magnet", label: "MONEY MAGNET", icon: "$", style: "money" },
+  money_magnet: { name: "💰 Sparkle Tycoon", label: "SPARKLE TYCOON", icon: "$", style: "tycoon" },
   main_character: { name: "⭐ Main Character", label: "MAIN CHARACTER", icon: "★", style: "star" },
   king: { name: "👑 King", label: "KING", icon: "K", style: "king" },
   alpha: { name: "🐺 Alpha", label: "ALPHA", icon: "A", style: "alpha" },
   cool_guy: { name: "😎 Cool Guy", label: "COOL GUY", icon: "CG", style: "cool" },
   bad_influence: { name: "😈 Bad Influence", label: "BAD INFLUENCE", icon: "BI", style: "danger" },
   speed_demon: { name: "⚡ Speed Demon", label: "SPEED DEMON", icon: "SD", style: "speed" },
-  raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon" },
-  diamond_darling: { name: "💎 Diamond Darling", label: "DIAMOND DARLING", icon: "DD", style: "diamond" },
-  millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "money" }
+  raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon_boss" },
+  diamond_darling: { name: "🧊 Black Ice Collector", label: "BLACK ICE COLLECTOR", icon: "BI", style: "black_ice" },
+  millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" }
 };
 
 const NAME_EFFECTS = {
@@ -4909,64 +4909,72 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   if(!badgeId || !PROFILE_BADGES[badgeId]) return;
   const b=PROFILE_BADGES[badgeId];
   const colors={
-    diamond:[[125,205,255],[245,255,255]],gold:[[245,190,55],[255,240,150]],
-    rainbow:[[255,110,190],[100,210,255]],sparkle:[[255,225,90],[255,255,255]],
-    green:[[80,205,95],[185,255,170]],royal:[[160,95,255],[255,220,110]],
-    pink:[[255,100,190],[255,210,240]],butterfly:[[170,120,255],[180,235,255]],
-    raccoon:[[125,95,75],[220,180,140]],toxic:[[80,255,75],[205,255,110]],
-    money:[[70,190,95],[255,225,80]],star:[[255,190,55],[255,240,140]],
-    king:[[60,70,90],[255,215,80]],alpha:[[90,100,115],[220,235,255]],
-    cool:[[50,160,230],[180,240,255]],danger:[[220,55,65],[255,150,120]],
-    speed:[[80,210,255],[240,255,255]]
+    vip_luxury:[[180,210,255],[255,255,255]], spender:[[70,190,245],[255,235,120]],
+    rainbow:[[255,110,190],[100,210,255]], sparkle:[[255,225,90],[255,255,255]],
+    green:[[80,205,95],[185,255,170]], frame_royal:[[155,80,255],[255,220,100]],
+    diva:[[255,75,175],[255,220,245]], butterfly:[[170,120,255],[180,235,255]],
+    raccoon_robber:[[115,80,60],[245,210,145]], toxic:[[75,255,70],[215,255,120]],
+    tycoon:[[55,180,110],[255,225,80]], star:[[255,190,55],[255,240,140]],
+    king:[[55,65,95],[255,215,80]], alpha:[[90,100,115],[220,235,255]],
+    cool:[[50,160,230],[180,240,255]], danger:[[220,55,65],[255,150,120]],
+    speed:[[80,210,255],[240,255,255]], raccoon_boss:[[75,55,45],[255,190,75]],
+    black_ice:[[35,75,120],[190,240,255]], millionaire:[[125,75,30],[255,235,115]]
   };
   const [base,hi]=colors[b.style]||[[150,150,160],[255,255,255]];
   const r=Math.max(15,Math.round(size/2));
-  // Soft collectible medallion with a tiny animated glint.
   profileFill(frame,cx-r-2,cy-r-2,r*2+4,r*2+4,255,255,255,110);
   profileFill(frame,cx-r,cy-r,r*2,r*2,base[0],base[1],base[2],245);
   profileFill(frame,cx-r+3,cy-r+3,r*2-6,r*2-6,28,22,38,215);
   const p=phase*Math.PI*2;
   const glintX=cx+Math.round(Math.cos(p+cx*.01)*(r-7));
   const glintY=cy+Math.round(Math.sin(p+cx*.01)*(r-7));
-  if(b.style==="diamond"){
-    profileDiamond(frame,cx,cy,Math.max(7,Math.round(r*.48)),hi,255);
-  } else if(["star","sparkle","speed"].includes(b.style)){
-    profileStar(frame,cx,cy,Math.max(7,Math.round(r*.48)),hi,255);
+  if(b.style==="vip_luxury"){
+    profileDiamond(frame,cx,cy,Math.max(7,Math.round(r*.46)),hi,255);
+    profileFill(frame,cx-11,cy+8,22,3,hi[0],hi[1],hi[2],220);
+    drawBitmapText(frame,"VIP",cx-7,cy-3,0.8,base,255);
+  } else if(b.style==="black_ice"){
+    profileFill(frame,cx-4,cy-12,8,24,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-11,cy-5,22,10,base[0],base[1],base[2],255);
+    profileFill(frame,cx-7,cy-9,14,18,hi[0],hi[1],hi[2],170);
+    profileFill(frame,cx-2,cy-10,4,20,255,255,255,120);
+  } else if(b.style==="spender"){
+    profileFill(frame,cx-10,cy-7,20,14,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-7,cy-4,14,8,base[0],base[1],base[2],255);
+    drawBitmapText(frame,"$",cx-3,cy-3,1,hi,255);
   } else if(b.style==="rainbow"){
-    profileFill(frame,cx-r+7,cy-8,r*2-14,4,255,85,165,255);
-    profileFill(frame,cx-r+7,cy-2,r*2-14,4,255,210,75,255);
-    profileFill(frame,cx-r+7,cy+4,r*2-14,4,90,205,255,255);
-  } else if(b.style==="money"){
-    profileFill(frame,cx-5,cy-9,10,18,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-8,cy-5,16,10,hi[0],hi[1],hi[2],255);
-    drawBitmapText(frame,"$",cx-3,cy-6,1,[45,120,65],255);
-  } else if(b.style==="raccoon"){
-    profileFill(frame,cx-9,cy-6,18,14,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-7,cy-11,5,6,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx+2,cy-11,5,6,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-5,cy-1,4,3,base[0],base[1],base[2],255);
-    profileFill(frame,cx+1,cy-1,4,3,base[0],base[1],base[2],255);
+    profileFill(frame,cx-11,cy-8,22,4,255,80,160,255); profileFill(frame,cx-11,cy-2,22,4,255,210,75,255); profileFill(frame,cx-11,cy+4,22,4,90,205,255,255);
+  } else if(b.style==="sparkle"||b.style==="star"||b.style==="speed"){
+    profileStar(frame,cx,cy,Math.max(7,Math.round(r*.48)),hi,255);
+    if(b.style==="speed") profileFill(frame,cx-13,cy+8,10,3,hi[0],hi[1],hi[2],220);
+  } else if(b.style==="frame_royal"){
+    profileSmoothRoundedRect(frame,cx-11,cy-10,22,20,3,hi,255,1);
+    profileSmoothRoundedRect(frame,cx-6,cy-5,12,10,2,base,255,1);
+    profileStar(frame,cx,cy-12,4,hi,255);
+  } else if(b.style==="diva"){
+    profileFill(frame,cx-10,cy-8,20,16,hi[0],hi[1],hi[2],245);
+    profileFill(frame,cx-6,cy-5,12,10,base[0],base[1],base[2],255);
+    profileFill(frame,cx-1,cy-10,2,20,hi[0],hi[1],hi[2],220);
   } else if(b.style==="butterfly"){
-    profileFill(frame,cx-12,cy-7,9,12,hi[0],hi[1],hi[2],230);
-    profileFill(frame,cx+3,cy-7,9,12,hi[0],hi[1],hi[2],230);
-    profileFill(frame,cx-2,cy-8,4,16,base[0],base[1],base[2],255);
+    profileFill(frame,cx-12,cy-7,9,12,hi[0],hi[1],hi[2],230); profileFill(frame,cx+3,cy-7,9,12,hi[0],hi[1],hi[2],230); profileFill(frame,cx-2,cy-8,4,16,base[0],base[1],base[2],255);
+  } else if(b.style==="raccoon_robber"||b.style==="raccoon_boss"){
+    profileFill(frame,cx-9,cy-6,18,14,hi[0],hi[1],hi[2],255); profileFill(frame,cx-7,cy-11,5,6,hi[0],hi[1],hi[2],255); profileFill(frame,cx+2,cy-11,5,6,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-5,cy-1,4,3,base[0],base[1],base[2],255); profileFill(frame,cx+1,cy-1,4,3,base[0],base[1],base[2],255);
+    if(b.style==="raccoon_robber") profileFill(frame,cx+7,cy+5,8,6,hi[0],hi[1],hi[2],255);
+    else { profileStar(frame,cx,cy+9,4,hi,240); }
   } else if(b.style==="green"){
-    profileFill(frame,cx-3,cy-9,6,14,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-10,cy-7,10,8,hi[0],hi[1],hi[2],245);
-    profileFill(frame,cx,cy-4,10,8,hi[0],hi[1],hi[2],245);
-    profileFill(frame,cx-2,cy+5,4,7,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-3,cy-9,6,14,hi[0],hi[1],hi[2],255); profileFill(frame,cx-10,cy-7,10,8,hi[0],hi[1],hi[2],245); profileFill(frame,cx,cy-4,10,8,hi[0],hi[1],hi[2],245); profileFill(frame,cx-2,cy+5,4,7,hi[0],hi[1],hi[2],255);
   } else if(b.style==="toxic"){
-    profileFill(frame,cx-9,cy-9,18,18,hi[0],hi[1],hi[2],245);
-    profileFill(frame,cx-3,cy-6,6,12,base[0],base[1],base[2],255);
-    profileFill(frame,cx-6,cy-3,12,6,base[0],base[1],base[2],255);
-  } else if(["royal","king"].includes(b.style)){
-    profileFill(frame,cx-10,cy-6,20,9,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-8,cy-11,5,7,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx-2,cy-14,5,10,hi[0],hi[1],hi[2],255);
-    profileFill(frame,cx+5,cy-11,5,7,hi[0],hi[1],hi[2],255);
+    profileFill(frame,cx-9,cy-9,18,18,hi[0],hi[1],hi[2],245); profileFill(frame,cx-3,cy-6,6,12,base[0],base[1],base[2],255); profileFill(frame,cx-6,cy-3,12,6,base[0],base[1],base[2],255);
+  } else if(b.style==="tycoon"||b.style==="millionaire"){
+    profileFill(frame,cx-9,cy-6,18,13,hi[0],hi[1],hi[2],255); profileFill(frame,cx-7,cy-10,14,5,hi[0],hi[1],hi[2],255); drawBitmapText(frame,"$",cx-3,cy-3,1,base,255);
+  } else if(["king","alpha"].includes(b.style)){
+    profileFill(frame,cx-10,cy-6,20,9,hi[0],hi[1],hi[2],255); profileFill(frame,cx-8,cy-11,5,7,hi[0],hi[1],hi[2],255); profileFill(frame,cx-2,cy-14,5,10,hi[0],hi[1],hi[2],255); profileFill(frame,cx+5,cy-11,5,7,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="cool"){
+    profileFill(frame,cx-11,cy-5,9,5,hi[0],hi[1],hi[2],255); profileFill(frame,cx+2,cy-5,9,5,hi[0],hi[1],hi[2],255); profileFill(frame,cx-2,cy-2,4,3,hi[0],hi[1],hi[2],255);
+  } else if(b.style==="danger"){
+    profileFill(frame,cx-9,cy-8,18,16,hi[0],hi[1],hi[2],245); profileStar(frame,cx,cy,7,base,255);
   } else {
-    profileFill(frame,cx-8,cy-8,16,16,hi[0],hi[1],hi[2],245);
-    drawBitmapText(frame,b.icon.slice(0,2),cx-5,cy-3,1,base,255);
+    profileFill(frame,cx-8,cy-8,16,16,hi[0],hi[1],hi[2],245); drawBitmapText(frame,b.icon.slice(0,2),cx-5,cy-3,1,base,255);
   }
   profileStar(frame,glintX,glintY,2,hi,210);
 }
@@ -8118,6 +8126,42 @@ function profileBadgeIdsFromMask(mask) {
   return out;
 }
 
+const PROFILE_BADGE_GUIDE = {
+  vip: "Owner-awarded special badge.",
+  big_spender: "Spend 100,000 sparkles.",
+  color_chaos_champion: "Win 25 Color Chaos games.",
+  sparkle_hoarder: "Have 50,000 sparkles.",
+  tree_keeper: "Water your tree 100 times.",
+  royalty: "Own 5 profile frames.",
+  diva: "Own 10 cosmetics.",
+  butterfly_baby: "Own a butterfly effect.",
+  raccoon_royalty: "Steal 10,000 sparkles.",
+  toxic: "Catch 10 bluffs.",
+  money_magnet: "Earn 100,000 sparkles.",
+  main_character: "Reach level 25.",
+  king: "Get 50 total wins across the qualifying games.",
+  alpha: "Win Coup 25 times.",
+  cool_guy: "Own 5 animated effects.",
+  bad_influence: "Reach 25,000 Bad Influence progress.",
+  speed_demon: "Win 10 speed-related games.",
+  raccoon_boss: "Steal from 25 unique players.",
+  diamond_darling: "Own at least one Black Ice collection item.",
+  millionaire: "Have 1,000,000 sparkles."
+};
+
+function profileBadgeGuideFromPage(userId,page=0,unlockedMask="0",equippedMask="0"){
+  const ids=Object.keys(PROFILE_BADGES), perPage=5;
+  const totalPages=Math.max(1,Math.ceil(ids.length/perPage));
+  const safePage=Math.min(Math.max(Number(page)||0,0),totalPages-1);
+  const pageIds=ids.slice(safePage*perPage,safePage*perPage+perPage);
+  const lines=pageIds.map(id=>`**${PROFILE_BADGES[id].name}**\n${PROFILE_BADGE_GUIDE[id]||"Unlock requirement not documented."}`).join("\n\n");
+  const nav=[];
+  if(safePage>0) nav.push(button("⬅️ Previous",`profile_badge_guide:${userId}:${safePage-1}:${unlockedMask}:${equippedMask}`,2));
+  if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badge_guide:${userId}:${safePage+1}:${unlockedMask}:${equippedMask}`,2));
+  nav.push(button("⬅️ Back to Badges",`profile_badges:${userId}:0:${unlockedMask}:${equippedMask}`,2));
+  return {content:`📖 **BADGE GUIDE**\n\n${lines}\n\nPage **${safePage+1}/${totalPages}**`,components:[row(...nav)],flags:64};
+}
+
 function profileBadgeMenuFromMasks(userId,page,unlockedMask,equippedMask="0") {
   const badgeIds=Object.keys(PROFILE_BADGES), perPage=6;
   const totalPages=Math.max(1,Math.ceil(badgeIds.length/perPage));
@@ -8139,7 +8183,7 @@ function profileBadgeMenuFromMasks(userId,page,unlockedMask,equippedMask="0") {
   if(safePage>0) nav.push(button("⬅️ Previous",`profile_badges:${userId}:${safePage-1}:${unlockedMask}:${equippedMask}`,2));
   if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badges:${userId}:${safePage+1}:${unlockedMask}:${equippedMask}`,2));
   if(nav.length) rows.push(row(...nav));
-  rows.push(row(button("❌ Remove All Badges","unequip_badges",2),button("⬅️ Back to Profile",`profile_back:${userId}`,2)));
+  rows.push(row(button("📖 Badge Guide",`profile_badge_guide:${userId}:0:${unlockedMask}:${equippedMask}`,2),button("❌ Remove All","unequip_badges",2),button("⬅️ Back",`profile_back:${userId}`,2)));
   return {
     content:`🏅 **PROFILE BADGES**\n\n🔓 Unlocked badges can be equipped. 🔒 Locked badges cannot be equipped yet.\n\n**Equipped:** ${equipped.size?[...equipped].filter(id=>PROFILE_BADGES[id]).map(id=>PROFILE_BADGES[id].name).join(" • "):"None"}\n\nPage **${safePage+1}/${totalPages}**`,
     components:rows,
@@ -27702,6 +27746,24 @@ export default {
     // other middleware before returning Discord's response.
     if (interaction.type === 3) {
       const fastBadgeId = String(interaction.data?.custom_id || "");
+      if (fastBadgeId.startsWith("profile_badge_guide:")) {
+        try {
+          const parts = fastBadgeId.split(":");
+          const targetId = parts[1] || "";
+          const page = Number(parts[2] || 0);
+          const unlockedMask = parts[3] || "0";
+          const equippedMask = parts[4] || "0";
+          const userId = String(interaction.member?.user?.id || interaction.user?.id || "");
+          if (!userId || userId !== targetId) {
+            return new Response(JSON.stringify({type:4,data:{content:"❌ You can only view your own badge guide.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+          }
+          const guide = profileBadgeGuideFromPage(userId,page,unlockedMask,equippedMask);
+          return new Response(JSON.stringify({type:4,data:guide}),{status:200,headers:{"Content-Type":"application/json"}});
+        } catch (error) {
+          console.error("Badge guide fast-path error:",error);
+          return new Response(JSON.stringify({type:4,data:{content:`❌ Couldn't open the badge guide: ${error?.message||"Unknown error"}`,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
+        }
+      }
       if (fastBadgeId.startsWith("profile_badges:")) {
         try {
           const parts = fastBadgeId.split(":");
