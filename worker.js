@@ -27697,6 +27697,40 @@ export default {
       );
     }
 
+    // BADGE FAST PATH: handle badge components before the normal interaction
+    // router. This path does not touch KV, waitUntil, defer logic, or any
+    // other middleware before returning Discord's response.
+    if (interaction.type === 3) {
+      const fastBadgeId = String(interaction.data?.custom_id || "");
+      if (fastBadgeId.startsWith("profile_badges:")) {
+        try {
+          const parts = fastBadgeId.split(":");
+          const targetId = parts[1] || "";
+          const page = Number(parts[2] || 0);
+          const unlockedMask = parts[3] || "0";
+          const equippedMask = parts[4] || "0";
+          const userId = String(interaction.member?.user?.id || interaction.user?.id || "");
+          if (!userId || userId !== targetId) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: "❌ You can only manage badges on your own profile.", flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
+          }
+          const menu = profileBadgeMenuFromMasks(userId, page, unlockedMask, equippedMask);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: { content: menu.content, components: menu.components, flags: 64 }
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        } catch (error) {
+          console.error("Badge fast-path error:", error);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: { content: `❌ Couldn't open your badges: ${error?.message || "Unknown error"}`, flags: 64 }
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+      }
+    }
+
     /*
       IMPORTANT: Discord only gives us about 3 seconds to acknowledge an
       interaction. Do NOT make a KV/Discord API call before returning the
@@ -27837,50 +27871,6 @@ export default {
       } catch(error) {
         console.error("Color Key response error:",error);
         return new Response(JSON.stringify({type:4,data:{content:`❌ Couldn't load the Color Key: ${error?.message||"Unknown error"}`,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-      }
-    }
-
-    // BADGE COMPONENTS: use a fast initial response for the menu itself.
-    // The /profile command already loaded the player's badge state, so the
-    // profile_badges button carries compact base-36 masks for unlocked/equipped
-    // badges. This lets Discord receive the menu in the original response with
-    // ZERO KV reads and therefore cannot hit the 3-second interaction timeout.
-    if (isBadgeComponent) {
-      const user = getUserFromInteraction(interaction);
-      if (!user) {
-        return new Response(JSON.stringify({type:4,data:{content:"❌ I couldn't identify you.",flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-      }
-      const jsonResponse=(data)=>new Response(JSON.stringify({type:4,data:{...data,flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-
-      if (customId.startsWith("profile_badges:")) {
-        const parts=customId.split(":");
-        const targetId=parts[1]||"";
-        const page=Number(parts[2]||0);
-        const unlockedMask=parts[3]||"0";
-        const equippedMask=parts[4]||"0";
-        if(user.id!==targetId) return jsonResponse({content:"❌ You can only manage badges on your own profile.",components:[]});
-        return jsonResponse(profileBadgeMenuFromMasks(user.id,page,unlockedMask,equippedMask));
-      }
-
-      // Equip/remove operations do require KV. A proper type-5 ephemeral ACK is
-      // returned immediately as the Worker response, then waitUntil performs the
-      // save and edits that same private response. This keeps Discord's 3-second
-      // acknowledgement deadline separate from the KV operation.
-      if (customId.startsWith("equip_badge:") || customId === "unequip_badges") {
-        const ack = new Response(JSON.stringify({type:5,data:{flags:64}}),{status:200,headers:{"Content-Type":"application/json"}});
-        ctx.waitUntil((async()=>{
-          try {
-            let content;
-            if(customId.startsWith("equip_badge:")) content=await toggleProfileBadgeData(env,user.id,customId.slice("equip_badge:".length));
-            else content=await unequipAllProfileBadgesData(env,user.id);
-            const r=await editOriginalResponse(env,interaction,{content,components:[]});
-            if(!r.ok) console.error("Badge private response edit failed:",r.status,await r.text());
-          } catch(error) {
-            console.error("Badge save error:",error);
-            try { await editOriginalResponse(env,interaction,{content:`❌ Couldn't update your badges: ${error?.message||"Unknown error"}`,components:[]}); } catch(e) { console.error("Badge error response failed:",e); }
-          }
-        })());
-        return ack;
       }
     }
 
