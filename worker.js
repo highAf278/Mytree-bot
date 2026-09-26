@@ -23250,6 +23250,32 @@ async function handleBlacklistList(env, interaction) {
   return sendText(env, interaction, `🚫 **Blacklisted Players (${entries.length})**\n\n${lines.join("\n")}`);
 }
 
+
+function rumbleHowToPlayText() {
+  return [
+    "📖 **HOW TO PLAY — RACCOON RUMBLE**",
+    "",
+    "🦝 **Players:** 3–6",
+    "🎯 **Goal:** Finish with the most Loot, while trying to complete your secret objective.",
+    "",
+    "**Choose one secret action each round:**",
+    "💰 **Grab** — gain Loot.",
+    "🛡️ **Guard** — protect yourself from a robbery.",
+    "🥔 **Lay Low** — take a small safe payout.",
+    "🦝 **Rob** — target another player and steal Loot.",
+    "🔎 **Spy** — secretly inspect another player's action.",
+    "🧨 **Sabotage** — try to cancel another player's Grab.",
+    "",
+    "🎭 Everyone gets a private secret objective. Completing it earns a bonus.",
+    "⏰ If you run out of time, the bot automatically chooses **Lay Low** for you.",
+    "🔐 Your first click is locked. Double-clicking an action will NOT submit it twice.",
+    "",
+    "🏆 When the final round ends, Loot totals and completed secret objectives determine the results.",
+    "",
+    "💡 **Tip:** Keep your objective secret. Bluff, betray, guard, spy, and trust absolutely nobody. 😂🦝"
+  ].join("\n");
+}
+
 /* =========================================================
    RACCOON RUMBLE — 3–6 PLAYERS
    A fast simultaneous-choice social game. Secret objectives,
@@ -27222,6 +27248,16 @@ export default {
     const isRumbleCommand = interaction.type === 2 && interaction.data?.name === "rumble";
     const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
     const isRumbleComponent = interaction.type === 3 && customId.startsWith("rumble:");
+
+    if (customId.startsWith("rumble:howto:")) {
+      const gameId = customId.split(":")[2];
+      const state = await getGuildState(env, interaction.guild_id);
+      const game = state.rumble;
+      if (!game || game.id !== gameId) {
+        return sendEphemeralFollowup(env, interaction, "❌ That Rumble is no longer active.");
+      }
+      return sendEphemeralFollowup(env, interaction, rumbleHowToPlayText());
+    }
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
