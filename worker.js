@@ -98,6 +98,24 @@ const IMAGES = {
   midnightRiderTree: "IMG_7424.png",
   midnightRiderBackground: "IMG_7425.png",
   midnightRiderEffect: "IMG_7426.png",
+  fairyHollowTree: "IMG_7875.png",
+  fairyHollowBackground: "IMG_7877.png",
+  fairyHollowEffect: "IMG_7876.png",
+  glamTree: "IMG_7878.png",
+  glamBackground: "IMG_7879.png",
+  glamEffect: "IMG_7895.png",
+  blackCatMagicTree: "IMG_7881.png",
+  blackCatMagicBackground: "IMG_7882.png",
+  blackCatMagicEffect: "IMG_7883.png",
+  dragonRealmTree: "IMG_7884.png",
+  dragonRealmBackground: "IMG_7885.png",
+  dragonRealmEffect: "IMG_7886.png",
+  infernoKingTree: "IMG_7887.png",
+  infernoKingBackground: "IMG_7888.png",
+  infernoKingEffect: "IMG_7889.png",
+  thunderGodTree: "IMG_7890.png",
+  thunderGodBackground: "IMG_7892.png",
+  thunderGodEffect: "IMG_7893.png",
   birthdayTree: "IMG_7494.png",
   birthdayBackground: "IMG_7500.png",
   birthdayEffect: "IMG_7497.png",
@@ -336,6 +354,24 @@ const SHOP_ITEMS = {
     value: "ocean_opal",
     limited: true
   },
+  fairy_hollow_tree: { name: "🧚 Fairy Hollow Tree", price: 30000, type: "tree", value: "fairy_hollow", limited: true },
+  fairy_hollow_background: { name: "🧚 Fairy Hollow Background", price: 15000, type: "background", value: "fairy_hollow", limited: true },
+  fairy_hollow_effect: { name: "✨ Fairy Hollow Effect", price: 20000, type: "effect", value: "fairy_hollow", limited: true },
+  glam_tree: { name: "💎 Glam Tree", price: 35000, type: "tree", value: "glam", limited: true },
+  glam_background: { name: "💎 Glam Background", price: 18000, type: "background", value: "glam", limited: true },
+  glam_effect: { name: "✨ Glam Effect", price: 25000, type: "effect", value: "glam", limited: true },
+  black_cat_magic_tree: { name: "🐈‍⬛ Black Cat Magic Tree", price: 35000, type: "tree", value: "black_cat_magic", limited: true },
+  black_cat_magic_background: { name: "🐈‍⬛ Black Cat Magic Background", price: 18000, type: "background", value: "black_cat_magic", limited: true },
+  black_cat_magic_effect: { name: "✨ Black Cat Magic Effect", price: 25000, type: "effect", value: "black_cat_magic", limited: true },
+  dragon_realm_tree: { name: "🐉 Dragon Realm Tree", price: 45000, type: "tree", value: "dragon_realm", limited: true },
+  dragon_realm_background: { name: "🐉 Dragon Realm Background", price: 20000, type: "background", value: "dragon_realm", limited: true },
+  dragon_realm_effect: { name: "✨ Dragon Realm Effect", price: 30000, type: "effect", value: "dragon_realm", limited: true },
+  inferno_king_tree: { name: "🔥 Inferno King Tree", price: 45000, type: "tree", value: "inferno_king", limited: true },
+  inferno_king_background: { name: "🔥 Inferno King Background", price: 20000, type: "background", value: "inferno_king", limited: true },
+  inferno_king_effect: { name: "✨ Inferno King Effect", price: 30000, type: "effect", value: "inferno_king", limited: true },
+  thunder_god_tree: { name: "⚡ Thunder God Tree", price: 50000, type: "tree", value: "thunder_god", limited: true },
+  thunder_god_background: { name: "⚡ Thunder God Background", price: 20000, type: "background", value: "thunder_god", limited: true },
+  thunder_god_effect: { name: "✨ Thunder God Effect", price: 30000, type: "effect", value: "thunder_god", limited: true },
   candy_effect: {
     name: "🍭 Candy Rush Effect",
     price: 1000,
@@ -920,7 +956,9 @@ function unlockNameEffects(player) {
     "cherry", "cotton_candy_tree", "stoned_birthday_tree", "shadow_tree",
     "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree",
     "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree",
-    "world_of_flags_tree", "ocean_opal_tree", "werewives_tree"
+    "world_of_flags_tree", "ocean_opal_tree", "fairy_hollow_tree", "glam_tree",
+    "black_cat_magic_tree", "dragon_realm_tree", "inferno_king_tree", "thunder_god_tree",
+    "werewives_tree"
   ]);
   const treeCount = owned.filter(id => treeIds.has(id)).length + (owned.includes("cherry") ? 0 : 1);
   const limitedSets = [
@@ -930,6 +968,12 @@ function unlockNameEffects(player) {
     ["lavender_twilight", ["lavender_twilight_tree", "lavender_twilight_background", "lavender_twilight_effect"]],
     ["world_of_flags", ["world_of_flags_tree", "world_of_flags_background", "world_of_flags_effect"]],
     ["ocean_opal", ["ocean_opal_tree", "ocean_opal_background", "ocean_opal_effect"]],
+    ["fairy_hollow", ["fairy_hollow_tree", "fairy_hollow_background", "fairy_hollow_effect"]],
+    ["glam", ["glam_tree", "glam_background", "glam_effect"]],
+    ["black_cat_magic", ["black_cat_magic_tree", "black_cat_magic_background", "black_cat_magic_effect"]],
+    ["dragon_realm", ["dragon_realm_tree", "dragon_realm_background", "dragon_realm_effect"]],
+    ["inferno_king", ["inferno_king_tree", "inferno_king_background", "inferno_king_effect"]],
+    ["thunder_god", ["thunder_god_tree", "thunder_god_background", "thunder_god_effect"]],
     ["halloween", ["halloween_tree", "halloween_background", "halloween_effect"]]
   ];
   const completedLimitedSets = limitedSets.filter(([,ids]) => ids.every(id => owned.includes(id))).length;
@@ -2851,6 +2895,24 @@ function getBackgroundImage(player) {
     case "ocean_opal":
       return IMAGES.oceanOpalBackground;
 
+    case "fairy_hollow":
+      return IMAGES.fairyHollowBackground;
+
+    case "glam":
+      return IMAGES.glamBackground;
+
+    case "black_cat_magic":
+      return IMAGES.blackCatMagicBackground;
+
+    case "dragon_realm":
+      return IMAGES.dragonRealmBackground;
+
+    case "inferno_king":
+      return IMAGES.infernoKingBackground;
+
+    case "thunder_god":
+      return IMAGES.thunderGodBackground;
+
     case "werewives":
       return IMAGES.werewivesBackground;
 
@@ -2913,6 +2975,24 @@ function getTreeImage(player) {
 
     case "ocean_opal":
       return IMAGES.oceanOpalTree;
+
+    case "fairy_hollow":
+      return IMAGES.fairyHollowTree;
+
+    case "glam":
+      return IMAGES.glamTree;
+
+    case "black_cat_magic":
+      return IMAGES.blackCatMagicTree;
+
+    case "dragon_realm":
+      return IMAGES.dragonRealmTree;
+
+    case "inferno_king":
+      return IMAGES.infernoKingTree;
+
+    case "thunder_god":
+      return IMAGES.thunderGodTree;
 
     case "werewives":
       return IMAGES.werewivesTree;
@@ -3013,6 +3093,24 @@ function getEffectImage(player) {
 
     case "ocean_opal":
       return IMAGES.oceanOpalEffect;
+
+    case "fairy_hollow":
+      return IMAGES.fairyHollowEffect;
+
+    case "glam":
+      return IMAGES.glamEffect;
+
+    case "black_cat_magic":
+      return IMAGES.blackCatMagicEffect;
+
+    case "dragon_realm":
+      return IMAGES.dragonRealmEffect;
+
+    case "inferno_king":
+      return IMAGES.infernoKingEffect;
+
+    case "thunder_god":
+      return IMAGES.thunderGodEffect;
 
     case "werewives":
       return IMAGES.werewivesEffect;
@@ -7540,63 +7638,63 @@ async function showRegularSet(env,interaction,setId){
 
 const LIMITED_SHOP_SETS = [
   {
-    id: "cats",
-    label: "🐱 Cat Bundle",
-    description: "Special limited cat items",
+    id: "fairy_hollow",
+    label: "🧚 Fairy Hollow",
+    description: "Whimsical enchanted forest set",
     items: [
-      ["purr_princess_effect", "👑 Purr Princess", "buy_purr_princess"],
-      ["kitty_tree", "🐱 Kitty Tree", "buy_kitty_tree"],
-      ["cozy_cat_background", "🐱 Cozy Cat", "buy_cozy_cat"]
+      ["fairy_hollow_tree", "🧚 Fairy Hollow Tree", "buy_fairy_hollow_tree"],
+      ["fairy_hollow_background", "🧚 Fairy Hollow Background", "buy_fairy_hollow_background"],
+      ["fairy_hollow_effect", "✨ Fairy Hollow Effect", "buy_fairy_hollow_effect"]
     ]
   },
   {
-    id: "green_glow",
-    label: "💚 Green Glow",
-    description: "Limited glowing forest set",
+    id: "glam",
+    label: "💎 Glam",
+    description: "Luxury sparkle and glamour set",
     items: [
-      ["green_glow_tree", "💚 Green Glow Tree", "buy_green_glow_tree"],
-      ["green_glow_background", "💚 Green Glow Background", "buy_green_glow_background"],
-      ["green_glow_effect", "💚 Green Glow Effect", "buy_green_glow_effect"]
+      ["glam_tree", "💎 Glam Tree", "buy_glam_tree"],
+      ["glam_background", "💎 Glam Background", "buy_glam_background"],
+      ["glam_effect", "✨ Glam Effect", "buy_glam_effect"]
     ]
   },
   {
-    id: "prism_flutter",
-    label: "🌈🦋 Prism Flutter",
-    description: "Rainbow butterfly fantasy set",
+    id: "black_cat_magic",
+    label: "🐈‍⬛ Black Cat Magic",
+    description: "Witchy black-cat magic set",
     items: [
-      ["prism_flutter_tree", "🌈🦋 Prism Flutter Tree", "buy_prism_flutter_tree"],
-      ["prism_flutter_background", "🌈🦋 Prism Flutter Background", "buy_prism_flutter_background"],
-      ["prism_flutter_effect", "🌈🦋 Prism Flutter Effect", "buy_prism_flutter_effect"]
+      ["black_cat_magic_tree", "🐈‍⬛ Black Cat Magic Tree", "buy_black_cat_magic_tree"],
+      ["black_cat_magic_background", "🐈‍⬛ Black Cat Magic Background", "buy_black_cat_magic_background"],
+      ["black_cat_magic_effect", "✨ Black Cat Magic Effect", "buy_black_cat_magic_effect"]
     ]
   },
   {
-    id: "lavender_twilight",
-    label: "💜🌙 Lavender Twilight",
-    description: "Dreamy purple moonlit set",
+    id: "dragon_realm",
+    label: "🐉 Dragon Realm",
+    description: "Powerful red-and-purple dragon set",
     items: [
-      ["lavender_twilight_tree", "💜🌙 Lavender Twilight Tree", "buy_lavender_twilight_tree"],
-      ["lavender_twilight_background", "💜🌙 Lavender Twilight Background", "buy_lavender_twilight_background"],
-      ["lavender_twilight_effect", "💜🌙 Lavender Twilight Effect", "buy_lavender_twilight_effect"]
+      ["dragon_realm_tree", "🐉 Dragon Realm Tree", "buy_dragon_realm_tree"],
+      ["dragon_realm_background", "🐉 Dragon Realm Background", "buy_dragon_realm_background"],
+      ["dragon_realm_effect", "✨ Dragon Realm Effect", "buy_dragon_realm_effect"]
     ]
   },
   {
-    id: "world_of_flags",
-    label: "🌎🏳️ World of Flags",
-    description: "International unity set",
+    id: "inferno_king",
+    label: "🔥 Inferno King",
+    description: "Volcanic royal fire set",
     items: [
-      ["world_of_flags_tree", "🌎🏳️ World of Flags Tree", "buy_world_of_flags_tree"],
-      ["world_of_flags_background", "🌎🏳️ World of Flags Background", "buy_world_of_flags_background"],
-      ["world_of_flags_effect", "🌎🏳️ World of Flags Effect", "buy_world_of_flags_effect"]
+      ["inferno_king_tree", "🔥 Inferno King Tree", "buy_inferno_king_tree"],
+      ["inferno_king_background", "🔥 Inferno King Background", "buy_inferno_king_background"],
+      ["inferno_king_effect", "✨ Inferno King Effect", "buy_inferno_king_effect"]
     ]
   },
   {
-    id: "ocean_opal",
-    label: "🩵🌊 Ocean Opal",
-    description: "Pastel underwater pearl set",
+    id: "thunder_god",
+    label: "⚡ Thunder God",
+    description: "Divine storm and lightning set",
     items: [
-      ["ocean_opal_tree", "🩵🌊 Ocean Opal Tree", "buy_ocean_opal_tree"],
-      ["ocean_opal_background", "🩵🌊 Ocean Opal Background", "buy_ocean_opal_background"],
-      ["ocean_opal_effect", "🫧 Ocean Opal Effect", "buy_ocean_opal_effect"]
+      ["thunder_god_tree", "⚡ Thunder God Tree", "buy_thunder_god_tree"],
+      ["thunder_god_background", "⚡ Thunder God Background", "buy_thunder_god_background"],
+      ["thunder_god_effect", "✨ Thunder God Effect", "buy_thunder_god_effect"]
     ]
   },
   {
@@ -7960,6 +8058,12 @@ async function showCustomBackgrounds(
     ["lavender_twilight_background", "💜🌙 Lavender Twilight", "lavender_twilight"],
     ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"],
     ["ocean_opal_background", "🩵🌊 Ocean Opal", "ocean_opal"],
+    ["fairy_hollow_background", "🧚 Fairy Hollow", "fairy_hollow"],
+    ["glam_background", "💎 Glam", "glam"],
+    ["black_cat_magic_background", "🐈‍⬛ Black Cat Magic", "black_cat_magic"],
+    ["dragon_realm_background", "🐉 Dragon Realm", "dragon_realm"],
+    ["inferno_king_background", "🔥 Inferno King", "inferno_king"],
+    ["thunder_god_background", "⚡ Thunder God", "thunder_god"],
     ["werewives_background", "🐺🌙 Werewives", "werewives"],
     ["golden_pickle_background", "🥒💛 Golden Pickle", "golden_pickle"],
     ["midnight_rider_background", "🏍️🌙 Midnight Rider", "midnight_rider"]
@@ -8037,6 +8141,12 @@ async function showCustomTrees(
     ["lavender_twilight", "💜🌙 Lavender Twilight", "lavender_twilight_tree"],
     ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_tree"],
     ["ocean_opal", "🩵🌊 Ocean Opal", "ocean_opal_tree"],
+    ["fairy_hollow", "🧚 Fairy Hollow", "fairy_hollow_tree"],
+    ["glam", "💎 Glam", "glam_tree"],
+    ["black_cat_magic", "🐈‍⬛ Black Cat Magic", "black_cat_magic_tree"],
+    ["dragon_realm", "🐉 Dragon Realm", "dragon_realm_tree"],
+    ["inferno_king", "🔥 Inferno King", "inferno_king_tree"],
+    ["thunder_god", "⚡ Thunder God", "thunder_god_tree"],
     ["werewives", "🐺🌙 Werewives", "werewives_tree"],
     ["golden_pickle", "🥒✨ Golden Pickle", "golden_pickle_tree"],
     ["midnight_rider", "🏍️🌙 Midnight Rider", "midnight_rider_tree"]
@@ -8101,6 +8211,12 @@ async function showCustomEffects(
   if (player.inventory.includes("lavender_twilight_effect")) buttons.push(button("💜🌙 Lavender Twilight", "equip_effect_lavender_twilight", player.equipped.effect === "lavender_twilight" ? 3 : 2));
   if (player.inventory.includes("world_of_flags_effect")) buttons.push(button("🌎🏳️ World of Flags", "equip_effect_world_of_flags", player.equipped.effect === "world_of_flags" ? 3 : 2));
   if (player.inventory.includes("ocean_opal_effect")) buttons.push(button("🩵🌊 Ocean Opal", "equip_effect_ocean_opal", player.equipped.effect === "ocean_opal" ? 3 : 2));
+  if (player.inventory.includes("fairy_hollow_effect")) buttons.push(button("🧚 Fairy Hollow", "equip_effect_fairy_hollow", player.equipped.effect === "fairy_hollow" ? 3 : 2));
+  if (player.inventory.includes("glam_effect")) buttons.push(button("💎 Glam", "equip_effect_glam", player.equipped.effect === "glam" ? 3 : 2));
+  if (player.inventory.includes("black_cat_magic_effect")) buttons.push(button("🐈‍⬛ Black Cat Magic", "equip_effect_black_cat_magic", player.equipped.effect === "black_cat_magic" ? 3 : 2));
+  if (player.inventory.includes("dragon_realm_effect")) buttons.push(button("🐉 Dragon Realm", "equip_effect_dragon_realm", player.equipped.effect === "dragon_realm" ? 3 : 2));
+  if (player.inventory.includes("inferno_king_effect")) buttons.push(button("🔥 Inferno King", "equip_effect_inferno_king", player.equipped.effect === "inferno_king" ? 3 : 2));
+  if (player.inventory.includes("thunder_god_effect")) buttons.push(button("⚡ Thunder God", "equip_effect_thunder_god", player.equipped.effect === "thunder_god" ? 3 : 2));
   if (player.inventory.includes("werewives_effect")) buttons.push(button("🐺🌙 Werewives", "equip_effect_werewives", player.equipped.effect === "werewives" ? 3 : 2));
   if (player.inventory.includes("golden_pickle_effect")) buttons.push(button("🥒✨ Golden Pickle", "equip_effect_golden_pickle", player.equipped.effect === "golden_pickle" ? 3 : 2));
   if (player.inventory.includes("midnight_rider_effect")) buttons.push(button("🏍️🌙 Midnight Rider", "equip_effect_midnight_rider", player.equipped.effect === "midnight_rider" ? 3 : 2));
@@ -8389,6 +8505,24 @@ async function equipTheme(
         "ocean_opal_background"
       ),
 
+    fairy_hollow:
+      player.inventory.includes("fairy_hollow_background"),
+
+    glam:
+      player.inventory.includes("glam_background"),
+
+    black_cat_magic:
+      player.inventory.includes("black_cat_magic_background"),
+
+    dragon_realm:
+      player.inventory.includes("dragon_realm_background"),
+
+    inferno_king:
+      player.inventory.includes("inferno_king_background"),
+
+    thunder_god:
+      player.inventory.includes("thunder_god_background"),
+
     werewives:
       player.inventory.includes(
         "werewives_background"
@@ -8521,6 +8655,24 @@ async function equipTree(
         "ocean_opal_tree"
       ),
 
+    fairy_hollow:
+      player.inventory.includes("fairy_hollow_tree"),
+
+    glam:
+      player.inventory.includes("glam_tree"),
+
+    black_cat_magic:
+      player.inventory.includes("black_cat_magic_tree"),
+
+    dragon_realm:
+      player.inventory.includes("dragon_realm_tree"),
+
+    inferno_king:
+      player.inventory.includes("inferno_king_tree"),
+
+    thunder_god:
+      player.inventory.includes("thunder_god_tree"),
+
     werewives:
       player.inventory.includes(
         "werewives_tree"
@@ -8596,6 +8748,12 @@ async function equipEffect(
       lavender_twilight: "lavender_twilight_effect",
       world_of_flags: "world_of_flags_effect",
       ocean_opal: "ocean_opal_effect",
+      fairy_hollow: "fairy_hollow_effect",
+      glam: "glam_effect",
+      black_cat_magic: "black_cat_magic_effect",
+      dragon_realm: "dragon_realm_effect",
+      inferno_king: "inferno_king_effect",
+      thunder_god: "thunder_god_effect",
       werewives: "werewives_effect",
       golden_pickle: "golden_pickle_effect",
       midnight_rider: "midnight_rider_effect",
@@ -8879,6 +9037,24 @@ const INVENTORY_NAMES = {
   ocean_opal_tree: "🩵🌊 Ocean Opal Tree",
   ocean_opal_background: "🩵🌊 Ocean Opal Background",
   ocean_opal_effect: "🫧 Ocean Opal Effect",
+  fairy_hollow_tree: "🧚 Fairy Hollow Tree",
+  fairy_hollow_background: "🧚 Fairy Hollow Background",
+  fairy_hollow_effect: "✨ Fairy Hollow Effect",
+  glam_tree: "💎 Glam Tree",
+  glam_background: "💎 Glam Background",
+  glam_effect: "✨ Glam Effect",
+  black_cat_magic_tree: "🐈‍⬛ Black Cat Magic Tree",
+  black_cat_magic_background: "🐈‍⬛ Black Cat Magic Background",
+  black_cat_magic_effect: "✨ Black Cat Magic Effect",
+  dragon_realm_tree: "🐉 Dragon Realm Tree",
+  dragon_realm_background: "🐉 Dragon Realm Background",
+  dragon_realm_effect: "✨ Dragon Realm Effect",
+  inferno_king_tree: "🔥 Inferno King Tree",
+  inferno_king_background: "🔥 Inferno King Background",
+  inferno_king_effect: "✨ Inferno King Effect",
+  thunder_god_tree: "⚡ Thunder God Tree",
+  thunder_god_background: "⚡ Thunder God Background",
+  thunder_god_effect: "✨ Thunder God Effect",
   werewives_tree: "🐺🌙 Werewives Tree",
   werewives_background: "🐺🌙 Werewives Background",
   werewives_effect: "🐺🌙 Werewives Effect",
@@ -8929,9 +9105,9 @@ const INVENTORY_CATEGORIES = [
 ];
 
 const INVENTORY_CATEGORY_IDS = {
-  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
-  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "beans_effect"],
+  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "fairy_hollow_tree", "glam_tree", "black_cat_magic_tree", "dragon_realm_tree", "inferno_king_tree", "thunder_god_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
+  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "fairy_hollow_background", "glam_background", "black_cat_magic_background", "dragon_realm_background", "inferno_king_background", "thunder_god_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "beans_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration"],
   frames: ["profile_frame_royal_gold"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
@@ -11336,59 +11512,47 @@ async function handleComponent(
     buy_halloween_tree:
       "halloween_tree",
 
-    buy_purr_princess:
-      "purr_princess_effect",
+    buy_fairy_hollow_tree:
+      "fairy_hollow_tree",
+    buy_fairy_hollow_background:
+      "fairy_hollow_background",
+    buy_fairy_hollow_effect:
+      "fairy_hollow_effect",
 
-    buy_kitty_tree:
-      "kitty_tree",
+    buy_glam_tree:
+      "glam_tree",
+    buy_glam_background:
+      "glam_background",
+    buy_glam_effect:
+      "glam_effect",
 
-    buy_cozy_cat:
-      "cozy_cat_background",
+    buy_black_cat_magic_tree:
+      "black_cat_magic_tree",
+    buy_black_cat_magic_background:
+      "black_cat_magic_background",
+    buy_black_cat_magic_effect:
+      "black_cat_magic_effect",
 
-    buy_green_glow_tree:
-      "green_glow_tree",
+    buy_dragon_realm_tree:
+      "dragon_realm_tree",
+    buy_dragon_realm_background:
+      "dragon_realm_background",
+    buy_dragon_realm_effect:
+      "dragon_realm_effect",
 
-    buy_green_glow_background:
-      "green_glow_background",
+    buy_inferno_king_tree:
+      "inferno_king_tree",
+    buy_inferno_king_background:
+      "inferno_king_background",
+    buy_inferno_king_effect:
+      "inferno_king_effect",
 
-    buy_green_glow_effect:
-      "green_glow_effect",
-
-    buy_prism_flutter_tree:
-      "prism_flutter_tree",
-
-    buy_prism_flutter_background:
-      "prism_flutter_background",
-
-    buy_prism_flutter_effect:
-      "prism_flutter_effect",
-
-    buy_lavender_twilight_tree:
-      "lavender_twilight_tree",
-
-    buy_lavender_twilight_background:
-      "lavender_twilight_background",
-
-    buy_lavender_twilight_effect:
-      "lavender_twilight_effect",
-
-    buy_world_of_flags_tree:
-      "world_of_flags_tree",
-
-    buy_world_of_flags_background:
-      "world_of_flags_background",
-
-    buy_world_of_flags_effect:
-      "world_of_flags_effect",
-
-    buy_ocean_opal_tree:
-      "ocean_opal_tree",
-
-    buy_ocean_opal_background:
-      "ocean_opal_background",
-
-    buy_ocean_opal_effect:
-      "ocean_opal_effect"
+    buy_thunder_god_tree:
+      "thunder_god_tree",
+    buy_thunder_god_background:
+      "thunder_god_background",
+    buy_thunder_god_effect:
+      "thunder_god_effect"
   };
 
   if (
