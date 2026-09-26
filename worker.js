@@ -794,6 +794,13 @@ function defaultPlayer() {
     experimentCompleted: 0,
     experimentSuccesses: 0,
     experimentXP: 0,
+    rumbleGames: 0,
+    rumbleWins: 0,
+    rumbleRobberies: 0,
+    rumbleBlocks: 0,
+    rumbleSpies: 0,
+    rumbleLayLows: 0,
+    rumbleSabotages: 0,
     seenNewsIds: []
   };
 }
@@ -2088,6 +2095,7 @@ async function getGuildState(env, guildId) {
       announcementChannelName: "",
       hunt: null,
       island: null,
+      rumble: null,
       nextChaosAt: 0,
       birthday: null
     };
@@ -2103,6 +2111,7 @@ async function getGuildState(env, guildId) {
       announcementChannelName: "",
       hunt: null,
       island: null,
+      rumble: null,
       nextChaosAt: 0,
       birthday: null
     };
@@ -2114,6 +2123,7 @@ async function getGuildState(env, guildId) {
       announcementChannelName: "",
       hunt: null,
       island: null,
+      rumble: null,
       nextChaosAt: 0,
       birthday: null,
       ...JSON.parse(raw)
@@ -11057,6 +11067,24 @@ async function handleComponent(
     return;
   }
 
+  if (id === "games:rumble") {
+    return handleRumbleCreate(env, interaction);
+  }
+
+  if (id.startsWith("rumble:")) {
+    const parts = id.split(":");
+    const action = parts[1];
+    const gameId = parts[2];
+    if (action === "join") return handleRumbleJoin(env, interaction, gameId);
+    if (action === "leave") return handleRumbleLeave(env, interaction, gameId);
+    if (action === "start") return handleRumbleStart(env, interaction, gameId);
+    if (action === "status") return handleRumbleStatus(env, interaction, gameId);
+    if (action === "end") return handleRumbleEnd(env, interaction, gameId);
+    if (action === "open") return handleRumbleOpen(env, interaction, gameId, parts[3]);
+    if (action === "action") return handleRumbleAction(env, interaction, gameId, parts[3], parts[4], parts[5] || null);
+    return;
+  }
+
   if (id.startsWith("experiment:")) {
     const parts=id.split(":");
     const action=parts[1];
@@ -18293,7 +18321,14 @@ const SOLO_TITLES = {
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
   court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
-  court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" }
+  court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" },
+  rumble_first: { name: "the Trash Panda Supreme", description: "Win your first Raccoon Rumble." },
+  rumble_saboteur: { name: "the Tiny Menace", description: "Successfully sabotage 2 grabs in Raccoon Rumble." },
+  rumble_hoarder: { name: "the Loot Goblin", description: "Finish a Raccoon Rumble with 2,000+ Loot." },
+  professional_snake: { name: "the Professional Snake", description: "Successfully rob players 3 times in Raccoon Rumble." },
+  trap_goblin: { name: "the Trap Goblin", description: "Successfully block 3 robberies in Raccoon Rumble." },
+  pocket_detective: { name: "the Pocket Detective", description: "Successfully Spy 3 times in Raccoon Rumble." },
+  suspicious_potato: { name: "the Suspicious Potato", description: "Win Raccoon Rumble after using Lay Low at least twice." }
 };
 
 const SOLO_STORY_LEVELS = [
@@ -18455,11 +18490,11 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🦝💥 **Raccoon Rumble** — exactly 3 players, secret objectives + chaos\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
     row(button("🧪 The Experiment", "games:experiment", 1), button("🕵️ Solo Mission", "games:solo", 3)),
     row(button("🌳⚔️ Tree Battle", "games:battle", 1), button("🌈 Color Chaos", "games:colorchaos", 3)),
-    row(button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2))
+    row(button("🦝💥 Raccoon Rumble", "games:rumble", 1), button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2))
   ]);
 }
 
@@ -18627,6 +18662,18 @@ async function handleTitleUnequip(env,interaction){
    Night actions are private button interactions.
    The public game channel is locked during Night.
 ========================================================= */
+
+const RUMBLE_MIN_PLAYERS = 3;
+const RUMBLE_MAX_PLAYERS = 6;
+const RUMBLE_ROUNDS = 5;
+const RUMBLE_LARGE_GAME_ROUNDS = 6;
+const RUMBLE_GRAB_REWARD = 300;
+const RUMBLE_GUARD_REWARD = 100;
+const RUMBLE_SPY_REWARD = 50;
+const RUMBLE_LAY_LOW_REWARD = 75;
+const RUMBLE_ROB_AMOUNT = 500;
+const RUMBLE_WIN_REWARD = 750;
+const RUMBLE_OBJECTIVE_REWARD = 350;
 
 const HEIST_MIN_PLAYERS = 3;
 const HEIST_MAX_PLAYERS = 12;
@@ -23203,6 +23250,610 @@ async function handleBlacklistList(env, interaction) {
   return sendText(env, interaction, `🚫 **Blacklisted Players (${entries.length})**\n\n${lines.join("\n")}`);
 }
 
+/* =========================================================
+   RACCOON RUMBLE — 3–6 PLAYERS
+   A fast simultaneous-choice social game. Secret objectives,
+   robbing, guarding, spying, bluffing, and raccoon nonsense.
+========================================================= */
+
+const RUMBLE_OBJECTIVES = [
+  { id: "hoarder", name: "💰 The Hoarder", description: "Finish with the most Loot." },
+  { id: "snake", name: "🐍 The Snake", description: "Successfully rob other players 3 times." },
+  { id: "guardian", name: "🛡️ The Guardian", description: "Successfully block 3 robberies." },
+  { id: "spy", name: "🔎 The Watcher", description: "Successfully Spy 3 times." },
+  { id: "potato", name: "🥔 The Potato", description: "Lay Low at least 3 times." },
+  { id: "saboteur", name: "🧨 The Saboteur", description: "Successfully sabotage 2 Grab attempts." },
+  { id: "burglar", name: "💼 The Burglar", description: "Successfully rob at least 2 different players." },
+  { id: "lootgoblin", name: "👹 The Loot Goblin", description: "Finish with at least 2,000 Loot." }
+];
+
+function makeRumbleGame(guildId, channelId, hostId) {
+  return {
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 10),
+    guildId,
+    channelId,
+    hostId,
+    status: "lobby",
+    round: 0,
+    maxRounds: RUMBLE_ROUNDS,
+    createdAt: Date.now(),
+    phaseEndsAt: 0,
+    resolving: false,
+    lastResolvedRound: 0,
+    players: {},
+    publicEvents: []
+  };
+}
+
+function rumblePlayers(game) {
+  return Object.values(game?.players || {});
+}
+
+function rumblePlayerCount(game) {
+  return rumblePlayers(game).length;
+}
+
+function rumbleName(player) {
+  return player?.displayName || player?.username || "Werewife";
+}
+
+function rumbleObjective(id) {
+  return RUMBLE_OBJECTIVES.find(x => x.id === id) || RUMBLE_OBJECTIVES[0];
+}
+
+function rumbleTargetOptions(game, userId) {
+  return rumblePlayers(game).filter(p => p.id !== userId);
+}
+
+function rumbleLobbyText(game) {
+  const players = rumblePlayers(game);
+  const list = players.length
+    ? players.map((p, i) => `${i + 1}. <@${p.id}>`).join("\n")
+    : "Nobody has joined yet.";
+  return [
+    "🦝💥 **RACCOON RUMBLE**",
+    "",
+    "Three players enter. Five rounds of suspicious decisions begin.",
+    "",
+    `👥 Players: **${players.length}/${RUMBLE_MAX_PLAYERS}**`,
+    list,
+    "",
+    players.length >= RUMBLE_MIN_PLAYERS
+      ? `🔥 The rumble is ready! The host can start it with ${players.length} players.`
+      : `⏳ Waiting for ${RUMBLE_MIN_PLAYERS - players.length} more player(s).`,
+    "",
+    "🔐 Everyone gets a unique secret objective.",
+    "💰 Grab • 🦝 Rob • 🛡️ Guard • 🔎 Spy • 🥔 Lay Low • 🧨 Sabotage",
+    "🛑 The host can end the lobby if everyone gets distracted by raccoons."
+  ].join("\n");
+}
+
+function rumbleLobbyComponents(game) {
+  const rows = [
+    row(
+      button("🦝 Join Rumble", `rumble:join:${game.id}`, 1),
+      button("🚪 Leave", `rumble:leave:${game.id}`, 2),
+      button("👁️ Status", `rumble:status:${game.id}`, 3)
+    )
+  ];
+  if (game.hostId) rows.push(row(button("▶️ Start Rumble", `rumble:start:${game.id}`, 1)));
+  rows.push(row(button("🛑 End Rumble", `rumble:end:${game.id}`, 4)));
+  return rows;
+}
+
+function rumbleActionComponents(game, player) {
+  const targets = rumbleTargetOptions(game, player.id);
+  const rows = [
+    row(
+      button("💰 Grab +300", `rumble:action:${game.id}:${game.round}:grab`, 1),
+      button("🛡️ Guard +100", `rumble:action:${game.id}:${game.round}:guard`, 2),
+      button("🥔 Lay Low +75", `rumble:action:${game.id}:${game.round}:laylow`, 3)
+    )
+  ];
+  // Every other player is a possible target. This scales automatically from
+  // 3 players (2 targets) all the way to 6 players (5 targets).
+  for (const target of targets) {
+    rows.push(row(button(`🦝 Rob ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:rob:${target.id}`, 4)));
+  }
+  for (const target of targets) {
+    rows.push(row(button(`🔎 Spy ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:spy:${target.id}`, 2)));
+  }
+  for (const target of targets) {
+    rows.push(row(button(`🧨 Sabotage ${rumbleName(target)}`, `rumble:action:${game.id}:${game.round}:sabotage:${target.id}`, 4)));
+  }
+  return rows;
+}
+
+function rumbleStandings(game) {
+  return rumblePlayers(game)
+    .slice()
+    .sort((a, b) => Number(b.loot || 0) - Number(a.loot || 0))
+    .map((p, i) => `${i + 1}. ${rumbleName(p)} — 💰 **${Number(p.loot || 0)} Loot**`)
+    .join("\n");
+}
+
+function rumbleActionLabel(action) {
+  const labels = {
+    grab: "💰 Grab",
+    guard: "🛡️ Guard",
+    laylow: "🥔 Lay Low",
+    rob: "🦝 Rob",
+    spy: "🔎 Spy",
+    sabotage: "🧨 Sabotage"
+  };
+  return labels[action] || action;
+}
+
+async function rumblePrivateMenu(env, interaction, game, player, extra = "") {
+  const objective = rumbleObjective(player.objective);
+  return sendText(
+    env,
+    interaction,
+    [
+      `🦝💥 **RACCOON RUMBLE — ROUND ${game.round}/${game.maxRounds}**`,
+      "",
+      `🎭 Secret Objective: **${objective.name}**`,
+      `_${objective.description}_`,
+      "",
+      `💰 Your Loot: **${Number(player.loot || 0)}**`,
+      `📊 Your successful moves: Rob **${Number(player.robSuccesses || 0)}** • Block **${Number(player.blockSuccesses || 0)}** • Spy **${Number(player.spySuccesses || 0)}** • Sabotage **${Number(player.sabotageSuccesses || 0)}**`,
+      "",
+      extra || "Choose one move. Your choice stays secret until everyone locks in.",
+      "⚠️ Double-click protection is ON: once you lock a round, every extra click is ignored."
+    ].join("\n"),
+    rumbleActionComponents(game, player)
+  );
+}
+
+async function rumbleStartRound(env, game) {
+  if (!game || game.status === "ended") return false;
+  const state = await getGuildState(env, game.guildId);
+  if (!state.rumble || state.rumble.id !== game.id || state.rumble.status === "ended") return false;
+
+  game.round += 1;
+  game.resolving = false;
+  game.lastResolvedRound = game.round - 1;
+  game.phaseEndsAt = Date.now() + 90 * 1000;
+  for (const p of rumblePlayers(game)) {
+    p.submitted = false;
+    p.action = null;
+    p.targetId = null;
+    p.roundNumber = game.round;
+  }
+  state.rumble = game;
+  await saveGuildState(env, game.guildId, state);
+
+  await sendChannelMessage(
+    env,
+    game.channelId,
+    [
+      `🦝💥 **ROUND ${game.round}/${game.maxRounds} BEGINS!**`,
+      "",
+      "🔐 Your choices are private. Click **Open My Actions** to get your secret menu.",
+      "💰 Grab • 🦝 Rob • 🛡️ Guard • 🔎 Spy • 🥔 Lay Low • 🧨 Sabotage",
+      "",
+      "⏳ You have 90 seconds. If you disappear, the raccoons will make you Lay Low."
+    ].join("\n"),
+    [row(button("🔐 Open My Actions", `rumble:open:${game.id}:${game.round}`, 1))]
+  );
+  return true;
+}
+
+async function rumbleResolveRound(env, game) {
+  if (!game || game.status !== "playing" || game.resolving || game.lastResolvedRound >= game.round) return false;
+  game.resolving = true;
+  const state = await getGuildState(env, game.guildId);
+  if (!state.rumble || state.rumble.id !== game.id || state.rumble.status !== "playing" || state.rumble.lastResolvedRound >= game.round) return false;
+  state.rumble = game;
+  await saveGuildState(env, game.guildId, state);
+
+  const players = rumblePlayers(game);
+  const byId = Object.fromEntries(players.map(p => [p.id, p]));
+  const lines = [];
+  const randomEvents = [
+    "🦝 A raccoon accountant has entered the vault and is judging everyone.",
+    "🧀 The Cheese Council demands a percentage of the drama.",
+    "💅 Someone's tree is silently disappointed in these choices.",
+    "🎲 The vault makes a suspicious noise. Nobody investigates."
+  ];
+
+  for (const p of players) {
+    const action = p.action;
+    if (action === "grab") {
+      if (p.actionCancelled) {
+        lines.push(`💰 **${rumbleName(p)}** reached for the vault, but the sabotage got there first.`);
+      } else {
+        p.loot = Number(p.loot || 0) + RUMBLE_GRAB_REWARD;
+        lines.push(`💰 **${rumbleName(p)}** grabbed **${RUMBLE_GRAB_REWARD} Loot**.`);
+      }
+    } else if (action === "guard") {
+      p.loot = Number(p.loot || 0) + RUMBLE_GUARD_REWARD;
+      p.guardActive = true;
+      lines.push(`🛡️ **${rumbleName(p)}** guarded the vault and gained **${RUMBLE_GUARD_REWARD} Loot**.`);
+    } else if (action === "laylow") {
+      p.loot = Number(p.loot || 0) + RUMBLE_LAY_LOW_REWARD;
+      p.layLowCount = Number(p.layLowCount || 0) + 1;
+      lines.push(`🥔 **${rumbleName(p)}** laid suspiciously low.`);
+    } else if (action === "spy") {
+      p.loot = Number(p.loot || 0) + RUMBLE_SPY_REWARD;
+      const target = byId[p.targetId];
+      if (target) {
+        p.spySuccesses = Number(p.spySuccesses || 0) + 1;
+        target.spyWatched = true;
+        lines.push(`🔎 **${rumbleName(p)}** spied on **${rumbleName(target)}** and earned **${RUMBLE_SPY_REWARD} Loot**.`);
+      }
+    }
+  }
+
+  // Sabotage resolves before Grab/Rob. A successful sabotage cancels a target's
+  // Grab for the round and pays the saboteur a small reward.
+  for (const p of players) {
+    if (p.action !== "sabotage") continue;
+    const target = byId[p.targetId];
+    if (!target || target.id === p.id) continue;
+    if (target.action === "grab") {
+      target.actionCancelled = true;
+      // Grab was processed in the general action pass above, so reverse its
+      // +300 payout here before applying the sabotage reward.
+      target.loot = Math.max(0, Number(target.loot || 0) - RUMBLE_GRAB_REWARD);
+      const priorGrabLine = `💰 **${rumbleName(target)}** grabbed **${RUMBLE_GRAB_REWARD} Loot**.`;
+      const priorIndex = lines.lastIndexOf(priorGrabLine);
+      if (priorIndex >= 0) lines.splice(priorIndex, 1);
+      p.loot = Number(p.loot || 0) + 200;
+      p.sabotageSuccesses = Number(p.sabotageSuccesses || 0) + 1;
+      lines.push(`🧨 **${rumbleName(p)}** sabotaged **${rumbleName(target)}**! Their Grab was cancelled, and the saboteur gained **200 Loot**.`);
+    } else {
+      p.loot = Number(p.loot || 0) + 25;
+      lines.push(`🧨 **${rumbleName(p)}** sabotaged **${rumbleName(target)}**, but hit the wrong move. +25 Loot for the attempt.`);
+    }
+  }
+
+  // Resolve robberies after all defensive choices are known.
+  for (const p of players) {
+    if (p.action !== "rob") continue;
+    const target = byId[p.targetId];
+    if (!target || target.id === p.id) continue;
+    if (target.action === "guard") {
+      p.loot = Math.max(0, Number(p.loot || 0) - 100);
+      p.robFailed = Number(p.robFailed || 0) + 1;
+      target.blockSuccesses = Number(target.blockSuccesses || 0) + 1;
+      target.loot = Number(target.loot || 0) + 150;
+      lines.push(`🛡️ **${rumbleName(target)}** blocked **${rumbleName(p)}**! The robber lost 100 Loot.`);
+    } else {
+      const amount = Math.min(RUMBLE_ROB_AMOUNT, Number(target.loot || 0));
+      target.loot = Math.max(0, Number(target.loot || 0) - amount);
+      p.loot = Number(p.loot || 0) + amount;
+      if (amount > 0) {
+        p.robSuccesses = Number(p.robSuccesses || 0) + 1;
+        p.robbedTargets = Array.isArray(p.robbedTargets) ? p.robbedTargets : [];
+        if (!p.robbedTargets.includes(target.id)) p.robbedTargets.push(target.id);
+        lines.push(`🦝 **${rumbleName(p)}** robbed **${rumbleName(target)}** for **${amount} Loot**!`);
+      } else {
+        lines.push(`🦝 **${rumbleName(p)}** tried to rob **${rumbleName(target)}**, but they were broke.`);
+      }
+    }
+  }
+
+  // Tell spies what they learned without exposing secret objectives.
+  for (const p of players) {
+    if (p.action !== "spy") continue;
+    const target = byId[p.targetId];
+    if (target) {
+      p.lastPrivateResult = `🔎 You spied on **${rumbleName(target)}**. Their action this round was **${rumbleActionLabel(target.action)}**.`;
+    }
+  }
+
+  for (const p of players) {
+    p.guardActive = false;
+    p.actionCancelled = false;
+  }
+  game.lastResolvedRound = game.round;
+  game.resolving = false;
+  state.rumble = game;
+  await saveGuildState(env, game.guildId, state);
+
+  const chaos = randomEvents[randomInt(0, randomEvents.length - 1)];
+  await sendChannelMessage(env, game.channelId, [
+    `💥 **ROUND ${game.round} RESOLVED!**`,
+    "",
+    ...lines,
+    "",
+    chaos,
+    "",
+    "📊 **Current Standings**",
+    rumbleStandings(game)
+  ].join("\n"));
+
+  // Private spy reports and round result nudges.
+  for (const p of players) {
+    if (p.lastPrivateResult) {
+      const fakeInteraction = null;
+      // The actual spy result is sent through a fresh channel message only if a
+      // DM-capable interaction is available; otherwise it remains in state and
+      // is shown on the next private action menu. This avoids leaking secrets.
+    }
+  }
+
+  if (game.round >= game.maxRounds) {
+    await rumbleFinish(env, game);
+    return true;
+  }
+
+  await rumbleStartRound(env, game);
+  return true;
+}
+
+async function rumbleFinish(env, game) {
+  if (!game || game.status === "ended") return;
+  game.status = "ended";
+  game.phaseEndsAt = 0;
+  const players = rumblePlayers(game);
+  const sorted = players.slice().sort((a, b) => Number(b.loot || 0) - Number(a.loot || 0));
+  const winner = sorted[0];
+  const highest = Number(winner?.loot || 0);
+  const winners = sorted.filter(p => Number(p.loot || 0) === highest);
+  const resultLines = [];
+
+  for (const p of players) {
+    const player = await getPlayer(env, p.id);
+    player.rumbleGames = Number(player.rumbleGames || 0) + 1;
+    player.rumbleRobberies = Number(player.rumbleRobberies || 0) + Number(p.robSuccesses || 0);
+    player.rumbleBlocks = Number(player.rumbleBlocks || 0) + Number(p.blockSuccesses || 0);
+    player.rumbleSpies = Number(player.rumbleSpies || 0) + Number(p.spySuccesses || 0);
+    player.rumbleLayLows = Number(player.rumbleLayLows || 0) + Number(p.layLowCount || 0);
+    player.rumbleSabotages = Number(player.rumbleSabotages || 0) + Number(p.sabotageSuccesses || 0);
+
+    const objective = rumbleObjective(p.objective);
+    let objectiveComplete = false;
+    if (p.objective === "hoarder") objectiveComplete = Number(p.loot || 0) === highest;
+    if (p.objective === "snake") objectiveComplete = Number(p.robSuccesses || 0) >= 3;
+    if (p.objective === "guardian") objectiveComplete = Number(p.blockSuccesses || 0) >= 3;
+    if (p.objective === "spy") objectiveComplete = Number(p.spySuccesses || 0) >= 3;
+    if (p.objective === "potato") objectiveComplete = Number(p.layLowCount || 0) >= 3;
+    if (p.objective === "saboteur") objectiveComplete = Number(p.sabotageSuccesses || 0) >= 2;
+    if (p.objective === "burglar") objectiveComplete = Array.isArray(p.robbedTargets) && p.robbedTargets.length >= 2;
+    if (p.objective === "lootgoblin") objectiveComplete = Number(p.loot || 0) >= 2000;
+    if (objectiveComplete) {
+      p.objectiveComplete = true;
+      player.sparkles = Number(player.sparkles || 0) + RUMBLE_OBJECTIVE_REWARD;
+      resultLines.push(`🎭 <@${p.id}> completed **${objective.name}** for **+${RUMBLE_OBJECTIVE_REWARD} ✨**.`);
+    }
+
+    if (winners.some(w => w.id === p.id)) {
+      player.rumbleWins = Number(player.rumbleWins || 0) + 1;
+      player.sparkles = Number(player.sparkles || 0) + RUMBLE_WIN_REWARD;
+      if (!player.titles?.includes("rumble_first")) unlockOwnedTitle(player, "rumble_first");
+      if (Number(p.robSuccesses || 0) >= 3) unlockOwnedTitle(player, "professional_snake");
+      if (Number(p.blockSuccesses || 0) >= 3) unlockOwnedTitle(player, "trap_goblin");
+      if (Number(p.layLowCount || 0) >= 2) unlockOwnedTitle(player, "suspicious_potato");
+      if (Number(p.sabotageSuccesses || 0) >= 2) unlockOwnedTitle(player, "rumble_saboteur");
+      if (Number(p.loot || 0) >= 2000) unlockOwnedTitle(player, "rumble_hoarder");
+    }
+    if (Number(p.spySuccesses || 0) >= 3) unlockOwnedTitle(player, "pocket_detective");
+    await savePlayer(env, player);
+  }
+
+  const winnerText = winners.length === 1
+    ? `👑 **${rumbleName(winner)} WINS THE RUMBLE!**`
+    : `👑 **IT'S A TIE!** ${winners.map(w => rumbleName(w)).join(" • ")}`;
+
+  await sendChannelMessage(env, game.channelId, [
+    "🦝💥 **RACCOON RUMBLE — FINAL RESULTS**",
+    "",
+    winnerText,
+    `🏆 Winner reward: **+${RUMBLE_WIN_REWARD} ✨** each winner`,
+    "",
+    "📊 **Final Loot**",
+    rumbleStandings(game),
+    "",
+    ...resultLines,
+    "",
+    "💀 The raccoons are already planning the rematch."
+  ].join("\n"));
+
+  const state = await getGuildState(env, game.guildId);
+  if (state.rumble?.id === game.id) {
+    state.rumble = game;
+    await saveGuildState(env, game.guildId, state);
+  }
+}
+
+async function handleRumbleCreate(env, interaction) {
+  if (await checkGamePunishment(env, interaction)) return;
+  if (!interaction.guild_id) return sendText(env, interaction, "❌ Raccoon Rumble is server-only.");
+  const state = await getGuildState(env, interaction.guild_id);
+  if (state.rumble && state.rumble.status !== "ended") return sendText(env, interaction, `❌ A Raccoon Rumble is already running in <#${state.rumble.channelId}>.`);
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const game = makeRumbleGame(interaction.guild_id, interaction.channel_id, user.id);
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  game.players[user.id] = {
+    id: user.id,
+    username: user.username || "",
+    displayName: interaction.member?.nick || user.global_name || user.username || "Werewife",
+    loot: 0,
+    objective: null,
+    submitted: false,
+    action: null,
+    targetId: null,
+    robSuccesses: 0,
+    blockSuccesses: 0,
+    spySuccesses: 0,
+    sabotageSuccesses: 0,
+    robbedTargets: [],
+    layLowCount: 0,
+    lastPrivateResult: ""
+  };
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  return sendText(env, interaction, rumbleLobbyText(game), rumbleLobbyComponents(game));
+}
+
+async function handleRumbleJoin(env, interaction, gameId) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || (gameId && game.id !== gameId) || game.status !== "lobby") return sendText(env, interaction, "❌ That Raccoon Rumble lobby is no longer open.");
+  if (!user) return;
+  if (game.players[user.id]) return sendEphemeralFollowup(env, interaction, "🦝 You're already in this rumble! Your double-click was ignored. 💅");
+  if (rumblePlayerCount(game) >= RUMBLE_MAX_PLAYERS) return sendText(env, interaction, "❌ This Rumble is full. Raccoon Rumble supports **3–6 players**.");
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  game.players[user.id] = {
+    id: user.id,
+    username: user.username || "",
+    displayName: interaction.member?.nick || user.global_name || user.username || "Werewife",
+    loot: 0,
+    objective: null,
+    submitted: false,
+    action: null,
+    targetId: null,
+    robSuccesses: 0,
+    blockSuccesses: 0,
+    spySuccesses: 0,
+    sabotageSuccesses: 0,
+    robbedTargets: [],
+    layLowCount: 0,
+    lastPrivateResult: ""
+  };
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  return sendText(env, interaction, rumbleLobbyText(game), rumbleLobbyComponents(game));
+}
+
+async function handleRumbleLeave(env, interaction, gameId) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || (gameId && game.id !== gameId) || game.status !== "lobby" || !user || !game.players[user.id]) return sendText(env, interaction, "❌ You aren't in an open Rumble lobby.");
+  delete game.players[user.id];
+  if (game.hostId === user.id) game.hostId = rumblePlayers(game)[0]?.id || null;
+  if (!rumblePlayerCount(game)) state.rumble = null;
+  else state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  return state.rumble ? sendText(env, interaction, rumbleLobbyText(game), rumbleLobbyComponents(game)) : sendText(env, interaction, "🚪 You left the Rumble. The empty lobby has been closed.");
+}
+
+async function handleRumbleStart(env, interaction, gameId) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || (gameId && game.id !== gameId) || game.status !== "lobby") return sendText(env, interaction, "❌ That Rumble lobby is no longer available.");
+  if (!user || game.hostId !== user.id) return sendText(env, interaction, "❌ Only the Rumble host can start it.");
+  if (rumblePlayerCount(game) < RUMBLE_MIN_PLAYERS || rumblePlayerCount(game) > RUMBLE_MAX_PLAYERS) return sendText(env, interaction, "❌ Raccoon Rumble needs **3–6 players** to start.");
+
+  const objectives = shuffleArray(RUMBLE_OBJECTIVES.slice());
+  const players = rumblePlayers(game);
+  players.forEach((p, i) => {
+    p.objective = objectives[i].id;
+    p.loot = 0;
+    p.submitted = false;
+    p.action = null;
+    p.targetId = null;
+    p.robbedTargets = [];
+    p.sabotageSuccesses = 0;
+  });
+  game.maxRounds = players.length >= 5 ? RUMBLE_LARGE_GAME_ROUNDS : RUMBLE_ROUNDS;
+  game.status = "playing";
+  game.round = 0;
+  game.lastResolvedRound = 0;
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  await sendText(env, interaction, "🦝💥 **THE RUMBLE IS STARTING!** Check your private action menu.");
+  await rumbleStartRound(env, game);
+}
+
+async function handleRumbleStatus(env, interaction, gameId) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || (gameId && game.id !== gameId)) return sendText(env, interaction, "❌ That Rumble no longer exists.");
+  const me = user && game.players[user.id];
+  return sendText(env, interaction, [
+    "🦝💥 **RACCOON RUMBLE STATUS**",
+    `Status: **${game.status}**`,
+    `Round: **${game.round}/${game.maxRounds}**`,
+    `Players: **${rumblePlayerCount(game)}/${RUMBLE_MAX_PLAYERS}**`,
+    "",
+    rumbleStandings(game),
+    me?.objective ? `\n🔐 Your secret objective: **${rumbleObjective(me.objective).name}** — ${rumbleObjective(me.objective).description}` : ""
+  ].join("\n"));
+}
+
+async function handleRumbleEnd(env, interaction, gameId) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || (gameId && game.id !== gameId) || game.status === "ended") return sendText(env, interaction, "❌ There isn't an active Rumble to end.");
+  if (!user || (user.id !== game.hostId && user.id !== env.OWNER_ID)) return sendText(env, interaction, "❌ Only the Rumble host or bot owner can end it.");
+  game.status = "ended";
+  game.cancelled = true;
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  await sendChannelMessage(env, game.channelId, "🛑 **RACCOON RUMBLE ENDED.** The raccoons have been escorted out.");
+  return sendText(env, interaction, "🛑 Raccoon Rumble ended.");
+}
+
+async function handleRumbleOpen(env, interaction, gameId, round) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env, interaction, "❌ That Rumble is no longer active.");
+  const player = user && game.players[user.id];
+  if (!player) return sendText(env, interaction, "❌ You're not a player in this Rumble.");
+  if (Number(round) !== Number(game.round)) return sendText(env, interaction, "⏰ That action menu is from an older round. Click the current **Open My Actions** button.");
+  if (player.submitted) return sendText(env, interaction, "🔐 **Choice already locked!** Your double-click was ignored. 🦝");
+  const extra = player.lastPrivateResult || "";
+  player.lastPrivateResult = "";
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+  return rumblePrivateMenu(env, interaction, game, player, extra || "Choose one move. Your choice stays secret until everyone locks in.");
+}
+
+async function handleRumbleAction(env, interaction, gameId, round, action, targetId = null) {
+  if (await checkGamePunishment(env, interaction)) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const game = state.rumble;
+  const user = getUserFromInteraction(interaction);
+  if (!game || game.id !== gameId || game.status !== "playing") return sendText(env, interaction, "❌ That Rumble is no longer active.");
+  const player = user && game.players[user.id];
+  if (!player) return sendText(env, interaction, "❌ You're not a player in this Rumble.");
+  if (Number(round) !== Number(game.round)) return sendText(env, interaction, "⏰ That action button is from an older round. Open the current round menu instead.");
+  if (player.submitted) return sendEphemeralFollowup(env, interaction, "🔐 **Choice already locked!** Your double-click was ignored. The raccoons have your first choice. 🦝");
+  if (!["grab", "guard", "laylow", "rob", "spy", "sabotage"].includes(action)) return sendText(env, interaction, "❌ Unknown Rumble action.");
+  if ((action === "rob" || action === "spy" || action === "sabotage") && (!targetId || !game.players[targetId] || targetId === user.id)) return sendText(env, interaction, "❌ Choose one of the other players.");
+
+  player.submitted = true;
+  player.action = action;
+  player.targetId = targetId || null;
+  player.roundNumber = game.round;
+  state.rumble = game;
+  await saveGuildState(env, interaction.guild_id, state);
+
+  const submittedCount = rumblePlayers(game).filter(p => p.submitted).length;
+  if (submittedCount < RUMBLE_MAX_PLAYERS) {
+    const extra = `🔒 **Locked in:** ${rumbleActionLabel(action)}${targetId ? ` → <@${targetId}>` : ""}\n\nWaiting for **${RUMBLE_MAX_PLAYERS - submittedCount}** other player(s)...`;
+    return rumblePrivateMenu(env, interaction, game, player, extra);
+  }
+
+  await sendText(env, interaction, `🔒 **${rumbleActionLabel(action)} locked!** Everyone has chosen. Resolving the round...`);
+  await rumbleResolveRound(env, game);
+}
+
+async function handleRumbleCommand(env, interaction) {
+  const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
+  if (sub === "create") return handleRumbleCreate(env, interaction);
+  if (sub === "join") return handleRumbleJoin(env, interaction, null);
+  if (sub === "leave") return handleRumbleLeave(env, interaction, null);
+  if (sub === "start") return handleRumbleStart(env, interaction, null);
+  if (sub === "status") return handleRumbleStatus(env, interaction, null);
+  if (sub === "end") return handleRumbleEnd(env, interaction, null);
+  return sendText(env, interaction, "❌ Unknown Rumble action.");
+}
+
 async function handleCommand(
   env,
   interaction
@@ -23230,6 +23881,11 @@ async function handleCommand(
 
   if (name === "games") {
     await handleGamesMenu(env, interaction);
+    return;
+  }
+
+  if (name === "rumble") {
+    await handleRumbleCommand(env, interaction);
     return;
   }
 
@@ -25542,6 +26198,18 @@ const COMMANDS = [
     description: "Open the Werewives games menu"
   },
   {
+    name: "rumble",
+    description: "Play Raccoon Rumble — 3–6 players",
+    options: [
+      { type: 1, name: "create", description: "Create a Raccoon Rumble lobby" },
+      { type: 1, name: "join", description: "Join the active Raccoon Rumble lobby" },
+      { type: 1, name: "leave", description: "Leave the active Raccoon Rumble lobby" },
+      { type: 1, name: "start", description: "Start Raccoon Rumble (host only)" },
+      { type: 1, name: "status", description: "View the active Raccoon Rumble" },
+      { type: 1, name: "end", description: "End the active Raccoon Rumble (host only)" }
+    ]
+  },
+  {
     name: "experiment",
     description: "Play The Experiment — social puzzle chaos",
     options: [
@@ -26518,7 +27186,9 @@ export default {
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
     const isNewsComponent = interaction.type === 3 && customId.startsWith("news:ok:");
+    const isRumbleCommand = interaction.type === 2 && interaction.data?.name === "rumble";
     const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
+    const isRumbleComponent = interaction.type === 3 && customId.startsWith("rumble:");
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
     const isBattleComponent = interaction.type === 3 && (customId.startsWith("battle:") || customId.startsWith("battleitem:") || customId.startsWith("bshop:"));
@@ -26697,6 +27367,15 @@ export default {
       } else if (isIslandCommand) {
         const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
         ephemeral = ["rules", "status"].includes(sub);
+      } else if (isRumbleCommand) {
+        const sub = interaction.data?.options?.find(option => option.type === 1)?.name || "status";
+        ephemeral = ["join", "leave", "start", "status", "end"].includes(sub);
+        if (sub === "create") ephemeral = false;
+      } else if (isRumbleComponent) {
+        const action = String(interaction.data.custom_id).split(":")[1];
+        // Lobby buttons update the public lobby; choices/status remain private.
+        if (["join", "leave", "start"].includes(action)) update = true;
+        else ephemeral = true;
       } else if (isExperimentComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
         if (action === "vote" || action === "clue" || action === "status") ephemeral = true;
@@ -26803,6 +27482,37 @@ export default {
   },
 
 
+ /* =========================================================
+   RACCOON RUMBLE TIMER
+========================================================= */
+
+async function processRumbleTimers(env) {
+  const rawGuilds = await env.TREE_DATA.list({ prefix: "guild:" });
+  for (const key of rawGuilds.keys || []) {
+    const guildId = String(key.name || "").slice(6);
+    if (!guildId) continue;
+    try {
+      const state = await getGuildState(env, guildId);
+      const game = state.rumble;
+      if (!game || game.status !== "playing" || !Number(game.phaseEndsAt || 0) || Date.now() < Number(game.phaseEndsAt)) continue;
+      // Missing choices become Lay Low. This makes abandoned phones harmless
+      // and prevents a Rumble from hanging forever.
+      for (const p of rumblePlayers(game)) {
+        if (!p.submitted) {
+          p.submitted = true;
+          p.action = "laylow";
+          p.targetId = null;
+          p.lateAutoChoice = true;
+        }
+      }
+      await saveGuildState(env, guildId, state);
+      await rumbleResolveRound(env, game);
+    } catch (error) {
+      console.error(`Raccoon Rumble timer failed for guild ${guildId}:`, error);
+    }
+  }
+}
+
  /* =======================================================
    SCHEDULED TASKS
 
@@ -26825,6 +27535,9 @@ export default {
     ctx.waitUntil(
       Promise.all([
         processHeistTimers(
+          env
+        ),
+        processRumbleTimers(
           env
         ),
         processChaosIslandTimers(
