@@ -3679,7 +3679,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
   else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
   else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
-  else if(effectId==="black_ice") baseY+=Math.round(Math.sin(t*0.9)*0.8);
+  else if(effectId==="black_ice") baseY+=Math.round(Math.sin(t*0.35)*0.25);
 
   for(const ch of str){
     if(ch===" "){px+=3*drawScale;charIndex++;continue;}
@@ -3745,6 +3745,15 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
       xx+=Math.round(Math.sin(t+charIndex*0.35));
       color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
+    } else if(effectId==="black_ice"){
+      const sweep=(t*0.42 + charIndex/Math.max(1,str.length))%1;
+      const distance=Math.abs(sweep-0.5);
+      const glint=Math.max(0,1-distance*4.5);
+      if(glint>0.15) color=[255,255,255];
+      else if(charIndex%3===0) color=[225,249,255];
+      else if(charIndex%3===1) color=[116,205,239];
+      else color=[47,103,143];
+      yy+=Math.round(Math.sin(t*0.45+charIndex*0.18)*0.45);
     }
 
     const rows=BITMAP_FONT[ch]||BITMAP_FONT["?"];
@@ -3774,6 +3783,40 @@ function profileRainbowBand(frame,x,y,radius,thickness,c,phase,side=1){
       const py=Math.round(y+Math.sin(a)*rr);
       profileFill(frame,px,py,Math.max(2,thickness),Math.max(2,thickness),col[0],col[1],col[2],245);
     }
+  }
+}
+function profileIceShard(frame,x,y,s,c,a=220,angle=0){
+  const len=Math.max(4,s*2.4), w=Math.max(1,Math.round(s*0.45));
+  const dx=Math.cos(angle)*len, dy=Math.sin(angle)*len;
+  const px=Math.cos(angle+Math.PI/2)*w, py=Math.sin(angle+Math.PI/2)*w;
+  const p1=[Math.round(x+px),Math.round(y+py)];
+  const p2=[Math.round(x-px),Math.round(y-py)];
+  const tip=[Math.round(x+dx),Math.round(y+dy)];
+  profilePixelLine(frame,p1[0],p1[1],tip[0],tip[1],Math.max(1,w),c[0],c[1],c[2],a);
+  profilePixelLine(frame,p2[0],p2[1],tip[0],tip[1],Math.max(1,w),c[0],c[1],c[2],a);
+  profilePixelLine(frame,p1[0],p1[1],p2[0],p2[1],1,255,255,255,Math.min(255,a+20));
+}
+function profileIceCrown(frame,x,y,s,c,phase){
+  const w=Math.max(10,s*4), h=Math.max(8,s*3);
+  const pts=[
+    [x-w,y+h],[x-Math.round(w*.62),y-Math.round(h*.45)],
+    [x-Math.round(w*.2),y+Math.round(h*.15)],[x,y-h],
+    [x+Math.round(w*.2),y+Math.round(h*.15)],
+    [x+Math.round(w*.62),y-Math.round(h*.45)],[x+w,y+h]
+  ];
+  for(let i=0;i<pts.length-1;i++) profilePixelLine(frame,pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],2,c[0],c[1],c[2],220);
+  profilePixelLine(frame,x-w,y+h,x+w,y+h,2,245,253,255,230);
+  const glint=Math.round((Math.sin(phase*Math.PI*2)+1)*0.5*pts.length);
+  if(glint>0&&glint<pts.length) profileStar(frame,pts[glint][0],pts[glint][1],2,[255,255,255],235);
+}
+function profileIceMist(frame,x,y,w,c,phase,flip=1){
+  const pts=18; let px=x,py=y;
+  for(let i=0;i<pts;i++){
+    const t=i/(pts-1);
+    const nx=x+flip*t*w;
+    const ny=y+Math.sin((phase+t*.9)*Math.PI*2)*4+Math.sin(t*Math.PI)*5;
+    profilePixelLine(frame,px,py,nx,ny,Math.max(1,Math.round(2-t)),c[0],c[1],c[2],Math.round(150-75*t));
+    px=nx; py=ny;
   }
 }
 function drawProfileEffectParticles(frame,effectId,phase){
@@ -3871,6 +3914,29 @@ function drawProfileEffectParticles(frame,effectId,phase){
         else profileStar(frame,Math.round(xx),Math.round(yy),2+(i%2),[255,215,70],220);
         if(i%2===0) profileDiamond(frame,Math.round(xx+5),Math.round(yy-4),2,[255,245,170],180);
       });
+      break;
+    }
+    case "black_ice": {
+      const icy=[[245,253,255],[185,239,255],[95,195,235],[45,86,120]];
+      profileIceCrown(frame,548,135,5,icy[2],phase);
+      const shards=[
+        [350,139,7,-1.9,0.00],[390,132,5,-1.2,.13],[430,139,6,-1.7,.25],
+        [675,139,6,-1.4,.41],[715,132,5,-1.9,.56],[744,144,7,-1.25,.72],
+        [350,228,6,1.9,.18],[392,232,5,1.35,.34],[704,232,6,1.75,.61],[744,226,7,1.25,.82]
+      ];
+      shards.forEach(([x,y,s,a,o],i)=>{
+        const drift=Math.sin(p*0.7+o*8)*4;
+        const drop=Math.cos(p*0.55+o*7)*5;
+        profileIceShard(frame,Math.round(x+drift),Math.round(y+drop),s,icy[i%icy.length],205,a);
+        if(i%2===0) profileStar(frame,Math.round(x+drift+4),Math.round(y+drop-5),2,[255,255,255],190);
+      });
+      profileIceMist(frame,350,218,62,icy[1],phase,1);
+      profileIceMist(frame,746,146,62,icy[2],phase,-1);
+      for(let i=0;i<7;i++){
+        const x=390+i*48+Math.sin(p*0.55+i)*7;
+        const y=142+Math.sin(p*0.75+i*1.7)*15;
+        profileSnowflake(frame,Math.round(x),Math.round(y),2+(i%2),icy[(i+1)%icy.length],185);
+      }
       break;
     }
     case "spooky": {
