@@ -27794,80 +27794,84 @@ export default {
       }
     }
 
-    // BADGE COMPONENTS: Discord must receive the acknowledgement as the
-    // HTTP response to THIS incoming interaction request. Do not POST a
-    // second callback request to Discord from inside the Worker; doing that
-    // can leave the client spinner alive even though the callback endpoint
-    // was contacted. Return type 5 immediately, then finish the private menu
-    // with the interaction webhook in waitUntil().
+    // BADGE COMPONENTS: handle these BEFORE the generic interaction middleware.
+    // Badge menus are private. The initial response is returned directly to
+    // Discord; there is no defer/waitUntil/edit-original cycle here.
     if (isBadgeComponent) {
-      ctx.waitUntil((async () => {
-        try {
-          const user = getUserFromInteraction(interaction);
-          if (!user) throw new Error("Could not identify the Discord user.");
+      const user = getUserFromInteraction(interaction);
+      if (!user) {
+        return new Response(JSON.stringify({
+          type: 4,
+          data: { content: "❌ I couldn't identify you.", flags: 64 }
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
 
-          const appId = interaction.application_id || env.CLIENT_ID;
-          let data;
+      const jsonResponse = (data) => new Response(JSON.stringify({ type: 4, data: { ...data, flags: 64 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
 
-          if (customId.startsWith("profile_badges:")) {
-            const parts = customId.split(":");
-            const targetId = parts[1] || "";
-            const page = Number(parts[2] || 0);
-            if (user.id !== targetId) {
-              data = { content: "❌ You can only manage badges on your own profile.", components: [] };
-            } else {
-              const payload = await buildProfileBadgesPayload(env, user.id, page);
-              data = { content: payload.content, components: payload.components };
-            }
-          } else if (customId.startsWith("equip_badge:")) {
-            const badgeId = customId.slice("equip_badge:".length);
-            const content = await toggleProfileBadgeData(env, user.id, badgeId);
-            data = { content, components: [] };
-          } else {
-            const content = await unequipAllProfileBadgesData(env, user.id);
-            data = { content, components: [] };
+      const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error("badge operation timeout")), ms));
+
+      try {
+        if (customId.startsWith("profile_badges:")) {
+          const parts = customId.split(":");
+          const targetId = parts[1] || "";
+          const page = Number(parts[2] || 0);
+          if (user.id !== targetId) {
+            return jsonResponse({ content: "❌ You can only manage badges on your own profile.", components: [] });
           }
 
-          const edit = await fetch(
-            `https://discord.com/api/v10/webhooks/${appId}/${interaction.token}/messages/@original`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(data)
+          try {
+            const payload = await Promise.race([
+              buildProfileBadgesPayload(env, user.id, page),
+              timeout(2200)
+            ]);
+            return jsonResponse({ content: payload.content, components: payload.components });
+          } catch (loadError) {
+            console.warn("Badge menu fell back to fast response:", loadError?.message || loadError);
+            const badgeIds = Object.keys(PROFILE_BADGES);
+            const perPage = 8;
+            const totalPages = Math.max(1, Math.ceil(badgeIds.length / perPage));
+            const safePage = Math.min(Math.max(Number(page) || 0, 0), totalPages - 1);
+            const pageIds = badgeIds.slice(safePage * perPage, safePage * perPage + perPage);
+            const rows = [];
+            for (let i = 0; i < pageIds.length; i += 2) {
+              const a = pageIds[i], b = pageIds[i + 1];
+              const buttons = [button(`🏅 ${PROFILE_BADGES[a].name}`, `equip_badge:${a}`, 2)];
+              if (b) buttons.push(button(`🏅 ${PROFILE_BADGES[b].name}`, `equip_badge:${b}`, 2));
+              rows.push(row(...buttons));
             }
-          );
-          if (!edit.ok) {
-            const detail = await edit.text();
-            console.error("Badge deferred edit failed:", edit.status, detail);
-            // A follow-up gives the user a visible result even if editing the
-            // deferred original fails for an unexpected Discord/API reason.
-            await fetch(`https://discord.com/api/v10/webhooks/${appId}/${interaction.token}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...data, flags: 64 })
-            }).catch(()=>null);
+            const nav = [];
+            if (safePage > 0) nav.push(button("⬅️ Previous", `profile_badges:${user.id}:${safePage - 1}`, 2));
+            if (safePage < totalPages - 1) nav.push(button("Next ➡️", `profile_badges:${user.id}:${safePage + 1}`, 2));
+            if (nav.length) rows.push(row(...nav));
+            rows.push(row(button("❌ Remove All Badges", "unequip_badges", 2), button("⬅️ Back to Profile", `profile_back:${user.id}`, 2)));
+            return jsonResponse({
+              content: `🏅 **PROFILE BADGES**\n\nTap a badge to check/equip it. Locked badges will tell you what you need to unlock them.\n\nPage **${safePage + 1}/${totalPages}**`,
+              components: rows
+            });
           }
-        } catch (error) {
-          console.error("Badge interaction error:", error);
-          const appId = interaction.application_id || env.CLIENT_ID;
-          await fetch(
-            `https://discord.com/api/v10/webhooks/${appId}/${interaction.token}/messages/@original`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
-                components: []
-              })
-            }
-          ).catch(()=>null);
         }
-      })());
 
-      return new Response(
-        JSON.stringify({ type: 5, data: { flags: 64 } }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
+        if (customId.startsWith("equip_badge:")) {
+          const badgeId = customId.slice("equip_badge:".length);
+          const content = await Promise.race([
+            toggleProfileBadgeData(env, user.id, badgeId),
+            timeout(2200)
+          ]);
+          return jsonResponse({ content });
+        }
+
+        const content = await Promise.race([
+          unequipAllProfileBadgesData(env, user.id),
+          timeout(2200)
+        ]);
+        return jsonResponse({ content });
+      } catch (error) {
+        console.error("Badge direct response error:", error);
+        return jsonResponse({ content: "❌ Couldn't complete that badge action in time. Please tap the badge button again.", components: [] });
+      }
     }
 
     // Titles must return the actual menu in the initial Discord response.
