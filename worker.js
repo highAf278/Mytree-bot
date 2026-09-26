@@ -4936,7 +4936,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   profileSmoothLine(frame,cx-r+3,cy-r+2,cx+r-3,cy-r+2,1,silver,150);
   profileSmoothLine(frame,cx-r+2,cy-r+3,cx-r+2,cy+r-3,1,silver,100);
 
-  const AW=100, AH=100, S=5;
+  // Render the emblem on a real 500x500 supersampled canvas.
+  // V6 accidentally allocated only 100x100 while scaling every drawing coordinate by 5,
+  // so almost all artwork was written outside the canvas and only the black fill survived.
+  const AW=500, AH=500, S=5, DS=25;
   const art={width:AW,height:AH,data:new Uint8ClampedArray(AW*AH*4)};
   for(let i=0;i<art.data.length;i+=4){art.data[i]=black[0];art.data[i+1]=black[1];art.data[i+2]=black[2];art.data[i+3]=255;}
   const X=v=>v*S, C=(v)=>v*S;
@@ -5062,14 +5065,14 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     L(31,27,43,22,1.5,white,190); L(57,22,69,27,1.5,white,190); O(74,73,3,hi,220); O(25,72,2,white,180);
   }
 
-  // Four-pixel averaging downsample. This is the important part: curves and
-  // diagonals are calculated at 5x resolution before Discord ever sees them.
+  // Average the full 500x500 artwork down to the 20x20 enamel center.
+  // 25x25 source pixels contribute to each final pixel, preserving curves and facets.
   const outW=20,outH=20;
   const ox=Math.round(cx-outW/2), oy=Math.round(cy-outH/2);
   for(let py=0;py<outH;py++) for(let px=0;px<outW;px++){
     let sr=0,sg=0,sb=0,sa=0,n=0;
-    for(let yy=0;yy<S;yy++) for(let xx=0;xx<S;xx++){
-      const ax=px*S+xx, ay=py*S+yy, o=(ay*AW+ax)*4;
+    for(let yy=0;yy<DS;yy++) for(let xx=0;xx<DS;xx++){
+      const ax=px*DS+xx, ay=py*DS+yy, o=(ay*AW+ax)*4;
       sr+=art.data[o]; sg+=art.data[o+1]; sb+=art.data[o+2]; sa+=art.data[o+3]; n++;
     }
     const o=((oy+py)*frame.width+(ox+px))*4;
