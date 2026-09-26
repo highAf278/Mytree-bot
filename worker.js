@@ -27715,6 +27715,14 @@ export default {
         customId.startsWith("inventory:")
       );
 
+    const isBadgeComponent =
+      interaction.type === 3 &&
+      (
+        customId.startsWith("profile_badges:") ||
+        customId.startsWith("equip_badge:") ||
+        customId === "unequip_badges"
+      );
+
     const isCustomizeComponent =
       interaction.type === 3 &&
       (
@@ -27905,6 +27913,12 @@ export default {
         // Tree actions should update the existing /tree message rather than
         // showing a long-running ephemeral "Bot is thinking..." state.
         update = true;
+      } else if (isBadgeComponent) {
+        // Badge management is PRIVATE. Use a deferred ephemeral response
+        // instead of a type-6 update, which would edit the public /profile.
+        // sendText() will then edit this private original response.
+        ephemeral = true;
+        update = false;
       } else if (isCustomizeComponent) {
         // Customize menus and equip actions can perform KV reads/writes.
         // Acknowledge immediately so Discord does not leave the button
