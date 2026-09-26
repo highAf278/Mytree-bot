@@ -27720,9 +27720,6 @@ export default {
       (
         customId === "customize" ||
         customId.startsWith("profile_frames:") ||
-        customId.startsWith("profile_badges:") ||
-        customId.startsWith("equip_badge:") ||
-        customId === "unequip_badges" ||
         customId.startsWith("profile_back:") ||
         customId.startsWith("equip_frame_") ||
         customId === "custom_effects" ||
