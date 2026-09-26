@@ -950,7 +950,8 @@ const NAME_EFFECTS = {
   shadow: { name: "🖤 Shadow", requirement: "Win 50 Heist games." },
   frostbite: { name: "❄️ Frostbite", requirement: "Win 25 Color Chaos games." },
   golden: { name: "💛✨ Golden", requirement: "Reach 100,000 sparkles." },
-  spooky: { name: "👻 Spooky", requirement: "Own the complete Halloween set." }
+  spooky: { name: "👻 Spooky", requirement: "Own the complete Halloween set." },
+  black_ice: { name: "🧊 Black Ice", requirement: "Own the complete Black Ice limited set." }
 };
 
 function unlockOwnedTitle(player, id) {
@@ -1009,7 +1010,8 @@ function unlockNameEffects(player) {
     shadow: Number(player.heistWins || 0) >= 50,
     frostbite: Number(player.pastelWins || 0) >= 25,
     golden: Number(player.sparkles || 0) >= 100000,
-    spooky: halloweenComplete
+    spooky: halloweenComplete,
+    black_ice: ["black_ice_tree", "black_ice_background", "black_ice_decoration", "black_ice_snow_animated_effect"].every(id => owned.includes(id))
   };
   for (const [id, ok] of Object.entries(checks)) if (ok && !player.unlockedNameEffects.includes(id)) player.unlockedNameEffects.push(id);
   if (checks.firework) unlockOwnedTitle(player, "firework_fiend");
@@ -1021,6 +1023,7 @@ function unlockNameEffects(player) {
   if (checks.frostbite) unlockOwnedTitle(player, "frostbite");
   if (checks.golden) unlockOwnedTitle(player, "golden_legend");
   if (checks.spooky) unlockOwnedTitle(player, "haunted");
+  if (checks.black_ice) unlockOwnedTitle(player, "frostborn");
   if (player.equippedNameEffect && !player.unlockedNameEffects.includes(player.equippedNameEffect)) player.equippedNameEffect = "";
 }
 
@@ -1054,7 +1057,8 @@ function nameEffectText(effectId, titleText, phase = 0) {
     shadow:{colors:["#eeeeee","#777777","#222222"],shadow:"0 0 3px #fff,0 0 12px rgba(0,0,0,.95)"},
     frostbite:{colors:["#ffffff","#b9efff","#72cfff","#dff9ff"],shadow:"0 0 7px #fff,0 0 21px rgba(80,205,255,.95)"},
     golden:{colors:["#fff7b0","#ffd95a","#fff2a0","#d99a16"],shadow:"0 0 4px #fff,0 0 10px #ffe477,0 0 22px rgba(255,190,35,.95),0 0 34px rgba(255,220,100,.7)"},
-    spooky:{colors:["#ffffff","#d49cff","#ff9b45","#9d6bff"],shadow:"0 0 5px #fff,0 0 17px rgba(150,80,255,.9)"}
+    spooky:{colors:["#ffffff","#d49cff","#ff9b45","#9d6bff"],shadow:"0 0 5px #fff,0 0 17px rgba(150,80,255,.9)"},
+    black_ice:{colors:["#f8fdff","#c9f3ff","#6ec9ee","#17344f"],shadow:"0 0 6px #ffffff,0 0 14px rgba(95,210,255,.95),0 0 24px rgba(20,80,125,.8)"}
   };
   const cfg=configs[effectId]||{colors:["#ffffff"],shadow:"0 0 12px rgba(255,255,255,.65)"};
   const chars=[...text].map((ch,i)=>{
@@ -1085,7 +1089,7 @@ function profileCardHTML(player, phase = 0) {
     inferno:["✦","·","✦","·"], green_glow:["✦","·","✦","·"], candy_rush:["✦","·","✧","✦"], cosmic:["✦","✧","·","★"],
     firework:["✦","·","✧","★"], royal_blood:["✦","·","★","✦"], enchanted:["✧","✦","·","★"],
     royal_purple:["✦","·","✧","★"], butterflies:["✧","·","✦","✧"], shadow:["·","✦","·","★"],
-    frostbite:["✧","·","✦","✧"], golden:["✦","·","★","✦"], spooky:["✦","·","✧","★"]
+    frostbite:["✧","·","✦","✧"], golden:["✦","·","★","✦"], spooky:["✦","·","✧","★"], black_ice:["❄","✦","·","❄"]
   };
   const particleSet=particleMap[effectId]||[];
   const particles=particleSet.length?particleSet.map((symbol,i)=>`<span class="particle p${i}" style="left:${18+i*24}%;top:${18+(i%2)*58}%">${symbol}</span>`).join(""):"";
@@ -3400,7 +3404,7 @@ function drawBitmapText(frame,text,x,y,scale=3,rgb=[42,32,48],maxWidth=null){
 }
 function profileTextWidth(text,scale=3){let n=0;for(const ch of profileSafeText(text).toUpperCase())n+=ch===" "?3*scale:6*scale;return Math.max(0,n-scale);}
 function profileEffectColor(id){
-  const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
+  const map={starlight:[255,255,255],inferno:[255,139,50],firework:[255,122,200],royal_blood:[255,74,95],enchanted:[194,140,255],royal_purple:[142,77,255],butterflies:[255,183,238],shadow:[238,238,238],frostbite:[114,207,255],golden:[255,217,90],spooky:[212,156,255],black_ice:[110,201,238],petals:[245,139,198],cosmic:[122,134,239],green_glow:[84,220,99],candy_rush:[255,105,180]};return map[id]||[42,32,48];
 }
 function profileEffectColors(id){
   return {
@@ -3419,7 +3423,8 @@ function profileEffectColors(id){
     shadow:[[245,245,245],[145,145,155],[65,65,75]],
     frostbite:[[255,255,255],[190,240,255],[105,210,255],[220,250,255]],
     golden:[[255,255,230],[255,220,85],[255,245,150],[220,165,35]],
-    spooky:[[255,255,255],[215,165,255],[255,160,90],[155,110,255]]
+    spooky:[[255,255,255],[215,165,255],[255,160,90],[155,110,255]],
+    black_ice:[[245,253,255],[185,239,255],[95,195,235],[45,86,120]]
   }[id] || [profileEffectColor(id)];
 }
 function profileEffectColorAt(id,index,phase){
@@ -3674,6 +3679,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   else if(effectId==="frostbite") baseY+=Math.round(Math.sin(t)*1);
   else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
   else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
+  else if(effectId==="black_ice") baseY+=Math.round(Math.sin(t*0.9)*0.8);
 
   for(const ch of str){
     if(ch===" "){px+=3*drawScale;charIndex++;continue;}
@@ -7915,6 +7921,12 @@ async function buyItem(
   player.shopPurchases =
     Number(player.shopPurchases || 0) + 1;
 
+  // Unlock collector rewards immediately when this purchase completes a set.
+  const hadFrostborn = Array.isArray(player.titles) && player.titles.includes("frostborn");
+  const hadBlackIceEffect = Array.isArray(player.unlockedNameEffects) && player.unlockedNameEffects.includes("black_ice");
+  unlockNameEffects(player);
+  const unlockedBlackIceCollector = !hadFrostborn && player.titles.includes("frostborn") && !hadBlackIceEffect && player.unlockedNameEffects.includes("black_ice");
+
   if (
     itemId === "purr_princess_effect" ||
     itemId === "kitty_tree" ||
@@ -7930,10 +7942,14 @@ async function buyItem(
     player
   );
 
+  const collectorMessage = unlockedBlackIceCollector
+    ? `\n\n🧊❄️ **BLACK ICE COMPLETE!** You collected the entire Black Ice Limited set!\n🏷️ **Title Unlocked:** Frostborn\n✨ **Name Effect Unlocked:** Black Ice`
+    : "";
+
   await sendText(
     env,
     interaction,
-    `🎉 You bought **${item.name}** for **${item.price} sparkles**!\n\nGo to **Customize** to equip it.`
+    `🎉 You bought **${item.name}** for **${item.price} sparkles**!${collectorMessage}\n\nGo to **Customize** to equip it.`
   );
 }
 
@@ -8144,6 +8160,7 @@ async function showCustomBackgrounds(
     ["dragon_realm_background", "🐉 Dragon Realm", "dragon_realm"],
     ["inferno_king_background", "🔥 Inferno King", "inferno_king"],
     ["thunder_god_background", "⚡ Thunder God", "thunder_god"],
+    ["black_ice_background", "🧊 Black Ice", "black_ice"],
     ["werewives_background", "🐺🌙 Werewives", "werewives"],
     ["golden_pickle_background", "🥒💛 Golden Pickle", "golden_pickle"],
     ["midnight_rider_background", "🏍️🌙 Midnight Rider", "midnight_rider"]
@@ -8227,6 +8244,7 @@ async function showCustomTrees(
     ["dragon_realm", "🐉 Dragon Realm", "dragon_realm_tree"],
     ["inferno_king", "🔥 Inferno King", "inferno_king_tree"],
     ["thunder_god", "⚡ Thunder God", "thunder_god_tree"],
+    ["black_ice", "🧊 Black Ice", "black_ice_tree"],
     ["werewives", "🐺🌙 Werewives", "werewives_tree"],
     ["golden_pickle", "🥒✨ Golden Pickle", "golden_pickle_tree"],
     ["midnight_rider", "🏍️🌙 Midnight Rider", "midnight_rider_tree"]
@@ -8325,6 +8343,7 @@ async function showCustomEffects(
   if (player.inventory.includes("kitty_parade_animated_effect")) buttons.push(button("🐱 Kitty Parade", "equip_effect_kitty_parade_animated", player.equipped.effect === "kitty_parade_animated" ? 3 : 2));
   if (player.inventory.includes("electric_storm_animated_effect")) buttons.push(button("⚡ Electric Storm", "equip_effect_electric_storm_animated", player.equipped.effect === "electric_storm_animated" ? 3 : 2));
   if (player.inventory.includes("experimental_effect_animated_effect")) buttons.push(button("🧪 Experimental Effect", "equip_effect_experimental_effect_animated", player.equipped.effect === "experimental_effect_animated" ? 3 : 2));
+  if (player.inventory.includes("black_ice_snow_animated_effect")) buttons.push(button("❄️ Black Ice Snow", "equip_effect_black_ice_snow_animated", player.equipped.effect === "black_ice_snow_animated" ? 3 : 2));
   if (player.inventory.includes("beans_effect")) buttons.push(button("🫘💥 Bean Burst", "equip_effect_beans", player.equipped.effect === "beans" ? 3 : 2));
   if (player.inventory.includes("halloween_effect")) buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
 
@@ -8447,6 +8466,7 @@ async function showCustomDecorations(
   if (player.inventory.includes("birthday_decoration")) buttons.push(button("🎁 Spooky Birthday", "equip_decoration_birthday", player.equipped.decoration === "birthday" ? 3 : 2));
 
   const newDecorations = [
+    ["black_ice_decoration", "🐺 Black Ice Wolf", "black_ice_wolf"],
     ["raccoon_thief_decoration", "🦝 Raccoon Thief", "raccoon_thief"],
     ["frank_frog_decoration", "🐸 Frank the Frog", "frank_frog"],
     ["duck_hat_boots_decoration", "🦆 Duck With Hat & Boots", "duck_hat_boots"],
@@ -8603,6 +8623,9 @@ async function equipTheme(
     thunder_god:
       player.inventory.includes("thunder_god_background"),
 
+    black_ice:
+      player.inventory.includes("black_ice_background"),
+
     werewives:
       player.inventory.includes(
         "werewives_background"
@@ -8753,6 +8776,9 @@ async function equipTree(
     thunder_god:
       player.inventory.includes("thunder_god_tree"),
 
+    black_ice:
+      player.inventory.includes("black_ice_tree"),
+
     werewives:
       player.inventory.includes(
         "werewives_tree"
@@ -8860,6 +8886,7 @@ async function equipEffect(
       kitty_parade_animated: "kitty_parade_animated_effect",
       electric_storm_animated: "electric_storm_animated_effect",
       experimental_effect_animated: "experimental_effect_animated_effect",
+      black_ice_snow_animated: "black_ice_snow_animated_effect",
       beans: "beans_effect"
     }[effect];
 
@@ -8944,7 +8971,10 @@ async function equipDecoration(
         "eggward_decoration",
 
       hedgy:
-        "hedgy_decoration"
+        "hedgy_decoration",
+
+      black_ice_wolf:
+        "black_ice_decoration"
     }[decoration];
 
     if (
@@ -18444,6 +18474,7 @@ const SOLO_TITLES = {
   frostbite: { name: "Frostbite", description: "Win 25 Color Chaos games." },
   golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
+  frostborn: { name: "Frostborn", description: "Own the complete Black Ice limited set." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
   court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
   court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" },
