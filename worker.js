@@ -120,6 +120,9 @@ const IMAGES = {
   birthdayBackground: "IMG_7500.png",
   birthdayEffect: "IMG_7497.png",
   birthdayDecoration: "IMG_7499.png",
+  blackIceTree: "IMG_7897.png",
+  blackIceBackground: "IMG_7898.png",
+  blackIceDecoration: "IMG_7899.png",
   eggwardDecoration: "IMG_7663.png",
   hedgyDecoration: "IMG_7666.png"
 };
@@ -372,6 +375,10 @@ const SHOP_ITEMS = {
   thunder_god_tree: { name: "⚡ Thunder God Tree", price: 50000, type: "tree", value: "thunder_god", limited: true },
   thunder_god_background: { name: "⚡ Thunder God Background", price: 20000, type: "background", value: "thunder_god", limited: true },
   thunder_god_effect: { name: "✨ Thunder God Effect", price: 30000, type: "effect", value: "thunder_god", limited: true },
+  black_ice_tree: { name: "🧊 Black Ice Tree", price: 100000, type: "tree", value: "black_ice", limited: true },
+  black_ice_background: { name: "🧊 Black Ice Background", price: 100000, type: "background", value: "black_ice", limited: true },
+  black_ice_decoration: { name: "🐺 Black Ice Wolf", price: 100000, type: "decoration", value: "black_ice_wolf", limited: true },
+  black_ice_snow_animated_effect: { name: "❄️ Black Ice Snow", price: 100000, type: "effect", value: "black_ice_snow_animated", limited: true },
   candy_effect: {
     name: "🍭 Candy Rush Effect",
     price: 1000,
@@ -981,6 +988,7 @@ function unlockNameEffects(player) {
     ["dragon_realm", ["dragon_realm_tree", "dragon_realm_background", "dragon_realm_effect"]],
     ["inferno_king", ["inferno_king_tree", "inferno_king_background", "inferno_king_effect"]],
     ["thunder_god", ["thunder_god_tree", "thunder_god_background", "thunder_god_effect"]],
+    ["black_ice", ["black_ice_tree", "black_ice_background", "black_ice_decoration", "black_ice_snow_animated_effect"]],
     ["halloween", ["halloween_tree", "halloween_background", "halloween_effect"]]
   ];
   const completedLimitedSets = limitedSets.filter(([,ids]) => ids.every(id => owned.includes(id))).length;
@@ -2923,6 +2931,9 @@ function getBackgroundImage(player) {
     case "thunder_god":
       return IMAGES.thunderGodBackground;
 
+    case "black_ice":
+      return IMAGES.blackIceBackground;
+
     case "werewives":
       return IMAGES.werewivesBackground;
 
@@ -3004,6 +3015,9 @@ function getTreeImage(player) {
     case "thunder_god":
       return IMAGES.thunderGodTree;
 
+    case "black_ice":
+      return IMAGES.blackIceTree;
+
     case "werewives":
       return IMAGES.werewivesTree;
 
@@ -3064,6 +3078,9 @@ function getDecorationImage(player) {
 
     case "hedgy":
       return IMAGES.hedgyDecoration;
+
+    case "black_ice_wolf":
+      return IMAGES.blackIceDecoration;
 
     default:
       return null;
@@ -6088,7 +6105,49 @@ async function renderTreeDirectFallback(env, player) {
 
   const birthdayAnimatedEffect = player.equipped?.effect;
   const animatedShopEffect = birthdayAnimatedEffect;
-  const animatedEffectDrawers = {
+  function drawAnimatedBlackIceSnow(frame, phase = 0) {
+  // Minimal premium snow: sparse white, icy-blue, and charcoal flakes pushed
+  // sideways by a gentle wind so the Black Ice tree remains the focal point.
+  const flakes = 34;
+  const colors = [
+    [250, 253, 255],
+    [150, 220, 255],
+    [55, 65, 78]
+  ];
+  for (let i = 0; i < flakes; i++) {
+    const speed = 0.38 + (i % 5) * 0.055;
+    const cycle = (phase * speed + i / flakes) % 1;
+    const baseX = ((i * 37) % 100) / 100;
+    const xNorm = (baseX + cycle * 0.34 + 0.035 * Math.sin(phase * Math.PI * 2 + i * 1.7)) % 1;
+    const yNorm = (i / flakes + cycle * 0.72) % 1;
+    const x = xNorm * frame.width;
+    const y = yNorm * frame.height;
+    const size = 2.5 + (i % 5) * 1.15;
+    const color = colors[i % colors.length];
+    const alpha = i % 3 === 2 ? 125 : 190;
+    effectDisc(frame, x, y, size * 0.52, color, alpha);
+    const drift = 0.65 + 0.25 * Math.sin(phase * Math.PI * 2 + i);
+    effectRibbonPath(
+      frame,
+      [[x - size, y], [x + size, y + drift * size * 0.35]],
+      Math.max(0.8, size * 0.18),
+      color,
+      alpha
+    );
+    if (size > 5) {
+      effectRibbonPath(
+        frame,
+        [[x, y - size], [x + drift * size * 0.3, y + size]],
+        Math.max(0.7, size * 0.14),
+        color,
+        Math.max(100, alpha - 25)
+      );
+    }
+  }
+}
+
+const animatedEffectDrawers = {
+    black_ice_snow_animated: drawAnimatedBlackIceSnow,
     petal_storm_animated: drawAnimatedPetalStorm,
     butterfly_garden_animated: drawAnimatedButterflyGarden,
     rainbow_trail_animated: drawAnimatedRainbowTrail,
@@ -7708,6 +7767,17 @@ const LIMITED_SHOP_SETS = [
     ]
   },
   {
+    id: "black_ice",
+    label: "🧊 Black Ice — LIMITED",
+    description: "Limited collector set • 100,000 sparkles per item",
+    items: [
+      ["black_ice_tree", "🧊 Black Ice Tree", "buy_black_ice_tree"],
+      ["black_ice_background", "🧊 Black Ice Background", "buy_black_ice_background"],
+      ["black_ice_decoration", "🐺 Black Ice Wolf", "buy_black_ice_decoration"],
+      ["black_ice_snow_animated_effect", "❄️ Black Ice Snow", "buy_black_ice_snow_animated"]
+    ]
+  },
+  {
     id: "halloween",
     label: "🎃 Halloween",
     description: "Holiday limited items",
@@ -9115,10 +9185,10 @@ const INVENTORY_CATEGORIES = [
 ];
 
 const INVENTORY_CATEGORY_IDS = {
-  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "fairy_hollow_tree", "glam_tree", "black_cat_magic_tree", "dragon_realm_tree", "inferno_king_tree", "thunder_god_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
-  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "fairy_hollow_background", "glam_background", "black_cat_magic_background", "dragon_realm_background", "inferno_king_background", "thunder_god_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "beans_effect"],
-  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration"],
+  trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "fairy_hollow_tree", "glam_tree", "black_cat_magic_tree", "dragon_realm_tree", "inferno_king_tree", "thunder_god_tree", "black_ice_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
+  backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "fairy_hollow_background", "glam_background", "black_cat_magic_background", "dragon_realm_background", "inferno_king_background", "thunder_god_background", "black_ice_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "black_ice_snow_animated_effect", "beans_effect"],
+  decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration", "black_ice_decoration"],
   frames: ["profile_frame_royal_gold"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
@@ -11626,7 +11696,16 @@ async function handleComponent(
     buy_thunder_god_background:
       "thunder_god_background",
     buy_thunder_god_effect:
-      "thunder_god_effect"
+      "thunder_god_effect",
+
+    buy_black_ice_tree:
+      "black_ice_tree",
+    buy_black_ice_background:
+      "black_ice_background",
+    buy_black_ice_decoration:
+      "black_ice_decoration",
+    buy_black_ice_snow_animated:
+      "black_ice_snow_animated_effect"
   };
 
   if (
