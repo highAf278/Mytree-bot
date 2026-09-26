@@ -8043,6 +8043,36 @@ async function buyItem(
    CUSTOMIZE
 ========================================================= */
 
+async function handleBadgeAdmin(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const sub = interaction.data?.options?.find(o => o.type === 1)?.name || "";
+  const target = String(getOption(interaction, "user") || "").trim();
+  const badgeId = String(getOption(interaction, "badge") || "").trim();
+
+  if (!target || !PROFILE_BADGES[badgeId]) {
+    return sendText(env, interaction, "❌ Choose a valid user and badge.");
+  }
+
+  const player = await getPlayer(env, target);
+  if (!Array.isArray(player.equippedBadges)) player.equippedBadges = [];
+  if (sub === "give") {
+    if (!player.equippedBadges.includes(badgeId)) player.equippedBadges.push(badgeId);
+    player.equippedBadges = [...new Set(player.equippedBadges)].slice(0, 4);
+    player.equippedBadge = player.equippedBadges[0] || "";
+    await savePlayer(env, player, target);
+    return sendText(env, interaction, `🏅 Gave **${PROFILE_BADGES[badgeId].name}** to <@${target}>!`);
+  }
+
+  if (sub === "remove") {
+    player.equippedBadges = player.equippedBadges.filter(id => id !== badgeId);
+    if (player.equippedBadge === badgeId) player.equippedBadge = player.equippedBadges[0] || "";
+    await savePlayer(env, player, target);
+    return sendText(env, interaction, `🏅 Removed **${PROFILE_BADGES[badgeId].name}** from <@${target}>.`);
+  }
+
+  return sendText(env, interaction, "❌ Use `/badge give` or `/badge remove`.");
+}
+
 async function showProfileBadges(env, interaction, targetId, page=0) {
   const user = getUserFromInteraction(interaction);
   if (!user || user.id !== targetId) return sendText(env, interaction, "❌ You can only manage badges on your own profile.");
@@ -8059,12 +8089,14 @@ async function showProfileBadges(env, interaction, targetId, page=0) {
     if(pageIds[i+1]) buttons.push(button(equipped.includes(pageIds[i+1])?`🏅 ${PROFILE_BADGES[pageIds[i+1]].name} ✓`:PROFILE_BADGES[pageIds[i+1]].name,`equip_badge:${pageIds[i+1]}`,equipped.includes(pageIds[i+1])?3:2));
     rows.push(row(...buttons));
   }
-  const nav=[];
-  if(safePage>0) nav.push(button("⬅️ Previous",`profile_badges:${user.id}:${safePage-1}`,2));
-  if(safePage<totalPages-1) nav.push(button("Next ➡️",`profile_badges:${user.id}:${safePage+1}`,2));
-  if(nav.length) rows.push(row(...nav));
-  rows.push(row(button("❌ Remove All Badges","unequip_badges",2)));
-  rows.push(row(button("⬅️ Back to Profile",`profile_back:${user.id}`,2)));
+  // Discord allows a maximum of 5 action rows per message.
+  // Four badge rows + one control row keeps this menu valid.
+  const controls=[];
+  if(safePage>0) controls.push(button("⬅️ Previous",`profile_badges:${user.id}:${safePage-1}`,2));
+  if(safePage<totalPages-1) controls.push(button("Next ➡️",`profile_badges:${user.id}:${safePage+1}`,2));
+  controls.push(button("❌ Remove All","unequip_badges",2));
+  controls.push(button("↩️ Profile",`profile_back:${user.id}`,2));
+  rows.push(row(...controls));
   await sendText(env,interaction,`🏅 **PROFILE BADGES**\n\nEquip up to **4 badges** on your profile.\n\n**Equipped:** ${equipped.length?equipped.map(id=>PROFILE_BADGES[id].name).join(" • "):"None"}\n\nPage **${safePage+1}/${totalPages}**`,rows);
 }
 
@@ -24277,6 +24309,7 @@ async function handleCommand(
   if (name === "court-leaderboard") { await handleCourtLeaderboard(env, interaction); return; }
 
   if (name === "profile") { await handleProfile(env, interaction); return; }
+  if (name === "badge") { await handleBadgeAdmin(env, interaction); return; }
   if (name === "storetest") { await handleStoreTest(env, interaction); return; }
   if (name === "panel") { const sub = interaction.data?.options?.find(option => option.type === 1)?.name; if (sub === "color") await handleProfileColor(env, interaction, (interaction.data?.options?.find(option => option.type === 1)?.options?.find(option => option.name === "hex")?.value ?? null)); return; }
   if (name === "present") { await handlePresentItem(env, interaction, getOption(interaction,"user"), getOption(interaction,"item")); return; }
@@ -26666,6 +26699,68 @@ const COMMANDS = [
     description: "View the Raccoon Court leaderboard"
   },
 
+  {
+    name: "badge",
+    description: "Owner-only profile badge management",
+    options: [
+      {
+        type: 1,
+        name: "give",
+        description: "Give a profile badge to a player",
+        options: [
+          { type: 6, name: "user", description: "Player", required: true },
+          { type: 3, name: "badge", description: "Badge", required: true, choices: [
+            { type: 3, name: "💎 VIP", value: "vip" },
+            { type: 3, name: "💳 Big Spender", value: "big_spender" },
+            { type: 3, name: "🌈 Color Chaos Champion", value: "color_chaos_champion" },
+            { type: 3, name: "✨ Sparkle Hoarder", value: "sparkle_hoarder" },
+            { type: 3, name: "🌳 Tree Keeper", value: "tree_keeper" },
+            { type: 3, name: "👑 Royalty", value: "royalty" },
+            { type: 3, name: "💅 Diva", value: "diva" },
+            { type: 3, name: "🦋 Butterfly Baby", value: "butterfly_baby" },
+            { type: 3, name: "🦝 Raccoon Royalty", value: "raccoon_royalty" },
+            { type: 3, name: "☢️ Toxic", value: "toxic" },
+            { type: 3, name: "💰 Money Magnet", value: "money_magnet" },
+            { type: 3, name: "⭐ Main Character", value: "main_character" },
+            { type: 3, name: "👑 King", value: "king" },
+            { type: 3, name: "🐺 Alpha", value: "alpha" },
+            { type: 3, name: "😎 Cool Guy", value: "cool_guy" },
+            { type: 3, name: "😈 Bad Influence", value: "bad_influence" },
+            { type: 3, name: "⚡ Speed Demon", value: "speed_demon" },
+            { type: 3, name: "🦝 Raccoon Boss", value: "raccoon_boss" }
+          ]}
+        ]
+      },
+      {
+        type: 1,
+        name: "remove",
+        description: "Remove a profile badge from a player",
+        options: [
+          { type: 6, name: "user", description: "Player", required: true },
+          { type: 3, name: "badge", description: "Badge", required: true, choices: [
+            { type: 3, name: "💎 VIP", value: "vip" },
+            { type: 3, name: "💳 Big Spender", value: "big_spender" },
+            { type: 3, name: "🌈 Color Chaos Champion", value: "color_chaos_champion" },
+            { type: 3, name: "✨ Sparkle Hoarder", value: "sparkle_hoarder" },
+            { type: 3, name: "🌳 Tree Keeper", value: "tree_keeper" },
+            { type: 3, name: "👑 Royalty", value: "royalty" },
+            { type: 3, name: "💅 Diva", value: "diva" },
+            { type: 3, name: "🦋 Butterfly Baby", value: "butterfly_baby" },
+            { type: 3, name: "🦝 Raccoon Royalty", value: "raccoon_royalty" },
+            { type: 3, name: "☢️ Toxic", value: "toxic" },
+            { type: 3, name: "💰 Money Magnet", value: "money_magnet" },
+            { type: 3, name: "⭐ Main Character", value: "main_character" },
+            { type: 3, name: "👑 King", value: "king" },
+            { type: 3, name: "🐺 Alpha", value: "alpha" },
+            { type: 3, name: "😎 Cool Guy", value: "cool_guy" },
+            { type: 3, name: "😈 Bad Influence", value: "bad_influence" },
+            { type: 3, name: "⚡ Speed Demon", value: "speed_demon" },
+            { type: 3, name: "🦝 Raccoon Boss", value: "raccoon_boss" }
+          ]}
+        ]
+      }
+    ]
+  },
   {
     name: "storetest",
     description: "Owner-only preview of future profile shop cosmetics",
