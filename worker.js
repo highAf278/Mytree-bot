@@ -27794,75 +27794,65 @@ export default {
       }
     }
 
-    // BADGE COMPONENTS: return the actual private badge response as the
-    // interaction's FIRST response. Do not send a loading placeholder and
-    // then PATCH @original; that was leaving the placeholder stuck in some
-    // Workers invocations. Badge menus are lightweight enough to build here,
-    // and this completely bypasses the generic middleware chain.
+    // BADGE COMPONENTS: acknowledge the button IMMEDIATELY, then do the
+    // KV work and edit that same private response. The important part is that
+    // Discord receives the type-5 callback before getPlayer()/savePlayer().
+    // Do NOT put the slow work before the callback and do NOT rely on
+    // waitUntil() for the response edit.
     if (isBadgeComponent) {
       try {
+        const ack = await fetch(
+          `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: 5,
+              data: { flags: 64 }
+            })
+          }
+        );
+
+        if (!ack.ok) {
+          console.error("Badge initial ACK failed:", ack.status, await ack.text());
+          return new Response("OK", { status: 200 });
+        }
+
+        interaction.__deferred = true;
+        interaction.__deferredUpdate = false;
+        interaction.__deferredEphemeral = true;
+
+        // The interaction is already acknowledged, so this work is no longer
+        // constrained by Discord's 3-second initial-response window.
         if (customId.startsWith("profile_badges:")) {
           const parts = customId.split(":");
           const targetId = parts[1] || "";
           const page = Number(parts[2] || 0);
-          const payload = await buildProfileBadgesPayload(env, targetId, page);
-          return new Response(JSON.stringify({
-            type: 4,
-            data: payload
-          }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" }
-          });
+          await showProfileBadges(env, interaction, targetId, page);
+          return new Response("OK", { status: 200 });
         }
 
         if (customId.startsWith("equip_badge:")) {
           const badgeId = customId.slice("equip_badge:".length);
-          const user = getUserFromInteraction(interaction);
-          if (!user) {
-            return new Response(JSON.stringify({
-              type: 4,
-              data: { content: "❌ I couldn't identify you.", flags: 64 }
-            }), { status: 200, headers: { "Content-Type": "application/json" } });
-          }
-          const content = await toggleProfileBadgeData(env, user.id, badgeId);
-          return new Response(JSON.stringify({
-            type: 4,
-            data: { content, flags: 64 }
-          }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" }
-          });
+          await toggleProfileBadge(env, interaction, badgeId);
+          return new Response("OK", { status: 200 });
         }
 
         if (customId === "unequip_badges") {
-          const user = getUserFromInteraction(interaction);
-          if (!user) {
-            return new Response(JSON.stringify({
-              type: 4,
-              data: { content: "❌ I couldn't identify you.", flags: 64 }
-            }), { status: 200, headers: { "Content-Type": "application/json" } });
-          }
-          const content = await unequipAllProfileBadgesData(env, user.id);
-          return new Response(JSON.stringify({
-            type: 4,
-            data: { content, flags: 64 }
-          }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" }
-          });
+          await unequipAllProfileBadges(env, interaction);
+          return new Response("OK", { status: 200 });
         }
       } catch (error) {
-        console.error("Badge initial response error:", error);
-        return new Response(JSON.stringify({
-          type: 4,
-          data: {
+        console.error("Badge interaction error:", error);
+        try {
+          await editOriginalResponse(env, interaction, {
             content: `❌ Couldn't load your badges: ${error?.message || "Unknown error"}`,
-            flags: 64
-          }
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
+            components: []
+          });
+        } catch (editError) {
+          console.error("Could not edit badge error response:", editError);
+        }
+        return new Response("OK", { status: 200 });
       }
     }
 
