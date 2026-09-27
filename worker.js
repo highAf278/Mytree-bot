@@ -5048,20 +5048,26 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP: unmistakable luxury crown + jewel. Big silhouette, bright facets.
-    POLY([[18,31],[25,12],[39,26],[50,7],[61,26],[75,12],[82,31],[77,42],[23,42]],hi,255);
-    POLY([[24,30],[30,19],[39,31],[50,14],[61,31],[70,19],[76,30],[71,36],[29,36]],base,255);
-    O(30,23,3.5,white,255); O(50,14,4,white,255); O(70,23,3.5,white,255);
-    F(23,37,54,6,[255,222,120],255);
-    // Large jewel/crest underneath — deliberately not another plain diamond.
-    POLY([[25,43],[50,37],[75,43],[68,78],[50,92],[32,78]],base,255);
-    POLY([[25,43],[50,37],[50,84],[32,78]],hi,255);
-    POLY([[50,37],[75,43],[68,78],[50,84]],base,255);
-    POLY([[39,50],[50,43],[61,50],[56,68],[50,76],[44,68]],white,250);
-    POLY([[39,50],[50,43],[50,76],[44,68]],[245,190,255],255);
-    POLY([[50,43],[61,50],[56,68],[50,76]],[255,224,105],255);
-    O(28,48,3,white,245); O(72,48,3,white,245); O(35,76,3,hi,245); O(65,76,3,hi,245);
-    ST(84,80,7,white,255); ST(17,21,4,white,230);
+    // VIP PROTOTYPE: a dedicated, extremely bold vector emblem.
+    // The colored jewel rim + black enamel center is intentionally simple so
+    // the crown still reads as a crown after the profile PNG is reduced.
+    RR(7,7,86,86,13,base,255,1);
+    RR(13,13,74,74,9,black,255,1);
+    // Three oversized crown points: this is the primary recognition shape.
+    POLY([[19,31],[28,12],[41,29],[50,8],[59,29],[72,12],[81,31],[75,48],[25,48]],hi,255);
+    POLY([[23,32],[29,21],[41,38],[50,17],[59,38],[71,21],[77,32],[72,43],[28,43]],base,255);
+    // Thick gold crown band.
+    F(25,39,50,10,[255,219,92],255);
+    L(27,48,73,48,5,white,230);
+    // Three large jewel studs make the VIP/luxury meaning survive tiny scaling.
+    O(28,31,4,white,255); O(50,18,5,white,255); O(72,31,4,white,255);
+    O(28,31,2,base,255); O(50,18,2.5,[255,236,115],255); O(72,31,2,base,255);
+    // One oversized center jewel below the crown — not a second emblem.
+    POLY([[37,56],[50,50],[63,56],[59,73],[50,82],[41,73]],hi,255);
+    POLY([[37,56],[50,50],[50,78],[41,73]],white,235);
+    POLY([[50,50],[63,56],[59,73],[50,78]],[255,220,82],245);
+    O(50,56,3,white,245);
+    ST(17,18,4,white,230); ST(83,80,5,white,230);
   } else if(b.style==='spender'){
     RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
     // Card chip and contactless marks.
@@ -5211,7 +5217,12 @@ function drawProfileBadges(frame,badgeIds,phase=0){
   // Badges belong to the tree showcase shelf, not the achievement ribbon.
   const y=450;
   const positions=[145,180,215,250];
-  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
+  for(let i=0;i<ids.length;i++){
+    // Prototype the new VIP badge at a slightly larger final footprint.
+    // The remaining badges stay at their current size until the new system is approved.
+    const badgeSize = ids[i] === "vip" ? 30 : 24;
+    drawProfileBadgeEmblem(frame,ids[i],positions[i],y,badgeSize,phase+i*.13);
+  }
 }
 
 async function renderProfileDirectFrame(env,player,phase=0){
