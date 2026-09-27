@@ -1074,7 +1074,7 @@ function nameEffectText(effectId, titleText, phase = 0) {
     const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 1px rgba(255,255,255,.95),0 0 3px rgba(255,160,220,.35)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
     return `<span class="effect-candy_rush">${chars}</span>`;
   }
-  if (effectId === "petals") return `<span class="effect-petals"><span class="petalGlow">${safe}</span></span>`;
+  if (effectId === "petals") return `<span class="effect-petals"><span class="petalBloom petalFlower1">✿</span><span class="petalBloom petalFlower2">❀</span><span class="petalGlow">${safe}</span><span class="petalBloom petalFlower3">✿</span></span>`;
   if (effectId === "cosmic") return `<span class="effect-cosmic"><span class="cosmicGlow">${safe}</span></span>`;
   if (effectId === "green_glow") return `<span class="effect-green_glow"><span class="greenGlowText">${safe}</span></span>`;
   const configs={
@@ -1116,7 +1116,7 @@ function profileCardHTML(player, phase = 0) {
   const decorUrl = decor ? imageUrl(decor) : "";
   const titleMarkup = nameEffectText(effectId, title, phase);
   const particleMap = {
-    rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✦","·","✧","✦"],
+    rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✿","❀","✿","❀"],
     inferno:["✦","·","✦","·"], green_glow:["✦","·","✦","·"], candy_rush:["✦","·","✧","✦"], cosmic:["✦","✧","·","★"],
     firework:["✦","·","✧","★"], royal_blood:["✦","·","★","✦"], enchanted:["✧","✦","·","★"],
     royal_purple:["✦","·","✧","★"], butterflies:["✧","·","✦","✧"], shadow:["·","✦","·","★"],
@@ -1127,7 +1127,7 @@ function profileCardHTML(player, phase = 0) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
     .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:color-mix(in srgb, ${bg} 86%, white 14%);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:color-mix(in srgb, ${bg} 72%, white 28%);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
-    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:15px;font-family:Arial,sans-serif;font-weight:700;z-index:3;filter:drop-shadow(0 0 3px rgba(255,255,255,.65));pointer-events:none;opacity:.9}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalBloom{position:absolute;font-size:18px;line-height:1;color:#ff8fca;text-shadow:0 0 2px #fff,0 0 7px rgba(255,105,190,.75);animation:petalBloom 2.4s ease-in-out infinite}.petalFlower1{left:-28px;top:-9px}.petalFlower2{right:-27px;top:3px;color:#ffc1df;animation-delay:.45s}.petalFlower3{right:-14px;bottom:-12px;color:#d98cff;animation-delay:.9s}@keyframes petalBloom{0%,100%{transform:translateY(0) rotate(-8deg) scale(.9);opacity:.78}50%{transform:translateY(-5px) rotate(8deg) scale(1.12);opacity:1}}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:15px;font-family:Arial,sans-serif;font-weight:700;z-index:3;filter:drop-shadow(0 0 3px rgba(255,255,255,.65));pointer-events:none;opacity:.9}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -4996,12 +4996,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   const b=PROFILE_BADGES[badgeId];
   const r=Math.max(10,Math.round(size/2));
 
-  // BADGE ARTWORK V3 — designed for the actual tiny profile size.
-  // Rule: one unmistakable silhouette per badge, with only a few bold highlights.
-  // Butterfly Baby and Diamond Darling are intentionally preserved exactly.
+  // LOCKED BADGE SHELL: the user's preferred black enamel look.
   const black=[1,2,5], white=[255,255,255], silver=[205,211,225];
   const palettes={
-    vip_luxury:[[170,72,245],[255,214,72]], spender:[[246,181,38],[255,235,150]],
+    vip_luxury:[[205,92,255],[255,235,255]], spender:[[246,181,38],[255,235,150]],
     rainbow:[[255,70,170],[105,220,255]], sparkle:[[255,208,48],[255,249,180]],
     green:[[68,205,95],[190,255,178]], frame_royal:[[175,92,255],[255,216,105]],
     diva:[[255,92,188],[255,214,241]], butterfly:[[70,205,255],[225,145,255]],
@@ -5014,21 +5012,21 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
   const [base,hi]=palettes[b.style]||[[190,195,210],[255,255,255]];
 
-  // Collectible shell: white edge + black enamel center.
   profileFill(frame,cx-r-2,cy-r-2,r*2+4,r*2+4,white[0],white[1],white[2],255);
   profileFill(frame,cx-r,cy-r,r*2,r*2,black[0],black[1],black[2],255);
   profileSmoothLine(frame,cx-r+2,cy-r+2,cx+r-2,cy-r+2,1,silver,150);
   profileSmoothLine(frame,cx-r+2,cy-r+2,cx-r+2,cy+r-2,1,silver,100);
 
-  // Supersample first, then reduce to the exact 20x20 artwork footprint.
+  // Work large, but design for the final 20px size. 5x supersampling means
+  // a 5px source stroke becomes roughly one crisp visible pixel in Discord.
   const AW=500, AH=500, S=5, DS=25;
   const art={width:AW,height:AH,data:new Uint8ClampedArray(AW*AH*4)};
   for(let i=0;i<art.data.length;i+=4){art.data[i]=black[0];art.data[i+1]=black[1];art.data[i+2]=black[2];art.data[i+3]=255;}
   const X=v=>v*S;
   const F=(x,y,w,h,c=base,a=255)=>profileFill(art,X(x),X(y),X(w),X(h),c[0],c[1],c[2],a);
-  const L=(x1,y1,x2,y2,w=6,c=base,a=255)=>profileSmoothLine(art,X(x1),X(y1),X(x2),X(y2),X(w),c,a);
+  const L=(x1,y1,x2,y2,w=4,c=base,a=255)=>profileSmoothLine(art,X(x1),X(y1),X(x2),X(y2),X(w),c,a);
   const O=(x,y,rr,c=hi,a=255,fill=true,w=1)=>profileSmoothCircle(art,X(x),X(y),X(rr),c,a,fill,X(w));
-  const RR=(x,y,w,h,rr,c=base,a=255,lw=4)=>profileSmoothRoundedRect(art,X(x),X(y),X(w),X(h),X(rr),c,a,X(lw));
+  const RR=(x,y,w,h,rr,c=base,a=255,lw=3)=>profileSmoothRoundedRect(art,X(x),X(y),X(w),X(h),X(rr),c,a,X(lw));
   const ST=(x,y,rr,c=hi,a=255)=>profileSmoothStar(art,X(x),X(y),X(rr),c,a);
   const P=(x,y,rx,ry,c=base,a=255,rot=0)=>profileSmoothPetal(art,X(x),X(y),X(rx),X(ry),c,a,rot);
   const POLY=(pts,c=base,a=255)=>{
@@ -5050,53 +5048,61 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP: a unique luxury medallion, NOT a crown. Big purple disk, gold rim,
-    // unmistakable V, and chunky ribbon tails. Slightly fuller than the prior VIP.
-    POLY([[29,13],[42,13],[50,29],[58,13],[71,13],[64,39],[36,39]],base,255);
-    POLY([[35,14],[44,14],[50,27],[56,14],[65,14],[60,35],[40,35]],hi,255);
-    O(50,57,36,base,255); O(50,57,30,hi,255); O(50,57,25,black,255);
-    L(37,45,50,69,8,hi,255); L(50,69,63,45,8,hi,255);
-    L(39,46,50,65,3,white,205); L(61,46,50,65,3,white,205);
-    O(50,57,4,white,235);
-    ST(19,25,5,white,210); ST(81,25,5,hi,230);
+    // VIP: unmistakable luxury crown + jewel. Big silhouette, bright facets.
+    POLY([[18,31],[25,12],[39,26],[50,7],[61,26],[75,12],[82,31],[77,42],[23,42]],hi,255);
+    POLY([[24,30],[30,19],[39,31],[50,14],[61,31],[70,19],[76,30],[71,36],[29,36]],base,255);
+    O(30,23,3.5,white,255); O(50,14,4,white,255); O(70,23,3.5,white,255);
+    F(23,37,54,6,[255,222,120],255);
+    // Large jewel/crest underneath — deliberately not another plain diamond.
+    POLY([[25,43],[50,37],[75,43],[68,78],[50,92],[32,78]],base,255);
+    POLY([[25,43],[50,37],[50,84],[32,78]],hi,255);
+    POLY([[50,37],[75,43],[68,78],[50,84]],base,255);
+    POLY([[39,50],[50,43],[61,50],[56,68],[50,76],[44,68]],white,250);
+    POLY([[39,50],[50,43],[50,76],[44,68]],[245,190,255],255);
+    POLY([[50,43],[61,50],[56,68],[50,76]],[255,224,105],255);
+    O(28,48,3,white,245); O(72,48,3,white,245); O(35,76,3,hi,245); O(65,76,3,hi,245);
+    ST(84,80,7,white,255); ST(17,21,4,white,230);
   } else if(b.style==='spender'){
-    // Big Spender: giant credit card with a chunky gold chip and one coin.
-    RR(8,24,84,52,8,base,255,4); F(9,27,82,12,hi,255);
-    RR(18,44,19,18,2,white,240,2);
-    F(46,47,33,6,white,225); F(46,58,24,5,hi,230);
-    O(78,77,9,hi,255); O(78,77,4,white,245);
+    RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
+    // Card chip and contactless marks.
+    RR(27,51,13,11,2,white,230,2); L(29,54,38,54,2,base,230); L(29,58,38,58,2,base,230);
+    L(57,55,78,55,4,white,220); L(57,64,72,64,4,white,160); O(80,39,3,white,230);
+    ST(20,79,5,hi,230);
   } else if(b.style==='rainbow'){
-    // Color Chaos Champion: three very thick nested rainbow bands.
-    const c1=[255,70,170], c2=[255,205,55], c3=[80,205,255];
-    L(15,75,15,53,10,c1,255); L(15,53,50,20,10,c1,255); L(50,20,85,53,10,c1,255); L(85,53,85,75,10,c1,255);
-    L(25,75,25,56,8,c2,255); L(25,56,50,31,8,c2,255); L(50,31,75,56,8,c2,255); L(75,56,75,75,8,c2,255);
-    L(35,75,35,61,6,c3,255); L(35,61,50,43,6,c3,255); L(50,43,65,61,6,c3,255); L(65,61,65,75,6,c3,255);
+    const cols=[[255,70,155],[255,174,55],[255,238,70],[74,222,130],[65,177,255],[176,100,255]];
+    // Six bright nested arcs. The black center below them keeps the rainbow readable.
+    for(let i=0;i<6;i++){
+      const x=24+i*4, y=76-i*4, w=52-i*8;
+      L(x,y,x+10,y-30,6,cols[i],245); L(x+10,y-30,x+w-10,y-30,6,cols[i],245); L(x+w-10,y-30,x+w,y,6,cols[i],245);
+    }
+    ST(50,57,10,white,250); O(23,31,3,cols[0],230); O(77,31,3,cols[5],230);
   } else if(b.style==='sparkle'){
-    // Sparkle Hoarder: a SINGLE chunky four-point sparkle.
-    // Do not use thin star outlines here — they disappear when the 500px
-    // artwork is reduced to the tiny 20px profile footprint.
-    // Filled silhouette = unmistakable sparkle at Discord size.
-    POLY([[50,5],[59,41],[95,50],[59,59],[50,95],[41,59],[5,50],[41,41]],base,255);
-    POLY([[50,25],[55,45],[75,50],[55,55],[50,75],[45,55],[25,50],[45,45]],white,250);
-    O(50,50,5,hi,255);
+    // Sparkle Hoarder: treasure chest silhouette with a BIG overflowing sparkle pile.
+    // The chest is secondary; the sparkle hoard is the immediately readable feature.
+    RR(22,56,56,27,6,base,255,5); F(22,56,56,9,hi,255); L(22,65,78,65,5,white,235);
+    RR(44,66,12,11,3,black,255,2); O(50,71,2.5,white,235);
+    ST(50,31,22,hi,255); ST(50,31,12,white,255);
+    ST(30,45,10,base,255); ST(70,42,11,white,255);
+    ST(24,27,6,white,245); ST(78,24,6,hi,245);
+    O(38,38,3,white,245); O(62,35,3,hi,245); O(36,51,3,hi,235); O(64,50,3,white,235);
   } else if(b.style==='green'){
-    // Tree Keeper: bold evergreen silhouette with a wide trunk/base.
-    F(44,57,12,30,base,255); F(38,84,24,6,hi,255);
-    O(50,29,21,hi,255); O(32,48,19,base,255); O(68,48,19,base,255); O(50,61,26,base,255);
-    O(43,29,5,white,225); O(60,43,4,hi,225);
+    F(45,59,10,27,base); F(42,82,16,5,hi);
+    P(50,34,27,18,hi,250); P(34,51,24,18,base,250); P(66,51,24,18,base,250); P(50,66,29,18,base,250);
+    O(34,36,3,white,220); O(66,39,3,hi,220); O(43,53,3,hi,220); O(59,59,3,white,190);
   } else if(b.style==='frame_royal'){
-    // Frame Royalty: unmistakable crown sitting over a simple frame plaque.
-    RR(17,50,66,31,5,base,255,4);
-    POLY([[10,34],[24,9],[40,28],[50,5],[60,28],[76,9],[90,34],[83,57],[17,57]],hi,255);
-    F(18,45,64,12,base,255);
-    O(24,23,4,white,230); O(50,15,5,white,240); O(76,23,4,white,230);
+    RR(14,19,72,69,7,base,255,5); RR(24,29,52,48,4,black,255,4);
+    // Crown perched on the frame.
+    POLY([[29,27],[34,12],[45,25],[50,9],[55,25],[66,12],[71,27],[66,34],[34,34]],hi,255);
+    O(34,21,3,white,230); O(50,16,3,white,240); O(66,21,3,white,230);
+    O(20,24,4,hi); O(80,24,4,hi); O(20,78,4,hi); O(80,78,4,hi);
+    L(29,39,71,39,4,white,190); L(29,69,71,69,4,white,170);
   } else if(b.style==='diva'){
-    // Diva: oversized lipstick silhouette — strong enough to read without text.
-    RR(34,41,32,44,7,base,255,4); RR(39,20,22,35,5,hi,255,4);
-    POLY([[39,20],[61,20],[57,11],[43,11]],white,245);
-    F(39,49,22,10,hi,255); O(72,74,8,white,220);
+    // Compact mirror with handle and shine.
+    O(48,48,30,base,255); O(48,48,23,black,255); O(48,48,20,hi,220); O(48,48,16,black,255);
+    L(63,68,78,84,6,base); L(67,72,82,87,3,hi); ST(30,28,7,white,230); ST(72,27,5,hi,230);
+    L(37,40,58,54,3,white,180); L(43,58,59,45,3,hi,160);
   } else if(b.style==='butterfly'){
-    // LOCKED WINNER — EXACTLY PRESERVED.
+    // LOCKED WINNER: preserve this silhouette; it is the benchmark that reads correctly at 20px.
     P(32,39,20,24,base,255,-.35); P(68,39,20,24,base,255,.35);
     P(35,65,18,19,hi,245,.28); P(65,65,18,19,hi,245,-.28);
     O(50,51,4,hi,255); F(47,49,6,27,hi); O(50,47,4,white,210);
@@ -5105,77 +5111,79 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     L(44,61,34,66,4,base,220); L(56,61,66,66,4,base,220);
     L(48,44,40,24,3,white,180); L(52,44,60,24,3,white,180);
     O(39,20,2,hi,230); O(61,20,2,hi,230); O(27,38,2,white,180); O(73,38,2,white,180);
-  } else if(b.style==='raccoon_robber'){
-    // Raccoon Robber: huge raccoon face + obvious gold loot bag.
-    POLY([[13,34],[23,10],[39,25],[50,20],[61,25],[77,10],[87,34],[80,68],[65,87],[50,93],[35,87],[20,68]],base,255);
-    POLY([[18,47],[39,39],[50,47],[40,57]],black,255); POLY([[82,47],[61,39],[50,47],[60,57]],black,255);
-    O(40,48,5,white,255); O(60,48,5,white,255); O(40,48,2,black,255); O(60,48,2,black,255);
-    O(50,66,11,hi,255); O(50,64,4,black,255);
-    RR(67,66,22,20,4,hi,255,3); O(78,75,3,white,235);
+  } else if(b.style==='raccoon_robber' || b.style==='raccoon_boss'){
+    // Strong raccoon silhouette: ears + round head + mask + muzzle.
+    POLY([[24,38],[27,20],[40,29],[50,25],[60,29],[73,20],[76,38],[70,69],[61,82],[50,87],[39,82],[30,69]],base,255);
+    P(39,50,16,9,black,255,0); P(61,50,16,9,black,255,0);
+    O(41,49,4,white,255); O(59,49,4,white,255); O(41,49,2,black); O(59,49,2,black);
+    O(50,63,12,hi,255); O(50,61,4,black,255); L(44,72,50,75,3,white,170); L(56,72,50,75,3,white,170);
+    L(29,37,39,42,4,hi,200); L(71,37,61,42,4,hi,200);
+    if(b.style==='raccoon_robber'){
+      RR(68,67,20,18,3,hi,255,3); O(74,72,3,white,220); O(82,78,2,white,220);
+    } else {
+      ST(79,75,10,hi,250); F(69,73,20,5,base,240);
+    }
   } else if(b.style==='toxic'){
-    // Toxic: giant radiation trefoil. The symbol is the silhouette.
-    O(50,50,36,base,255); O(50,50,10,black,255); O(50,50,5,hi,255);
-    POLY([[45,45],[34,14],[49,10],[54,43]],hi,255);
-    POLY([[55,45],[87,34],[91,47],[58,54]],hi,255);
-    POLY([[47,55],[31,87],[17,79],[43,51]],hi,255);
+    // High-contrast radiation symbol.
+    O(50,50,32,base,255); O(50,50,27,black,255);
+    POLY([[47,47],[38,21],[47,18],[53,45]],base,255);
+    POLY([[53,47],[80,35],[84,44],[56,53]],base,255);
+    POLY([[48,54],[34,82],[26,77],[44,50]],base,255);
+    O(50,50,9,black,255); O(50,50,5,hi,255);
+    O(25,25,3,hi,230); O(75,25,3,white,220);
   } else if(b.style==='tycoon'){
-    // Sparkle Tycoon: giant money bag with a single sparkle, not a generic vault.
-    O(50,57,31,base,255); O(50,61,24,base,255);
-    POLY([[39,30],[44,18],[56,18],[61,30],[57,38],[43,38]],hi,255);
-    L(44,26,56,26,5,white,210);
-    ST(76,23,9,hi,255); ST(24,78,6,white,220);
+    // Vault: door, spokes, center lock, corner bolts.
+    RR(14,14,72,72,9,base,255,5); O(50,50,29,black,255); O(50,50,24,hi,255); O(50,50,19,black,255);
+    L(50,23,50,77,5,hi); L(23,50,77,50,5,hi); L(31,31,69,69,4,hi,230); L(69,31,31,69,4,hi,230);
+    O(50,50,8,hi,255); O(50,50,4,black,255); O(23,23,4,white,220); O(77,23,4,white,220); O(23,77,4,white,220); O(77,77,4,white,220);
   } else if(b.style==='star'){
-    // Main Character: one giant five-point star with a bright center.
-    ST(50,50,41,base,255); ST(50,50,25,hi,255); ST(50,50,9,white,235);
+    ST(50,50,34,base,255); ST(50,50,23,hi,255); ST(50,50,10,white,235);
+    L(16,78,31,64,4,white,190); L(69,31,84,16,4,white,190); O(21,22,3,hi,220); O(79,79,3,white,210);
   } else if(b.style==='king'){
-    // KING owns the crown silhouette. Larger and heavier than Frame Royalty.
-    POLY([[5,34],[19,7],[38,28],[50,2],[62,28],[81,7],[95,34],[87,71],[13,71]],base,255);
-    F(13,50,74,17,hi,255); L(15,60,85,60,7,white,220);
-    O(19,22,4,white,230); O(50,13,5,white,240); O(81,22,4,white,230);
+    POLY([[15,48],[27,23],[40,45],[50,14],[60,45],[73,23],[85,48],[80,72],[20,72]],base,255);
+    F(20,61,60,14,hi); L(20,61,80,61,5,white,220);
+    O(27,30,4,white,230); O(50,20,4,white,240); O(73,30,4,white,230);
+    O(32,66,3,base); O(50,66,3,white,230); O(68,66,3,base);
   } else if(b.style==='alpha'){
-    // Alpha: wolf head — ears and bright eyes do all the work.
-    POLY([[12,28],[30,9],[41,28],[50,20],[59,28],[70,9],[88,28],[80,68],[66,86],[50,93],[34,86],[20,68]],base,255);
-    POLY([[30,48],[47,42],[50,50],[40,57]],black,255); POLY([[70,48],[53,42],[50,50],[60,57]],black,255);
-    O(40,49,5,white,255); O(60,49,5,white,255); O(50,68,11,hi,255); O(50,66,4,black,255);
+    // Wolf face: ears, cheek silhouette, bright eyes and muzzle.
+    POLY([[20,27],[36,35],[50,27],[64,35],[80,27],[72,69],[61,84],[50,90],[39,84],[28,69]],base,255);
+    POLY([[25,31],[36,38],[30,55],[21,45]],hi,230); POLY([[75,31],[64,38],[70,55],[79,45]],hi,230);
+    P(39,52,14,9,black,255,0); P(61,52,14,9,black,255,0); O(41,52,4,white,255); O(59,52,4,white,255);
+    O(50,68,12,hi,255); O(50,66,4,black,255); L(44,76,50,79,3,white,170); L(56,76,50,79,3,white,170);
   } else if(b.style==='cool'){
-    // Cool Guy: huge sunglasses with two reflective lenses.
-    RR(7,32,40,31,8,base,255,5); RR(53,32,40,31,8,base,255,5);
-    L(47,47,53,47,6,hi,255); L(7,40,1,34,6,base,255); L(93,40,99,34,6,base,255);
-    L(15,39,39,55,5,white,210); L(61,39,85,55,5,white,210);
+    // Sunglasses: two thick lenses, bridge, arms and reflective highlights.
+    RR(10,34,38,27,8,base,255,5); RR(52,34,38,27,8,base,255,5);
+    L(48,46,52,46,5,hi); L(10,40,2,34,5,base); L(90,40,98,34,5,base);
+    L(18,40,39,55,4,white,210); L(61,40,82,55,4,white,210); L(24,57,39,47,3,hi,180); L(61,47,76,57,3,hi,180);
   } else if(b.style==='danger'){
-    // Bad Influence: giant horned imp face with a bright mischievous mouth.
-    POLY([[11,29],[30,9],[39,29],[50,21],[61,29],[70,9],[89,29],[82,69],[67,87],[50,93],[33,87],[18,69]],base,255);
-    O(39,49,5,white,255); O(61,49,5,white,255); O(39,49,2,black,255); O(61,49,2,black,255);
-    F(46,62,8,22,hi,255); L(38,73,50,80,5,hi,230); L(62,73,50,80,5,hi,230);
+    // Horned demon/imp crest with a bright center warning mark.
+    POLY([[25,31],[38,15],[43,34],[50,27],[57,34],[62,15],[75,31],[70,72],[50,87],[30,72]],base,255);
+    P(39,52,13,8,black,255,0); P(61,52,13,8,black,255,0); O(42,52,3,white,250); O(58,52,3,white,250);
+    F(47,40,6,27,hi); F(39,51,22,6,hi); O(50,68,3,black,255); ST(25,77,6,hi,220); ST(75,77,6,hi,220);
   } else if(b.style==='speed'){
-    // Speed Demon: giant lightning bolt plus two clean motion streaks.
-    POLY([[64,7],[24,49],[45,49],[33,93],[76,40],[55,40]],base,255);
-    POLY([[59,17],[38,47],[51,47],[42,71],[65,42],[53,42]],hi,245);
-    L(7,73,29,63,7,white,220); L(7,57,27,51,7,base,220);
-  } else if(b.style==='raccoon_boss'){
-    // Raccoon Boss: same unmistakable raccoon base, but with a chunky gold boss badge.
-    POLY([[13,34],[23,10],[39,25],[50,20],[61,25],[77,10],[87,34],[80,68],[65,87],[50,93],[35,87],[20,68]],base,255);
-    POLY([[18,47],[39,39],[50,47],[40,57]],black,255); POLY([[82,47],[61,39],[50,47],[60,57]],black,255);
-    O(40,48,5,white,255); O(60,48,5,white,255); O(40,48,2,black,255); O(60,48,2,black,255);
-    O(50,66,11,hi,255); O(50,64,4,black,255);
-    RR(64,72,27,14,4,hi,255,3); O(78,79,3,white,230);
+    // Bold lightning bolt + three clearly separated speed trails.
+    POLY([[60,10],[31,48],[48,48],[36,91],[70,43],[53,43]],base,255);
+    POLY([[58,16],[39,47],[53,47],[43,70],[63,43],[50,43]],hi,245);
+    L(8,69,29,60,5,white,210); L(7,58,27,52,5,base,210); L(70,25,90,15,5,hi,210);
+    O(83,78,3,white,210);
   } else if(b.style==='black_ice'){
-    // Diamond Darling: LOCKED — EXACTLY PRESERVED.
-    POLY([[50,6],[89,29],[73,48],[65,90],[35,90],[27,48],[11,29]],base,255);
-    POLY([[11,29],[38,31],[50,6],[62,31],[89,29],[69,47],[31,47]],hi,255);
-    POLY([[31,47],[50,31],[69,47],[65,90],[35,90]],base,255);
-    POLY([[31,47],[50,31],[50,82],[35,90]],white,225);
-    POLY([[50,31],[69,47],[65,90],[50,82]],[105,205,255],245);
-    L(12,29,88,29,6,white,235);
-    ST(81,16,7,white,245);
+    // Diamond Darling: jewelry-cut gemstone, with a strong silhouette and obvious facets.
+    POLY([[50,7],[82,28],[72,46],[64,84],[36,84],[28,46],[18,28]],base,255);
+    POLY([[18,28],[38,31],[50,7],[62,31],[82,28],[68,43],[32,43]],hi,250);
+    POLY([[32,43],[50,31],[68,43],[64,84],[36,84]],base,255);
+    POLY([[32,43],[50,31],[50,78],[36,84]],white,235);
+    POLY([[50,31],[68,43],[64,84],[50,78]],[105,205,255],245);
+    L(18,28,82,28,5,white,240); L(50,7,50,31,4,white,240);
+    ST(80,18,7,white,250); ST(25,72,4,hi,220);
   } else if(b.style==='millionaire'){
-    // Millionaire: giant gold coin with an unmistakable embossed M.
-    O(50,50,40,base,255); O(50,50,32,black,255); O(50,50,28,hi,255); O(50,50,23,black,255);
-    L(35,72,35,30,7,hi,255); L(35,30,50,52,7,hi,255); L(50,52,65,30,7,hi,255); L(65,30,65,72,7,hi,255);
-    O(18,22,4,white,225); O(82,78,4,hi,225);
+    // Coin with raised rim and embossed M.
+    O(50,50,34,base,255); O(50,50,28,black,255); O(50,50,24,hi,255); O(50,50,20,black,255);
+    L(37,68,37,35,5,hi); L(37,35,50,53,5,hi); L(50,53,63,35,5,hi); L(63,35,63,68,5,hi);
+    L(31,24,43,19,4,white,200); L(57,19,69,24,4,white,200); O(76,73,3,hi,220); O(24,73,3,white,180);
   }
 
-  // Downsample the large artwork to the exact tiny footprint used by the profile.
+  // Average 25x25 source pixels into each final pixel. This is the key to keeping
+  // curves and filled silhouettes recognizable after Discord receives the profile PNG.
   const outW=20,outH=20, ox=Math.round(cx-outW/2), oy=Math.round(cy-outH/2);
   for(let py=0;py<outH;py++) for(let px=0;px<outW;px++){
     let sr=0,sg=0,sb=0,sa=0,n=0;
@@ -5189,13 +5197,12 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     }
   }
 
-  // Tiny animated enamel glint; Butterfly remains unchanged by design.
-  if(b.style!=='butterfly'){
-    const gx=cx+Math.round(Math.cos(phase*6.283+cx*.01)*(r-5));
-    const gy=cy+Math.round(Math.sin(phase*6.283+cx*.01)*(r-5));
-    profileSmoothStar(frame,gx,gy,1.0,white,135);
-    profileSmoothStar(frame,cx-r+4,cy-r+4,0.8,white,105);
-  }
+  const gx=cx+Math.round(Math.cos(phase*6.283+cx*.01)*(r-5));
+  const gy=cy+Math.round(Math.sin(phase*6.283+cx*.01)*(r-5));
+  profileSmoothStar(frame,gx,gy,1.25,white,145);
+  // Tiny fixed enamel glint: reinforces the collectible/premium look without
+  // obscuring the emblem at Discord's final size.
+  if(b.style!=='butterfly') profileSmoothStar(frame,cx-r+4,cy-r+4,0.9,white,120);
 }
 
 function drawProfileBadges(frame,badgeIds,phase=0){
@@ -5204,10 +5211,7 @@ function drawProfileBadges(frame,badgeIds,phase=0){
   // Badges belong to the tree showcase shelf, not the achievement ribbon.
   const y=450;
   const positions=[145,180,215,250];
-  for(let i=0;i<ids.length;i++){
-    // All badges share the same tiny final footprint so their silhouettes are judged fairly.
-    drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
-  }
+  for(let i=0;i<ids.length;i++) drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
 }
 
 async function renderProfileDirectFrame(env,player,phase=0){
@@ -5475,51 +5479,19 @@ function drawRotatedEllipse(frame,cx,cy,rx,ry,angle,rgb,a=220){
   }
 }
 
-function drawPetalShape(frame,cx,cy,size,angle,rgb,alpha=225){
-  // PETAL STORM v2: unmistakable flower-petal silhouettes.
-  // The old version used a narrow ellipse, which read like leaves/teardrops.
-  // This version uses two rounded upper lobes + a tapered lower body, giving
-  // each falling piece the soft heart-like shape of a real flower petal.
+function drawOrganicPetal(frame,cx,cy,size,angle,rgb,alpha=225){
+  // Rounded petal body + pointed tip + soft highlight + central vein.
   const ca=Math.cos(angle),sa=Math.sin(angle);
-  function pos(dx,dy){return [cx+dx*ca-dy*sa,cy+dx*sa+dy*ca];}
-  const [lpx,lpy]=pos(-size*0.18,-size*0.18);
-  const [rpx,rpy]=pos(size*0.18,-size*0.18);
-  const [bpx,bpy]=pos(0,size*0.13);
-  const [tpx,tpy]=pos(0,size*0.43);
-
-  // Rounded shoulders create the visible two-lobed petal top.
-  drawRotatedEllipse(frame,lpx,lpy,size*0.24,size*0.25,angle,rgb,alpha);
-  drawRotatedEllipse(frame,rpx,rpy,size*0.24,size*0.25,angle,rgb,alpha);
-  // Broad lower body and tapered tip.
-  drawRotatedEllipse(frame,bpx,bpy,size*0.31,size*0.40,angle,rgb,alpha);
-  drawRotatedEllipse(frame,tpx,tpy,size*0.13,size*0.20,angle,rgb,Math.max(80,alpha-18));
-
-  // Soft inner highlight and a short vein make it read as a petal rather than
-  // a generic pink blob when the profile is reduced.
-  const [hx,hy]=pos(-size*0.07,-size*0.04);
-  drawRotatedEllipse(frame,hx,hy,size*0.07,size*0.18,angle,[255,244,249],105);
+  drawRotatedEllipse(frame,cx,cy,size*0.62,size*0.36,angle,rgb,alpha);
+  const tipX=cx+ca*size*0.58, tipY=cy+sa*size*0.58;
+  drawRotatedEllipse(frame,tipX,tipY,size*0.27,size*0.18,angle,rgb,alpha-10);
+  drawRotatedEllipse(frame,cx-ca*size*0.13,cy-sa*size*0.13,size*0.18,size*0.10,angle,[255,245,250],125);
   const vein=[];
-  for(let i=0;i<5;i++){
-    const t=i/4;
-    const [vx,vy]=pos(0,-size*0.03+t*size*0.37);
-    vein.push([vx,vy]);
+  for(let i=0;i<8;i++){
+    const t=i/7, d=(t-0.5)*size*0.85;
+    vein.push([cx+ca*d,cy+sa*d]);
   }
-  effectRibbonPath(frame,vein,Math.max(0.9,size*0.035),[255,112,172],105);
-}
-
-function drawMiniFlower(frame,cx,cy,size,phase,seed){
-  // A few tiny five-petal blossoms are mixed into the storm so the effect
-  // unmistakably belongs to flowers without turning into Flower Bloom.
-  const colors=[[255,153,198],[255,184,215],[248,125,180],[255,211,228],[235,105,169]];
-  const petalColor=colors[seed%colors.length];
-  for(let k=0;k<5;k++){
-    const a=(k/5)*Math.PI*2+phase*0.8+seed*0.31;
-    const px=cx+Math.cos(a)*size*0.23;
-    const py=cy+Math.sin(a)*size*0.23;
-    drawRotatedEllipse(frame,px,py,size*0.19,size*0.34,a,petalColor,145);
-  }
-  drawRotatedEllipse(frame,cx,cy,size*0.15,size*0.15,0,[255,231,116],205);
-  drawSparkle(frame,Math.round(cx),Math.round(cy-size*0.48),'star');
+  effectRibbonPath(frame,vein,1.8,[255,125,180],105);
 }
 
 function drawAnimatedPetalStorm(frame, phase=0) {
@@ -5537,20 +5509,10 @@ function drawAnimatedPetalStorm(frame, phase=0) {
     const y=((by+t*0.72)%1.12-0.07)*frame.height;
     const angle=baseAngle+Math.sin(phase*Math.PI*2*1.7+seed)*0.75+t*1.8;
     const scale=0.78+0.22*Math.sin(phase*Math.PI*2+seed*1.7)**2;
-    drawPetalShape(frame,x,y,size*scale,angle,colors[seed%colors.length],220);
+    drawOrganicPetal(frame,x,y,size*scale,angle,colors[seed%colors.length],220);
   }
-
-  // Occasional recognizable little blossoms break up the stream while keeping
-  // the effect primarily a falling-petal storm.
-  for(let i=0;i<4;i++){
-    const t=(phase*0.42+i*0.27)%1;
-    const x=(0.14+i*0.24+Math.sin(phase*2.2+i)*0.035)*frame.width;
-    const y=(0.18+t*0.70)*frame.height;
-    drawMiniFlower(frame,x,y,18+((i+1)%3)*3,phase,i+7);
-  }
-
-  for(let i=0;i<10;i++){
-    const t=(phase*1.1+i/10)%1;
+  for(let i=0;i<16;i++){
+    const t=(phase*1.1+i/16)%1;
     const x=(0.04+t*0.92)*frame.width;
     const y=(0.08+((i%5)*0.17)+Math.sin(t*8+i)*0.025)*frame.height;
     drawSparkle(frame,Math.round(x),Math.round(y),'star');
