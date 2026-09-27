@@ -764,7 +764,8 @@ function defaultPlayer() {
       cheese_block: 0,
       cheese_wheel: 0,
       judges_robe: 0,
-      raccoon_hitman: 0
+      raccoon_hitman: 0,
+      raccoon_empire: 0
     },
     ceaseDesistTargetId: "",
     ceaseDesistUntil: 0,
@@ -775,6 +776,8 @@ function defaultPlayer() {
     // made by this player is automatically paid to the magnet owner.
     sparkleMagnetOwnerId: "",
     sparkleMagnetUntil: 0,
+    // Raccoon Empire: permanent passive income/earnings bonus.
+    raccoonEmpireLastDividendAt: 0,
     courtGameTimeoutUntil: 0,
     courtFortuneBanUntil: 0,
     courtRaccoonBanUntil: 0,
@@ -2112,6 +2115,54 @@ async function savePlayer(env, player, ownerId = null, options = {}) {
   const key = ownerId != null ? String(ownerId) : String(player.userId || "").trim();
   if (!key) throw new Error("Cannot save player without an owner ID");
   player.userId = key;
+
+  /*
+     RACCOON EMPIRE
+     --------------
+     A purchased Empire License permanently adds 20% to positive sparkle
+     earnings. This is calculated from the player's persisted balance change,
+     so it automatically covers rewards from any command/game that ultimately
+     saves the player after granting sparkles.
+
+     The weekly 20,000 ✨ dividend uses skipRaccoonEmpireBonus so the fixed
+     dividend stays exactly 20,000 instead of becoming 24,000.
+  */
+  if (!options.skipRaccoonEmpireBonus) {
+    try {
+      const rawPreviousEmpire = await env.TREE_DATA.get(key);
+      let previousEmpireSparkles = null;
+      if (rawPreviousEmpire) {
+        try {
+          const previousEmpire = JSON.parse(rawPreviousEmpire);
+          previousEmpireSparkles = Number(previousEmpire.sparkles || 0);
+        } catch {}
+      }
+
+      const currentEmpireSparkles = Number(player.sparkles || 0);
+      const hasEmpire = raccoonMartCount(player, "raccoon_empire") > 0;
+
+      if (
+        previousEmpireSparkles !== null &&
+        currentEmpireSparkles > previousEmpireSparkles &&
+        hasEmpire
+      ) {
+        const baseGain = currentEmpireSparkles - previousEmpireSparkles;
+        const empireBonus = Math.floor(baseGain * 0.20);
+
+        if (empireBonus > 0) {
+          player.sparkles = currentEmpireSparkles + empireBonus;
+          player.badgeStats = player.badgeStats && typeof player.badgeStats === "object"
+            ? player.badgeStats
+            : {};
+          player.badgeStats.sparklesEarned =
+            Number(player.badgeStats.sparklesEarned || 0) + empireBonus;
+        }
+      }
+    } catch (error) {
+      // Never let Empire bookkeeping prevent the original save.
+      console.error("Raccoon Empire bonus processing failed:", error);
+    }
+  }
 
   /*
      SPARKLE MAGNET
@@ -7891,6 +7942,11 @@ const RACCOON_MART_ITEMS = {
     name: "🔫🦝 Raccoon Hitman",
     price: 20000,
     description: "For 24 hours, your /raccoon cooldown becomes 20 minutes. After 24 hours, your normal cooldown returns."
+  },
+  raccoon_empire: {
+    name: "🏛️🦝 Raccoon Empire License",
+    price: 200000,
+    description: "Permanent Raccoon Empire membership. You receive **20,000 ✨ every 7 days** and a permanent **20% bonus on positive sparkle earnings**. One license per player. The 20% bonus applies automatically to daily riddles, Fortune, raccoon wins, game rewards, achievements, level rewards, birthday rewards, and other positive sparkle gains."
   }
 };
 
@@ -8001,7 +8057,11 @@ async function showRaccoonMartInventory(env, interaction, page = 0) {
   page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
   const slice = ids.slice(page * 5, page * 5 + 5);
   const lines = slice.map(id => `${RACCOON_MART_ITEMS[id].name}: **${raccoonMartCount(player, id)}**`);
-  const usable = slice.filter(id => raccoonMartCount(player, id) > 0);
+  // Passive items do not need a Use button; ownership activates them automatically.
+  const usable = slice.filter(id =>
+    raccoonMartCount(player, id) > 0 &&
+    id !== "raccoon_empire"
+  );
   const rows = [];
   const useButtons = usable.map(id => button(`Use ${RACCOON_MART_ITEMS[id].name}`, `raccoonmart:use:${id}`, 1));
   for (let i = 0; i < useButtons.length; i += 2) rows.push(row(...useButtons.slice(i, i + 2)));
@@ -8024,17 +8084,33 @@ async function buyRaccoonMartItem(env, interaction, itemId) {
   if (!item) return sendText(env, interaction, "❌ That RaccoonMart item does not exist.");
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
+
+  if (itemId === "raccoon_empire" && raccoonMartCount(player, "raccoon_empire") > 0) {
+    return sendText(
+      env,
+      interaction,
+      "🏛️🦝 **You already own the Raccoon Empire License!**\n\nYour Empire is permanent, so you can only purchase one."
+    );
+  }
+
   if (Number(player.sparkles || 0) < item.price) {
     return sendText(env, interaction, `❌ You need **${item.price.toLocaleString()} sparkles**, but you only have **${Number(player.sparkles || 0).toLocaleString()}**.`);
   }
   player.sparkles -= item.price;
   setRaccoonMartCount(player, itemId, raccoonMartCount(player, itemId) + 1);
+
+  if (itemId === "raccoon_empire") {
+    // The purchase starts the 7-day clock. The first 20,000 ✨ dividend is
+    // paid after a full 7 days, never immediately on purchase.
+    player.raccoonEmpireLastDividendAt = Date.now();
+  }
+
   player.shopPurchases = Number(player.shopPurchases || 0) + 1;
   player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
   player.badgeStats.sparklesSpent = Number(player.badgeStats.sparklesSpent || 0) + item.price;
   await savePlayer(env, player, user.id);
   await sendText(env, interaction,
-    `🛒🦝 **PURCHASE COMPLETE!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n📦 You now own **${raccoonMartCount(player, itemId)}**.`,
+    `🛒🦝 **PURCHASE COMPLETE!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n📦 You now own **${raccoonMartCount(player, itemId)}**.${itemId === "raccoon_empire" ? "\n\n🏛️ **YOUR EMPIRE IS NOW ACTIVE PERMANENTLY!**\n💰 **20,000 ✨ every 7 days**\n📈 **+20% on positive sparkle earnings**\n♾️ **Never expires.**" : ""}`,
     raccoonMartHomeRows(player)
   );
 }
@@ -12405,6 +12481,13 @@ async function handleComponent(
       if (itemId === "cheese_wheel") return useCheeseProtection(env, interaction, itemId, 3 * 24 * 60 * 60 * 1000, 0);
       if (itemId === "raccoon_hitman") return useRaccoonHitman(env, interaction);
       if (itemId === "judges_robe") return useJudgesRobe(env, interaction);
+      if (itemId === "raccoon_empire") {
+        return sendText(
+          env,
+          interaction,
+          "🏛️🦝 **RACCOON EMPIRE IS ALREADY ACTIVE!**\n\nYour License is permanent. You receive **20,000 ✨ every 7 days** and **+20% on positive sparkle earnings** automatically."
+        );
+      }
       return showRaccoonMartTargetMenu(env, interaction, itemId);
     }
     if (action === "robe_choice") {
@@ -28630,6 +28713,63 @@ async function processRumbleTimers(env) {
 
 
 
+ /* =========================================================
+   RACCOON EMPIRE — WEEKLY DIVIDENDS
+========================================================= */
+
+const RACCOON_EMPIRE_WEEK = 7 * 24 * 60 * 60 * 1000;
+const RACCOON_EMPIRE_WEEKLY_PAYOUT = 20000;
+
+async function processRaccoonEmpireDividends(env) {
+  const now = Date.now();
+  const playerKeys = await listAllPlayerKeys(env);
+
+  for (const userId of playerKeys) {
+    try {
+      const player = await getPlayer(env, userId);
+
+      if (raccoonMartCount(player, "raccoon_empire") < 1) continue;
+
+      let lastDividend = Number(player.raccoonEmpireLastDividendAt || 0);
+
+      // Safety migration: if an Empire holder somehow has no timestamp,
+      // start their first 7-day clock now rather than granting a surprise payout.
+      if (!lastDividend) {
+        player.raccoonEmpireLastDividendAt = now;
+        await savePlayer(env, player, userId, {
+          skipRaccoonEmpireBonus: true,
+          skipSparkleMagnet: true
+        });
+        continue;
+      }
+
+      if (now - lastDividend < RACCOON_EMPIRE_WEEK) continue;
+
+      // Catch up missed weekly dividends without paying multiple weeks during
+      // one cron pass. Each successful pass advances exactly one 7-day period.
+      player.sparkles = Number(player.sparkles || 0) + RACCOON_EMPIRE_WEEKLY_PAYOUT;
+      player.badgeStats = player.badgeStats && typeof player.badgeStats === "object"
+        ? player.badgeStats
+        : {};
+      player.badgeStats.sparklesEarned =
+        Number(player.badgeStats.sparklesEarned || 0) + RACCOON_EMPIRE_WEEKLY_PAYOUT;
+
+      player.raccoonEmpireLastDividendAt = lastDividend + RACCOON_EMPIRE_WEEK;
+
+      await savePlayer(env, player, userId, {
+        skipRaccoonEmpireBonus: true,
+        skipSparkleMagnet: true
+      });
+
+      // If the worker was down for multiple weeks, the next scheduled pass
+      // will pay the next missed week. This avoids a huge accidental lump sum.
+    } catch (error) {
+      console.error(`Raccoon Empire dividend failed for ${userId}:`, error);
+    }
+  }
+}
+
+
 export default {
   async fetch(
     request,
@@ -29185,7 +29325,7 @@ export default {
   },
 
 
- /* =======================================================
+/* =======================================================
    SCHEDULED TASKS
 
    Cloudflare cron should be configured separately
@@ -29221,7 +29361,8 @@ export default {
         processCourtTrashRelease(env),
         processBirthdayEvent(env),
         expireBirthdayEventState(env),
-        processRaccoonMegaphoneJobs(env)
+        processRaccoonMegaphoneJobs(env),
+        processRaccoonEmpireDividends(env)
       ])
     );
   }
