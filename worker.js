@@ -5072,10 +5072,13 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     L(25,75,25,56,8,c2,255); L(25,56,50,31,8,c2,255); L(50,31,75,56,8,c2,255); L(75,56,75,75,8,c2,255);
     L(35,75,35,61,6,c3,255); L(35,61,50,43,6,c3,255); L(50,43,65,61,6,c3,255); L(65,61,65,75,6,c3,255);
   } else if(b.style==='sparkle'){
-    // Sparkle Hoarder: one MASSIVE clean sparkle, plus two tiny satellites.
-    // It must read as a sparkle at a glance, not as a pile of dots.
-    ST(50,50,42,base,255); ST(50,50,21,white,250);
-    ST(23,76,7,hi,255); ST(77,24,7,hi,255);
+    // Sparkle Hoarder: a SINGLE chunky four-point sparkle.
+    // Do not use thin star outlines here — they disappear when the 500px
+    // artwork is reduced to the tiny 20px profile footprint.
+    // Filled silhouette = unmistakable sparkle at Discord size.
+    POLY([[50,5],[59,41],[95,50],[59,59],[50,95],[41,59],[5,50],[41,41]],base,255);
+    POLY([[50,25],[55,45],[75,50],[55,55],[50,75],[45,55],[25,50],[45,45]],white,250);
+    O(50,50,5,hi,255);
   } else if(b.style==='green'){
     // Tree Keeper: bold evergreen silhouette with a wide trunk/base.
     F(44,57,12,30,base,255); F(38,84,24,6,hi,255);
