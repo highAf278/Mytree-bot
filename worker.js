@@ -3640,15 +3640,19 @@ function profileCandy(frame,x,y,s,c,alt){
   else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
 function profileFlower(frame,x,y,s,c,phase=0){
-  const r=Math.max(2,Math.round(s*0.72));
-  const petalColors=[c,[255,210,235],[255,240,120]];
+  // Actual five-petal flower for the PETALS name effect. Deliberately chunky so
+  // it reads as a flower in the 800x500 profile render instead of a sparkle.
+  const r=Math.max(2,Math.round(s*0.62));
+  const petalR=Math.max(3,Math.round(s*0.30));
+  const colors=[c,[255,190,225],[255,220,240],[245,145,205],[255,200,230]];
   for(let i=0;i<5;i++){
     const a=(Math.PI*2*i)/5 + Math.sin(phase*Math.PI*2)*0.08;
-    const px=Math.round(x+Math.cos(a)*r*0.72), py=Math.round(y+Math.sin(a)*r*0.72);
-    profilePetal(frame,px,py,Math.max(3,Math.round(s*0.62)),petalColors[i%petalColors.length],i%2?-1:1);
+    const px=Math.round(x+Math.cos(a)*r), py=Math.round(y+Math.sin(a)*r);
+    profileSmoothCircle(frame,px,py,petalR,colors[i],235,true);
+    profileSmoothCircle(frame,px-1,py-1,Math.max(1,Math.round(petalR*.35)),[255,245,255],150,true);
   }
-  profileFill(frame,x-2,y-2,5,5,255,205,65,245);
-  profileFill(frame,x-1,y-1,3,3,255,245,145,255);
+  profileSmoothCircle(frame,x,y,Math.max(2,Math.round(s*0.24)),[255,210,70],245,true);
+  profileSmoothCircle(frame,x,y,Math.max(1,Math.round(s*0.12)),[255,248,150],255,true);
 }
 function profilePumpkin(frame,x,y,s,c,phase=0){
   const w=Math.max(5,Math.round(s*1.25)), h=Math.max(4,Math.round(s*0.9));
@@ -3797,7 +3801,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       xx+=Math.round(Math.sin(t+charIndex*0.55));
     } else if(effectId==="petals"){
       yy+=Math.round(Math.sin(t+charIndex*0.35));
-      color=charIndex%2?[235,85,170]:[255,135,205];
+      color=charIndex%3===0?[255,125,195]:charIndex%3===1?[245,95,175]:[255,175,220];
     } else if(effectId==="butterflies"){
       yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
       xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
@@ -3943,14 +3947,17 @@ function drawProfileEffectParticles(frame,effectId,phase){
       break;
     }
     case "petals": {
-      const pts=[[350,136,0],[385,226,.12],[430,145,.25],[480,232,.38],[530,137,.51],[580,228,.64],[630,145,.77],[690,231,.89],[735,140,.31]];
+      // FLOWERS FIRST: make the PETALS name effect unmistakably floral.
+      profileFlower(frame,365,138,10,[245,105,190],phase*0.8);
+      profileFlower(frame,742,138,9,[255,145,205],phase*0.8+0.2);
+      profileFlower(frame,365,214,8,[255,175,220],phase*0.8+0.4);
+      profileFlower(frame,735,214,10,[245,120,195],phase*0.8+0.6);
+      // A few larger falling petals between the flowers — no generic stars.
+      const pts=[[390,160,0],[445,212,.17],[500,145,.31],[555,216,.48],[615,154,.63],[675,207,.79]];
       pts.forEach(([x,y,o],i)=>{
-        const xx=x+Math.sin(p*0.75+o*9)*10, yy=y+((phase+o)%1)*20;
-        profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%3),pal[i%pal.length],i%2?-1:1);
+        const xx=x+Math.sin(p*0.75+o*9)*9, yy=y+((phase+o)%1)*18;
+        profilePetal(frame,Math.round(xx),Math.round(yy),6+(i%2),pal[i%pal.length],i%2?-1:1);
       });
-      // Two recognizable little flowers among the drifting petals.
-      profileFlower(frame,405,143,8,[245,105,190],phase*0.7);
-      profileFlower(frame,690,222,8,[255,145,200],phase*0.7+0.4);
       break;
     }
     case "inferno": {
@@ -5048,20 +5055,19 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP: unmistakable luxury crown + jewel. Big silhouette, bright facets.
-    POLY([[18,31],[25,12],[39,26],[50,7],[61,26],[75,12],[82,31],[77,42],[23,42]],hi,255);
-    POLY([[24,30],[30,19],[39,31],[50,14],[61,31],[70,19],[76,30],[71,36],[29,36]],base,255);
-    O(30,23,3.5,white,255); O(50,14,4,white,255); O(70,23,3.5,white,255);
-    F(23,37,54,6,[255,222,120],255);
-    // Large jewel/crest underneath — deliberately not another plain diamond.
-    POLY([[25,43],[50,37],[75,43],[68,78],[50,92],[32,78]],base,255);
-    POLY([[25,43],[50,37],[50,84],[32,78]],hi,255);
-    POLY([[50,37],[75,43],[68,78],[50,84]],base,255);
-    POLY([[39,50],[50,43],[61,50],[56,68],[50,76],[44,68]],white,250);
-    POLY([[39,50],[50,43],[50,76],[44,68]],[245,190,255],255);
-    POLY([[50,43],[61,50],[56,68],[50,76]],[255,224,105],255);
-    O(28,48,3,white,245); O(72,48,3,white,245); O(35,76,3,hi,245); O(65,76,3,hi,245);
-    ST(84,80,7,white,255); ST(17,21,4,white,230);
+    // VIP = luxury medal, NOT a crown. King owns the crown silhouette.
+    // Chunky ribbon + round purple/gold medallion keeps the emblem readable at 24px.
+    POLY([[30,14],[42,20],[50,28],[58,20],[70,14],[66,40],[34,40]],hi,255);
+    POLY([[35,17],[44,23],[50,31],[56,23],[65,17],[62,36],[38,36]],base,255);
+    L(42,21,50,29,3,white,210); L(58,21,50,29,3,white,210);
+    O(50,66,28,base,255); O(50,66,23,[105,45,170],255); O(50,66,18,[170,85,245],255);
+    // Strong gold inner medallion and a single V-shaped VIP mark.
+    O(50,66,14,[255,205,65],255);
+    O(50,66,11,[30,18,38],255);
+    L(43,60,50,75,3,white,250); L(50,75,57,60,3,white,250);
+    L(45,65,55,65,2,[255,220,105],245);
+    O(44,57,2.5,white,235); O(56,57,2.5,white,235);
+    ST(79,81,5,white,230); ST(21,23,3,white,210);
   } else if(b.style==='spender'){
     RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
     // Card chip and contactless marks.
