@@ -9146,7 +9146,7 @@ function refreshProfileBadges(player) {
     "fairy_flight_animated_effect","crystal_aura_animated_effect","starfall_animated_effect",
     "unicorn_sparkle_animated_effect","snowfall_animated_effect","flower_bloom_animated_effect",
     "bubble_pop_animated_effect","candy_storm_animated_effect","kitty_parade_animated_effect",
-    "electric_storm_animated_effect","experimental_effect_animated_effect","black_ice_snow_animated_effect","beans_effect"
+    "electric_storm_animated_effect","experimental_effect_animated_effect","black_ice_snow_animated_effect","globe_animated_effect","beans_effect"
   ];
   const frameIds = ["rhinestone_princess","pink_glitter_bomb","candyland","butterfly_swarm","rainbow_dream","starfall","spiderweb","gothic_lace","crimson_velvet","royal_gold","diamond_palace","champagne","purple_royalty","toxic_green","midnight_chrome","black_ice","haunted_manor"];
   const frameOwned = frameIds.filter(id => inv.includes(id)).length;
@@ -10271,6 +10271,7 @@ async function equipEffect(
       electric_storm_animated: "electric_storm_animated_effect",
       experimental_effect_animated: "experimental_effect_animated_effect",
       black_ice_snow_animated: "black_ice_snow_animated_effect",
+      globe_animated: "globe_animated_effect",
       beans: "beans_effect"
     }[effect];
 
@@ -10586,6 +10587,8 @@ const INVENTORY_NAMES = {
   kitty_parade_animated_effect: "🐱 Kitty Parade",
   electric_storm_animated_effect: "⚡ Electric Storm",
   experimental_effect_animated_effect: "🧪 Experimental Effect",
+  black_ice_snow_animated_effect: "❄️ Black Ice Snow",
+  globe_animated_effect: "🌎✨ Worldlight Globe",
   beans_effect: "🫘💥 Bean Burst Effect"
 };
 
@@ -10601,7 +10604,7 @@ const INVENTORY_CATEGORIES = [
 const INVENTORY_CATEGORY_IDS = {
   trees: ["cherry", "cotton_candy_tree", "stoned_birthday_tree", "birthday_tree", "shadow_tree", "full_cherry_tree", "pine_tree", "red_tree", "soul_tree", "kitty_tree", "halloween_tree", "green_glow_tree", "prism_flutter_tree", "lavender_twilight_tree", "world_of_flags_tree", "ocean_opal_tree", "fairy_hollow_tree", "glam_tree", "black_cat_magic_tree", "dragon_realm_tree", "inferno_king_tree", "thunder_god_tree", "black_ice_tree", "werewives_tree", "golden_pickle_tree", "midnight_rider_tree"],
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "fairy_hollow_background", "glam_background", "black_cat_magic_background", "dragon_realm_background", "inferno_king_background", "thunder_god_background", "black_ice_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
-  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "black_ice_snow_animated_effect", "beans_effect"],
+  effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "black_ice_snow_animated_effect", "globe_animated_effect", "beans_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration", "black_ice_decoration"],
   frames: ["profile_frame_royal_gold"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
@@ -24693,7 +24696,7 @@ async function handleFree(env, interaction, guess) {
     await sendText(
       env,
       interaction,
-      `🌎✨ **WORLDLIGHT GLOBE UNLOCKED!**\n\nYou received the FREE **Worldlight Globe** animated effect!\n\n🌎 Large golden globes\n✨ Gold orbital light\n⭐ Big starbursts\n\nUse **/profile → Customize → Effects** to equip it! 🦝🌎`
+      "🌎✨ You got the **Worldlight Globe** effect!"
     );
     return;
   }
