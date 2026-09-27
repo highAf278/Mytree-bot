@@ -3546,16 +3546,40 @@ function profileStar(frame,x,y,s,c,a=255){
   profileFill(frame,x,y,2,2,255,255,255,Math.min(255,a));
 }
 function profilePetal(frame,x,y,s,c,flip=1){
-  // Small, clearly leaf/petal-shaped form: tapered top/bottom with a curved belly.
-  const w=Math.max(3,Math.round(s*0.72));
-  const h=Math.max(5,Math.round(s*1.35));
-  for(let row=-h;row<=h;row++){
-    const yy=row/h;
-    const width=Math.max(1,Math.round(w*(1-Math.min(0.9,Math.abs(yy)*0.72))));
-    const xx=x+Math.round(Math.sin(yy*Math.PI)*flip*1.5);
-    profileFill(frame,xx-width,y+row,width*2+1,1,c[0],c[1],c[2],235);
-  }
-  profilePixelLine(frame,x,y-h+1,x+flip*Math.max(1,Math.round(w*0.7)),y+h-1,1,255,225,245,150);
+  // PETALS V2: use the same smooth, rounded raster primitive as the rest of
+  // the profile artwork. The old row-by-row diamond/leaf shape looked like
+  // little shards after Discord compression. This is a real teardrop petal:
+  // rounded belly, tapered tip, subtle outline, and a visible center vein.
+  const rx=Math.max(2.8,s*0.58);
+  const ry=Math.max(4.5,s*1.02);
+  const rot=flip<0?0.34:-0.34;
+  const outline=[170,62,125];
+  profileSmoothPetal(frame,x,y,rx+1.35,ry+1.35,outline,205,rot);
+  profileSmoothPetal(frame,x,y,rx,ry,c,250,rot);
+
+  // Soft inner highlight keeps the petal readable at tiny Discord size.
+  profileSmoothPetal(
+    frame,
+    x-flip*0.7,
+    y-ry*0.16,
+    Math.max(1.2,rx*0.34),
+    Math.max(2.0,ry*0.46),
+    [255,225,242],
+    150,
+    rot
+  );
+
+  // Center vein follows the petal's natural direction instead of cutting
+  // across it like the old diagonal line.
+  profilePixelLine(
+    frame,
+    x-flip*0.35,
+    y+ry*0.55,
+    x+flip*0.55,
+    y-ry*0.58,
+    1,
+    255,235,247,145
+  );
 }
 function profileButterfly(frame,x,y,s,variant=0,phase=0){
   // V5: unmistakable butterfly silhouette designed for Discord's final-size render.
@@ -3640,15 +3664,32 @@ function profileCandy(frame,x,y,s,c,alt){
   else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
 function profileFlower(frame,x,y,s,c,phase=0){
-  const r=Math.max(2,Math.round(s*0.72));
-  const petalColors=[c,[255,210,235],[255,240,120]];
+  // PETALS V2: unmistakable five-petal flower with a round center.
+  // Petals overlap slightly at the base so the silhouette reads as a flower,
+  // not five disconnected leaves.
+  const r=Math.max(2.8,s*0.70);
+  const petalColors=[c,[255,180,220],[255,205,235],[245,155,215],[255,190,225]];
+  const wobble=Math.sin(phase*Math.PI*2)*0.035;
   for(let i=0;i<5;i++){
-    const a=(Math.PI*2*i)/5 + Math.sin(phase*Math.PI*2)*0.08;
-    const px=Math.round(x+Math.cos(a)*r*0.72), py=Math.round(y+Math.sin(a)*r*0.72);
-    profilePetal(frame,px,py,Math.max(3,Math.round(s*0.62)),petalColors[i%petalColors.length],i%2?-1:1);
+    const a=(Math.PI*2*i)/5-Math.PI/2+wobble;
+    const px=x+Math.cos(a)*r*0.66;
+    const py=y+Math.sin(a)*r*0.66;
+    const flip=Math.cos(a)>=0?1:-1;
+    profilePetal(
+      frame,
+      Math.round(px),
+      Math.round(py),
+      Math.max(4.5,s*0.72),
+      petalColors[i],
+      flip
+    );
   }
-  profileFill(frame,x-2,y-2,5,5,255,205,65,245);
-  profileFill(frame,x-1,y-1,3,3,255,245,145,255);
+
+  // Strong round center, with a darker ring and warm center dot so it still
+  // reads as a flower when Discord shrinks the whole profile.
+  profileSmoothCircle(frame,x,y,Math.max(2.8,s*0.25),[205,105,145],225,true);
+  profileSmoothCircle(frame,x,y,Math.max(2.0,s*0.18),[255,211,70],255,true);
+  profileSmoothCircle(frame,x-s*0.07,y-s*0.07,Math.max(0.8,s*0.07),[255,250,180],235,true);
 }
 function profilePumpkin(frame,x,y,s,c,phase=0){
   const w=Math.max(5,Math.round(s*1.25)), h=Math.max(4,Math.round(s*0.9));
@@ -3764,7 +3805,8 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   let baseY=Math.round(y);
   if(effectId==="rainbow") baseY+=Math.round(Math.sin(t)*1.5);
   else if(effectId==="candy_rush") baseY+=Math.round(Math.sin(t*2)*1.5);
-  else if(effectId==="petals") baseY+=Math.round(Math.sin(t)*1.2);
+  else if(effectId==="petals") baseY+=0; // Petals animate around the title; keep lettering stable.
+
   else if(effectId==="butterflies") baseY+=Math.round(Math.sin(t*1.5)*1.2);
   else if(effectId==="inferno") baseY+=Math.round(Math.sin(t*2.5)*1.5);
   else if(effectId==="starlight") baseY+=Math.round(Math.sin(t*0.8)*1);
@@ -3796,8 +3838,8 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       yy+=Math.round(Math.sin(t*2+charIndex*0.8)*2);
       xx+=Math.round(Math.sin(t+charIndex*0.55));
     } else if(effectId==="petals"){
-      yy+=Math.round(Math.sin(t+charIndex*0.35));
-      color=charIndex%2?[235,85,170]:[255,135,205];
+      // Stable, high-contrast lettering. The flowers/petals provide the motion.
+      color=charIndex%3===0?[255,150,210]:charIndex%3===1?[245,105,180]:[255,205,232];
     } else if(effectId==="butterflies"){
       yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
       xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
@@ -3943,14 +3985,28 @@ function drawProfileEffectParticles(frame,effectId,phase){
       break;
     }
     case "petals": {
-      const pts=[[350,136,0],[385,226,.12],[430,145,.25],[480,232,.38],[530,137,.51],[580,228,.64],[630,145,.77],[690,231,.89],[735,140,.31]];
-      pts.forEach(([x,y,o],i)=>{
-        const xx=x+Math.sin(p*0.75+o*9)*10, yy=y+((phase+o)%1)*20;
-        profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%3),pal[i%pal.length],i%2?-1:1);
+      // PETALS V2: fewer, larger, separated shapes so Discord preserves their
+      // silhouette. Flowers are placed at the corners of the title area and
+      // gently bob; individual petals drift independently.
+      const flowers=[
+        [365,139,10,0.00],[735,139,10,0.55],
+        [365,226,9,0.25],[735,226,9,0.80]
+      ];
+      flowers.forEach(([x,y,s,o])=>{
+        const xx=x+Math.round(Math.sin(p*0.70+o*7)*4);
+        const yy=y+Math.round(Math.cos(p*0.60+o*6)*3);
+        profileFlower(frame,xx,yy,s,[245,105,190],phase*0.55+o);
       });
-      // Two recognizable little flowers among the drifting petals.
-      profileFlower(frame,405,143,8,[245,105,190],phase*0.7);
-      profileFlower(frame,690,222,8,[255,145,200],phase*0.7+0.4);
+
+      const pts=[
+        [395,137,0.05],[445,226,0.18],[495,139,0.31],
+        [545,228,0.44],[595,140,0.57],[645,226,0.70],[705,150,0.84]
+      ];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=x+Math.round(Math.sin(p*0.70+o*8)*6);
+        const yy=y+Math.round(Math.cos(p*0.55+o*7)*4)+Math.round(((phase+o)%1)*10-5);
+        profilePetal(frame,xx,yy,6+(i%2),pal[i%pal.length],i%2?-1:1);
+      });
       break;
     }
     case "inferno": {
