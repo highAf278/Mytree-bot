@@ -1074,7 +1074,7 @@ function nameEffectText(effectId, titleText, phase = 0) {
     const chars=[...text].map((ch,i)=>`<span style="color:hsl(${hues[i%4]},90%,75%);text-shadow:0 0 1px rgba(255,255,255,.95),0 0 3px rgba(255,160,220,.35)">${ch === " " ? "&nbsp;" : escapeHTML(ch)}</span>`).join("");
     return `<span class="effect-candy_rush">${chars}</span>`;
   }
-  if (effectId === "petals") return `<span class="effect-petals"><span class="petalBloom petalFlower1">✿</span><span class="petalBloom petalFlower2">❀</span><span class="petalGlow">${safe}</span><span class="petalBloom petalFlower3">✿</span></span>`;
+  if (effectId === "petals") return `<span class="effect-petals"><span class="petalGlow">${safe}</span></span>`;
   if (effectId === "cosmic") return `<span class="effect-cosmic"><span class="cosmicGlow">${safe}</span></span>`;
   if (effectId === "green_glow") return `<span class="effect-green_glow"><span class="greenGlowText">${safe}</span></span>`;
   const configs={
@@ -1116,7 +1116,7 @@ function profileCardHTML(player, phase = 0) {
   const decorUrl = decor ? imageUrl(decor) : "";
   const titleMarkup = nameEffectText(effectId, title, phase);
   const particleMap = {
-    rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✿","❀","✿","❀"],
+    rainbow:["✦","✧","·","★"], starlight:["✦","✧","★","·"], petals:["✦","·","✧","✦"],
     inferno:["✦","·","✦","·"], green_glow:["✦","·","✦","·"], candy_rush:["✦","·","✧","✦"], cosmic:["✦","✧","·","★"],
     firework:["✦","·","✧","★"], royal_blood:["✦","·","★","✦"], enchanted:["✧","✦","·","★"],
     royal_purple:["✦","·","✧","★"], butterflies:["✧","·","✦","✧"], shadow:["·","✦","·","★"],
@@ -1127,7 +1127,7 @@ function profileCardHTML(player, phase = 0) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#222;font-family:Arial,sans-serif}#card{width:800px;height:500px;background:${bg};border:8px solid rgba(255,255,255,.9);border-radius:34px;overflow:hidden;position:relative;color:#2a2030;box-shadow:0 12px 40px rgba(0,0,0,.28)}
     .wash{position:absolute;inset:0;background:transparent}.tree{position:absolute;left:2%;bottom:-4%;width:350px;height:430px;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.decor{position:absolute;left:21%;bottom:9%;width:125px;height:125px;object-fit:contain}.panel{position:absolute;left:330px;right:24px;top:24px;bottom:24px;background:color-mix(in srgb, ${bg} 86%, white 14%);border-radius:25px;padding:24px}.name{font-size:32px;font-weight:900}.subtitle{font-size:17px;opacity:.72;margin-top:4px}.titleBox{margin-top:26px;background:color-mix(in srgb, ${bg} 72%, white 28%);border-radius:20px;padding:20px 14px;text-align:center;min-height:92px}.title{font-size:34px;font-weight:900;letter-spacing:.4px}.effect{font-size:15px;margin-top:10px;font-weight:700}.stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:18px}.badge{margin-top:18px;font-size:14px;opacity:.8}
-    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalBloom{position:absolute;font-size:18px;line-height:1;color:#ff8fca;text-shadow:0 0 2px #fff,0 0 7px rgba(255,105,190,.75);animation:petalBloom 2.4s ease-in-out infinite}.petalFlower1{left:-28px;top:-9px}.petalFlower2{right:-27px;top:3px;color:#ffc1df;animation-delay:.45s}.petalFlower3{right:-14px;bottom:-12px;color:#d98cff;animation-delay:.9s}@keyframes petalBloom{0%,100%{transform:translateY(0) rotate(-8deg) scale(.9);opacity:.78}50%{transform:translateY(-5px) rotate(8deg) scale(1.12);opacity:1}}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:15px;font-family:Arial,sans-serif;font-weight:700;z-index:3;filter:drop-shadow(0 0 3px rgba(255,255,255,.65));pointer-events:none;opacity:.9}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
+    .effect-petals,.effect-cosmic,.effect-green_glow{display:inline-block;position:relative;line-height:1.05;min-width:10px}.petalGlow{color:#f58bc6;text-shadow:0 0 1px #fff,0 0 3px rgba(255,135,205,.45)}.petalAccent{position:absolute;font-size:20px;line-height:1}.petalA{left:-22px;top:-7px}.petalB{right:-22px;bottom:-8px}.cosmicGlow{color:#7a86ef;text-shadow:0 0 1px #fff,0 0 3px rgba(120,125,255,.45)}.cosmicOrbit{position:absolute;left:-10px;right:-10px;top:48%;height:20px;border:1px solid rgba(120,140,255,.75);border-radius:50%;transform:rotate(-7deg);box-shadow:0 0 3px rgba(120,150,255,.55);pointer-events:none}.cosmicSpark{position:absolute;color:#9ba7ff;font-size:15px;text-shadow:0 0 7px #fff}.cs1{left:-22px;top:2px}.cs2{right:-18px;top:10px}.cs3{right:-10px;bottom:-8px}.greenGlowText{color:#54dc63;text-shadow:0 0 1px #fff,0 0 3px rgba(80,255,100,.45)}.greenHeart{position:absolute;font-size:22px;line-height:1;filter:drop-shadow(0 0 5px rgba(60,255,80,.8))}.gh1{left:-27px;top:-8px}.gh2{right:-27px;bottom:-8px}.greenSpark{position:absolute;color:#58e86a;font-size:15px;text-shadow:0 0 7px #fff}.gs1{left:-17px;bottom:-5px}.gs2{right:-16px;top:-8px}.effect-firework,.effect-royal_blood,.effect-enchanted,.effect-royal_purple,.effect-butterflies,.effect-shadow,.effect-frostbite,.effect-golden,.effect-spooky{display:inline-block;position:relative;line-height:1.05;min-width:10px}.effect-golden{filter:drop-shadow(0 0 5px rgba(255,210,70,.65))}.effect-shadow{filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}.particle{position:absolute;font-size:15px;font-family:Arial,sans-serif;font-weight:700;z-index:3;filter:drop-shadow(0 0 3px rgba(255,255,255,.65));pointer-events:none;opacity:.9}.p0{animation:floatA 2.8s ease-in-out infinite}.p1{animation:floatB 3.2s ease-in-out infinite .25s}.p2{animation:floatA 3.5s ease-in-out infinite .5s}.p3{animation:floatB 2.9s ease-in-out infinite .75s}@keyframes floatA{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}@keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(7px) rotate(-4deg)}}
   </style></head><body><div id="card"><div class="wash"></div><img class="tree" src="${tree}">${decorUrl?`<img class="decor" src="${decorUrl}">`:""}<div class="panel"><div class="name">${escapeHTML(player.displayName || player.username || "Werewife")}</div><div class="subtitle">Werewives Profile ✨</div><div class="titleBox"><div class="title">${titleMarkup}</div><div class="effect">✨ ${escapeHTML(effect)}</div></div><div class="stats"><div>🌳 Level <b>${Number(player.level||1)}</b></div><div>✨ ${Number(player.sparkles||0).toLocaleString()}</div><div>📏 ${Number(getTreeHeight(player)||0)} ft</div><div>🏆 ${Number(player.soloWins||0)} Solo Wins</div></div><div class="badge">🏷️ ${player.titles?.length||0} titles owned</div></div>${particles}</div></body></html>`;
 }
 
@@ -3640,19 +3640,15 @@ function profileCandy(frame,x,y,s,c,alt){
   else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
 function profileFlower(frame,x,y,s,c,phase=0){
-  // Actual five-petal flower for the PETALS name effect. Deliberately chunky so
-  // it reads as a flower in the 800x500 profile render instead of a sparkle.
-  const r=Math.max(2,Math.round(s*0.62));
-  const petalR=Math.max(3,Math.round(s*0.30));
-  const colors=[c,[255,190,225],[255,220,240],[245,145,205],[255,200,230]];
+  const r=Math.max(2,Math.round(s*0.72));
+  const petalColors=[c,[255,210,235],[255,240,120]];
   for(let i=0;i<5;i++){
     const a=(Math.PI*2*i)/5 + Math.sin(phase*Math.PI*2)*0.08;
-    const px=Math.round(x+Math.cos(a)*r), py=Math.round(y+Math.sin(a)*r);
-    profileSmoothCircle(frame,px,py,petalR,colors[i],235,true);
-    profileSmoothCircle(frame,px-1,py-1,Math.max(1,Math.round(petalR*.35)),[255,245,255],150,true);
+    const px=Math.round(x+Math.cos(a)*r*0.72), py=Math.round(y+Math.sin(a)*r*0.72);
+    profilePetal(frame,px,py,Math.max(3,Math.round(s*0.62)),petalColors[i%petalColors.length],i%2?-1:1);
   }
-  profileSmoothCircle(frame,x,y,Math.max(2,Math.round(s*0.24)),[255,210,70],245,true);
-  profileSmoothCircle(frame,x,y,Math.max(1,Math.round(s*0.12)),[255,248,150],255,true);
+  profileFill(frame,x-2,y-2,5,5,255,205,65,245);
+  profileFill(frame,x-1,y-1,3,3,255,245,145,255);
 }
 function profilePumpkin(frame,x,y,s,c,phase=0){
   const w=Math.max(5,Math.round(s*1.25)), h=Math.max(4,Math.round(s*0.9));
@@ -3801,7 +3797,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       xx+=Math.round(Math.sin(t+charIndex*0.55));
     } else if(effectId==="petals"){
       yy+=Math.round(Math.sin(t+charIndex*0.35));
-      color=charIndex%3===0?[255,125,195]:charIndex%3===1?[245,95,175]:[255,175,220];
+      color=charIndex%2?[235,85,170]:[255,135,205];
     } else if(effectId==="butterflies"){
       yy+=Math.round(Math.sin(t*1.6+charIndex*0.55));
       xx+=Math.round(Math.sin(t*1.2+charIndex*0.3));
@@ -3947,17 +3943,14 @@ function drawProfileEffectParticles(frame,effectId,phase){
       break;
     }
     case "petals": {
-      // FLOWERS FIRST: make the PETALS name effect unmistakably floral.
-      profileFlower(frame,365,138,10,[245,105,190],phase*0.8);
-      profileFlower(frame,742,138,9,[255,145,205],phase*0.8+0.2);
-      profileFlower(frame,365,214,8,[255,175,220],phase*0.8+0.4);
-      profileFlower(frame,735,214,10,[245,120,195],phase*0.8+0.6);
-      // A few larger falling petals between the flowers — no generic stars.
-      const pts=[[390,160,0],[445,212,.17],[500,145,.31],[555,216,.48],[615,154,.63],[675,207,.79]];
+      const pts=[[350,136,0],[385,226,.12],[430,145,.25],[480,232,.38],[530,137,.51],[580,228,.64],[630,145,.77],[690,231,.89],[735,140,.31]];
       pts.forEach(([x,y,o],i)=>{
-        const xx=x+Math.sin(p*0.75+o*9)*9, yy=y+((phase+o)%1)*18;
-        profilePetal(frame,Math.round(xx),Math.round(yy),6+(i%2),pal[i%pal.length],i%2?-1:1);
+        const xx=x+Math.sin(p*0.75+o*9)*10, yy=y+((phase+o)%1)*20;
+        profilePetal(frame,Math.round(xx),Math.round(yy),5+(i%3),pal[i%pal.length],i%2?-1:1);
       });
+      // Two recognizable little flowers among the drifting petals.
+      profileFlower(frame,405,143,8,[245,105,190],phase*0.7);
+      profileFlower(frame,690,222,8,[255,145,200],phase*0.7+0.4);
       break;
     }
     case "inferno": {
@@ -5055,19 +5048,20 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP = luxury medal, NOT a crown. King owns the crown silhouette.
-    // Chunky ribbon + round purple/gold medallion keeps the emblem readable at 24px.
-    POLY([[30,14],[42,20],[50,28],[58,20],[70,14],[66,40],[34,40]],hi,255);
-    POLY([[35,17],[44,23],[50,31],[56,23],[65,17],[62,36],[38,36]],base,255);
-    L(42,21,50,29,3,white,210); L(58,21,50,29,3,white,210);
-    O(50,66,28,base,255); O(50,66,23,[105,45,170],255); O(50,66,18,[170,85,245],255);
-    // Strong gold inner medallion and a single V-shaped VIP mark.
-    O(50,66,14,[255,205,65],255);
-    O(50,66,11,[30,18,38],255);
-    L(43,60,50,75,3,white,250); L(50,75,57,60,3,white,250);
-    L(45,65,55,65,2,[255,220,105],245);
-    O(44,57,2.5,white,235); O(56,57,2.5,white,235);
-    ST(79,81,5,white,230); ST(21,23,3,white,210);
+    // VIP: unmistakable luxury crown + jewel. Big silhouette, bright facets.
+    POLY([[18,31],[25,12],[39,26],[50,7],[61,26],[75,12],[82,31],[77,42],[23,42]],hi,255);
+    POLY([[24,30],[30,19],[39,31],[50,14],[61,31],[70,19],[76,30],[71,36],[29,36]],base,255);
+    O(30,23,3.5,white,255); O(50,14,4,white,255); O(70,23,3.5,white,255);
+    F(23,37,54,6,[255,222,120],255);
+    // Large jewel/crest underneath — deliberately not another plain diamond.
+    POLY([[25,43],[50,37],[75,43],[68,78],[50,92],[32,78]],base,255);
+    POLY([[25,43],[50,37],[50,84],[32,78]],hi,255);
+    POLY([[50,37],[75,43],[68,78],[50,84]],base,255);
+    POLY([[39,50],[50,43],[61,50],[56,68],[50,76],[44,68]],white,250);
+    POLY([[39,50],[50,43],[50,76],[44,68]],[245,190,255],255);
+    POLY([[50,43],[61,50],[56,68],[50,76]],[255,224,105],255);
+    O(28,48,3,white,245); O(72,48,3,white,245); O(35,76,3,hi,245); O(65,76,3,hi,245);
+    ST(84,80,7,white,255); ST(17,21,4,white,230);
   } else if(b.style==='spender'){
     RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
     // Card chip and contactless marks.
