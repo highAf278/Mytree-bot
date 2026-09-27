@@ -755,7 +755,6 @@ function defaultPlayer() {
     raccoonCourtPreviousEffect: null,
     // RaccoonMart is intentionally separate from cosmetic inventory.
     raccoonMart: {
-      emergency_cheese: 0,
       jail_free_card: 0,
       handcuffs: 0,
       raccoon_megaphone: 0,
@@ -7796,11 +7795,6 @@ async function showShop(
 ========================================================= */
 
 const RACCOON_MART_ITEMS = {
-  emergency_cheese: {
-    name: "🧀 Emergency Cheese",
-    price: 5000,
-    description: "Automatically counters one /raccoon attack. The attacker gets robbed instead, and the cheese is consumed."
-  },
   jail_free_card: {
     name: "🎟️ Get Out of Jail Free Card",
     price: 25000,
@@ -24255,29 +24249,6 @@ async function handleRaccoon(env, interaction) {
     return;
   }
 
-  if (raccoonMartCount(target, "emergency_cheese") > 0) {
-    consumeRaccoonMartItem(target, "emergency_cheese");
-    player.lastRaccoon = now;
-    player.raccoonRobberies = Number(player.raccoonRobberies || 0) + 1;
-    const counterAvailable = Math.max(0, Number(player.sparkles || 0));
-    const counterRequested = randomInt(0, 300);
-    const counterStolen = Math.min(counterRequested, counterAvailable);
-    target.sparkles = Number(target.sparkles || 0) + counterStolen;
-    player.sparkles = Math.max(0, counterAvailable - counterStolen);
-    target.raccoonWins = Number(target.raccoonWins || 0) + (counterStolen > 0 ? 1 : 0);
-    target.badgeStats = target.badgeStats && typeof target.badgeStats === "object" ? target.badgeStats : {};
-    target.badgeStats.sparklesStolen = Number(target.badgeStats.sparklesStolen || 0) + counterStolen;
-    target.badgeStats.sparklesEarned = Number(target.badgeStats.sparklesEarned || 0) + counterStolen;
-    if (counterStolen > 0) {
-      target.badgeStats.uniqueRaccoonTargets = Array.isArray(target.badgeStats.uniqueRaccoonTargets) ? target.badgeStats.uniqueRaccoonTargets : [];
-      if (!target.badgeStats.uniqueRaccoonTargets.includes(String(user.id))) target.badgeStats.uniqueRaccoonTargets.push(String(user.id));
-    }
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
-    await sendText(env, interaction, `🧀🦝 **EMERGENCY CHEESE ACTIVATED!**\n\n<@${targetId}> had Emergency Cheese. Your raccoon turned around and robbed **${counterStolen.toLocaleString()} ✨** from YOU instead! 😭\n\n🧀 The cheese has been consumed.`);
-    await sendUserDM(env, targetId, `🧀🦝 **EMERGENCY CHEESE SAVED YOU!**\n\nThe raccoon sent by <@${user.id}> was turned around and stole **${counterStolen.toLocaleString()} ✨** from them instead.`);
-    return;
-  }
   const activeRaccoonCooldown = Number(player.raccoonHitmanUntil || 0) > now
     ? 20 * 60 * 1000
     : RACCOON_COOLDOWN;
