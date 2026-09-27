@@ -5475,19 +5475,51 @@ function drawRotatedEllipse(frame,cx,cy,rx,ry,angle,rgb,a=220){
   }
 }
 
-function drawOrganicPetal(frame,cx,cy,size,angle,rgb,alpha=225){
-  // Rounded petal body + pointed tip + soft highlight + central vein.
+function drawPetalShape(frame,cx,cy,size,angle,rgb,alpha=225){
+  // PETAL STORM v2: unmistakable flower-petal silhouettes.
+  // The old version used a narrow ellipse, which read like leaves/teardrops.
+  // This version uses two rounded upper lobes + a tapered lower body, giving
+  // each falling piece the soft heart-like shape of a real flower petal.
   const ca=Math.cos(angle),sa=Math.sin(angle);
-  drawRotatedEllipse(frame,cx,cy,size*0.62,size*0.36,angle,rgb,alpha);
-  const tipX=cx+ca*size*0.58, tipY=cy+sa*size*0.58;
-  drawRotatedEllipse(frame,tipX,tipY,size*0.27,size*0.18,angle,rgb,alpha-10);
-  drawRotatedEllipse(frame,cx-ca*size*0.13,cy-sa*size*0.13,size*0.18,size*0.10,angle,[255,245,250],125);
+  function pos(dx,dy){return [cx+dx*ca-dy*sa,cy+dx*sa+dy*ca];}
+  const [lpx,lpy]=pos(-size*0.18,-size*0.18);
+  const [rpx,rpy]=pos(size*0.18,-size*0.18);
+  const [bpx,bpy]=pos(0,size*0.13);
+  const [tpx,tpy]=pos(0,size*0.43);
+
+  // Rounded shoulders create the visible two-lobed petal top.
+  drawRotatedEllipse(frame,lpx,lpy,size*0.24,size*0.25,angle,rgb,alpha);
+  drawRotatedEllipse(frame,rpx,rpy,size*0.24,size*0.25,angle,rgb,alpha);
+  // Broad lower body and tapered tip.
+  drawRotatedEllipse(frame,bpx,bpy,size*0.31,size*0.40,angle,rgb,alpha);
+  drawRotatedEllipse(frame,tpx,tpy,size*0.13,size*0.20,angle,rgb,Math.max(80,alpha-18));
+
+  // Soft inner highlight and a short vein make it read as a petal rather than
+  // a generic pink blob when the profile is reduced.
+  const [hx,hy]=pos(-size*0.07,-size*0.04);
+  drawRotatedEllipse(frame,hx,hy,size*0.07,size*0.18,angle,[255,244,249],105);
   const vein=[];
-  for(let i=0;i<8;i++){
-    const t=i/7, d=(t-0.5)*size*0.85;
-    vein.push([cx+ca*d,cy+sa*d]);
+  for(let i=0;i<5;i++){
+    const t=i/4;
+    const [vx,vy]=pos(0,-size*0.03+t*size*0.37);
+    vein.push([vx,vy]);
   }
-  effectRibbonPath(frame,vein,1.8,[255,125,180],105);
+  effectRibbonPath(frame,vein,Math.max(0.9,size*0.035),[255,112,172],105);
+}
+
+function drawMiniFlower(frame,cx,cy,size,phase,seed){
+  // A few tiny five-petal blossoms are mixed into the storm so the effect
+  // unmistakably belongs to flowers without turning into Flower Bloom.
+  const colors=[[255,153,198],[255,184,215],[248,125,180],[255,211,228],[235,105,169]];
+  const petalColor=colors[seed%colors.length];
+  for(let k=0;k<5;k++){
+    const a=(k/5)*Math.PI*2+phase*0.8+seed*0.31;
+    const px=cx+Math.cos(a)*size*0.23;
+    const py=cy+Math.sin(a)*size*0.23;
+    drawRotatedEllipse(frame,px,py,size*0.19,size*0.34,a,petalColor,145);
+  }
+  drawRotatedEllipse(frame,cx,cy,size*0.15,size*0.15,0,[255,231,116],205);
+  drawSparkle(frame,Math.round(cx),Math.round(cy-size*0.48),'star');
 }
 
 function drawAnimatedPetalStorm(frame, phase=0) {
@@ -5505,10 +5537,20 @@ function drawAnimatedPetalStorm(frame, phase=0) {
     const y=((by+t*0.72)%1.12-0.07)*frame.height;
     const angle=baseAngle+Math.sin(phase*Math.PI*2*1.7+seed)*0.75+t*1.8;
     const scale=0.78+0.22*Math.sin(phase*Math.PI*2+seed*1.7)**2;
-    drawOrganicPetal(frame,x,y,size*scale,angle,colors[seed%colors.length],220);
+    drawPetalShape(frame,x,y,size*scale,angle,colors[seed%colors.length],220);
   }
-  for(let i=0;i<16;i++){
-    const t=(phase*1.1+i/16)%1;
+
+  // Occasional recognizable little blossoms break up the stream while keeping
+  // the effect primarily a falling-petal storm.
+  for(let i=0;i<4;i++){
+    const t=(phase*0.42+i*0.27)%1;
+    const x=(0.14+i*0.24+Math.sin(phase*2.2+i)*0.035)*frame.width;
+    const y=(0.18+t*0.70)*frame.height;
+    drawMiniFlower(frame,x,y,18+((i+1)%3)*3,phase,i+7);
+  }
+
+  for(let i=0;i<10;i++){
+    const t=(phase*1.1+i/10)%1;
     const x=(0.04+t*0.92)*frame.width;
     const y=(0.08+((i%5)*0.17)+Math.sin(t*8+i)*0.025)*frame.height;
     drawSparkle(frame,Math.round(x),Math.round(y),'star');
