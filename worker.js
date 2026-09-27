@@ -6576,7 +6576,84 @@ async function renderTreeDirectFallback(env, player) {
   }
 }
 
+function drawAnimatedGlobe(frame, phase = 0) {
+  // WORLDLIGHT / GLOBE: deliberately chunky shapes so the animation survives
+  // Discord compression. Large gold globes, thick orbital ribbons and a few
+  // high-contrast starbursts; no microscopic particles.
+  const gold = [255, 214, 74];
+  const goldHi = [255, 245, 170];
+  const blue = [35, 105, 170];
+  const navy = [10, 35, 70];
+  const white = [255, 255, 255];
+
+  const globes = [
+    { x: 0.22, y: 0.28, r: 54, speed: 0.85, phase: 0.00 },
+    { x: 0.78, y: 0.34, r: 48, speed: -0.72, phase: 0.33 },
+    { x: 0.50, y: 0.76, r: 42, speed: 0.58, phase: 0.67 }
+  ];
+
+  for (let i = 0; i < globes.length; i++) {
+    const g = globes[i];
+    const drift = Math.sin((phase * Math.PI * 2 * g.speed) + g.phase * Math.PI * 2);
+    const bob = Math.cos((phase * Math.PI * 2 * 0.75) + i) * 9;
+    const cx = frame.width * g.x + drift * 16;
+    const cy = frame.height * g.y + bob;
+    const r = g.r;
+
+    // Soft halo + solid globe body.
+    effectDisc(frame, cx, cy, r * 1.35, gold, 32);
+    effectDisc(frame, cx, cy, r, navy, 225);
+    effectDisc(frame, cx, cy, r - 5, blue, 235);
+
+    // Chunky gold continent silhouettes. Keep them intentionally simple.
+    drawRotatedEllipse(frame, cx - r * 0.28, cy - r * 0.18, r * 0.25, r * 0.15, -0.25, gold, 235);
+    drawRotatedEllipse(frame, cx + r * 0.12, cy - r * 0.04, r * 0.20, r * 0.29, 0.35, gold, 235);
+    drawRotatedEllipse(frame, cx - r * 0.02, cy + r * 0.30, r * 0.17, r * 0.11, -0.45, goldHi, 220);
+    effectDisc(frame, cx + r * 0.39, cy + r * 0.12, r * 0.08, gold, 225);
+
+    // Thick latitude/longitude highlights.
+    effectRibbonPath(frame, [[cx-r*0.84,cy-r*0.04],[cx,cy-r*0.20],[cx+r*0.84,cy-r*0.04]], 3.2, goldHi, 185);
+    effectRibbonPath(frame, [[cx-r*0.80,cy+r*0.20],[cx,cy+r*0.32],[cx+r*0.80,cy+r*0.20]], 2.6, gold, 165);
+    effectRibbonPath(frame, [[cx-r*0.12,cy-r*0.88],[cx-r*0.28,cy],[cx-r*0.12,cy+r*0.88]], 2.5, goldHi, 150);
+
+    // Strong outer rim so the globe remains readable after compression.
+    effectRibbonPath(frame, [[cx-r*0.86,cy],[cx-r*0.61,cy-r*0.58],[cx,cy-r*0.86],[cx+r*0.61,cy-r*0.58],[cx+r*0.86,cy]], 4.2, gold, 205);
+    effectRibbonPath(frame, [[cx+r*0.86,cy],[cx+r*0.61,cy+r*0.58],[cx,cy+r*0.86],[cx-r*0.61,cy+r*0.58],[cx-r*0.86,cy]], 4.2, gold, 205);
+  }
+
+  // One slow orbital ribbon sweeps around the profile.
+  const orbit = phase * Math.PI * 2;
+  const ox = frame.width * 0.50;
+  const oy = frame.height * 0.48;
+  const rx = frame.width * 0.43;
+  const ry = frame.height * 0.31;
+  const points = [];
+  for (let i = 0; i <= 30; i++) {
+    const a = orbit + (i / 30) * Math.PI * 1.35;
+    points.push([ox + Math.cos(a) * rx, oy + Math.sin(a) * ry]);
+  }
+  effectRibbonPath(frame, points, 5.0, gold, 155);
+
+  // Big four-point starbursts: readable, sparse, and Discord-safe.
+  const stars = [
+    [0.11, 0.62, 34, 0.00],
+    [0.88, 0.67, 30, 0.42],
+    [0.56, 0.13, 38, 0.71]
+  ];
+  for (let i = 0; i < stars.length; i++) {
+    const [sx, sy, size, offset] = stars[i];
+    const pulse = 0.65 + 0.35 * Math.sin(phase * Math.PI * 2 * 2 + offset * Math.PI * 2);
+    const x = frame.width * sx + Math.sin(phase * Math.PI * 2 + i) * 7;
+    const y = frame.height * sy + Math.cos(phase * Math.PI * 2 + i) * 6;
+    effectDisc(frame, x, y, size * 0.55 * pulse, goldHi, 70);
+    effectRibbonPath(frame, [[x, y-size*pulse],[x,y+size*pulse]], 5.5, white, 225);
+    effectRibbonPath(frame, [[x-size*pulse,y],[x+size*pulse,y]], 5.5, white, 225);
+    effectDisc(frame, x, y, 7 * pulse, gold, 245);
+  }
+}
+
 const animatedEffectDrawers = {
+    globe_animated: drawAnimatedGlobe,
     black_ice_snow_animated: drawAnimatedBlackIceSnow,
     petal_storm_animated: drawAnimatedPetalStorm,
     butterfly_garden_animated: drawAnimatedButterflyGarden,
@@ -9650,6 +9727,7 @@ async function showCustomEffects(
   if (player.inventory.includes("electric_storm_animated_effect")) buttons.push(button("⚡ Electric Storm", "equip_effect_electric_storm_animated", player.equipped.effect === "electric_storm_animated" ? 3 : 2));
   if (player.inventory.includes("experimental_effect_animated_effect")) buttons.push(button("🧪 Experimental Effect", "equip_effect_experimental_effect_animated", player.equipped.effect === "experimental_effect_animated" ? 3 : 2));
   if (player.inventory.includes("black_ice_snow_animated_effect")) buttons.push(button("❄️ Black Ice Snow", "equip_effect_black_ice_snow_animated", player.equipped.effect === "black_ice_snow_animated" ? 3 : 2));
+  if (player.inventory.includes("globe_animated_effect")) buttons.push(button("🌎✨ Worldlight Globe", "equip_effect_globe_animated", player.equipped.effect === "globe_animated" ? 3 : 2));
   if (player.inventory.includes("beans_effect")) buttons.push(button("🫘💥 Bean Burst", "equip_effect_beans", player.equipped.effect === "beans" ? 3 : 2));
   if (player.inventory.includes("halloween_effect")) buttons.push(button("👻 Halloween", "equip_effect_halloween", player.equipped.effect === "halloween" ? 3 : 2));
 
@@ -24580,31 +24658,49 @@ async function handleFree(env, interaction, guess) {
   const user = getUserFromInteraction(interaction);
   if (!user) return;
 
-  // GOLD is a public self-claim code. Anyone can enter GOLD once to receive Royal Gold.
-  if (normalized !== "gold") {
-    await sendText(env, interaction, "🎁 **FREE GIFT**\n\n❌ That code isn't active.");
-    return;
-  }
-
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   player.inventory = Array.isArray(player.inventory) ? player.inventory : [];
 
-  const inventoryId = "profile_frame_royal_gold";
-  if (player.inventory.includes(inventoryId)) {
-    await sendText(env, interaction, "👑 You already own the FREE **Royal Gold Profile Frame**!\n\nUse **/profile → Frames** to equip it.");
+  if (normalized === "gold") {
+    const inventoryId = "profile_frame_royal_gold";
+    if (player.inventory.includes(inventoryId)) {
+      await sendText(env, interaction, "👑 You already own the FREE **Royal Gold Profile Frame**!\n\nUse **/profile → Frames** to equip it.");
+      return;
+    }
+
+    player.inventory.push(inventoryId);
+    await savePlayer(env, player);
+
+    await sendText(
+      env,
+      interaction,
+      `👑 **ROYAL GOLD UNLOCKED!**\n\nYou received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nOpen **/profile → Frames** to equip it. ✨`
+    );
     return;
   }
 
-  player.inventory.push(inventoryId);
-  await savePlayer(env, player);
+  if (normalized === "globe") {
+    const inventoryId = "globe_animated_effect";
+    if (player.inventory.includes(inventoryId)) {
+      await sendText(env, interaction, "🌎✨ You already own the FREE **Worldlight Globe** effect!\n\nUse **/profile → Customize → Effects** to equip it.");
+      return;
+    }
 
-  await sendText(
-    env,
-    interaction,
-    `👑 **ROYAL GOLD UNLOCKED!**\n\nYou received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nOpen **/profile → Frames** to equip it. ✨`
-  );
+    player.inventory.push(inventoryId);
+    await savePlayer(env, player);
+
+    await sendText(
+      env,
+      interaction,
+      `🌎✨ **WORLDLIGHT GLOBE UNLOCKED!**\n\nYou received the FREE **Worldlight Globe** animated effect!\n\n🌎 Large golden globes\n✨ Gold orbital light\n⭐ Big starbursts\n\nUse **/profile → Customize → Effects** to equip it! 🦝🌎`
+    );
+    return;
+  }
+
+  await sendText(env, interaction, "🎁 **FREE GIFT**\n\n❌ That code isn't active.");
 }
+
 async function handleBlame(env, interaction) {
   if (!interaction.guild_id) {
     await sendText(env, interaction, "❌ `/blame` can only be used inside a server.");
@@ -28380,7 +28476,7 @@ const COMMANDS = [
 
   {
     name: "free",
-    description: "Enter the GOLD code to unlock the free Royal Gold profile frame",
+    description: "Enter a free gift code to unlock a cosmetic reward",
     options: [
       { type: 3, name: "guess", description: "Secret gift code", required: true }
     ]
