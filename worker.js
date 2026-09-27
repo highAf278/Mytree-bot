@@ -3647,23 +3647,45 @@ function profileCandy(frame,x,y,s,c,alt){
   else profilePixelLine(frame,x-w+2,y-1,x+w-2,y-1,2,255,255,255,165);
 }
 function profileFlower(frame,x,y,s,c,phase=0){
-  // PETALS V3: unmistakable five-petal flower with a visible center.
-  const r=Math.max(4,Math.round(s*0.78));
-  const petalS=Math.max(5,Math.round(s*0.72));
-  const petalColors=[c,[255,190,225],[255,215,238],c,[255,200,232]];
-  const wobble=Math.sin(phase*Math.PI*2)*0.045;
+  // 🌸 PETALS V4: cherry-blossom/flower emoji silhouette.
+  // This is intentionally separate from profilePetal so the little flowers
+  // stay round and unmistakably read as flowers at Discord size.
+  const r=Math.max(3,Math.round(s*0.43));
+  const petalR=Math.max(3,Math.round(s*0.34));
+  const wobble=Math.sin(phase*Math.PI*2)*0.04;
 
   for(let i=0;i<5;i++){
-    const a=(Math.PI*2*i)/5+wobble;
+    const a=(Math.PI*2*i)/5-Math.PI/2+wobble;
     const px=Math.round(x+Math.cos(a)*r);
     const py=Math.round(y+Math.sin(a)*r);
-    profilePetal(frame,px,py,petalS,petalColors[i],Math.cos(a)>=0?1:-1);
+
+    // Dark pink outline: rounded blob/oval, not a diamond.
+    for(let row=-petalR;row<=petalR;row++){
+      const q=row/petalR;
+      const half=Math.max(1,Math.round(petalR*0.92*Math.sqrt(Math.max(0,1-q*q))));
+      profileFill(frame,px-half,py+row,half*2+1,1,205,65,135,245);
+    }
+
+    // Light pink inner face, slightly inset.
+    const inner=Math.max(2,petalR-1);
+    for(let row=-inner;row<=inner;row++){
+      const q=row/inner;
+      const half=Math.max(1,Math.round(inner*0.90*Math.sqrt(Math.max(0,1-q*q))));
+      profileFill(frame,px-half,py+row,half*2+1,1,c[0],c[1],c[2],250);
+    }
+
+    // Tiny white highlight gives the petal the soft emoji-like shine.
+    profileFill(frame,px-1,py-inner+1,2,2,255,235,248,220);
   }
 
-  profileFill(frame,x-4,y-4,9,9,210,75,145,235);
-  profileFill(frame,x-3,y-3,7,7,255,198,70,255);
-  profileFill(frame,x-2,y-2,5,5,255,225,105,255);
-  profileFill(frame,x-1,y-1,3,3,255,250,175,255);
+  // Small white/pink center opening.
+  profileFill(frame,x-4,y-4,9,9,255,205,232,250);
+  profileFill(frame,x-3,y-3,7,7,255,220,240,255);
+
+  // Warm center/stamens like 🌸.
+  profileFill(frame,x-2,y-2,5,5,255,190,70,255);
+  profileFill(frame,x-1,y-1,3,3,255,225,105,255);
+  profileFill(frame,x,y,1,1,255,248,170,255);
 }
 function profilePumpkin(frame,x,y,s,c,phase=0){
   const w=Math.max(5,Math.round(s*1.25)), h=Math.max(4,Math.round(s*0.9));
