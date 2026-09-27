@@ -760,10 +760,18 @@ function defaultPlayer() {
       handcuffs: 0,
       raccoon_megaphone: 0,
       sparkle_magnet: 0,
-      cease_desist: 0
+      cease_desist: 0,
+      cheese_slice: 0,
+      cheese_block: 0,
+      cheese_wheel: 0,
+      judges_robe: 0,
+      raccoon_hitman: 0
     },
     ceaseDesistTargetId: "",
     ceaseDesistUntil: 0,
+    raccoonShieldUses: 0,
+    raccoonShieldUntil: 0,
+    raccoonHitmanUntil: 0,
     // Sparkle Magnet: while active, 20% of every positive sparkle gain
     // made by this player is automatically paid to the magnet owner.
     sparkleMagnetOwnerId: "",
@@ -1880,7 +1888,7 @@ async function handleCourtLeaderboard(env, interaction) {
   return sendText(env,interaction,`🦝⚖️ **RACCOON COURT LEADERBOARD**\n\n${lines.join("\n")}${championText}\n📊 Ranked by **guilty verdicts**, then total cases.\n🦝 The raccoons are keeping score.`);
 }
 
-async function handleCourt(env, interaction, forcedTargetId = null, forced = false) {
+async function handleCourt(env, interaction, forcedTargetId = null, forced = false, forcedPunishmentId = null) {
   const user=getUserFromInteraction(interaction); if(!user)return;
   const targetId=forcedTargetId || getOption(interaction,"user");
   if(!targetId)return sendText(env,interaction,"🦝⚖️ The Raccoon Court needs a defendant.");
@@ -1900,7 +1908,7 @@ async function handleCourt(env, interaction, forcedTargetId = null, forced = fal
   target.courtGuilty=Number(target.courtGuilty||0)+(guilty?1:0);
   target.courtNotGuilty=Number(target.courtNotGuilty||0)+(guilty?0:1);
   let punishment="",punishmentName="";
-  if(guilty){const chosen=COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)];punishmentName=chosen.name;if(chosen.id==="trash_release")target.courtTrashReleaseChannelId=String((await getGuildState(env,interaction.guild_id))?.announcementChannelId||interaction.channel_id||"");punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`;}
+  if(guilty){const chosen=forcedPunishmentId ? (COURT_PUNISHMENTS.find(p=>p.id===forcedPunishmentId) || COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)]) : COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)];punishmentName=chosen.name;if(chosen.id==="trash_release")target.courtTrashReleaseChannelId=String((await getGuildState(env,interaction.guild_id))?.announcementChannelId||interaction.channel_id||"");punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`;}
   await savePlayer(env,accuser,user.id); await savePlayer(env,target,targetId);
   if(guilty && Number(target.courtGuilty||0)>0){
     try{
@@ -7817,6 +7825,31 @@ const RACCOON_MART_ITEMS = {
     name: "⚖️ Cease & Desist",
     price: 8000,
     description: "Pick a player. Their /raccoon attacks against you are blocked for 6 hours."
+  },
+  cheese_slice: {
+    name: "🧀 Cheese Slice",
+    price: 1000,
+    description: "Protects you from exactly one /raccoon attack. The slice is consumed when it blocks the attack."
+  },
+  cheese_block: {
+    name: "🧀 Cheese Block",
+    price: 2000,
+    description: "Protects you from /raccoon for 24 hours. Attacks are blocked automatically while the protection is active."
+  },
+  cheese_wheel: {
+    name: "🧀 Cheese Wheel",
+    price: 5000,
+    description: "Protects you from /raccoon for 3 full days. Attacks are blocked automatically while the protection is active."
+  },
+  judges_robe: {
+    name: "👨‍⚖️ Judge's Robe",
+    price: 10000,
+    description: "Use it on a player to choose which Court punishment they receive if the randomized verdict is GUILTY. The guilty/not guilty verdict is still randomized."
+  },
+  raccoon_hitman: {
+    name: "🔫🦝 Raccoon Hitman",
+    price: 20000,
+    description: "For 24 hours, your /raccoon cooldown becomes 20 minutes. After 24 hours, your normal cooldown returns."
   }
 };
 
@@ -7850,24 +7883,38 @@ function raccoonMartUserSelect(customId, placeholder) {
   };
 }
 
-function raccoonMartHomeRows(player) {
+function raccoonMartPageCount() {
+  return Math.ceil(Object.keys(RACCOON_MART_ITEMS).length / 4);
+}
+
+function raccoonMartHomeRows(player, page = 0) {
   const ids = Object.keys(RACCOON_MART_ITEMS);
-  const buttons = ids.map(id => {
-    const item = RACCOON_MART_ITEMS[id];
-    const count = raccoonMartCount(player, id);
-    return button(`${item.name} — ${item.price.toLocaleString()} ✨`, `raccoonmart:buy:${id}`, 1, false);
-  });
+  const pageCount = raccoonMartPageCount();
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+  const slice = ids.slice(page * 4, page * 4 + 4);
   const rows = [];
-  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  for (let i = 0; i < slice.length; i += 2) {
+    rows.push(row(...slice.slice(i, i + 2).map(id => {
+      const item = RACCOON_MART_ITEMS[id];
+      return button(`${item.name} — ${item.price.toLocaleString()} ✨`, `raccoonmart:buy:${id}`, 1, false);
+    })));
+  }
+  const nav = [];
+  if (pageCount > 1) {
+    nav.push(button("⬅️ Prev", `raccoonmart:page:${page - 1}`, 2, page === 0));
+    nav.push(button(`Page ${page + 1}/${pageCount}`, `raccoonmart:page:${page}`, 2, true));
+    nav.push(button("Next ➡️", `raccoonmart:page:${page + 1}`, 2, page === pageCount - 1));
+  }
+  if (nav.length) rows.push(row(...nav));
   rows.push(row(
-    button("ℹ️ What do these do?", "raccoonmart:info", 2),
-    button("📦 My RaccoonMart", "raccoonmart:inventory", 2)
+    button("ℹ️ What do these do?", `raccoonmart:info:0`, 2),
+    button("📦 My RaccoonMart", `raccoonmart:inventory:0`, 2)
   ));
   rows.push(row(button("⬅️ Back to Tree", "back_tree", 2)));
   return rows;
 }
 
-async function showRaccoonMart(env, interaction) {
+async function showRaccoonMart(env, interaction, page = 0) {
   const user = getUserFromInteraction(interaction);
   if (!user) return;
   const player = await getPlayer(env, user.id);
@@ -7877,35 +7924,54 @@ async function showRaccoonMart(env, interaction) {
     `${item.name} — **${item.price.toLocaleString()} ✨** • You own **${raccoonMartCount(player, id)}**`
   );
   await sendText(env, interaction,
-    `🦝🛒 **RACCOONMART**\n\nThe completely unnecessary store for extremely necessary chaos.\n\n${lines.join("\n")}\n\n✨ Items here are separate from the cosmetic /shop inventory.`,
-    raccoonMartHomeRows(player)
+    `🦝🛒 **RACCOONMART** — Page **${Number(page) + 1}/${raccoonMartPageCount()}**\n\nThe completely unnecessary store for extremely necessary chaos.\n\n${lines.join("\n")}\n\n✨ Items here are separate from the cosmetic /shop inventory.`,
+    raccoonMartHomeRows(player, page)
   );
 }
 
-async function showRaccoonMartInfo(env, interaction) {
-  const lines = Object.values(RACCOON_MART_ITEMS).map(item =>
-    `${item.name} — **${item.price.toLocaleString()} ✨**\n${item.description}`
-  );
+async function showRaccoonMartInfo(env, interaction, page = 0) {
+  const ids = Object.keys(RACCOON_MART_ITEMS);
+  const pageCount = Math.ceil(ids.length / 5);
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+  const slice = ids.slice(page * 5, page * 5 + 5);
+  const lines = slice.map(id => {
+    const item = RACCOON_MART_ITEMS[id];
+    return `${item.name} — **${item.price.toLocaleString()} ✨**\n${item.description}`;
+  });
+  const rows = [];
+  if (pageCount > 1) rows.push(row(
+    button("⬅️ Prev", `raccoonmart:info:${page - 1}`, 2, page === 0),
+    button(`Guide ${page + 1}/${pageCount}`, `raccoonmart:info:${page}`, 2, true),
+    button("Next ➡️", `raccoonmart:info:${page + 1}`, 2, page === pageCount - 1)
+  ));
+  rows.push(row(button("⬅️ Back to RaccoonMart", `raccoonmart:home:${Math.min(page, raccoonMartPageCount()-1)}`, 2)));
   await sendText(env, interaction,
-    `ℹ️🦝 **RACCOONMART ITEM GUIDE**\n\n${lines.join("\n\n")}`,
-    [row(button("⬅️ Back to RaccoonMart", "raccoonmart:home", 2))]
+    `ℹ️🦝 **RACCOONMART ITEM GUIDE** — Page **${page + 1}/${pageCount}**\n\n${lines.join("\n\n")}`,
+    rows
   );
 }
 
-async function showRaccoonMartInventory(env, interaction) {
+async function showRaccoonMartInventory(env, interaction, page = 0) {
   const user = getUserFromInteraction(interaction);
   if (!user) return;
   const player = await getPlayer(env, user.id);
-  const lines = Object.entries(RACCOON_MART_ITEMS).map(([id, item]) =>
-    `${item.name}: **${raccoonMartCount(player, id)}**`
-  );
-  const usable = Object.entries(RACCOON_MART_ITEMS).filter(([id]) => raccoonMartCount(player, id) > 0);
+  const ids = Object.keys(RACCOON_MART_ITEMS);
+  const pageCount = Math.ceil(ids.length / 5);
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+  const slice = ids.slice(page * 5, page * 5 + 5);
+  const lines = slice.map(id => `${RACCOON_MART_ITEMS[id].name}: **${raccoonMartCount(player, id)}**`);
+  const usable = slice.filter(id => raccoonMartCount(player, id) > 0);
   const rows = [];
-  const useButtons = usable.map(([id, item]) => button(`Use ${item.name}`, `raccoonmart:use:${id}`, 1));
+  const useButtons = usable.map(id => button(`Use ${RACCOON_MART_ITEMS[id].name}`, `raccoonmart:use:${id}`, 1));
   for (let i = 0; i < useButtons.length; i += 2) rows.push(row(...useButtons.slice(i, i + 2)));
-  rows.push(row(button("🛒 Back to RaccoonMart", "raccoonmart:home", 2)));
+  if (pageCount > 1) rows.push(row(
+    button("⬅️ Prev", `raccoonmart:inventory:${page - 1}`, 2, page === 0),
+    button(`Inventory ${page + 1}/${pageCount}`, `raccoonmart:inventory:${page}`, 2, true),
+    button("Next ➡️", `raccoonmart:inventory:${page + 1}`, 2, page === pageCount - 1)
+  ));
+  rows.push(row(button("🛒 Back to RaccoonMart", `raccoonmart:home:${Math.min(page, raccoonMartPageCount()-1)}`, 2)));
   await sendText(env, interaction,
-    `📦🦝 **YOUR RACCOONMART ITEMS**\n\n${lines.join("\n")}`,
+    `📦🦝 **YOUR RACCOONMART ITEMS** — Page **${page + 1}/${pageCount}**\n\n${lines.join("\n")}`,
     rows
   );
 }
@@ -7984,6 +8050,82 @@ async function useJailFreeCard(env, interaction) {
     `🎟️🦝 **GET OUT OF JAIL FREE!**\n\nThe Court sentence has been cancelled. The raccoons are furious.\n\n📦 Cards remaining: **${raccoonMartCount(player, "jail_free_card")}**`,
     raccoonMartHomeRows(player)
   );
+}
+
+async function useCheeseProtection(env, interaction, itemId, durationMs = 0, uses = 0) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  if (!consumeRaccoonMartItem(player, itemId)) return sendText(env, interaction, `❌ You don't have **${RACCOON_MART_ITEMS[itemId].name}**.`);
+  const now = Date.now();
+  if (uses) {
+    player.raccoonShieldUses = Number(player.raccoonShieldUses || 0) + uses;
+  } else {
+    player.raccoonShieldUntil = Math.max(Number(player.raccoonShieldUntil || 0), now + durationMs);
+  }
+  await savePlayer(env, player, user.id);
+  const detail = uses
+    ? `🧀 One /raccoon attack will be blocked automatically.`
+    : `🧀 /raccoon is blocked for **${durationMs >= 3 * 24 * 60 * 60 * 1000 ? "3 days" : "24 hours"}**.`;
+  await sendText(env, interaction, `🧀🦝 **CHEESE PROTECTION ACTIVATED!**\n\n${detail}\n\n📦 Remaining: **${raccoonMartCount(player, itemId)}**`, raccoonMartHomeRows(player));
+}
+
+function raccoonMartPunishmentSelect(customId) {
+  return {
+    type: 1,
+    components: [{
+      type: 3,
+      custom_id: customId,
+      placeholder: "⚖️ Choose a Court punishment...",
+      min_values: 1,
+      max_values: 1,
+      options: COURT_PUNISHMENTS.map(p => ({ label: p.name.replace(/^[^A-Za-z0-9]+/, "").slice(0, 100), value: p.id, description: "Applied only if the randomized verdict is GUILTY." }))
+    }]
+  };
+}
+
+async function useJudgesRobe(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  if (!raccoonMartCount(player, "judges_robe")) return sendText(env, interaction, "❌ You don't have a Judge's Robe.");
+  await sendText(env, interaction, `👨‍⚖️🦝 **JUDGE'S ROBE**\n\nChoose the punishment the defendant will receive **IF** the randomized verdict is GUILTY.\n\n🎲 **GUILTY / NOT GUILTY is still completely randomized.**\n⚠️ The robe is consumed when the case is filed.`, [
+    raccoonMartPunishmentSelect("raccoonmart:robe_choice"),
+    row(button("⬅️ Back to RaccoonMart", "raccoonmart:home:0", 2))
+  ]);
+}
+
+async function useJudgesRobeTarget(env, interaction, punishmentId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const punishment = COURT_PUNISHMENTS.find(p => p.id === punishmentId);
+  if (!punishment) return sendText(env, interaction, "❌ That Court punishment does not exist.");
+  const player = await getPlayer(env, user.id);
+  if (!raccoonMartCount(player, "judges_robe")) return sendText(env, interaction, "❌ You don't have a Judge's Robe.");
+  await sendText(env, interaction, `👨‍⚖️ **JUDGE'S ROBE — ${punishment.name}**\n\nChoose the defendant. Their verdict will still be randomized.`, [
+    raccoonMartUserSelect(`raccoonmart:robe_target:${punishmentId}`, "⚖️ Choose a defendant..."),
+    row(button("⬅️ Back to RaccoonMart", "raccoonmart:home:0", 2))
+  ]);
+}
+
+async function useJudgesRobeOnTarget(env, interaction, targetId, punishmentId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "⚖️ Choose another player for the Judge's Robe.");
+  const player = await getPlayer(env, user.id);
+  if (!consumeRaccoonMartItem(player, "judges_robe")) return sendText(env, interaction, "❌ You don't have a Judge's Robe.");
+  await savePlayer(env, player, user.id);
+  return handleCourt(env, interaction, targetId, true, punishmentId);
+}
+
+async function useRaccoonHitman(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  if (!consumeRaccoonMartItem(player, "raccoon_hitman")) return sendText(env, interaction, "❌ You don't have a Raccoon Hitman.");
+  player.raccoonHitmanUntil = Date.now() + 24 * 60 * 60 * 1000;
+  await savePlayer(env, player, user.id);
+  const untilText = new Date(player.raccoonHitmanUntil).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+  await sendText(env, interaction, `🔫🦝 **RACCOON HITMAN HIRED!**\n\nYour /raccoon cooldown is now **20 minutes** for the next **24 hours**.\n\nAfter **${untilText}**, your normal cooldown returns.\n\n📦 Hitmen remaining: **${raccoonMartCount(player, "raccoon_hitman")}**`, raccoonMartHomeRows(player));
 }
 
 async function useCeaseDesist(env, interaction, targetId) {
@@ -12209,14 +12351,30 @@ async function handleComponent(
   if (id.startsWith("raccoonmart:")) {
     const parts = id.split(":");
     const action = parts[1] || "";
-    if (action === "home") return showRaccoonMart(env, interaction);
-    if (action === "info") return showRaccoonMartInfo(env, interaction);
-    if (action === "inventory") return showRaccoonMartInventory(env, interaction);
+    if (action === "home") return showRaccoonMart(env, interaction, Number(parts[2] || 0));
+    if (action === "page") return showRaccoonMart(env, interaction, Number(parts[2] || 0));
+    if (action === "info") return showRaccoonMartInfo(env, interaction, Number(parts[2] || 0));
+    if (action === "inventory") return showRaccoonMartInventory(env, interaction, Number(parts[2] || 0));
     if (action === "buy") return buyRaccoonMartItem(env, interaction, parts[2]);
     if (action === "use") {
       const itemId = parts[2];
       if (itemId === "jail_free_card") return useJailFreeCard(env, interaction);
+      if (itemId === "cheese_slice") return useCheeseProtection(env, interaction, itemId, 0, 1);
+      if (itemId === "cheese_block") return useCheeseProtection(env, interaction, itemId, 24 * 60 * 60 * 1000, 0);
+      if (itemId === "cheese_wheel") return useCheeseProtection(env, interaction, itemId, 3 * 24 * 60 * 60 * 1000, 0);
+      if (itemId === "raccoon_hitman") return useRaccoonHitman(env, interaction);
+      if (itemId === "judges_robe") return useJudgesRobe(env, interaction);
       return showRaccoonMartTargetMenu(env, interaction, itemId);
+    }
+    if (action === "robe_choice") {
+      const punishmentId = interaction.data?.values?.[0] || "";
+      return useJudgesRobeTarget(env, interaction, punishmentId);
+    }
+    if (action === "robe") return useJudgesRobeTarget(env, interaction, parts[2]);
+    if (action === "robe_target") {
+      const punishmentId = parts[2];
+      const targetId = interaction.data?.values?.[0] || "";
+      return useJudgesRobeOnTarget(env, interaction, targetId, punishmentId);
     }
     if (action === "target") {
       const itemId = parts[2];
@@ -24078,6 +24236,25 @@ async function handleRaccoon(env, interaction) {
     return;
   }
 
+  if (Number(target.raccoonShieldUntil || 0) > now) {
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+    await sendText(env, interaction, `🧀🦝 **CHEESE SHIELD!**\n\n<@${targetId}> is protected from /raccoon until **${punishmentTimeText(target.raccoonShieldUntil)}**.\n\nYour raccoon bounced off the cheese. 😭`);
+    return;
+  }
+
+  if (Number(target.raccoonShieldUntil || 0) <= now && Number(target.raccoonShieldUntil || 0) > 0) {
+    target.raccoonShieldUntil = 0;
+  }
+  if (Number(target.raccoonShieldUses || 0) > 0) {
+    target.raccoonShieldUses = Math.max(0, Number(target.raccoonShieldUses || 0) - 1);
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+    await sendText(env, interaction, `🧀🦝 **CHEESE SLICE BLOCKED THE ROBBERY!**\n\n<@${targetId}> was protected from your /raccoon attack. The cheese slice was consumed. 😭`);
+    await sendUserDM(env, targetId, `🧀🦝 **CHEESE SLICE USED!**\n\nYour Cheese Slice blocked a /raccoon attack from <@${user.id}>. Your sparkles are safe!`);
+    return;
+  }
+
   if (raccoonMartCount(target, "emergency_cheese") > 0) {
     consumeRaccoonMartItem(target, "emergency_cheese");
     player.lastRaccoon = now;
@@ -24101,8 +24278,12 @@ async function handleRaccoon(env, interaction) {
     await sendUserDM(env, targetId, `🧀🦝 **EMERGENCY CHEESE SAVED YOU!**\n\nThe raccoon sent by <@${user.id}> was turned around and stole **${counterStolen.toLocaleString()} ✨** from them instead.`);
     return;
   }
-  if (player.lastRaccoon && now - player.lastRaccoon < RACCOON_COOLDOWN) {
-    const remaining = RACCOON_COOLDOWN - (now - player.lastRaccoon);
+  const activeRaccoonCooldown = Number(player.raccoonHitmanUntil || 0) > now
+    ? 20 * 60 * 1000
+    : RACCOON_COOLDOWN;
+
+  if (player.lastRaccoon && now - player.lastRaccoon < activeRaccoonCooldown) {
+    const remaining = activeRaccoonCooldown - (now - player.lastRaccoon);
     const hours = Math.floor(remaining / 3600000);
     const minutes = Math.ceil((remaining % 3600000) / 60000);
     const timeText = hours > 0
