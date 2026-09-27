@@ -753,6 +753,17 @@ function defaultPlayer() {
     raccoonCourtPreviousTree: "",
     raccoonCourtStinkEffectUntil: 0,
     raccoonCourtPreviousEffect: null,
+    // RaccoonMart is intentionally separate from cosmetic inventory.
+    raccoonMart: {
+      emergency_cheese: 0,
+      jail_free_card: 0,
+      handcuffs: 0,
+      raccoon_megaphone: 0,
+      sparkle_magnet: 0,
+      cease_desist: 0
+    },
+    ceaseDesistTargetId: "",
+    ceaseDesistUntil: 0,
     courtGameTimeoutUntil: 0,
     courtFortuneBanUntil: 0,
     courtRaccoonBanUntil: 0,
@@ -868,6 +879,10 @@ async function getPlayer(env, userId) {
       equipped: {
         ...defaultPlayer().equipped,
         ...(player.equipped || {})
+      },
+      raccoonMart: {
+        ...defaultPlayer().raccoonMart,
+        ...(player.raccoonMart || {})
       }
     };
 
@@ -1861,18 +1876,18 @@ async function handleCourtLeaderboard(env, interaction) {
   return sendText(env,interaction,`🦝⚖️ **RACCOON COURT LEADERBOARD**\n\n${lines.join("\n")}${championText}\n📊 Ranked by **guilty verdicts**, then total cases.\n🦝 The raccoons are keeping score.`);
 }
 
-async function handleCourt(env, interaction) {
+async function handleCourt(env, interaction, forcedTargetId = null, forced = false) {
   const user=getUserFromInteraction(interaction); if(!user)return;
-  const targetId=getOption(interaction,"user");
+  const targetId=forcedTargetId || getOption(interaction,"user");
   if(!targetId)return sendText(env,interaction,"🦝⚖️ The Raccoon Court needs a defendant.");
   if(String(targetId)===String(user.id))return sendText(env,interaction,"🦝⚖️ You cannot put yourself on trial. The raccoons have standards. Barely.");
   const now=Date.now();
   const accuser=await getPlayer(env,user.id); await refreshPunishmentState(env,accuser);
   const sixHours=6*60*60000;
-  if(Number(accuser.courtLastFiledAt||0)>0 && now-Number(accuser.courtLastFiledAt)<sixHours)return sendText(env,interaction,`⏳🦝 **COURT IS CLOSED FOR YOU.**\n\nYou must wait **${punishmentTimeText(Number(accuser.courtLastFiledAt)+sixHours)}** before filing another case.`);
+  if(!forced && Number(accuser.courtLastFiledAt||0)>0 && now-Number(accuser.courtLastFiledAt)<sixHours)return sendText(env,interaction,`⏳🦝 **COURT IS CLOSED FOR YOU.**\n\nYou must wait **${punishmentTimeText(Number(accuser.courtLastFiledAt)+sixHours)}** before filing another case.`);
   const target=await getPlayer(env,targetId); await refreshPunishmentState(env,target);
   const day=courtDayKey();
-  if(String(target.courtLastTargetedDay||"")===day)return sendText(env,interaction,"🚫🦝 **THIS DEFENDANT HAS ALREADY BEEN TO COURT TODAY.**\n\nThe raccoons will not hear another case against them until tomorrow.");
+  if(!forced && String(target.courtLastTargetedDay||"")===day)return sendText(env,interaction,"🚫🦝 **THIS DEFENDANT HAS ALREADY BEEN TO COURT TODAY.**\n\nThe raccoons will not hear another case against them until tomorrow.");
   accuser.courtLastFiledAt=now; target.courtLastTargetedDay=day;
   const caseNumber=`RAC-${randomInt(100000,999999)}`; const charge=courtCharge();
   const judge=courtRandomJudge(); const judgeLine=judge.lines[randomInt(0,judge.lines.length-1)];
@@ -1904,7 +1919,7 @@ async function handleCourt(env, interaction) {
     const publicEmbed={title:"🦝⚖️ THE RACCOON COURT",description:guilty?`**${verdict}**\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}`:`**${verdict}**\n\n${innocentLine}\n\n**CASE CLOSED.**`,color:guilty?0xD94A4A:0x4CAF50,fields:[{name:"👨‍⚖️ Judge",value:judge.name,inline:true},{name:"📁 Case",value:`**${caseNumber}**`,inline:true},{name:"👤 Defendant",value:`<@${targetId}>`,inline:true},{name:"📜 Charge",value:charge,inline:false}],author:{name:`${target.displayName||target.username||"Werewife"} — Court Defendant`,icon_url:avatarUrl},thumbnail:{url:avatarUrl},footer:{text:`Raccoon Court • ${judge.name} has spoken. 🦝⚖️`},timestamp:new Date().toISOString()};
     await sendChannelMessage(env,announcementChannelId,"🦝⚖️ **Raccoon Court Case Filed**",[],{embeds:[publicEmbed]});
   }
-  await sendText(env,interaction,`🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
+  await sendText(env,interaction,`${forced ? "⛓️🦝 **HANDCUFFS USED!**\n\n" : ""}🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
 }
 
 async function handlePickleJail(env, interaction) {
@@ -7703,6 +7718,291 @@ async function showShop(
   await showRegularShop(env, interaction);
 }
 
+/* =========================================================
+   RACCOONMART — UTILITY / CHAOS ITEMS
+   Kept completely separate from cosmetic SHOP_ITEMS/inventory.
+========================================================= */
+
+const RACCOON_MART_ITEMS = {
+  emergency_cheese: {
+    name: "🧀 Emergency Cheese",
+    price: 5000,
+    description: "Automatically counters one /raccoon attack. The attacker gets robbed instead, and the cheese is consumed."
+  },
+  jail_free_card: {
+    name: "🎟️ Get Out of Jail Free Card",
+    price: 25000,
+    description: "Ends your currently active Raccoon Court punishment. One card removes the active Court sentence."
+  },
+  handcuffs: {
+    name: "⛓️ Handcuffs",
+    price: 15000,
+    description: "Lets you send someone to Raccoon Court even if they already went to Court today or you already filed against them."
+  },
+  raccoon_megaphone: {
+    name: "📢 Raccoon Megaphone",
+    price: 3000,
+    description: "Pick a player and publicly announce a ridiculous RaccoonMart notice about them."
+  },
+  sparkle_magnet: {
+    name: "🧲 Sparkle Magnet",
+    price: 12000,
+    description: "Use it on a player to pull 5–15% of their current sparkles toward your sparkle stash."
+  },
+  cease_desist: {
+    name: "⚖️ Cease & Desist",
+    price: 8000,
+    description: "Pick a player. Their /raccoon attacks against you are blocked for 6 hours."
+  }
+};
+
+function raccoonMartCount(player, id) {
+  player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object" ? player.raccoonMart : {};
+  return Math.max(0, Number(player.raccoonMart[id] || 0));
+}
+
+function setRaccoonMartCount(player, id, count) {
+  player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object" ? player.raccoonMart : {};
+  player.raccoonMart[id] = Math.max(0, Number(count || 0));
+}
+
+function consumeRaccoonMartItem(player, id) {
+  const count = raccoonMartCount(player, id);
+  if (count < 1) return false;
+  setRaccoonMartCount(player, id, count - 1);
+  return true;
+}
+
+function raccoonMartUserSelect(customId, placeholder) {
+  return {
+    type: 1,
+    components: [{
+      type: 5,
+      custom_id: customId,
+      placeholder,
+      min_values: 1,
+      max_values: 1
+    }]
+  };
+}
+
+function raccoonMartHomeRows(player) {
+  const ids = Object.keys(RACCOON_MART_ITEMS);
+  const buttons = ids.map(id => {
+    const item = RACCOON_MART_ITEMS[id];
+    const count = raccoonMartCount(player, id);
+    return button(`${item.name} — ${item.price.toLocaleString()} ✨`, `raccoonmart:buy:${id}`, 1, false);
+  });
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  rows.push(row(
+    button("ℹ️ What do these do?", "raccoonmart:info", 2),
+    button("📦 My RaccoonMart", "raccoonmart:inventory", 2)
+  ));
+  rows.push(row(button("⬅️ Back to Tree", "back_tree", 2)));
+  return rows;
+}
+
+async function showRaccoonMart(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  await savePlayer(env, player, user.id);
+  const lines = Object.entries(RACCOON_MART_ITEMS).map(([id, item]) =>
+    `${item.name} — **${item.price.toLocaleString()} ✨** • You own **${raccoonMartCount(player, id)}**`
+  );
+  await sendText(env, interaction,
+    `🦝🛒 **RACCOONMART**\n\nThe completely unnecessary store for extremely necessary chaos.\n\n${lines.join("\n")}\n\n✨ Items here are separate from the cosmetic /shop inventory.`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+async function showRaccoonMartInfo(env, interaction) {
+  const lines = Object.values(RACCOON_MART_ITEMS).map(item =>
+    `${item.name} — **${item.price.toLocaleString()} ✨**\n${item.description}`
+  );
+  await sendText(env, interaction,
+    `ℹ️🦝 **RACCOONMART ITEM GUIDE**\n\n${lines.join("\n\n")}`,
+    [row(button("⬅️ Back to RaccoonMart", "raccoonmart:home", 2))]
+  );
+}
+
+async function showRaccoonMartInventory(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  const lines = Object.entries(RACCOON_MART_ITEMS).map(([id, item]) =>
+    `${item.name}: **${raccoonMartCount(player, id)}**`
+  );
+  const usable = Object.entries(RACCOON_MART_ITEMS).filter(([id]) => raccoonMartCount(player, id) > 0);
+  const rows = [];
+  const useButtons = usable.map(([id, item]) => button(`Use ${item.name}`, `raccoonmart:use:${id}`, 1));
+  for (let i = 0; i < useButtons.length; i += 2) rows.push(row(...useButtons.slice(i, i + 2)));
+  rows.push(row(button("🛒 Back to RaccoonMart", "raccoonmart:home", 2)));
+  await sendText(env, interaction,
+    `📦🦝 **YOUR RACCOONMART ITEMS**\n\n${lines.join("\n")}`,
+    rows
+  );
+}
+
+async function buyRaccoonMartItem(env, interaction, itemId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const item = RACCOON_MART_ITEMS[itemId];
+  if (!item) return sendText(env, interaction, "❌ That RaccoonMart item does not exist.");
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  if (Number(player.sparkles || 0) < item.price) {
+    return sendText(env, interaction, `❌ You need **${item.price.toLocaleString()} sparkles**, but you only have **${Number(player.sparkles || 0).toLocaleString()}**.`);
+  }
+  player.sparkles -= item.price;
+  setRaccoonMartCount(player, itemId, raccoonMartCount(player, itemId) + 1);
+  player.shopPurchases = Number(player.shopPurchases || 0) + 1;
+  player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+  player.badgeStats.sparklesSpent = Number(player.badgeStats.sparklesSpent || 0) + item.price;
+  await savePlayer(env, player, user.id);
+  await sendText(env, interaction,
+    `🛒🦝 **PURCHASE COMPLETE!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n📦 You now own **${raccoonMartCount(player, itemId)}**.`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+function hasActiveCourtSentence(player) {
+  const fields = [
+    "courtGameTimeoutUntil", "courtFortuneBanUntil", "courtRaccoonBanUntil",
+    "courtRecycleBanUntil", "courtRiddleBanUntil", "courtUtilityLockUntil",
+    "courtProbationUntil", "courtWatchUntil", "courtCriminalRecordUntil",
+    "courtShameCornerUntil", "raccoonCourtTreeUntil", "raccoonCourtStinkEffectUntil",
+    "courtRaccoonTitleUntil", "courtPublicShameUntil", "courtTrashReleaseUntil",
+    "courtSpoonInvestigationUntil", "courtTreeConfiscationUntil"
+  ];
+  return fields.some(field => Number(player[field] || 0) > Date.now());
+}
+
+async function useJailFreeCard(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  await refreshPunishmentState(env, player);
+  if (!hasActiveCourtSentence(player)) {
+    return sendText(env, interaction, "🎟️ The raccoons checked your record... you don't have an active Court sentence to escape from.");
+  }
+  if (!consumeRaccoonMartItem(player, "jail_free_card")) {
+    return sendText(env, interaction, "❌ You don't have a Get Out of Jail Free Card.");
+  }
+
+  // Restore anything Court temporarily replaced, then clear Court timers.
+  if (Number(player.raccoonCourtTreeUntil || 0) > 0) player.equipped.tree = player.raccoonCourtPreviousTree || "cherry";
+  if (Number(player.raccoonCourtStinkEffectUntil || 0) > 0) player.equipped.effect = player.raccoonCourtPreviousEffect ?? null;
+  if (Number(player.courtCriminalRecordUntil || 0) > 0 && player.courtPreviousTitle) player.equippedTitle = player.courtPreviousTitle;
+  if (Number(player.courtRaccoonTitleUntil || 0) > 0 && player.courtRaccoonPreviousTitle && !player.courtPreviousTitle) player.equippedTitle = player.courtRaccoonPreviousTitle;
+
+  const fields = [
+    "courtGameTimeoutUntil", "courtFortuneBanUntil", "courtRaccoonBanUntil",
+    "courtRecycleBanUntil", "courtRiddleBanUntil", "courtUtilityLockUntil",
+    "courtProbationUntil", "courtWatchUntil", "courtCriminalRecordUntil",
+    "courtShameCornerUntil", "raccoonCourtTreeUntil", "raccoonCourtStinkEffectUntil",
+    "courtRaccoonTitleUntil", "courtPublicShameUntil", "courtTrashReleaseUntil",
+    "courtSpoonInvestigationUntil", "courtTreeConfiscationUntil"
+  ];
+  for (const field of fields) player[field] = 0;
+  player.courtTrashReleaseNextAt = 0;
+  player.courtTrashReleaseChannelId = "";
+  player.courtSpoonInvestigationLastAt = 0;
+  player.courtPublicShameLastAt = 0;
+  player.raccoonCourtPreviousTree = "";
+  player.raccoonCourtPreviousEffect = null;
+  player.courtPreviousTitle = "";
+  player.courtRaccoonPreviousTitle = "";
+  await savePlayer(env, player, user.id);
+  await sendText(env, interaction,
+    `🎟️🦝 **GET OUT OF JAIL FREE!**\n\nThe Court sentence has been cancelled. The raccoons are furious.\n\n📦 Cards remaining: **${raccoonMartCount(player, "jail_free_card")}**`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+async function useCeaseDesist(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "⚖️ Choose another player for the Cease & Desist.");
+  const player = await getPlayer(env, user.id);
+  const target = await getPlayer(env, targetId);
+  if (!consumeRaccoonMartItem(player, "cease_desist")) return sendText(env, interaction, "❌ You don't have a Cease & Desist.");
+  player.ceaseDesistTargetId = String(targetId);
+  player.ceaseDesistUntil = Date.now() + 6 * 60 * 60 * 1000;
+  await savePlayer(env, player, user.id);
+  await savePlayer(env, target, targetId);
+  await sendText(env, interaction,
+    `⚖️📜 **CEASE & DESIST SERVED!**\n\n<@${targetId}> is legally forbidden from sending a raccoon after you for **6 hours**.\n\n🦝 Your lawyers are raccoons. This is apparently binding.`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+async function useSparkleMagnet(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "🧲 Choose another player for the Sparkle Magnet.");
+  const player = await getPlayer(env, user.id);
+  const target = await getPlayer(env, targetId);
+  if (!consumeRaccoonMartItem(player, "sparkle_magnet")) return sendText(env, interaction, "❌ You don't have a Sparkle Magnet.");
+  const available = Math.max(0, Number(target.sparkles || 0));
+  const percent = randomInt(5, 15);
+  const pulled = Math.min(available, Math.floor(available * percent / 100));
+  target.sparkles = Math.max(0, available - pulled);
+  player.sparkles = Number(player.sparkles || 0) + pulled;
+  player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+  player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + pulled;
+  await savePlayer(env, player, user.id);
+  await savePlayer(env, target, targetId);
+  await sendUserDM(env, targetId, `🧲✨ **SPARKLE MAGNET!**\n\n<@${user.id}> activated a Sparkle Magnet and pulled **${pulled.toLocaleString()} ✨** from your balance.`);
+  await sendText(env, interaction,
+    `🧲✨ **SPARKLE MAGNET ACTIVATED!**\n\nYou pulled **${pulled.toLocaleString()} ✨** from <@${targetId}> (${percent}%).\n\n📦 Magnets remaining: **${raccoonMartCount(player, "sparkle_magnet")}**`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+async function useMegaphone(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "📢 Choose another player for the Raccoon Megaphone.");
+  const player = await getPlayer(env, user.id);
+  if (!consumeRaccoonMartItem(player, "raccoon_megaphone")) return sendText(env, interaction, "❌ You don't have a Raccoon Megaphone.");
+  const notices = [
+    `📢🦝 **RACCOONMART PUBLIC NOTICE:** <@${targetId}> has been officially reported for **suspicious raccoon activity**.`,
+    `📢🦝 **ATTENTION WEREWIVES:** Please keep an eye on <@${targetId}>. The raccoons have filed a complaint.`,
+    `📢⚠️ **RACCOONMART ALERT:** <@${targetId}> has been placed under extremely unnecessary investigation.`,
+    `📢🦝 **BREAKING NEWS:** The raccoons would like everyone to know that <@${targetId}> is being dramatic again.`
+  ];
+  await sendChannelMessage(env, interaction.channel_id, notices[randomInt(0, notices.length - 1)]);
+  await savePlayer(env, player, user.id);
+  await sendText(env, interaction, `📢🦝 **MEGAPHONE FIRED!**\n\n<@${targetId}> has been publicly announced. 😭\n\n📦 Megaphones remaining: **${raccoonMartCount(player, "raccoon_megaphone")}**`, raccoonMartHomeRows(player));
+}
+
+async function useHandcuffs(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "⛓️ Choose another player for the Handcuffs.");
+  const player = await getPlayer(env, user.id);
+  if (!consumeRaccoonMartItem(player, "handcuffs")) return sendText(env, interaction, "❌ You don't have any Handcuffs.");
+  await savePlayer(env, player, user.id);
+  await handleCourt(env, interaction, targetId, true);
+}
+
+async function showRaccoonMartTargetMenu(env, interaction, itemId) {
+  const labels = {
+    handcuffs: ["⛓️ **HANDCUFFS**", "Choose the player you want to send to Court."],
+    raccoon_megaphone: ["📢 **RACCOON MEGAPHONE**", "Choose the player who deserves a public raccoon announcement."],
+    sparkle_magnet: ["🧲 **SPARKLE MAGNET**", "Choose the player whose sparkles you want to magnetically yoink."],
+    cease_desist: ["⚖️ **CEASE & DESIST**", "Choose the player who is being legally forbidden from raccoon attacks against you."]
+  };
+  const entry = labels[itemId];
+  if (!entry) return sendText(env, interaction, "❌ That RaccoonMart action needs no target.");
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
+  if (!raccoonMartCount(player, itemId)) return sendText(env, interaction, `❌ You don't own **${RACCOON_MART_ITEMS[itemId].name}**.`);
+  await sendText(env, interaction, `${entry[0]}\n\n${entry[1]}`, [
+    raccoonMartUserSelect(`raccoonmart:target:${itemId}`, "🦝 Choose a player..."),
+    row(button("⬅️ Back to RaccoonMart", "raccoonmart:home", 2))
+  ]);
+}
+
 async function showBackgroundShop(
   env,
   interaction
@@ -11604,6 +11904,30 @@ async function handleComponent(
     if(action==="bossstart") return birthdayBossStart(env,interaction);
     if(action==="bossleave") return birthdayBossLeave(env,interaction);
     if(action==="bossaction") return birthdayBossAction(env,interaction,parts[2]);
+    return;
+  }
+
+  if (id.startsWith("raccoonmart:")) {
+    const parts = id.split(":");
+    const action = parts[1] || "";
+    if (action === "home") return showRaccoonMart(env, interaction);
+    if (action === "info") return showRaccoonMartInfo(env, interaction);
+    if (action === "inventory") return showRaccoonMartInventory(env, interaction);
+    if (action === "buy") return buyRaccoonMartItem(env, interaction, parts[2]);
+    if (action === "use") {
+      const itemId = parts[2];
+      if (itemId === "jail_free_card") return useJailFreeCard(env, interaction);
+      return showRaccoonMartTargetMenu(env, interaction, itemId);
+    }
+    if (action === "target") {
+      const itemId = parts[2];
+      const targetId = interaction.data?.values?.[0] || "";
+      if (itemId === "handcuffs") return useHandcuffs(env, interaction, targetId);
+      if (itemId === "raccoon_megaphone") return useMegaphone(env, interaction, targetId);
+      if (itemId === "sparkle_magnet") return useSparkleMagnet(env, interaction, targetId);
+      if (itemId === "cease_desist") return useCeaseDesist(env, interaction, targetId);
+      return sendText(env, interaction, "❌ That RaccoonMart item could not be used.");
+    }
     return;
   }
 
@@ -23445,8 +23769,39 @@ async function handleRaccoon(env, interaction) {
   const target = await getPlayer(env, targetId);
 
   updatePlayerIdentity(player, interaction);
+  await refreshPunishmentState(env, target);
 
   const now = Date.now();
+
+  if (Number(target.ceaseDesistUntil || 0) > now && String(target.ceaseDesistTargetId || "") === String(user.id)) {
+    await sendText(env, interaction, `⚖️🦝 **CEASE & DESIST ENFORCED!**\n\n<@${user.id}> has been legally forbidden from sending a raccoon after <@${targetId}> until **${punishmentTimeText(target.ceaseDesistUntil)}** from now.
+\nThe raccoon has been served paperwork and sent home. 📜`);
+    return;
+  }
+
+  if (raccoonMartCount(target, "emergency_cheese") > 0) {
+    consumeRaccoonMartItem(target, "emergency_cheese");
+    player.lastRaccoon = now;
+    player.raccoonRobberies = Number(player.raccoonRobberies || 0) + 1;
+    const counterAvailable = Math.max(0, Number(player.sparkles || 0));
+    const counterRequested = randomInt(0, 300);
+    const counterStolen = Math.min(counterRequested, counterAvailable);
+    target.sparkles = Number(target.sparkles || 0) + counterStolen;
+    player.sparkles = Math.max(0, counterAvailable - counterStolen);
+    target.raccoonWins = Number(target.raccoonWins || 0) + (counterStolen > 0 ? 1 : 0);
+    target.badgeStats = target.badgeStats && typeof target.badgeStats === "object" ? target.badgeStats : {};
+    target.badgeStats.sparklesStolen = Number(target.badgeStats.sparklesStolen || 0) + counterStolen;
+    target.badgeStats.sparklesEarned = Number(target.badgeStats.sparklesEarned || 0) + counterStolen;
+    if (counterStolen > 0) {
+      target.badgeStats.uniqueRaccoonTargets = Array.isArray(target.badgeStats.uniqueRaccoonTargets) ? target.badgeStats.uniqueRaccoonTargets : [];
+      if (!target.badgeStats.uniqueRaccoonTargets.includes(String(user.id))) target.badgeStats.uniqueRaccoonTargets.push(String(user.id));
+    }
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+    await sendText(env, interaction, `🧀🦝 **EMERGENCY CHEESE ACTIVATED!**\n\n<@${targetId}> had Emergency Cheese. Your raccoon turned around and robbed **${counterStolen.toLocaleString()} ✨** from YOU instead! 😭\n\n🧀 The cheese has been consumed.`);
+    await sendUserDM(env, targetId, `🧀🦝 **EMERGENCY CHEESE SAVED YOU!**\n\nThe raccoon sent by <@${user.id}> was turned around and stole **${counterStolen.toLocaleString()} ✨** from them instead.`);
+    return;
+  }
   if (player.lastRaccoon && now - player.lastRaccoon < RACCOON_COOLDOWN) {
     const remaining = RACCOON_COOLDOWN - (now - player.lastRaccoon);
     const hours = Math.floor(remaining / 3600000);
@@ -24627,6 +24982,11 @@ async function handleCommand(
 
   if (name === "raccoon") {
     await handleRaccoon(env, interaction);
+    return;
+  }
+
+  if (name === "raccoonmart") {
+    await showRaccoonMart(env, interaction);
     return;
   }
 
@@ -27337,6 +27697,11 @@ const COMMANDS = [
   },
 
   {
+    name: "raccoonmart",
+    description: "Open RaccoonMart — utility items for chaotic nonsense"
+  },
+
+  {
     name: "sparkle",
     description: "Check your sparkle balance"
   },
@@ -28007,6 +28372,9 @@ export default {
     const isTreeComponent = interaction.type === 3 && customId.startsWith("tree:");
     // Shop buttons can involve KV reads/writes before the response is ready.
     // Acknowledge them immediately so Discord never hits the 3-second timeout.
+    const isRaccoonMartComponent =
+      interaction.type === 3 && customId.startsWith("raccoonmart:");
+
     const isShopComponent =
       interaction.type === 3 &&
       (
@@ -28243,7 +28611,11 @@ export default {
         // Acknowledge immediately so Discord does not leave the button
         // spinning on "Bot is thinking..." while the menu is rebuilt.
         update = true;
-            } else if (isShopComponent) {
+            } else if (isRaccoonMartComponent) {
+        // RaccoonMart handlers edit the private shop/menu after KV work.
+        update = false;
+        ephemeral = true;
+      } else if (isShopComponent) {
         // Shop handlers edit the existing shop message after KV work.
         // A type-6 update ACK removes the Discord "Bot is thinking..."
         // state immediately and avoids leaving the button interaction
