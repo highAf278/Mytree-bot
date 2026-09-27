@@ -4917,11 +4917,11 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     rainbow:[[255,70,170],[105,220,255]], sparkle:[[255,208,48],[255,249,180]],
     green:[[68,205,95],[190,255,178]], frame_royal:[[175,92,255],[255,216,105]],
     diva:[[255,92,188],[255,214,241]], butterfly:[[70,205,255],[225,145,255]],
-    raccoon_robber:[[190,130,84],[255,215,158]], toxic:[[92,238,72],[222,255,128]],
+    raccoon_robber:[[220,155,100],[255,225,175]], toxic:[[92,238,72],[222,255,128]],
     tycoon:[[55,194,116],[255,221,72]], star:[[255,184,45],[255,242,155]],
-    king:[[255,201,56],[255,241,155]], alpha:[[145,184,225],[244,252,255]],
-    cool:[[62,175,255],[195,244,255]], danger:[[238,55,92],[255,171,153]],
-    speed:[[55,211,255],[230,253,255]], raccoon_boss:[[222,153,72],[255,228,130]],
+    king:[[255,201,56],[255,241,155]], alpha:[[170,205,245],[255,255,255]],
+    cool:[[65,190,255],[215,250,255]], danger:[[250,65,105],[255,195,170]],
+    speed:[[55,211,255],[230,253,255]], raccoon_boss:[[240,175,80],[255,238,155]],
     black_ice:[[45,170,255],[245,253,255]], millionaire:[[255,195,42],[255,241,145]]
   };
   const [base,hi]=palettes[b.style]||[[190,195,210],[255,255,255]];
@@ -4962,23 +4962,20 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP LUXURY: a dedicated royal crest, not another plain diamond.
-    // Strong silhouette + bright jewel tones so it survives the 20px Discord badge.
-    // Crown first, then a jewel-set shield underneath.
-    POLY([[24,28],[34,13],[43,25],[50,9],[57,25],[66,13],[76,28],[71,40],[29,40]],hi,255);
-    POLY([[29,29],[35,19],[43,30],[50,15],[57,30],[65,19],[71,29],[67,36],[33,36]],base,255);
-    O(35,23,3,white,245); O(50,16,3,white,255); O(65,23,3,white,245);
-    L(29,37,71,37,5,white,220);
-    // Royal shield / jewel body.
-    POLY([[25,40],[50,35],[75,40],[69,72],[50,90],[31,72]],base,255);
-    POLY([[25,40],[50,35],[50,84],[31,72]],hi,245);
-    POLY([[50,35],[75,40],[69,72],[50,84]],base,255);
-    POLY([[39,47],[50,41],[61,47],[56,65],[50,72],[44,65]],white,235);
-    POLY([[39,47],[50,41],[50,72],[44,65]], [235,185,255],245);
-    POLY([[50,41],[61,47],[56,65],[50,72]], [255,220,95],245);
-    // Tiny VIP-style jewel studs and a signature glint.
-    O(29,45,3,white,235); O(71,45,3,white,235); O(34,73,3,hi,235); O(66,73,3,hi,235);
-    ST(79,79,6,white,235); ST(21,22,4,white,190);
+    // VIP: unmistakable luxury crown + jewel. Big silhouette, bright facets.
+    POLY([[18,31],[25,12],[39,26],[50,7],[61,26],[75,12],[82,31],[77,42],[23,42]],hi,255);
+    POLY([[24,30],[30,19],[39,31],[50,14],[61,31],[70,19],[76,30],[71,36],[29,36]],base,255);
+    O(30,23,3.5,white,255); O(50,14,4,white,255); O(70,23,3.5,white,255);
+    F(23,37,54,6,[255,222,120],255);
+    // Large jewel/crest underneath — deliberately not another plain diamond.
+    POLY([[25,43],[50,37],[75,43],[68,78],[50,92],[32,78]],base,255);
+    POLY([[25,43],[50,37],[50,84],[32,78]],hi,255);
+    POLY([[50,37],[75,43],[68,78],[50,84]],base,255);
+    POLY([[39,50],[50,43],[61,50],[56,68],[50,76],[44,68]],white,250);
+    POLY([[39,50],[50,43],[50,76],[44,68]],[245,190,255],255);
+    POLY([[50,43],[61,50],[56,68],[50,76]],[255,224,105],255);
+    O(28,48,3,white,245); O(72,48,3,white,245); O(35,76,3,hi,245); O(65,76,3,hi,245);
+    ST(84,80,7,white,255); ST(17,21,4,white,230);
   } else if(b.style==='spender'){
     RR(12,28,76,48,7,base,255,4); F(15,31,70,11,hi); RR(22,46,23,21,3,hi,255,3);
     // Card chip and contactless marks.
@@ -4994,13 +4991,14 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     }
     ST(50,57,10,white,250); O(23,31,3,cols[0],230); O(77,31,3,cols[5],230);
   } else if(b.style==='sparkle'){
-    // Sparkle Hoarder: a tiny treasure chest overflowing with bright sparkles.
-    RR(22,53,56,29,6,base,255,5); RR(25,57,50,19,3,black,255,3);
-    F(25,53,50,8,hi,245); L(25,61,75,61,4,white,220);
-    RR(45,65,10,9,3,hi,255,2); O(50,70,2.5,black,255);
-    ST(50,34,18,base,255); ST(50,34,10,white,250);
-    ST(31,42,8,hi,245); ST(69,39,7,white,240); ST(27,27,5,white,220); ST(75,26,5,hi,225);
-    O(37,29,2.5,hi,235); O(63,28,2.5,white,230); O(39,45,2.5,white,225); O(62,46,2.5,hi,225);
+    // Sparkle Hoarder: treasure chest silhouette with a BIG overflowing sparkle pile.
+    // The chest is secondary; the sparkle hoard is the immediately readable feature.
+    RR(22,56,56,27,6,base,255,5); F(22,56,56,9,hi,255); L(22,65,78,65,5,white,235);
+    RR(44,66,12,11,3,black,255,2); O(50,71,2.5,white,235);
+    ST(50,31,22,hi,255); ST(50,31,12,white,255);
+    ST(30,45,10,base,255); ST(70,42,11,white,255);
+    ST(24,27,6,white,245); ST(78,24,6,hi,245);
+    O(38,38,3,white,245); O(62,35,3,hi,245); O(36,51,3,hi,235); O(64,50,3,white,235);
   } else if(b.style==='green'){
     F(45,59,10,27,base); F(42,82,16,5,hi);
     P(50,34,27,18,hi,250); P(34,51,24,18,base,250); P(66,51,24,18,base,250); P(50,66,29,18,base,250);
@@ -5083,11 +5081,14 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     L(8,69,29,60,5,white,210); L(7,58,27,52,5,base,210); L(70,25,90,15,5,hi,210);
     O(83,78,3,white,210);
   } else if(b.style==='black_ice'){
-    // Diamond Darling: large jewelry gemstone with obvious facets.
-    POLY([[50,9],[82,31],[68,83],[32,83],[18,31]],base,255);
-    POLY([[18,31],[50,35],[32,83]],hi,245); POLY([[50,35],[82,31],[68,83]],base,245); POLY([[32,83],[50,35],[68,83]],hi,235);
-    L(18,31,82,31,5,white,225); L(50,9,50,35,4,white,235); L(32,83,50,35,4,white,180); L(68,83,50,35,4,white,190);
-    ST(78,18,6,white,235); O(24,78,3,hi,220);
+    // Diamond Darling: jewelry-cut gemstone, with a strong silhouette and obvious facets.
+    POLY([[50,7],[82,28],[72,46],[64,84],[36,84],[28,46],[18,28]],base,255);
+    POLY([[18,28],[38,31],[50,7],[62,31],[82,28],[68,43],[32,43]],hi,250);
+    POLY([[32,43],[50,31],[68,43],[64,84],[36,84]],base,255);
+    POLY([[32,43],[50,31],[50,78],[36,84]],white,235);
+    POLY([[50,31],[68,43],[64,84],[50,78]],[105,205,255],245);
+    L(18,28,82,28,5,white,240); L(50,7,50,31,4,white,240);
+    ST(80,18,7,white,250); ST(25,72,4,hi,220);
   } else if(b.style==='millionaire'){
     // Coin with raised rim and embossed M.
     O(50,50,34,base,255); O(50,50,28,black,255); O(50,50,24,hi,255); O(50,50,20,black,255);
@@ -5113,6 +5114,9 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   const gx=cx+Math.round(Math.cos(phase*6.283+cx*.01)*(r-5));
   const gy=cy+Math.round(Math.sin(phase*6.283+cx*.01)*(r-5));
   profileSmoothStar(frame,gx,gy,1.25,white,145);
+  // Tiny fixed enamel glint: reinforces the collectible/premium look without
+  // obscuring the emblem at Discord's final size.
+  if(b.style!=='butterfly') profileSmoothStar(frame,cx-r+4,cy-r+4,0.9,white,120);
 }
 
 function drawProfileBadges(frame,badgeIds,phase=0){
