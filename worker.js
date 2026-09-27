@@ -5050,13 +5050,15 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
   };
 
   if(b.style==='vip_luxury'){
-    // VIP: one giant unmistakable crown. No tiny lettering or tiny gems.
-    POLY([[10,31],[22,12],[39,27],[50,8],[61,27],[78,12],[90,31],[84,65],[16,65]],base,255);
-    POLY([[10,31],[22,12],[39,27],[50,8],[50,52],[16,52]],hi,255);
-    F(16,52,68,14,[255,205,70],255);
-    L(18,58,82,58,7,white,220);
-    O(22,25,4,white,230); O(50,18,5,white,245); O(78,25,4,white,230);
-    ST(50,81,8,hi,255);
+    // VIP: a luxury award medallion, deliberately NOT a crown so King owns that silhouette.
+    // Big purple medal + gold V + ribbon tails = readable VIP status at 20px.
+    POLY([[31,10],[44,10],[50,27],[56,10],[69,10],[62,34],[38,34]],hi,255);
+    POLY([[31,10],[44,10],[50,27],[38,34]],base,255);
+    POLY([[56,10],[69,10],[62,34],[50,27]],base,255);
+    O(50,55,34,base,255); O(50,55,28,black,255); O(50,55,24,base,255);
+    L(37,43,50,68,7,[255,218,82],255); L(50,68,63,43,7,[255,218,82],255);
+    O(50,55,5,white,235);
+    ST(22,28,5,white,220); ST(78,28,5,white,220);
   } else if(b.style==='spender'){
     // Credit card: chunky card silhouette + one obvious coin.
     RR(9,24,82,50,7,base,255,4);
@@ -5073,10 +5075,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     L(34,70,34,59,6,c3,255); L(34,59,50,41,6,c3,255); L(50,41,66,59,6,c3,255); L(66,59,66,70,6,c3,255);
     ST(50,79,6,white,235);
   } else if(b.style==='sparkle'){
-    // Sparkle Hoarder: three giant overlapping sparkles. Readable even without the chest.
-    ST(50,46,25,base,255); ST(50,46,13,white,245);
-    ST(25,67,12,hi,255); ST(75,67,12,hi,255);
-    O(50,78,5,hi,230);
+    // Sparkle Hoarder: one dominant sparkle with two small satellites.
+    // No overlap pile — the silhouette stays clean instead of becoming a yellow blob.
+    ST(50,48,29,base,255); ST(50,48,13,white,245);
+    ST(25,72,8,hi,255); ST(75,70,8,hi,255);
   } else if(b.style==='green'){
     // Tree Keeper: unmistakable tree silhouette.
     F(45,56,10,31,base,255); F(39,84,22,5,hi,255);
@@ -5134,10 +5136,10 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     ST(50,50,40,base,255); ST(50,50,24,hi,255); ST(50,50,10,white,235);
     O(18,78,4,hi,225); O(82,22,4,white,225);
   } else if(b.style==='king'){
-    // King: giant gold crown, separate from the Royalty frame badge.
-    POLY([[9,34],[22,11],[39,29],[50,7],[61,29],[78,11],[91,34],[84,67],[16,67]],base,255);
-    F(17,51,66,13,hi,255); L(19,58,81,58,6,white,220);
-    O(22,25,4,white,230); O(50,17,5,white,240); O(78,25,4,white,230);
+    // King owns the crown silhouette. Make it a touch larger and bolder than before.
+    POLY([[6,33],[20,7],[38,27],[50,3],[62,27],[80,7],[94,33],[87,70],[13,70]],base,255);
+    F(14,50,72,16,hi,255); L(16,59,84,59,7,white,220);
+    O(20,23,4,white,230); O(50,14,5,white,240); O(80,23,4,white,230);
   } else if(b.style==='alpha'){
     // Alpha: bold wolf head silhouette with ears and eyes.
     POLY([[13,28],[31,10],[41,28],[50,20],[59,28],[69,10],[87,28],[80,68],[66,86],[50,92],[34,86],[20,68]],base,255);
@@ -5202,10 +5204,8 @@ function drawProfileBadges(frame,badgeIds,phase=0){
   const y=450;
   const positions=[145,180,215,250];
   for(let i=0;i<ids.length;i++){
-    // Prototype the new VIP badge at a slightly larger final footprint.
-    // The remaining badges stay at their current size until the new system is approved.
-    const badgeSize = ids[i] === "vip" ? 30 : 24;
-    drawProfileBadgeEmblem(frame,ids[i],positions[i],y,badgeSize,phase+i*.13);
+    // All badges share the same tiny final footprint so their silhouettes are judged fairly.
+    drawProfileBadgeEmblem(frame,ids[i],positions[i],y,24,phase+i*.13);
   }
 }
 
