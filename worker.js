@@ -7960,20 +7960,238 @@ async function useSparkleMagnet(env, interaction, targetId) {
   );
 }
 
+const RACCOON_MEGAPHONE_JOBS_KEY = "system:raccoon_megaphone_jobs";
+const RACCOON_MEGAPHONE_INTERVAL = 15 * 60 * 1000;
+const RACCOON_MEGAPHONE_TOTAL_MESSAGES = 4;
+
+function raccoonMegaphoneNotices(targetId) {
+  return [
+    `📢🦝 **RACCOONMART BREAKING NEWS:** <@${targetId}> has once again confused **confidence** with **having a point**. More at 11.`,
+    `📢🚨 **PUBLIC SERVICE ANNOUNCEMENT:** If <@${targetId}> tells you “trust me,” please secure your belongings and contact a raccoon immediately.`,
+    `📢🦝 **RACCOON ALERT:** <@${targetId}> has been caught wandering around the server with **absolutely no adult supervision**.`,
+    `📢⚠️ **IMPORTANT:** <@${targetId}> has been temporarily banned from making decisions after making **one decision too many**.`,
+    `📢📰 **LIVE UPDATE:** <@${targetId}> entered the conversation. Nobody knows why. Nobody invited them. The raccoons are investigating.`,
+    `📢🦝 **RACCOONMART WEATHER REPORT:** 100% chance of <@${targetId}> making things worse with a **slight chance of accountability**.`,
+    `📢🚨 **EMERGENCY ALERT:** <@${targetId}> has been spotted acting like they have a plan. **They do not have a plan.**`,
+    `📢🦝 **SERVER NOTICE:** <@${targetId}> has been asked to stop. They asked “stop what?” The investigation has escalated.`,
+    `📢📋 **OFFICIAL RACCOON REPORT:** <@${targetId}> is currently being investigated for **crimes against common sense**.`,
+    `📢🦝 **BREAKING:** The raccoons reviewed <@${targetId}>'s recent decisions and would like to formally request a refund.`,
+    `📢⚠️ **ATTENTION:** <@${targetId}> has been promoted to **Head of Making Things Weird**. Please direct all complaints elsewhere.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has the confidence of someone who has **never once reread their own messages**.`,
+    `📢🚨 **RACCOONMART ALERT:** <@${targetId}> has been caught with **too much audacity and not enough evidence**.`,
+    `📢📰 **EXCLUSIVE REPORT:** Sources confirm <@${targetId}> was involved in the incident. Which incident? **They know.**`,
+    `📢🦝 **SERVER-WIDE ANNOUNCEMENT:** Please lower your expectations for <@${targetId}>. We have tried raising them. It did not go well.`,
+    `📢⚠️ **URGENT:** <@${targetId}> has been placed on a watchlist after repeatedly saying “I can explain.” They could not explain.`,
+    `📢🦝 **RACCOON PRESS CONFERENCE:** Asked for a statement, <@${targetId}> said “no comment.” The raccoons interpreted this as **guilty enough**.`,
+    `📢🚨 **ALERT:** <@${targetId}> is currently operating at **maximum audacity** and **minimum common sense**. Please remain calm.`,
+    `📢📰 **BREAKING NEWS:** <@${targetId}> has somehow made themselves the main character of a situation that **did not require a main character**.`,
+    `📢🦝 **RACCOONMART CONSUMER WARNING:** Interacting with <@${targetId}> may cause confusion, secondhand embarrassment, and an uncontrollable need to say “girl…”`,
+    `📢⚠️ **OFFICIAL NOTICE:** <@${targetId}> has been temporarily removed from the Department of Good Ideas. Their badge has been confiscated.`,
+    `📢🦝 **RACCOON INVESTIGATION UPDATE:** We asked <@${targetId}> to explain themselves. The explanation somehow created **three additional questions**.`,
+    `📢🚨 **SERVER ALERT:** <@${targetId}> has been caught **doing the absolute most** for absolutely no reason.`,
+    `📢📰 **EXCLUSIVE:** <@${targetId}> would like everyone to know they are innocent. The raccoons would like everyone to know **they were not asked**.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been officially diagnosed with a severe case of **“I can make this worse.”**`,
+    `📢⚠️ **RACCOONMART WARNING:** <@${targetId}> has entered the chat with the energy of someone who already regrets what they're about to type.`,
+    `📢🚨 **BREAKING:** <@${targetId}> has been caught trying to win an argument they were **having by themselves**.`,
+    `📢🦝 **SERVER UPDATE:** <@${targetId}> has been promoted from “questionable” to **“actively concerning.”** Congratulations!`,
+    `📢📰 **RACCOON EXCLUSIVE:** <@${targetId}> has managed to turn a perfectly normal situation into **whatever this is**.`,
+    `📢⚠️ **ATTENTION WEREWIVES:** Please do not let <@${targetId}> near the metaphorical steering wheel. We have **seen enough**.`,
+    `📢🦝 **OFFICIAL RACCOON STATEMENT:** <@${targetId}> has been reported for **excessive nonsense in a public place**.`,
+    `📢🚨 **EMERGENCY:** <@${targetId}> said “watch this” and the raccoons immediately contacted their insurance company.`,
+    `📢📰 **DEVELOPING STORY:** <@${targetId}> has once again demonstrated that having access to a keyboard was **a questionable decision**.`,
+    `📢🦝 **PUBLIC SERVICE ALERT:** If <@${targetId}> starts a sentence with “okay but hear me out,” **leave immediately**.`,
+    `📢⚠️ **RACCOONMART NOTICE:** <@${targetId}> has been placed under **extreme supervision** after being trusted for approximately six seconds.`,
+    `📢🚨 **BREAKING:** <@${targetId}> has officially reached the **“maybe don't let them cook”** stage of today's events.`,
+    `📢🦝 **SERVER BULLETIN:** <@${targetId}> is currently collecting consequences like they're trying to complete a set.`,
+    `📢📰 **URGENT UPDATE:** <@${targetId}> has been asked to take several seats. They appear to be searching for **more seats to take**.`,
+    `📢⚠️ **RACCOONMART ALERT:** <@${targetId}> has achieved something remarkable: **being wrong with incredible confidence**.`,
+    `📢🦝 **OFFICIAL FINDINGS:** The raccoons checked the evidence. The evidence checked <@${targetId}>. The evidence won.`,
+    `📢🚨 **PUBLIC NOTICE:** <@${targetId}> has been temporarily classified as a **server hazard**. Please admire from a safe distance.`,
+    `📢📰 **BREAKING NEWS:** <@${targetId}> has been caught trying to act mysterious when the actual problem is that **nobody understood what they were talking about**.`,
+    `📢🦝 **RACCOONMART EXCLUSIVE:** <@${targetId}> has been nominated for **Most Likely To Make A Simple Thing Complicated**.`,
+    `📢⚠️ **ATTENTION:** <@${targetId}> has been informed that “because I said so” is not a legally binding argument. They are appealing.`,
+    `📢🚨 **SERVER ALERT:** <@${targetId}> has been caught giving advice that **even the raccoons refused to follow**.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been placed on **thin ice**. Unfortunately, they are still explaining how they got there.`,
+    `📢📰 **RACCOON PRESS:** Today's headline: **Local Werewife Shocked To Discover Actions Have Consequences.** More after this.`,
+    `📢⚠️ **OFFICIAL UPDATE:** <@${targetId}> has been asked to stop embarrassing themselves. They have requested **one final opportunity to embarrass themselves further**.`,
+    `📢🦝 **RACCOONMART ALERT:** <@${targetId}> has been found guilty of **being suspiciously confident for someone with that evidence**.`,
+    `📢🚨 **BREAKING:** <@${targetId}> said “I know what I'm doing.” The raccoons have requested proof.`,
+    `📢📰 **SERVER-WIDE NOTICE:** <@${targetId}> has once again volunteered themselves as **the plot**. Nobody knows what the plot is.`,
+    `📢🦝 **FINAL WARNING:** <@${targetId}> has used up their monthly supply of common sense. Please check back next month.`,
+    `📢⚠️ **RACCOONMART CONSUMER ALERT:** Side effects of interacting with <@${targetId}> may include saying “WHAT ARE YOU DOING 😭”`,
+    `📢🚨 **URGENT REPORT:** <@${targetId}> has been caught attempting to beat the allegations with **even more allegations**.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been assigned a raccoon supervisor. The raccoon has already filed for overtime.`,
+    `📢📰 **BREAKING:** <@${targetId}> has been placed on the **Do Not Let Them Cook** list until further notice.`,
+    `📢⚠️ **SERVER UPDATE:** <@${targetId}> has successfully turned “mind your business” into **a full-time occupation**.`,
+    `📢🦝 **RACCOONMART REPORT:** We regret to inform everyone that <@${targetId}> has once again **become the problem**.`,
+    `📢🚨 **EMERGENCY BROADCAST:** <@${targetId}> has been spotted running on **audacity, vibes, and absolutely no supporting documentation**.`,
+    `📢📰 **EXCLUSIVE REPORT:** <@${targetId}> has requested privacy during this difficult time. Unfortunately, they bought a Raccoon Megaphone victim package.`,
+    `📢🦝 **OFFICIAL RACCOON STATEMENT:** We cannot confirm whether <@${targetId}> knows what they're doing. We can confirm they are doing it loudly.`,
+    `📢⚠️ **ALERT:** <@${targetId}> has been caught trying to rewrite history. Unfortunately, **the screenshots exist**.`,
+    `📢🚨 **BREAKING NEWS:** <@${targetId}> has officially entered their **“maybe I should've thought about that first”** era.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been reported for **weaponized confidence**. The raccoons are requesting backup.`,
+    `📢📰 **RACCOONMART HEADLINE:** <@${targetId}> had one job. We will not be discussing how many times they failed it.`,
+    `📢⚠️ **OFFICIAL WARNING:** <@${targetId}> is currently too powerful. Unfortunately, their power is **mostly the ability to make questionable choices**.`,
+    `📢🦝 **SERVER BULLETIN:** <@${targetId}> has been caught being dramatic again. The raccoons would like to remind them that **this is not an award ceremony**.`,
+    `📢🚨 **URGENT:** <@${targetId}> has somehow made the raccoons say **“girl, be serious.”**`,
+    `📢📰 **BREAKING:** <@${targetId}> has been investigated, reviewed, reconsidered, and somehow **still looks suspicious**.`,
+    `📢🦝 **RACCOONMART FINAL FINDING:** <@${targetId}> is not technically banned from having ideas. We are simply asking them to **stop sharing them**.`,
+    `📢⚠️ **PUBLIC SERVICE ANNOUNCEMENT:** <@${targetId}> has been caught attempting to leave the scene before anyone asked questions. **Interesting. Very interesting.**`,
+    `📢🚨 **SERVER ALERT:** <@${targetId}> has officially been declared **too much for one raccoon to handle**. We are sending two.`,
+    `📢🦝 **RACCOONMART NEWS:** <@${targetId}> has been awarded the prestigious title of **Person Most Likely To Say “WAIT NO” Immediately After Pressing Send**.`,
+    `📢📰 **BREAKING:** <@${targetId}> has been caught in 4K, 8K, and apparently **surrounded by raccoons with receipts**.`,
+    `📢⚠️ **FINAL SERVER NOTICE:** <@${targetId}> has been advised to log off and reflect. They have chosen **to continue**.`,
+    `📢🦝 **RACCOONMART CLOSING STATEMENT:** We would explain what <@${targetId}> did, but honestly **they'd just make it worse**.`,
+    `📢🚨 **DEVELOPING STORY:** <@${targetId}> has been caught trying to look innocent while standing directly next to the **metaphorical crime scene**.`,
+    `📢📰 **SPECIAL REPORT:** <@${targetId}> has achieved the rare distinction of making **“please explain” sound like a threat**.`,
+    `📢🦝 **OFFICIAL NOTICE:** <@${targetId}> has been informed that the raccoons have **screenshots, witnesses, and absolutely no chill**.`,
+    `📢⚠️ **RACCOONMART ALERT:** <@${targetId}> has entered the chat. Everyone remain calm. **They have not been given adult supervision.**`,
+    `📢🚨 **BREAKING NEWS:** <@${targetId}> has been caught trying to sneak past the allegations. Unfortunately, the allegations have **excellent cardio**.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has officially been promoted to **Chief Executive Officer of Oops**.`,
+    `📢📰 **RACCOONMART EXCLUSIVE:** <@${targetId}> has been asked whether they regret their decision. They said “no.” The raccoons laughed for 14 minutes.`,
+    `📢⚠️ **SERVER ALERT:** <@${targetId}> has once again mistaken **being loud** for **being correct**.`,
+    `📢🦝 **FINAL REPORT:** The investigation into <@${targetId}> is ongoing because every time we finish, **they do something else**.`,
+    `📢🚨 **EMERGENCY UPDATE:** <@${targetId}> has been temporarily removed from the raccoons' trusted contacts. Their number is now saved as **“DO NOT ANSWER.”**`,
+    `📢📰 **BREAKING:** <@${targetId}> has been caught trying to argue with the facts. The facts have declined to comment.`,
+    `📢🦝 **PUBLIC SERVICE ANNOUNCEMENT:** If <@${targetId}> says “it's not that serious,” please note that **they are the reason it became that serious**.`,
+    `📢⚠️ **RACCOONMART WARNING:** <@${targetId}> has been spotted making a decision. We recommend giving them **a minute to reconsider**.`,
+    `📢🚨 **OFFICIAL STATEMENT:** <@${targetId}> has been cleared of all charges except **being embarrassing in public**.`,
+    `📢🦝 **SERVER BULLETIN:** <@${targetId}> has been assigned the rank **Suspicious Little Menace** effective immediately.`,
+    `📢📰 **RACCOONMART HEADLINE:** Local Werewife discovers consequences are real. Experts say **this was always going to happen**.`,
+    `📢⚠️ **ALERT:** <@${targetId}> has been asked to provide evidence. They provided **vibes**. The raccoons rejected the submission.`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been caught acting brand new despite the raccoons having **a complete archive of their nonsense**.`,
+    `📢🚨 **BREAKING:** <@${targetId}> has reached a new personal record for **turning a tiny problem into a server event**.`,
+    `📢📰 **SPECIAL REPORT:** <@${targetId}> has been officially declared **one “girl what” away from needing a committee**.`,
+    `📢🦝 **RACCOONMART ALERT:** <@${targetId}> has been placed under surveillance after the raccoons noticed **way too much suspicious confidence**.`,
+    `📢⚠️ **FINAL WARNING:** <@${targetId}> has been told to behave. They responded by **doing literally anything except behaving**.`,
+    `📢🚨 **SERVER-WIDE ALERT:** <@${targetId}> has somehow made themselves the subject of the announcement **again**. At this point it's a talent.`,
+    `📢🦝 **RACCOON PRESS CONFERENCE:** Asked who caused the problem, every raccoon in the room slowly turned toward <@${targetId}>.`,
+    `📢📰 **BREAKING NEWS:** <@${targetId}> has been caught attempting to beat the “problematic decision” allegations. **The decision remains problematic.**`,
+    `📢⚠️ **OFFICIAL NOTICE:** <@${targetId}> has been given one simple instruction. They have already made it complicated.`,
+    `📢🦝 **RACCOONMART REPORT:** <@${targetId}> has officially entered **the consequences portion of the evening**. Please enjoy responsibly.`,
+    `📢🚨 **EMERGENCY BROADCAST:** <@${targetId}> has been caught saying “trust the process.” There is currently **no known process**.`,
+    `📢📰 **PUBLIC NOTICE:** <@${targetId}> has been placed on the server's **Absolutely Not™** list until further notice.`,
+    `📢🦝 **FINAL RACCOON FINDING:** <@${targetId}> is not a menace every day. But today they are **really putting in the hours**.`,
+    `📢⚠️ **BREAKING:** <@${targetId}> has been accused of having **main-character syndrome in a group project**. The group has filed a complaint.`,
+    `📢🚨 **RACCOONMART ALERT:** <@${targetId}> has once again chosen the most complicated possible route to a problem that had **a very easy solution**.`,
+    `📢🦝 **SERVER UPDATE:** <@${targetId}> has been caught trying to act unbothered. The raccoons would like to report that **they are, in fact, bothered**.`,
+    `📢📰 **EXCLUSIVE:** <@${targetId}> has officially been promoted to **Director of Unnecessary Escalation**. Their first project is apparently this.`,
+    `📢⚠️ **PUBLIC SERVICE ALERT:** <@${targetId}> has been advised not to speak until their lawyer—and possibly a raccoon—arrives.`,
+    `📢🚨 **BREAKING NEWS:** <@${targetId}> has been caught doing something so questionable that **even the raccoons needed a group chat about it**.`,
+    `📢🦝 **RACCOONMART CLOSING REPORT:** <@${targetId}> has officially been described as **“a lot.”** The investigation found no evidence to dispute this.`,
+    `📢📰 **URGENT:** <@${targetId}> has been caught trying to make a comeback from a situation **nobody asked them to create**.`,
+    `📢⚠️ **SERVER NOTICE:** <@${targetId}> has been reminded that deleting the message does not delete **the collective memory**.`,
+    `📢🦝 **FINAL UPDATE:** <@${targetId}> has been asked to stop collecting allegations. They have apparently decided to **complete the set**.`,
+    `📢🚨 **RACCOONMART ALERT:** <@${targetId}> has officially been deemed **too suspicious for a normal Tuesday**.`,
+    `📢📰 **BREAKING:** <@${targetId}> has been nominated for **“Most Likely To Say It Was A Joke After Everyone Stared At Them.”**`,
+    `📢🦝 **PUBLIC NOTICE:** <@${targetId}> has been informed that the raccoons are not impressed. **They have seen worse.**`,
+    `📢⚠️ **OFFICIAL REPORT:** <@${targetId}> has somehow managed to make the phrase **“what happened?”** applicable to their entire afternoon.`,
+    `📢🚨 **FINAL SERVER ALERT:** <@${targetId}> has been caught in another suspicious situation. At this point, **we're starting to think it's a hobby**.`,
+    `📢🦝 **RACCOONMART EXCLUSIVE:** <@${targetId}> has officially been declared **a recurring problem**, which is honestly impressive consistency.`,
+    `📢📰 **BREAKING NEWS:** <@${targetId}> has been asked to explain the situation. Their response was so confusing that **the raccoons requested subtitles**.`,
+    `📢⚠️ **PUBLIC SERVICE ANNOUNCEMENT:** <@${targetId}> has been temporarily relieved of their duties as **Person Who Should Probably Know Better**.`,
+    `📢🚨 **RACCOON ALERT:** <@${targetId}> has been caught attempting to outsmart the raccoons. **This is not their first mistake.**`,
+    `📢🦝 **SERVER BULLETIN:** <@${targetId}> has been given the prestigious award for **Outstanding Achievement in Making Everyone Go “Girl… 😭”**.`,
+    `📢📰 **SPECIAL REPORT:** <@${targetId}> has once again proven that sometimes the best possible choice is **not the choice they make**.`,
+    `📢⚠️ **RACCOONMART NOTICE:** <@${targetId}> has been advised to sit quietly and think about what they've done. The raccoons have provided a chair.`,
+    `📢🚨 **BREAKING:** <@${targetId}> has officially run out of excuses. The raccoons checked. There are **none left in stock**.`,
+    `📢🦝 **FINAL PUBLIC NOTICE:** <@${targetId}> has been roasted by the raccoons, reviewed by the raccoons, and somehow **still has not learned anything**.`
+  ];
+}
+
+async function getRaccoonMegaphoneJobs(env) {
+  try {
+    const raw = await env.TREE_DATA.get(RACCOON_MEGAPHONE_JOBS_KEY);
+    const jobs = raw ? JSON.parse(raw) : [];
+    return Array.isArray(jobs) ? jobs : [];
+  } catch (error) {
+    console.error("Failed to load Raccoon Megaphone jobs:", error);
+    return [];
+  }
+}
+
+async function saveRaccoonMegaphoneJobs(env, jobs) {
+  await env.TREE_DATA.put(
+    RACCOON_MEGAPHONE_JOBS_KEY,
+    JSON.stringify(Array.isArray(jobs) ? jobs : [])
+  );
+}
+
+async function processRaccoonMegaphoneJobs(env) {
+  const now = Date.now();
+  const jobs = await getRaccoonMegaphoneJobs(env);
+  if (!jobs.length) return;
+
+  const remaining = [];
+
+  for (const job of jobs) {
+    try {
+      if (!job || !job.channelId || !job.targetId) continue;
+
+      const sentCount = Number(job.sentCount || 0);
+      const nextAt = Number(job.nextAt || 0);
+
+      if (sentCount >= RACCOON_MEGAPHONE_TOTAL_MESSAGES) continue;
+
+      if (now < nextAt) {
+        remaining.push(job);
+        continue;
+      }
+
+      const notices = Array.isArray(job.notices) && job.notices.length
+        ? job.notices
+        : raccoonMegaphoneNotices(job.targetId);
+
+      const message = notices[randomInt(0, notices.length - 1)];
+      await sendChannelMessage(env, job.channelId, message);
+
+      const newSentCount = sentCount + 1;
+
+      if (newSentCount < RACCOON_MEGAPHONE_TOTAL_MESSAGES) {
+        remaining.push({
+          ...job,
+          sentCount: newSentCount,
+          nextAt: nextAt + RACCOON_MEGAPHONE_INTERVAL
+        });
+      }
+    } catch (error) {
+      console.error("Raccoon Megaphone job failed:", error);
+      // Keep failed jobs so a temporary Discord/Worker error does not erase them.
+      remaining.push(job);
+    }
+  }
+
+  await saveRaccoonMegaphoneJobs(env, remaining);
+}
+
 async function useMegaphone(env, interaction, targetId) {
   const user = getUserFromInteraction(interaction);
   if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "📢 Choose another player for the Raccoon Megaphone.");
   const player = await getPlayer(env, user.id);
   if (!consumeRaccoonMartItem(player, "raccoon_megaphone")) return sendText(env, interaction, "❌ You don't have a Raccoon Megaphone.");
-  const notices = [
-    `📢🦝 **RACCOONMART PUBLIC NOTICE:** <@${targetId}> has been officially reported for **suspicious raccoon activity**.`,
-    `📢🦝 **ATTENTION WEREWIVES:** Please keep an eye on <@${targetId}>. The raccoons have filed a complaint.`,
-    `📢⚠️ **RACCOONMART ALERT:** <@${targetId}> has been placed under extremely unnecessary investigation.`,
-    `📢🦝 **BREAKING NEWS:** The raccoons would like everyone to know that <@${targetId}> is being dramatic again.`
-  ];
-  await sendChannelMessage(env, interaction.channel_id, notices[randomInt(0, notices.length - 1)]);
+
+  const notices = raccoonMegaphoneNotices(targetId);
+  const channelId = interaction.channel_id;
+  const now = Date.now();
+
+  // Fire the first announcement immediately. The remaining three are handled
+  // by the Cloudflare scheduled worker at +15, +30, and +45 minutes.
+  await sendChannelMessage(env, channelId, notices[randomInt(0, notices.length - 1)]);
+
+  const jobs = await getRaccoonMegaphoneJobs(env);
+  jobs.push({
+    id: `megaphone_${user.id}_${targetId}_${now}_${randomInt(1000, 999999)}`,
+    channelId: String(channelId),
+    targetId: String(targetId),
+    notices,
+    sentCount: 1,
+    nextAt: now + RACCOON_MEGAPHONE_INTERVAL,
+    createdAt: now
+  });
+  await saveRaccoonMegaphoneJobs(env, jobs);
+
   await savePlayer(env, player, user.id);
-  await sendText(env, interaction, `📢🦝 **MEGAPHONE FIRED!**\n\n<@${targetId}> has been publicly announced. 😭\n\n📦 Megaphones remaining: **${raccoonMartCount(player, "raccoon_megaphone")}**`, raccoonMartHomeRows(player));
+  await sendText(env, interaction, `📢🦝 **MEGAPHONE FIRED!**\n\n<@${targetId}> is now getting the full Raccoon Megaphone treatment. 😭\n\n📣 Announcements: **4 total** — now, +15m, +30m, +45m.\n📦 Megaphones remaining: **${raccoonMartCount(player, "raccoon_megaphone")}**`, raccoonMartHomeRows(player));
 }
 
 async function useHandcuffs(env, interaction, targetId) {
@@ -28722,7 +28940,8 @@ export default {
         ),
         processCourtTrashRelease(env),
         processBirthdayEvent(env),
-        expireBirthdayEventState(env)
+        expireBirthdayEventState(env),
+        processRaccoonMegaphoneJobs(env)
       ])
     );
   }
