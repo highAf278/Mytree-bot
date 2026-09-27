@@ -764,6 +764,10 @@ function defaultPlayer() {
     },
     ceaseDesistTargetId: "",
     ceaseDesistUntil: 0,
+    // Sparkle Magnet: while active, 20% of every positive sparkle gain
+    // made by this player is automatically paid to the magnet owner.
+    sparkleMagnetOwnerId: "",
+    sparkleMagnetUntil: 0,
     courtGameTimeoutUntil: 0,
     courtFortuneBanUntil: 0,
     courtRaccoonBanUntil: 0,
@@ -2088,7 +2092,7 @@ async function handleTitlesMenu(env, interaction) {
   if(interaction.__deferred) await editOriginalResponse(env,interaction,data); else await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:4,data})});
 }
 
-async function savePlayer(env, player, ownerId = null) {
+async function savePlayer(env, player, ownerId = null, options = {}) {
   updateAchievements(player);
   unlockNameEffects(player);
   if (Array.isArray(player.inventory) && player.inventory.filter(id => id !== "pink_sky_background").length >= 10) unlockOwnedTitle(player, "collector");
@@ -2101,6 +2105,66 @@ async function savePlayer(env, player, ownerId = null) {
   const key = ownerId != null ? String(ownerId) : String(player.userId || "").trim();
   if (!key) throw new Error("Cannot save player without an owner ID");
   player.userId = key;
+
+  /*
+     SPARKLE MAGNET
+     ----------------
+     Detect the player's positive sparkle balance change since the last
+     persisted version. This makes the magnet apply to ALL sparkle gains in
+     the bot instead of relying on every individual game/reward function to
+     remember to call a special helper.
+
+     Examples covered automatically: /daily-riddle, /fortune, /raccoon wins,
+     game rewards, achievement rewards, level rewards, birthday rewards, etc.
+
+     Transfers created by the magnet itself are marked skipSparkleMagnet so a
+     magnet owner's own 20% cut cannot recursively trigger another magnet.
+  */
+  if (!options.skipSparkleMagnet) {
+    try {
+      const rawPrevious = await env.TREE_DATA.get(key);
+      let previousSparkles = null;
+      if (rawPrevious) {
+        try {
+          const previous = JSON.parse(rawPrevious);
+          previousSparkles = Number(previous.sparkles || 0);
+        } catch {}
+      }
+
+      const currentSparkles = Number(player.sparkles || 0);
+      const magnetOwnerId = String(player.sparkleMagnetOwnerId || "").trim();
+      const magnetUntil = Number(player.sparkleMagnetUntil || 0);
+
+      if (previousSparkles !== null && currentSparkles > previousSparkles &&
+          magnetOwnerId && magnetOwnerId !== key && magnetUntil > Date.now()) {
+        const grossGain = currentSparkles - previousSparkles;
+        const magnetCut = Math.floor(grossGain * 0.20);
+
+        if (magnetCut > 0) {
+          const magnetOwner = await getPlayer(env, magnetOwnerId);
+          magnetOwner.sparkles = Number(magnetOwner.sparkles || 0) + magnetCut;
+          magnetOwner.badgeStats = magnetOwner.badgeStats && typeof magnetOwner.badgeStats === "object"
+            ? magnetOwner.badgeStats
+            : {};
+          magnetOwner.badgeStats.sparklesEarned = Number(magnetOwner.badgeStats.sparklesEarned || 0) + magnetCut;
+
+          player.sparkles = currentSparkles - magnetCut;
+
+          await savePlayer(env, magnetOwner, magnetOwnerId, { skipSparkleMagnet: true });
+        }
+      }
+
+      // Expired magnets are harmlessly cleared when the target is next saved.
+      if (magnetOwnerId && magnetUntil > 0 && magnetUntil <= Date.now()) {
+        player.sparkleMagnetOwnerId = "";
+        player.sparkleMagnetUntil = 0;
+      }
+    } catch (error) {
+      // Never let a magnet bookkeeping problem prevent the original save.
+      console.error("Sparkle Magnet processing failed:", error);
+    }
+  }
+
   await env.TREE_DATA.put(key, JSON.stringify(player));
 }
 
@@ -7747,7 +7811,7 @@ const RACCOON_MART_ITEMS = {
   sparkle_magnet: {
     name: "🧲 Sparkle Magnet",
     price: 12000,
-    description: "Use it on a player to pull 5–15% of their current sparkles toward your sparkle stash."
+    description: "Attach it to a player for 24 hours. Whenever they gain sparkles, 20% of that gain is automatically sent to you — daily riddle, fortune, raccoon wins, game rewards, and more."
   },
   cease_desist: {
     name: "⚖️ Cease & Desist",
@@ -7941,21 +8005,38 @@ async function useCeaseDesist(env, interaction, targetId) {
 async function useSparkleMagnet(env, interaction, targetId) {
   const user = getUserFromInteraction(interaction);
   if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "🧲 Choose another player for the Sparkle Magnet.");
+
   const player = await getPlayer(env, user.id);
   const target = await getPlayer(env, targetId);
-  if (!consumeRaccoonMartItem(player, "sparkle_magnet")) return sendText(env, interaction, "❌ You don't have a Sparkle Magnet.");
-  const available = Math.max(0, Number(target.sparkles || 0));
-  const percent = randomInt(5, 15);
-  const pulled = Math.min(available, Math.floor(available * percent / 100));
-  target.sparkles = Math.max(0, available - pulled);
-  player.sparkles = Number(player.sparkles || 0) + pulled;
-  player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
-  player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + pulled;
+
+  if (!consumeRaccoonMartItem(player, "sparkle_magnet")) {
+    return sendText(env, interaction, "❌ You don't have a Sparkle Magnet.");
+  }
+
+  const now = Date.now();
+  target.sparkleMagnetOwnerId = String(user.id);
+  target.sparkleMagnetUntil = now + 24 * 60 * 60 * 1000;
+
   await savePlayer(env, player, user.id);
   await savePlayer(env, target, targetId);
-  await sendUserDM(env, targetId, `🧲✨ **SPARKLE MAGNET!**\n\n<@${user.id}> activated a Sparkle Magnet and pulled **${pulled.toLocaleString()} ✨** from your balance.`);
-  await sendText(env, interaction,
-    `🧲✨ **SPARKLE MAGNET ACTIVATED!**\n\nYou pulled **${pulled.toLocaleString()} ✨** from <@${targetId}> (${percent}%).\n\n📦 Magnets remaining: **${raccoonMartCount(player, "sparkle_magnet")}**`,
+
+  const untilText = new Date(target.sparkleMagnetUntil).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+
+  await sendUserDM(
+    env,
+    targetId,
+    `🧲✨ **SPARKLE MAGNET ATTACHED!**\n\n<@${user.id}> attached a Sparkle Magnet to you for **24 hours**. 😭\n\nFrom now until **${untilText}**, whenever you gain sparkles, **20% of that gain** automatically goes to <@${user.id}>.\n\n📅 This applies to daily riddles, Fortune, raccoon wins, game rewards, achievements, and other sparkle gains.`
+  );
+
+  await sendText(
+    env,
+    interaction,
+    `🧲✨ **SPARKLE MAGNET ACTIVATED!**\n\n<@${targetId}> is now magnetized to you for **24 hours**. 😂\n\n💰 You receive **20% of every sparkle gain** they make while the magnet is active.\n🎯 This includes **/daily-riddle, /fortune, /raccoon wins, game rewards, achievements, and more.**\n\n⏰ Expires: **${untilText}**\n\n📦 Magnets remaining: **${raccoonMartCount(player, "sparkle_magnet")}**`,
     raccoonMartHomeRows(player)
   );
 }
