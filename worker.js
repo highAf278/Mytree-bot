@@ -778,6 +778,11 @@ function defaultPlayer() {
     sparkleMagnetUntil: 0,
     // Raccoon Empire: permanent passive income/earnings bonus.
     raccoonEmpireLastDividendAt: 0,
+    // Raccoon Suit: one-time 24-hour hourly-payday activation.
+    raccoonSuitStartedAt: 0,
+    raccoonSuitNextPayoutAt: 0,
+    raccoonSuitPayoutsMade: 0,
+    raccoonSuitTotalEarned: 0,
     courtGameTimeoutUntil: 0,
     courtFortuneBanUntil: 0,
     courtRaccoonBanUntil: 0,
@@ -8050,6 +8055,11 @@ const RACCOON_MART_ITEMS = {
     name: "🏛️🦝 Raccoon Empire License",
     price: 200000,
     description: "Permanent Raccoon Empire membership. You receive **20,000 ✨ every 7 days** and a permanent **20% bonus on positive sparkle earnings**. One license per player. The 20% bonus applies automatically to daily riddles, Fortune, raccoon wins, game rewards, achievements, level rewards, birthday rewards, and other positive sparkle gains."
+  },
+  raccoon_suit: {
+    name: "🦝💼 Raccoon Suit",
+    price: 350000,
+    description: "A one-time **24-hour payday event**. Activate the suit and receive **one random sparkle payout every hour for 24 hours**. Hourly payouts range from **15,000 ✨ to 300,000 ✨**, with rare jackpot payouts. The suit is consumed when activated."
   }
 };
 
@@ -8180,6 +8190,49 @@ async function showRaccoonMartInventory(env, interaction, page = 0) {
   );
 }
 
+async function useRaccoonSuit(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+
+  if (raccoonMartCount(player, "raccoon_suit") < 1) {
+    return sendText(env, interaction, "❌ You do not own a Raccoon Suit.");
+  }
+
+  if (Number(player.raccoonSuitStartedAt || 0) > 0) {
+    const started = Number(player.raccoonSuitStartedAt || 0);
+    const endsAt = started + 24 * 60 * 60 * 1000;
+    if (Date.now() < endsAt) {
+      const remainingHours = Math.max(1, Math.ceil((endsAt - Date.now()) / (60 * 60 * 1000)));
+      return sendText(
+        env,
+        interaction,
+        `🦝💼 **YOUR RACCOON SUIT IS ALREADY ACTIVE!**\n\n⏳ You have about **${remainingHours} hour${remainingHours === 1 ? "" : "s"}** left in your 24-hour payday event.\n💰 **${Number(player.raccoonSuitTotalEarned || 0).toLocaleString()} ✨** earned so far.`
+      );
+    }
+    // A stale completed activation should never block a new suit.
+    player.raccoonSuitStartedAt = 0;
+    player.raccoonSuitNextPayoutAt = 0;
+    player.raccoonSuitPayoutsMade = 0;
+    player.raccoonSuitTotalEarned = 0;
+  }
+
+  consumeRaccoonMartItem(player, "raccoon_suit");
+  const now = Date.now();
+  player.raccoonSuitStartedAt = now;
+  player.raccoonSuitNextPayoutAt = now + 60 * 60 * 1000;
+  player.raccoonSuitPayoutsMade = 0;
+  player.raccoonSuitTotalEarned = 0;
+  await savePlayer(env, player, user.id);
+
+  return sendText(
+    env,
+    interaction,
+    `🦝💼 **RACCOON SUIT ACTIVATED!**\n\nThe raccoon corporation has hired you for the next **24 hours**. 😭\n\n⏰ **First payday:** 1 hour from now\n💰 **Hourly payout:** 15,000–300,000 ✨\n🎰 **24 random paydays**\n\nGood luck. The raccoon financial department is watching. 🦝💼`
+  );
+}
+
 async function buyRaccoonMartItem(env, interaction, itemId) {
   const user = getUserFromInteraction(interaction);
   if (!user) return;
@@ -8213,7 +8266,7 @@ async function buyRaccoonMartItem(env, interaction, itemId) {
   player.badgeStats.sparklesSpent = Number(player.badgeStats.sparklesSpent || 0) + item.price;
   await savePlayer(env, player, user.id);
   await sendText(env, interaction,
-    `🛒🦝 **PURCHASE COMPLETE!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n📦 You now own **${raccoonMartCount(player, itemId)}**.${itemId === "raccoon_empire" ? "\n\n🏛️ **YOUR EMPIRE IS NOW ACTIVE PERMANENTLY!**\n💰 **20,000 ✨ every 7 days**\n📈 **+20% on positive sparkle earnings**\n♾️ **Never expires.**" : ""}`,
+    `🛒🦝 **PURCHASE COMPLETE!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n📦 You now own **${raccoonMartCount(player, itemId)}**.${itemId === "raccoon_empire" ? "\n\n🏛️ **YOUR EMPIRE IS NOW ACTIVE PERMANENTLY!**\n💰 **20,000 ✨ every 7 days**\n📈 **+20% on positive sparkle earnings**\n♾️ **Never expires.**" : itemId === "raccoon_suit" ? "\n\n🦝💼 **READY FOR ACTIVATION!**\n⏰ Activate it from **My RaccoonMart** to start your 24-hour payday event.\n💰 **24 random hourly payouts — 15,000 to 300,000 ✨ each.**" : ""}`,
     raccoonMartHomeRows(player)
   );
 }
@@ -13209,6 +13262,7 @@ async function handleComponent(
       if (itemId === "cheese_block") return useCheeseProtection(env, interaction, itemId, 24 * 60 * 60 * 1000, 0);
       if (itemId === "cheese_wheel") return useCheeseProtection(env, interaction, itemId, 3 * 24 * 60 * 60 * 1000, 0);
       if (itemId === "raccoon_hitman") return useRaccoonHitman(env, interaction);
+      if (itemId === "raccoon_suit") return useRaccoonSuit(env, interaction);
       if (itemId === "judges_robe") return useJudgesRobe(env, interaction);
       if (itemId === "raccoon_empire") {
         return sendText(
@@ -29480,6 +29534,84 @@ async function processRumbleTimers(env) {
 
 
  /* =========================================================
+   RACCOON SUIT — 24-HOUR HOURLY PAYDAYS
+========================================================= */
+
+const RACCOON_SUIT_DURATION = 24 * 60 * 60 * 1000;
+const RACCOON_SUIT_HOUR = 60 * 60 * 1000;
+
+function raccoonSuitPayout() {
+  const roll = randomInt(1, 100);
+  if (roll <= 20) return 15000;
+  if (roll <= 40) return 20000;
+  if (roll <= 60) return 25000;
+  if (roll <= 75) return 35000;
+  if (roll <= 87) return 50000;
+  if (roll <= 95) return 75000;
+  if (roll <= 99) return 150000;
+  return 300000;
+}
+
+async function processRaccoonSuitPaydays(env) {
+  const now = Date.now();
+  const playerKeys = await listAllPlayerKeys(env);
+
+  for (const userId of playerKeys) {
+    try {
+      const player = await getPlayer(env, userId);
+      const startedAt = Number(player.raccoonSuitStartedAt || 0);
+      if (!startedAt) continue;
+
+      const endAt = startedAt + RACCOON_SUIT_DURATION;
+      let nextAt = Number(player.raccoonSuitNextPayoutAt || 0);
+      let payoutsMade = Number(player.raccoonSuitPayoutsMade || 0);
+      let totalEarned = Number(player.raccoonSuitTotalEarned || 0);
+      if (!nextAt) nextAt = startedAt + RACCOON_SUIT_HOUR;
+
+      const payouts = [];
+      while (payoutsMade < 24 && nextAt <= now && nextAt <= endAt) {
+        const amount = raccoonSuitPayout();
+        player.sparkles = Number(player.sparkles || 0) + amount;
+        payoutsMade += 1;
+        totalEarned += amount;
+        payouts.push(amount);
+        nextAt += RACCOON_SUIT_HOUR;
+      }
+
+      if (payouts.length) {
+        player.raccoonSuitPayoutsMade = payoutsMade;
+        player.raccoonSuitTotalEarned = totalEarned;
+        player.raccoonSuitNextPayoutAt = nextAt;
+        player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+        player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + payouts.reduce((a,b) => a + b, 0);
+        await savePlayer(env, player, userId);
+
+        if (payouts.length === 1) {
+          const amount = payouts[0];
+          const jackpot = amount >= 150000 ? "\n\n🎰 **JACKPOT PAYDAY!**" : "";
+          await sendUserDM(env, userId, `🦝💼 **RACCOON SUIT PAYDAY!**\n\n💰 You received **${amount.toLocaleString()} ✨**.${jackpot}\n\n📊 **Suit earnings:** ${totalEarned.toLocaleString()} ✨\n⏰ **Paydays:** ${payoutsMade}/24`);
+        } else {
+          const batchTotal = payouts.reduce((a,b) => a + b, 0);
+          await sendUserDM(env, userId, `🦝💼 **RACCOON SUIT PAYDAY CATCH-UP!**\n\nThe scheduled worker was late, so you received **${payouts.length} missed paydays** totaling **${batchTotal.toLocaleString()} ✨**.\n\n📊 **Suit earnings:** ${totalEarned.toLocaleString()} ✨\n⏰ **Paydays:** ${payoutsMade}/24`);
+        }
+      }
+
+      if (payoutsMade >= 24 || now >= endAt) {
+        const finalTotal = Number(player.raccoonSuitTotalEarned || totalEarned);
+        player.raccoonSuitStartedAt = 0;
+        player.raccoonSuitNextPayoutAt = 0;
+        player.raccoonSuitPayoutsMade = 0;
+        player.raccoonSuitTotalEarned = 0;
+        await savePlayer(env, player, userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+        await sendUserDM(env, userId, `🦝🎓 **RACCOON SUIT CONTRACT EXPIRED!**\n\nYour 24-hour payday event is over.\n\n💰 **Base suit earnings:** ${finalTotal.toLocaleString()} ✨\n⏰ **Paydays completed:** ${payoutsMade}/24\n\nThe raccoon corporation thanks you for your service. 🦝💼`);
+      }
+    } catch (error) {
+      console.error(`Raccoon Suit payday failed for ${userId}:`, error);
+    }
+  }
+}
+
+/* =========================================================
    RACCOON EMPIRE — WEEKLY DIVIDENDS
 ========================================================= */
 
@@ -30140,6 +30272,7 @@ export default {
         processBirthdayEvent(env),
         expireBirthdayEventState(env),
         processRaccoonMegaphoneJobs(env),
+        processRaccoonSuitPaydays(env),
         processRaccoonEmpireDividends(env)
       ])
     );
