@@ -21071,35 +21071,59 @@ function crimeCreateCase(playerCount=1,forcedDifficulty=null){
   const type=CRIME_CASE_TYPES[randomInt(0,CRIME_CASE_TYPES.length-1)],twist=CRIME_TWISTS[randomInt(0,CRIME_TWISTS.length-1)];
   const times=crimeShuffle(["10:05 PM","10:17 PM","10:29 PM","10:41 PM","10:53 PM","11:05 PM","11:17 PM","11:29 PM","11:41 PM"]);
   const culpritTime=times[randomInt(2,6)];
-  const evidence=[]; const add=(id,title,text,truth,importance=1)=>evidence.push({id,title,text,truth,importance});
-  add("vaultlog","🏦 Treasury Log",`The treasury was opened at **${culpritTime}** using **${method}**.`,"culprit",3);
-  add("camera","📸 Camera Fragment",`A blurry figure matching **${culprit.emoji} ${culprit.name}** appears near ${crimeLocation}.`,"culprit",3);
-  add("motive","💰 Suspicious Motive",`Someone matching ${culprit.emoji} ${culprit.name}'s recent behavior had a reason to want **${stolen.toLocaleString()} ✨**.`,"culprit",2);
-  add("receipt","🧾 Receipt",`${culprit.emoji} ${culprit.name} has a receipt timestamped **${culpritTime}** from somewhere that could not be reached from their claimed location in time.`,"culprit",2);
-  add("key","🔑 Access Record",`The access record shows the thief needed **${method}**. Only a small group had a believable opportunity to use it.`,"culprit",3);
-  add("witness","👀 Witness Statement",`A witness saw someone matching **${culprit.emoji} ${culprit.name}** carrying something suspicious shortly before the theft.`,"culprit",2);
-  add("footprints","👣 Footprints",`The footprints lead away from ${crimeLocation} toward the area associated with ${culprit.emoji} ${culprit.name}.`,"culprit",2);
-  add("inventory","📦 Inventory Mismatch",`An item connected to **${method}** disappeared from inventory after ${culprit.emoji} ${culprit.name} had an opportunity to access it.`,"culprit",2);
-  const innocent=suspects.filter(s=>s.id!==culprit.id);
-  if(innocent[0])add("planted","🎭 Planted Evidence",`${innocent[0].emoji} ${innocent[0].name}'s item was found in a suspicious place, but the timestamp shows it was planted **after** the theft.`,"red",2);
-  if(innocent[1])add("alibi","🕐 Alibi Receipt",`${innocent[1].emoji} ${innocent[1].name} has a legitimate receipt supporting part of their alibi.`,"red",1);
-  if(innocent[2])add("witness2","🗣️ Confused Witness",`A witness initially points at ${innocent[2].emoji} ${innocent[2].name}, but admits they saw the person from far away.`,"red",1);
-  if(accomplice)add("accomplice","🤝 Second Set of Footprints",`A second person helped cover the escape. Evidence points toward **${accomplice.emoji} ${accomplice.name}**.`,"accomplice",3);
-  else add("decoy","🧀 Extremely Suspicious Cheese","A half-eaten cheese wheel was found near the treasury. It is extremely suspicious. It is also completely unrelated.","decoy",0);
-  add("finalclue","🧩 Final Connection",`When the timeline, access record, and camera fragment are compared, the same suspect appears in all three: **${culprit.emoji} ${culprit.name}**.`,"culprit",4);
-  let selected=crimeShuffle(evidence).slice(0,cfg.evidence);
-  for(const id of ["vaultlog","camera","finalclue"]){const req=evidence.find(e=>e.id===id);if(!selected.some(e=>e.id===id))selected[randomInt(0,selected.length-1)]=req;}
   const fakeTimes=crimeShuffle(times.filter(t=>t!==culpritTime));
+  const alibis={};
+  suspects.forEach((su,i)=>{
+    const claimedLocation=locations[(i+1)%locations.length];
+    const claimedTime=su.id===culprit.id?culpritTime:fakeTimes[i%fakeTimes.length];
+    alibis[su.id]={location:claimedLocation,time:claimedTime};
+  });
+
+  // Evidence deliberately describes facts, objects, routes and timestamps instead of naming the culprit.
+  // The player must combine several clues with suspect alibis rather than solving the case from clue #1.
+  const evidence=[]; const add=(id,title,text,truth="neutral",importance=1)=>evidence.push({id,title,text,truth,importance});
+  add("vaultlog","🏦 Treasury Log",`The treasury was opened at **${culpritTime}** using **${method}**. The log does not identify who used it.`,"neutral",3);
+  add("camera","📸 Camera Fragment",`A blurry figure is visible near **${crimeLocation}** shortly before the theft. The image is too unclear to identify the person, but they appear to be carrying something consistent with **${method}**.`,"neutral",3);
+  add("motive","💰 Suspicious Motive",`Someone involved in the theft had a plausible reason to want **${stolen.toLocaleString()} ✨**. Motive alone does not identify the thief.`,"neutral",2);
+  add("receipt","🧾 Receipt",`A receipt was timestamped **${culpritTime}** at a location that could not be reached from **${crimeLocation}** in the available time. Compare this with each suspect's claimed whereabouts.`,"timeline",3);
+  add("key","🔑 Access Record",`The stolen method was **${method}**. The access record shows it was available to only a few people, but the record does not name the thief.`,"access",3);
+  add("witness","👀 Witness Statement",`A witness saw a figure carrying something suspicious shortly before the theft. They could identify the route taken, but not the person's face.`,"neutral",2);
+  add("footprints","👣 Footprints",`Footprints leave **${crimeLocation}** and head toward **${locations[1]||locations[0]}**. The print pattern is distinctive, but several suspects could plausibly have made it.`,"route",2);
+  add("inventory","📦 Inventory Mismatch",`An item connected to **${method}** was signed out shortly before the theft and never properly returned. The signature is partially smudged.`,"access",2);
+
+  const innocent=suspects.filter(s=>s.id!==culprit.id);
+  if(innocent[0])add("planted","🎭 Planted Evidence",`${innocent[0].emoji} ${innocent[0].name}'s item was found in a suspicious place, but its timestamp shows it was planted **after** the theft.`,"red",2);
+  if(innocent[1])add("alibi","🕐 Alibi Receipt",`${innocent[1].emoji} ${innocent[1].name} has a receipt supporting part of their alibi. It confirms a location, but not the entire timeline.`,"red",1);
+  if(innocent[2])add("witness2","🗣️ Confused Witness",`A witness initially points at ${innocent[2].emoji} ${innocent[2].name}, but admits they saw the person from too far away to be certain.`,"red",1);
+  if(accomplice)add("accomplice","🤝 Second Set of Footprints",`A second person helped cover the escape. The evidence proves there was another participant, but does not identify them yet.`,"accomplice",3);
+  else add("decoy","🧀 Extremely Suspicious Cheese","A half-eaten cheese wheel was found near the treasury. It is extremely suspicious. It is also completely unrelated.","decoy",0);
+
+  // The strongest clue is no longer guaranteed to be present or to name anyone.
+  add("finalclue","🧩 Final Connection",`A comparison of the timeline, access record and camera route reveals that **one suspect's alibi cannot fit all three facts at once**. The suspect must be identified by comparing the evidence with the statements.`,"timeline",4);
+
+  let selected=crimeShuffle(evidence).slice(0,cfg.evidence);
+  // Always give the player enough core information to reason, but never a one-click culprit reveal.
+  for(const id of ["vaultlog","receipt","key"]){
+    const req=evidence.find(e=>e.id===id);
+    if(req&&!selected.some(e=>e.id===id))selected[randomInt(0,Math.max(0,selected.length-1))]=req;
+  }
+
   const suspectStatements={};
   suspects.forEach((su,i)=>{
     const isC=su.id===culprit.id,isA=accomplice?.id===su.id;
-    const t=isC?culpritTime:fakeTimes[i%fakeTimes.length];
-    const statements=[`I was at ${locations[(i+1)%locations.length]} around ${t}.`,`I had nothing to do with the treasury.`,`I don't remember seeing anyone suspicious.`,`I was busy with my own business that night.`];
-    if(isC)statements[0]=`I was nowhere near ${crimeLocation} at ${culpritTime}.`;
+    const t=alibis[su.id].time,loc=alibis[su.id].location;
+    const statements=[
+      `I was at ${loc} around ${t}.`,
+      `I had nothing to do with the treasury.`,
+      `I don't remember seeing anyone suspicious.`,
+      `I was busy with my own business that night.`
+    ];
+    if(isC)statements[0]=`I was at ${loc} around ${t}. That's all I remember.`;
     if(isA)statements[2]=`I never helped anyone get into the treasury.`;
     suspectStatements[su.id]=statements;
   });
-  return {id:`crime-${Date.now()}-${randomInt(1000,9999)}`,name:crimeCaseName(),difficulty,type:type.id,typeName:type.name,typeDescription:type.desc,twist,culpritId:culprit.id,accompliceId:accomplice?.id||"",suspects,locations,crimeLocation,method,motive,stolen,evidence:crimeShuffle(selected),suspectStatements,discovered:[],interrogated:[],contradictions:[],accusation:null,accompliceGuess:"",accompliceGuesses:{},status:"playing",startedAt:Date.now(),incorrectAccusations:0,perfect:true};
+
+  return {id:`crime-${Date.now()}-${randomInt(1000,9999)}`,name:crimeCaseName(),difficulty,type:type.id,typeName:type.name,typeDescription:type.desc,twist,culpritId:culprit.id,accompliceId:accomplice?.id||"",suspects,locations,crimeLocation,method,motive,stolen,evidence:crimeShuffle(selected),suspectStatements,alibis,discovered:[],interrogated:[],contradictions:[],accusation:null,accompliceGuess:"",accompliceGuesses:{},status:"playing",startedAt:Date.now(),incorrectAccusations:0,perfect:true};
 }
 function crimeCaseById(game,id){return (game.evidence||[]).find(e=>e.id===id);}
 function crimeCaseText(game,privateMode=false){
