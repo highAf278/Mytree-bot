@@ -30344,52 +30344,6 @@ export default {
       return showBirthdayCurseModal(env, interaction);
     }
 
-    // Sparkle Crime can do several KV reads/writes while generating a case.
-    // Use Discord's native deferred response directly instead of first creating
-    // a placeholder message with a separate callback POST. That placeholder
-    // could remain stuck if the follow-up edit never got scheduled.
-    if (isCrimeCommand) {
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = true;
-
-      ctx.waitUntil((async () => {
-        try {
-          const user = getUserFromInteraction(interaction);
-          const blacklisted = user && user.id !== env.OWNER_ID
-            ? await isUserBlacklisted(env, String(user.id))
-            : false;
-          if (blacklisted) {
-            await editOriginalResponse(env, interaction, {
-              content: "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.",
-              components: []
-            });
-            return;
-          }
-          await handleCommand(env, interaction);
-          await maybeShowNews(env, interaction);
-        } catch (error) {
-          console.error("Sparkle Crime interaction error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ **Sparkle Crime crashed while opening the case.**\n\n\`${error?.message || "Unknown error"}\``,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Sparkle Crime error:", editError);
-          }
-        }
-      })());
-
-      return new Response(
-        JSON.stringify({ type: 5, data: { flags: 64 } }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-    }
-
     if (relevant) {
       let update = false;
       let ephemeral = false;
