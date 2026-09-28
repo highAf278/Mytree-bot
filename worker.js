@@ -1,7 +1,5 @@
 import puppeteer from "@cloudflare/puppeteer";
 
-// Sparkle Vault deployment verification — no behavior change.
-
 /* =========================================================
    WEREWIVES TREE BOT
    EXISTING BINDINGS ONLY:
@@ -167,7 +165,7 @@ async function handleSparkleShopComponent(env, interaction) {
         try {
           const existing = JSON.parse(existingRaw);
           if (existing.status === "pending") {
-            return sendText(env, interaction, `⏳ **You already have a pending Sparkle purchase.**\n\n🆔 \\`${existing.id}\\`\n💵 **$${existing.price}**\n✨ **${Number(existing.sparkles).toLocaleString()} Sparkles**\n\nPlease wait for the owner to verify your payment.`);
+            return sendText(env, interaction, `⏳ **You already have a pending Sparkle purchase.**\n\n🆔 **${existing.id}**\n💵 **$${existing.price}**\n✨ **${Number(existing.sparkles).toLocaleString()} Sparkles**\n\nPlease wait for the owner to verify your payment.`);
           }
         } catch {}
       }
@@ -204,7 +202,7 @@ async function handleSparkleShopComponent(env, interaction) {
       const ownerMessage = await discordRequest(env, `/channels/${channel.id}/messages`, {
         method: "POST",
         body: JSON.stringify({
-          content: `💰💎 **SPARKLE PURCHASE PENDING**\n\n👤 **Player:** <@${user.id}> (${user.username || "Unknown"})\n💵 **Amount:** $${purchase.price}\n✨ **Sparkles:** ${purchase.sparkles.toLocaleString()}\n${methodLabel}\n🆔 **Purchase:** \\`${purchase.id}\\`\n\nCheck your ${method === "venmo" ? "Venmo" : "Apple Cash"} manually, then approve or reject this request.`,
+          content: `💰💎 **SPARKLE PURCHASE PENDING**\n\n👤 **Player:** <@${user.id}> (${user.username || "Unknown"})\n💵 **Amount:** $${purchase.price}\n✨ **Sparkles:** ${purchase.sparkles.toLocaleString()}\n${methodLabel}\n🆔 **Purchase:** **${purchase.id}**\n\nCheck your ${method === "venmo" ? "Venmo" : "Apple Cash"} manually, then approve or reject this request.`,
           components: [row(
             button("✅ APPROVE & SEND SPARKLES", `sparklepurchase:approve:${purchase.id}`, 3),
             button("❌ REJECT", `sparklepurchase:reject:${purchase.id}`, 4)
@@ -221,7 +219,7 @@ async function handleSparkleShopComponent(env, interaction) {
     return sendText(
       env,
       interaction,
-      `⏳ **PAYMENT SUBMITTED!**\n\n🆔 Purchase: \\`${purchase.id}\\`\n💵 **$${purchase.price}**\n✨ **${purchase.sparkles.toLocaleString()} Sparkles**\n\n${notifyLine}\n\nYour Sparkles will be added **only after the payment is manually verified**. 💎🦝`
+      `⏳ **PAYMENT SUBMITTED!**\n\n🆔 Purchase: **${purchase.id}**\n💵 **$${purchase.price}**\n✨ **${purchase.sparkles.toLocaleString()} Sparkles**\n\n${notifyLine}\n\nYour Sparkles will be added **only after the payment is manually verified**. 💎🦝`
     );
   }
 
@@ -243,7 +241,7 @@ async function handleSparklePurchaseComponent(env, interaction) {
 
   if (purchase.status !== "pending") {
     const statusText = purchase.status === "approved" ? "already been approved" : "already been rejected";
-    return sendText(env, interaction, `⚠️ This purchase has ${statusText}.\n\n🆔 \\`${purchase.id}\\``);
+    return sendText(env, interaction, `⚠️ This purchase has ${statusText}.\n\n🆔 **${purchase.id}**`);
   }
 
   if (action === "reject") {
@@ -258,8 +256,8 @@ async function handleSparklePurchaseComponent(env, interaction) {
       await savePlayer(env, player, purchase.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
     }
 
-    await sendUserDM(env, purchase.userId, `❌💎 **SPARKLE PURCHASE REJECTED**\n\nYour purchase \\`${purchase.id}\\` for **$${purchase.price}** was rejected by the Werewives owner.\n\nIf you believe this was a mistake, contact the owner directly.`);
-    return sendText(env, interaction, `❌ **Purchase rejected.**\n\n🆔 \\`${purchase.id}\\`\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**`);
+    await sendUserDM(env, purchase.userId, `❌💎 **SPARKLE PURCHASE REJECTED**\n\nYour purchase **${purchase.id}** for **$${purchase.price}** was rejected by the Werewives owner.\n\nIf you believe this was a mistake, contact the owner directly.`);
+    return sendText(env, interaction, `❌ **Purchase rejected.**\n\n🆔 **${purchase.id}**\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**`);
   }
 
   if (action === "approve") {
@@ -275,9 +273,9 @@ async function handleSparklePurchaseComponent(env, interaction) {
     purchase.processedBy = String(env.OWNER_ID);
     await env.TREE_DATA.put(sparklePurchaseKey(purchase.id), JSON.stringify(purchase), { expirationTtl: 30 * 24 * 60 * 60 });
 
-    await sendUserDM(env, purchase.userId, `💎🦝 **SPARKLES DELIVERED!** 🦝💎\n\nYour **${purchase.sparkles.toLocaleString()} ✨** purchase has been approved!\n\n💵 **Paid:** $${purchase.price}\n🆔 **Purchase:** \\`${purchase.id}\\`\n✨ **New balance:** ${Number(player.sparkles).toLocaleString()} Sparkles\n\nThank you for funding the raccoon economy. 😭💗`);
+    await sendUserDM(env, purchase.userId, `💎🦝 **SPARKLES DELIVERED!** 🦝💎\n\nYour **${purchase.sparkles.toLocaleString()} ✨** purchase has been approved!\n\n💵 **Paid:** $${purchase.price}\n🆔 **Purchase:** **${purchase.id}**\n✨ **New balance:** ${Number(player.sparkles).toLocaleString()} Sparkles\n\nThank you for funding the raccoon economy. 😭💗`);
 
-    return sendText(env, interaction, `✅💎 **PURCHASE APPROVED!**\n\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**\n✨ **${Number(purchase.sparkles).toLocaleString()} Sparkles delivered.**\n🆔 \\`${purchase.id}\\``);
+    return sendText(env, interaction, `✅💎 **PURCHASE APPROVED!**\n\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**\n✨ **${Number(purchase.sparkles).toLocaleString()} Sparkles delivered.**\n🆔 **${purchase.id}**`);
   }
 
   return sendText(env, interaction, "❌ Unknown purchase action.");
