@@ -30344,6 +30344,49 @@ export default {
       return showBirthdayCurseModal(env, interaction);
     }
 
+    // Sparkle Crime SOLO start: acknowledge immediately, then run ONLY the
+    // solo case handler in the background. This keeps it isolated from the
+    // generic interaction middleware so the detective case can always replace
+    // the deferred response. No other Sparkle Crime mode is changed here.
+    if (isCrimeCommand) {
+      const crimeSub = interaction.data?.options?.find(option => option.type === 1)?.name || "solo";
+      if (crimeSub === "solo") {
+        ctx.waitUntil((async () => {
+          try {
+            const user = getUserFromInteraction(interaction);
+            const blacklisted = user && user.id !== env.OWNER_ID
+              ? await isUserBlacklisted(env, String(user.id))
+              : false;
+            if (blacklisted) {
+              await editOriginalResponse(env, interaction, {
+                content: "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.",
+                components: []
+              });
+              return;
+            }
+            interaction.__deferred = true;
+            interaction.__deferredUpdate = false;
+            interaction.__deferredEphemeral = true;
+            await handleCrimeSoloStart(env, interaction);
+          } catch (error) {
+            console.error("Sparkle Crime solo start error:", error);
+            try {
+              await editOriginalResponse(env, interaction, {
+                content: `❌ **Sparkle Crime crashed while opening the case.**\n\n\`${error?.message || "Unknown error"}\``,
+                components: []
+              });
+            } catch (editError) {
+              console.error("Could not send Sparkle Crime solo error:", editError);
+            }
+          }
+        })());
+        return new Response(
+          JSON.stringify({ type: 5, data: { flags: 64 } }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     if (relevant) {
       let update = false;
       let ephemeral = false;
