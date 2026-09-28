@@ -21113,11 +21113,28 @@ function crimePublicRows(game){
   return [row(button("🔎 New Solo Case","crime:solo:new",1),button("🔎 New Multiplayer Case","crime:create",2))];
 }
 function crimePrivateRows(game){
-  const rows=[];const ev=game.evidence||[];
-  for(let i=0;i<Math.min(ev.length,18);i+=2)rows.push(row(button(`🔎 ${i+1}. ${ev[i].title.slice(0,32)}`,`crime:evidence:${game.id}:${ev[i].id}`,2,game.discovered?.includes(ev[i].id)),ev[i+1]?button(`🔎 ${i+2}. ${ev[i+1].title.slice(0,32)}`,`crime:evidence:${game.id}:${ev[i+1].id}`,2,game.discovered?.includes(ev[i+1].id)):button("—","crime:noop",2,true)));
-  rows.push(row(button("💬 Interrogate",`crime:interrogate:${game.id}`,1),button("🧩 My Theory",`crime:theory:${game.id}`,2)));
-  rows.push(row(button("🗳️ Accuse Thief",`crime:accuse:${game.id}`,4),button("⬅️ Case Board",`crime:board:${game.id}`,2)));
-  if(game.accompliceId)rows.push(row(button("🤝 Identify Accomplice",`crime:accomplice:${game.id}`,2)));
+  // Discord allows a maximum of 5 action rows per message. The old layout
+  // made one row for every two evidence items, which could create 11+ rows
+  // and caused Discord to reject the final case-board response. Pack up to
+  // five evidence buttons per row so even the largest case stays within the
+  // five-row limit while keeping every evidence item available.
+  const rows=[];const ev=(game.evidence||[]).slice(0,20);
+  for(let i=0;i<ev.length;i+=5){
+    const buttons=[];
+    for(let j=i;j<Math.min(i+5,ev.length);j++){
+      const e=ev[j];
+      buttons.push(button(`🔎 ${j+1}. ${e.title.slice(0,20)}`,`crime:evidence:${game.id}:${e.id}`,2,game.discovered?.includes(e.id)));
+    }
+    rows.push(row(...buttons));
+  }
+  const controls=[
+    button("💬 Interrogate",`crime:interrogate:${game.id}`,1),
+    button("🧩 My Theory",`crime:theory:${game.id}`,2),
+    button("🗳️ Accuse Thief",`crime:accuse:${game.id}`,4),
+    button("⬅️ Case Board",`crime:board:${game.id}`,2)
+  ];
+  if(game.accompliceId)controls.push(button("🤝 Accomplice",`crime:accomplice:${game.id}`,2));
+  rows.push(row(...controls));
   return rows;
 }
 function crimeAccusationRows(game){const rows=[];for(let i=0;i<game.suspects.length;i+=3)rows.push(row(...game.suspects.slice(i,i+3).map(s=>button(`${s.emoji} ${s.name}`,`crime:pickaccuse:${game.id}:${s.id}`,2))));return rows;}
@@ -30344,49 +30361,77 @@ export default {
       return showBirthdayCurseModal(env, interaction);
     }
 
-    // Sparkle Crime SOLO start: acknowledge immediately, then run ONLY the
-    // solo case handler in the background. This keeps it isolated from the
-    // generic interaction middleware so the detective case can always replace
-    // the deferred response. No other Sparkle Crime mode is changed here.
+    // Sparkle Crime SOLO start: use a complete type-4 response as the
+    // initial Discord response. This path intentionally does NOT use a
+    // deferred "thinking" response. The case itself is generated immediately
+    // from local data, while the player record is persisted in waitUntil().
+    // This isolates SOLO from the deferred-response path that was leaving
+    // Discord stuck on "MyTree is thinking...".
     if (isCrimeCommand) {
       const crimeSub = interaction.data?.options?.find(option => option.type === 1)?.name || "solo";
       if (crimeSub === "solo") {
-        // Mark the interaction synchronously so every background crime response
-        // uses PATCH @original after Discord sends the type-5 acknowledgement.
-        interaction.__deferred = true;
-        interaction.__deferredUpdate = false;
-        interaction.__deferredEphemeral = true;
-
-        ctx.waitUntil((async () => {
-          try {
-            const user = getUserFromInteraction(interaction);
-            const blacklisted = user && user.id !== env.OWNER_ID
-              ? await isUserBlacklisted(env, String(user.id))
-              : false;
-            if (blacklisted) {
-              await editOriginalResponse(env, interaction, {
-                content: "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.",
-                components: []
-              });
-              return;
-            }
-            await handleCrimeSoloStart(env, interaction);
-          } catch (error) {
-            console.error("Sparkle Crime solo start error:", error);
-            try {
-              await editOriginalResponse(env, interaction, {
-                content: `❌ **Sparkle Crime crashed while opening the case.**\n\n\`${error?.message || "Unknown error"}\``,
-                components: []
-              });
-            } catch (editError) {
-              console.error("Could not send Sparkle Crime solo error:", editError);
-            }
+        try {
+          const user = getUserFromInteraction(interaction);
+          if (!user) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: "❌ I couldn't determine your Discord account.", flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
           }
-        })());
-        return new Response(
-          JSON.stringify({ type: 5, data: { flags: 64 } }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
+
+          // Only this one KV read happens before Discord's initial response.
+          // Everything else is local and/or background work.
+          const player = await getPlayer(env, user.id);
+          const punishment = activePunishment(player);
+          if (["corner", "court_game", "court_shame_corner"].includes(punishment)) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: punishmentBlockedText(player, punishment), flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
+          }
+
+          if (player.sparkleCrimeSolo?.status === "playing") {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: "❌ You already have a detective case open. Finish it first.", flags: 64 }
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
+          }
+
+          updatePlayerIdentity(player, interaction);
+          const game = crimeCreateCase(1);
+          game.ownerId = user.id;
+          game.mode = "solo";
+          player.sparkleCrimeSolo = game;
+
+          const responseData = {
+            content: crimeCaseText(game, true),
+            components: crimePrivateRows(game),
+            flags: 64
+          };
+
+          // Persist after the complete response has already been sent to Discord.
+          ctx.waitUntil((async () => {
+            try {
+              await savePlayer(env, player, user.id);
+            } catch (error) {
+              console.error("Sparkle Crime solo save failed:", error);
+            }
+          })());
+
+          return new Response(JSON.stringify({ type: 4, data: responseData }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        } catch (error) {
+          console.error("Sparkle Crime solo fast-path error:", error);
+          return new Response(JSON.stringify({
+            type: 4,
+            data: {
+              content: `❌ **Couldn't open the detective case.**\n\n\`${error?.message || "Unknown error"}\``,
+              flags: 64
+            }
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
       }
     }
 
