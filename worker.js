@@ -21056,7 +21056,7 @@ const CRIME_TWISTS=[
   "Two suspects are lying, but only one is lying about the crime."
 ];
 function crimeShuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=randomInt(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;}
-function crimeDifficultyForPlayers(n){const r=Math.random();if(n<=1)return r<.55?"rookie":r<.85?"detective":r<.97?"investigator":"master";if(n<=3)return r<.35?"rookie":r<.75?"detective":r<.94?"investigator":"master";return r<.15?"detective":r<.55?"investigator":r<.92?"master":"legendary";}
+function crimeDifficultyForPlayers(n){const r=Math.random();if(n<=1)return r<.55?"rookie":r<.85?"detective":r<.97?"investigator":"master";if(n<=3)return r<.15?"detective":r<.50?"investigator":r<.88?"master":"legendary";return r<.05?"investigator":r<.40?"master":"legendary";}
 function crimeCaseName(){const a=["The Midnight","The Missing","The Glittering","The Great","The Suspicious","The Vanishing","The Ridiculous"],b=["Sparkle Job","Treasury Caper","Raccoon Heist","Midnight Theft","Golden Disaster","Treasury Mystery","Sparkle Scandal"];return `${a[randomInt(0,a.length-1)]} ${b[randomInt(0,b.length-1)]}`;}
 function crimeCreateCase(playerCount=1,forcedDifficulty=null){
   const difficulty=forcedDifficulty||crimeDifficultyForPlayers(playerCount),cfg=CRIME_DIFFICULTIES[difficulty];
@@ -21119,15 +21119,18 @@ function crimeCreateCase(playerCount=1,forcedDifficulty=null){
 }
 
 function crimeCaseById(game,id){return (game.evidence||[]).find(e=>e.id===id);}
-function crimeCaseText(game,privateMode=false){
-  const found=game.discovered?.length||0,total=game.evidence?.length||0;
+function crimeCaseText(game,privateMode=false,privateState=null){
+  const state=privateState||null;
+  const found=state?.discovered?.length ?? (game.discovered?.length||0),total=game.evidence?.length||0;
+  const interrogationCount=state?.interrogated?.length ?? (game.interrogated?.length||0);
+  const contradictionCount=state?.contradictions?.length ?? (game.contradictions?.length||0);
   const suspects=(game.suspects||[]).map(s=>{
     const a=game.alibis?.[s.id];
     return `${s.emoji} **${s.name}** — claims **${a?.location||"unknown"}** at **${a?.time||"unknown"}**`;
   }).join("\n");
   const playerCount=Object.keys(game.players||{}).length;
   const guessCount=Object.keys(game.playerGuesses||{}).length;
-  return [`🔎 **WHO STOLE THE SPARKLES?**`,`📁 **${game.name}**`,`${game.typeName} • ${CRIME_DIFFICULTIES[game.difficulty]?.name||game.difficulty}`,"",`💰 **Stolen:** ${Number(game.stolen||0).toLocaleString()} ✨`,`🏦 **Scene:** ${game.crimeLocation}`,`🔎 **Evidence:** ${found}/${total}`,`💬 **Interrogations:** ${game.interrogated?.length||0}`,`🚨 **Contradictions:** ${game.contradictions?.length||0}`,game.mode==="multi"?`🗳️ **Guesses submitted:** ${guessCount}/${playerCount}`:"",`👤 **Suspect Dossiers**`,suspects,"",`_${game.typeDescription}_`,...(privateMode?["","🔐 **PRIVATE INVESTIGATION PANEL**","Use the evidence and suspect alibis together. Interrogations can confirm a contradiction, but they are not the only way to solve the case."]: ["","🕵️ Use **Investigate** to open your private detective panel."])].filter(Boolean).join("\n");
+  return [`🔎 **WHO STOLE THE SPARKLES?**`,`📁 **${game.name}**`,`${game.typeName} • ${CRIME_DIFFICULTIES[game.difficulty]?.name||game.difficulty}`,"",`💰 **Stolen:** ${Number(game.stolen||0).toLocaleString()} ✨`,`🏦 **Scene:** ${game.crimeLocation}`,`🔎 **Evidence:** ${found}/${total}`,`💬 **Interrogations:** ${interrogationCount}`,`🚨 **Contradictions:** ${contradictionCount}`,game.mode==="multi"?`🗳️ **Guesses submitted:** ${guessCount}/${playerCount}`:"",`👤 **Suspect Dossiers**`,suspects,"",`_${game.typeDescription}_`,...(privateMode?["","🔐 **PRIVATE INVESTIGATION PANEL**","Use the evidence and suspect alibis together. Interrogations can confirm a contradiction, but they are not the only way to solve the case."]: ["","🕵️ Use **Investigate** to open your private detective panel."])].filter(Boolean).join("\n");
 }
 
 function crimePublicRows(game){
@@ -21135,18 +21138,25 @@ function crimePublicRows(game){
   if(game.status==="playing")return [row(button("🔎 Investigate",`crime:investigate:${game.id}`,1),button("📊 Case Status",`crime:status:${game.id}`,2)),row(button("🗳️ Make Accusation",`crime:accuse:${game.id}`,4)),row(button("🛑 End Case",`crime:end:${game.id}`,4))];
   return [row(button("🔎 New Solo Case","crime:solo:new",1),button("🔎 New Multiplayer Case","crime:create",2))];
 }
-function crimePrivateRows(game){
-  // Discord allows a maximum of 5 action rows per message. The old layout
-  // made one row for every two evidence items, which could create 11+ rows
-  // and caused Discord to reject the final case-board response. Pack up to
-  // five evidence buttons per row so even the largest case stays within the
-  // five-row limit while keeping every evidence item available.
+function crimePrivateState(game,userId){
+  if(!game.privateInvestigations||typeof game.privateInvestigations!=="object")game.privateInvestigations={};
+  if(!game.privateInvestigations[userId])game.privateInvestigations[userId]={discovered:[],interrogated:[],contradictions:[]};
+  const state=game.privateInvestigations[userId];
+  if(!Array.isArray(state.discovered))state.discovered=[];
+  if(!Array.isArray(state.interrogated))state.interrogated=[];
+  if(!Array.isArray(state.contradictions))state.contradictions=[];
+  return state;
+}
+function crimePrivateRows(game,privateState=null){
+  const state=privateState||{discovered:game.discovered||[],interrogated:game.interrogated||[],contradictions:game.contradictions||[]};
+  // Each multiplayer detective gets their own investigation notebook.
+  // Evidence/interrogation buttons are therefore independent per player.
   const rows=[];const ev=(game.evidence||[]).slice(0,20);
   for(let i=0;i<ev.length;i+=5){
     const buttons=[];
     for(let j=i;j<Math.min(i+5,ev.length);j++){
       const e=ev[j];
-      buttons.push(button(`🔎 ${j+1}. ${e.title.slice(0,20)}`,`crime:evidence:${game.id}:${e.id}`,2,game.discovered?.includes(e.id)));
+      buttons.push(button(`🔎 ${j+1}. ${e.title.slice(0,20)}`,`crime:evidence:${game.id}:${e.id}`,2,state.discovered.includes(e.id)));
     }
     rows.push(row(...buttons));
   }
@@ -21162,18 +21172,26 @@ function crimePrivateRows(game){
 }
 function crimeAccusationRows(game){const rows=[];for(let i=0;i<game.suspects.length;i+=3)rows.push(row(...game.suspects.slice(i,i+3).map(s=>button(`${s.emoji} ${s.name}`,`crime:pickaccuse:${game.id}:${s.id}`,2))));return rows;}
 function crimeAccompliceRows(game){const rows=[];for(let i=0;i<game.suspects.length;i+=3)rows.push(row(...game.suspects.slice(i,i+3).map(s=>button(`${s.emoji} ${s.name}`,`crime:pickaccomplice:${game.id}:${s.id}`,2))));return rows;}
-function crimeInterrogateRows(game){const avail=game.suspects.filter(s=>!game.interrogated.includes(s.id));const rows=[];for(let i=0;i<avail.length;i+=2)rows.push(row(...avail.slice(i,i+2).map(s=>button(`${s.emoji} ${s.name}`,`crime:question:${game.id}:${s.id}`,2))));rows.push(row(button("⬅️ Back",`crime:investigate:${game.id}`,2)));return rows;}
+function crimeInterrogateRows(game,privateState=null){
+  const state=privateState||{interrogated:game.interrogated||[]};
+  const avail=game.suspects.filter(s=>!state.interrogated.includes(s.id));
+  const rows=[];for(let i=0;i<avail.length;i+=2)rows.push(row(...avail.slice(i,i+2).map(s=>button(`${s.emoji} ${s.name}`,`crime:question:${game.id}:${s.id}`,2))));
+  rows.push(row(button("⬅️ Back",`crime:investigate:${game.id}`,2)));return rows;
+}
 function crimeUnlockTitles(player,stats){
   if(!Array.isArray(player.titles))player.titles=[];const out=[];const unlock=id=>{if(!player.titles.includes(id)){player.titles.push(id);out.push(id);}};
   if(stats.solved>=1)unlock("case_cracker");if(stats.evidence>=25)unlock("evidence_goblin");if(stats.contradictions>=10)unlock("lie_detector");if(stats.solved>=10)unlock("red_string_menace");if(stats.masterPerfect)unlock("master_detective");if(stats.solved>=25)unlock("raccoon_sherlock");if(stats.cleanCases>=5)unlock("clean_record");if(stats.interrogations>=25)unlock("interrogator");if(stats.reward>=10000)unlock("cold_case_crusher");if(stats.allEvidence)unlock("crime_scene_diva");if(stats.accomplice)unlock("accomplice_hunter");return out;
 }
-async function crimeSavePlayerResult(env,player,game,mode,allEvidence=false,correctGuess=true){
-  const reward=Math.max(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[0]||250,Math.min(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[1]||15000,Math.floor(Number(game.stolen||0)*.12+(game.discovered?.length||0)*100+(game.contradictions?.length||0)*175)));
+async function crimeSavePlayerResult(env,player,game,mode,allEvidence=false,correctGuess=true,privateState=null){
+  const evidenceCount=privateState?.discovered?.length ?? (game.discovered?.length||0);
+  const contradictionCount=privateState?.contradictions?.length ?? (game.contradictions?.length||0);
+  const interrogationCount=privateState?.interrogated?.length ?? (game.interrogated?.length||0);
+  const reward=Math.max(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[0]||250,Math.min(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[1]||15000,Math.floor(Number(game.stolen||0)*.12+evidenceCount*100+contradictionCount*175)));
   const solved=game.status==="solved";
   const playerSolved=mode==="multi" ? (solved&&correctGuess) : solved;
   player.crimeCases=Number(player.crimeCases||0)+1;
-  if(playerSolved){player.crimeSolved=Number(player.crimeSolved||0)+1;player.crimeBestCase=Math.max(Number(player.crimeBestCase||0),Number(game.stolen||0));if(mode==="solo")player.crimeSoloWins=Number(player.crimeSoloWins||0)+1;else player.crimeMultiplayerWins=Number(player.crimeMultiplayerWins||0)+1;if(game.incorrectAccusations===0)player.crimePerfectCases=Number(player.crimePerfectCases||0)+1;player.crimeEvidenceFound=Number(player.crimeEvidenceFound||0)+(game.discovered?.length||0);player.crimeContradictions=Number(player.crimeContradictions||0)+(game.contradictions?.length||0);player.crimeInterrogations=Number(player.crimeInterrogations||0)+(game.interrogated?.length||0);player.crimeAccusations=Number(player.crimeAccusations||0)+1;player.crimeCorrectAccusations=Number(player.crimeCorrectAccusations||0)+1;player.crimeBestReward=Math.max(Number(player.crimeBestReward||0),reward);player.crimeDailyCases=Number(player.crimeDailyCases||0)+1;player.sparkles=Number(player.sparkles||0)+reward;}
-  const stats={solved:Number(player.crimeSolved||0),evidence:Number(player.crimeEvidenceFound||0),contradictions:Number(player.crimeContradictions||0),interrogations:Number(player.crimeInterrogations||0),cleanCases:Number(player.crimePerfectCases||0),reward:Number(player.crimeBestReward||0),allEvidence,masterPerfect:playerSolved&&game.difficulty==="master"&&game.incorrectAccusations===0&&allEvidence,accomplice:playerSolved&&game.accompliceGuesses?.[player.userId]===game.accompliceId};
+  if(playerSolved){player.crimeSolved=Number(player.crimeSolved||0)+1;player.crimeBestCase=Math.max(Number(player.crimeBestCase||0),Number(game.stolen||0));if(mode==="solo")player.crimeSoloWins=Number(player.crimeSoloWins||0)+1;else player.crimeMultiplayerWins=Number(player.crimeMultiplayerWins||0)+1;if(Number(game.playerIncorrectAccusations?.[player.userId]||0)===0)player.crimePerfectCases=Number(player.crimePerfectCases||0)+1;player.crimeEvidenceFound=Number(player.crimeEvidenceFound||0)+evidenceCount;player.crimeContradictions=Number(player.crimeContradictions||0)+contradictionCount;player.crimeInterrogations=Number(player.crimeInterrogations||0)+interrogationCount;player.crimeAccusations=Number(player.crimeAccusations||0)+1;player.crimeCorrectAccusations=Number(player.crimeCorrectAccusations||0)+1;player.crimeBestReward=Math.max(Number(player.crimeBestReward||0),reward);player.crimeDailyCases=Number(player.crimeDailyCases||0)+1;player.sparkles=Number(player.sparkles||0)+reward;}
+  const stats={solved:Number(player.crimeSolved||0),evidence:Number(player.crimeEvidenceFound||0),contradictions:Number(player.crimeContradictions||0),interrogations:Number(player.crimeInterrogations||0),cleanCases:Number(player.crimePerfectCases||0),reward:Number(player.crimeBestReward||0),allEvidence,masterPerfect:playerSolved&&game.difficulty==="master"&&Number(game.playerIncorrectAccusations?.[player.userId]||0)===0&&allEvidence,accomplice:playerSolved&&game.accompliceGuesses?.[player.userId]===game.accompliceId};
   const titles=crimeUnlockTitles(player,stats);await savePlayer(env,player);
   if(playerSolved&&reward>0){let raw=await env.TREE_DATA.get("sparklecrime:leaderboard"),board=[];try{board=raw?JSON.parse(raw):[]}catch{}if(!Array.isArray(board))board=[];board.push({userId:player.userId,name:player.displayName||player.username||"Werewife",reward,caseName:game.name});board.sort((a,b)=>Number(b.reward)-Number(a.reward));await env.TREE_DATA.put("sparklecrime:leaderboard",JSON.stringify(board.slice(0,25)));}
   return {reward,titles};
@@ -21181,29 +21199,38 @@ async function crimeSavePlayerResult(env,player,game,mode,allEvidence=false,corr
 async function getCrimeGame(env,guildId){return (await getGuildState(env,guildId)).sparkleCrime||null;}
 async function saveCrimeGame(env,guildId,game){const state=await getGuildState(env,guildId);state.sparkleCrime=game;await saveGuildState(env,guildId,state);}
 async function getCrimePrivateGame(env,interaction,gameId){
+  const u=getUserFromInteraction(interaction);if(!u)return null;
   const multi=await getCrimeGame(env,interaction.guild_id);
-  if(multi?.id===gameId&&multi.status==="playing")return {game:multi,mode:"multi",player:null};
-  const u=getUserFromInteraction(interaction);if(!u)return null;const p=await getPlayer(env,u.id);
-  if(p.sparkleCrimeSolo?.id===gameId&&p.sparkleCrimeSolo.status==="playing")return {game:p.sparkleCrimeSolo,mode:"solo",player:p};
+  if(multi?.id===gameId&&multi.status==="playing")return {game:multi,mode:"multi",player:null,userId:u.id,privateState:crimePrivateState(multi,u.id)};
+  const p=await getPlayer(env,u.id);
+  if(p.sparkleCrimeSolo?.id===gameId&&p.sparkleCrimeSolo.status==="playing")return {game:p.sparkleCrimeSolo,mode:"solo",player:p,userId:u.id,privateState:{discovered:p.sparkleCrimeSolo.discovered||[],interrogated:p.sparkleCrimeSolo.interrogated||[],contradictions:p.sparkleCrimeSolo.contradictions||[]}};
   return null;
 }
 async function crimeInterrogateOne(env,interaction,ctx,suspectId){
-  const game=ctx.game,suspect=game.suspects.find(s=>s.id===suspectId);if(!suspect)return sendText(env,interaction,"❌ That suspect is unavailable.");
-  if(!game.interrogated.includes(suspectId))game.interrogated.push(suspectId);
+  const game=ctx.game,suspect=game.suspects.find(s=>s.id===suspectId),state=ctx.privateState||crimePrivateState(game,ctx.userId);if(!suspect)return sendText(env,interaction,"❌ That suspect is unavailable.");
+  if(!state.interrogated.includes(suspectId))state.interrogated.push(suspectId);
   const statements=game.suspectStatements[suspectId]||[],line=statements[randomInt(0,statements.length-1)];
   const alibi=game.alibis?.[suspectId];
-  const hasTimelineConflict=alibi?.time===game.evidence?.find(e=>e.id==="vaultlog")?.text.match(/\*\*(.*?)\*\*/)?.[1] && alibi?.location!==game.crimeLocation;
+  const vault=game.evidence?.find(e=>e.id==="vaultlog");
+  const crimeTime=vault?.text?.match(/\*\*(.*?)\*\*/)?.[1]||"";
+  const hasTimelineConflict=Boolean(alibi?.time===crimeTime&&alibi?.location!==game.crimeLocation);
   const hasAccessConflict=Array.isArray(game.accessEligibleIds)&&!game.accessEligibleIds.includes(suspectId);
-  const contradiction=(suspectId===game.culpritId)||(hasTimelineConflict&&!hasAccessConflict);
+  // Interrogation is no longer a built-in lie detector. A contradiction only
+  // appears when the player's gathered facts expose a real conflict.
+  const contradiction=hasTimelineConflict&&!hasAccessConflict;
   let extra="";
-  if(contradiction&&!game.contradictions.includes(suspectId)){game.contradictions.push(suspectId);extra="\n\n🚨 **CONTRADICTION FOUND.** Their claimed whereabouts do not fit the documented crime timeline.";}
-  if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,game);else{ctx.player.crimeInterrogations=Number(ctx.player.crimeInterrogations||0)+1;await savePlayer(env,ctx.player);}
-  await sendText(env,interaction,`💬 **${suspect.emoji} ${suspect.name}**\n\n> ${line}\n\n_${suspect.cover}._${extra}`,crimePrivateRows(game));
+  if(contradiction&&!state.contradictions.includes(suspectId)){state.contradictions.push(suspectId);extra="\n\n🚨 **TIMELINE CONFLICT.** Their statement does not fit the documented time and access records. You must decide what that means.";}
+  if(ctx.mode==="multi"){
+    if(!game.interrogated.includes(suspectId))game.interrogated.push(suspectId);
+    if(contradiction&&!game.contradictions.includes(suspectId))game.contradictions.push(suspectId);
+    await saveCrimeGame(env,interaction.guild_id,game);
+  }else{game.interrogated=state.interrogated;game.contradictions=state.contradictions;ctx.player.crimeInterrogations=Number(ctx.player.crimeInterrogations||0)+1;await savePlayer(env,ctx.player);}
+  await sendText(env,interaction,`💬 **${suspect.emoji} ${suspect.name}**\n\n> ${line}\n\n_${suspect.cover}._${extra}\n\n🧠 **Don't treat an interrogation as proof. Compare it against the evidence.**`,crimePrivateRows(game,state));
 }
 async function handleCrimeSoloStart(env,interaction){if(await checkGamePunishment(env,interaction))return;const u=getUserFromInteraction(interaction);if(!u)return;const p=await getPlayer(env,u.id);updatePlayerIdentity(p,interaction);if(p.sparkleCrimeSolo?.status==="playing")return sendText(env,interaction,"❌ You already have a detective case open. Finish it first.");const game=crimeCreateCase(1);game.ownerId=u.id;game.mode="solo";p.sparkleCrimeSolo=game;await savePlayer(env,p);await sendText(env,interaction,crimeCaseText(game,true),crimePrivateRows(game));}
 async function handleCrimeSoloAccuse(env,interaction,suspectId){
   const u=getUserFromInteraction(interaction);if(!u)return;const p=await getPlayer(env,u.id),g=p.sparkleCrimeSolo;if(!g||g.status!=="playing")return sendText(env,interaction,"❌ No active detective case.");
-  if(suspectId!==g.culpritId){g.incorrectAccusations++;g.perfect=false;await savePlayer(env,p);return sendText(env,interaction,"❌ **WRONG ACCUSATION.** The case remains open, but your perfect record is gone.",crimePrivateRows(g));}
+  if(suspectId!==g.culpritId){g.incorrectAccusations++;g.perfect=false;await savePlayer(env,p);return sendText(env,interaction,"❌ **WRONG ACCUSATION.** The case remains open, but your perfect record is gone.",crimePrivateRows(g,ctx.privateState));}
   g.status="solved";const all=g.discovered.length>=g.evidence.length;const r=await crimeSavePlayerResult(env,p,g,"solo",all);p.sparkleCrimeSolo=null;await savePlayer(env,p);
   const culprit=g.suspects.find(s=>s.id===g.culpritId),acc=g.accompliceId?g.suspects.find(s=>s.id===g.accompliceId):null;
   const titleText=r.titles.length?`\n🏷️ **NEW TITLES:** ${r.titles.map(t=>SOLO_TITLES[t].name).join(", ")}`:"";
@@ -21211,16 +21238,16 @@ async function handleCrimeSoloAccuse(env,interaction,suspectId){
 async function handleCrimeCreate(env,interaction){const u=getUserFromInteraction(interaction);if(!u)return;const st=await getGuildState(env,interaction.guild_id);if(st.sparkleCrime&&["lobby","playing"].includes(st.sparkleCrime.status))return sendText(env,interaction,"❌ There is already an active Sparkle Crime case.");const g=crimeCreateCase(2);g.status="lobby";g.ownerId=u.id;g.players={[u.id]:{id:u.id}};await saveCrimeGame(env,interaction.guild_id,g);await sendPublicText(env,interaction,`🔎 **WHO STOLE THE SPARKLES? — CASE LOBBY**\n\n📁 **${g.name}**\n${g.typeName}\n\n👥 Players: **1/${CRIME_MAX_PLAYERS}**\n\nThe host can start when ready.`,crimePublicRows(g));}
 async function handleCrimeJoin(env,interaction){const u=getUserFromInteraction(interaction);if(!u)return;const g=await getCrimeGame(env,interaction.guild_id);if(!g||g.status!=="lobby")return sendText(env,interaction,"❌ No open Sparkle Crime lobby.");if(g.players[u.id])return sendText(env,interaction,"❌ You are already in this case.");if(Object.keys(g.players).length>=CRIME_MAX_PLAYERS)return sendText(env,interaction,"❌ This case is full.");g.players[u.id]={id:u.id};await saveCrimeGame(env,interaction.guild_id,g);await editOriginalResponse(env,interaction,{content:`🔎 **WHO STOLE THE SPARKLES? — CASE LOBBY**\n\n📁 **${g.name}**\n${g.typeName}\n\n👥 Players: **${Object.keys(g.players).length}/${CRIME_MAX_PLAYERS}**\n\n${Object.keys(g.players).map(id=>`• <@${id}>`).join("\n")}\n\nThe host can start when ready.`,components:crimePublicRows(g)});}
 async function handleCrimeLeave(env,interaction){const u=getUserFromInteraction(interaction);if(!u)return;const g=await getCrimeGame(env,interaction.guild_id);if(!g||g.status!=="lobby")return sendText(env,interaction,"❌ No open lobby.");delete g.players[u.id];if(!Object.keys(g.players).length){const st=await getGuildState(env,interaction.guild_id);st.sparkleCrime=null;await saveGuildState(env,interaction.guild_id,st);return sendText(env,interaction,"🗑️ Sparkle Crime lobby closed.");}if(g.ownerId===u.id)g.ownerId=Object.keys(g.players)[0];await saveCrimeGame(env,interaction.guild_id,g);await editOriginalResponse(env,interaction,{content:`🔎 **WHO STOLE THE SPARKLES? — CASE LOBBY**\n\n📁 **${g.name}**\n\n👥 Players: **${Object.keys(g.players).length}/${CRIME_MAX_PLAYERS}**\n\n${Object.keys(g.players).map(id=>`• <@${id}>`).join("\n")}`,components:crimePublicRows(g)});}
-async function handleCrimeStart(env,interaction){const u=getUserFromInteraction(interaction);if(!u)return;const g=await getCrimeGame(env,interaction.guild_id);if(!g||g.status!=="lobby")return sendText(env,interaction,"❌ No Sparkle Crime lobby.");if(g.ownerId!==u.id)return sendText(env,interaction,"❌ Only the host can start the case.");if(Object.keys(g.players).length<2)return sendText(env,interaction,"❌ Multiplayer cases need at least **2 players**.");const fresh=crimeCreateCase(Object.keys(g.players).length);fresh.id=g.id;fresh.ownerId=g.ownerId;fresh.players=g.players;fresh.mode="multi";await saveCrimeGame(env,interaction.guild_id,fresh);await editOriginalResponse(env,interaction,{content:crimeCaseText(fresh,false),components:crimePublicRows(fresh)});}
-async function handleCrimeInvestigate(env,interaction){const g=await getCrimeGame(env,interaction.guild_id),u=getUserFromInteraction(interaction);if(!g||g.status!=="playing")return sendText(env,interaction,"❌ The case is not active.");if(!u||!g.players?.[u.id])return sendText(env,interaction,"❌ You are not part of this case.");await sendText(env,interaction,crimeCaseText(g,true),crimePrivateRows(g));}
-async function handleCrimeEvidence(env,interaction,gameId,evidenceId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ That detective case is no longer active.");const ev=crimeCaseById(ctx.game,evidenceId);if(!ev)return sendText(env,interaction,"❌ That evidence no longer exists.");if(!ctx.game.discovered.includes(evidenceId))ctx.game.discovered.push(evidenceId);if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);await sendText(env,interaction,`🔎 **${ev.title}**\n\n${ev.text}`,crimePrivateRows(ctx.game));}
-async function handleCrimeInterrogateMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active detective case.");await sendText(env,interaction,"💬 **WHO DO YOU WANT TO INTERROGATE?**",crimeInterrogateRows(ctx.game));}
-async function handleCrimeTheory(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");await sendText(env,interaction,`🧠 **YOUR CASE THEORY**\n\nEvidence: **${ctx.game.discovered.length}/${ctx.game.evidence.length}**\nInterrogations: **${ctx.game.interrogated.length}**\nContradictions: **${ctx.game.contradictions.length}**\n\nThe bot will not tell you whether you're right. That's your job, detective. 😈`,crimePrivateRows(ctx.game));}
+async function handleCrimeStart(env,interaction){const u=getUserFromInteraction(interaction);if(!u)return;const g=await getCrimeGame(env,interaction.guild_id);if(!g||g.status!=="lobby")return sendText(env,interaction,"❌ No Sparkle Crime lobby.");if(g.ownerId!==u.id)return sendText(env,interaction,"❌ Only the host can start the case.");if(Object.keys(g.players).length<2)return sendText(env,interaction,"❌ Multiplayer cases need at least **2 players**.");const fresh=crimeCreateCase(Object.keys(g.players).length);fresh.id=g.id;fresh.ownerId=g.ownerId;fresh.players=g.players;fresh.mode="multi";fresh.privateInvestigations={};for(const uid of Object.keys(fresh.players||{}))fresh.privateInvestigations[uid]={discovered:[],interrogated:[],contradictions:[]};await saveCrimeGame(env,interaction.guild_id,fresh);await editOriginalResponse(env,interaction,{content:crimeCaseText(fresh,false),components:crimePublicRows(fresh)});}
+async function handleCrimeInvestigate(env,interaction){const g=await getCrimeGame(env,interaction.guild_id),u=getUserFromInteraction(interaction);if(!g||g.status!=="playing")return sendText(env,interaction,"❌ The case is not active.");if(!u||!g.players?.[u.id])return sendText(env,interaction,"❌ You are not part of this case.");const state=crimePrivateState(g,u.id);await saveCrimeGame(env,interaction.guild_id,g);await sendText(env,interaction,crimeCaseText(g,true,state),crimePrivateRows(g,state));}
+async function handleCrimeEvidence(env,interaction,gameId,evidenceId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ That detective case is no longer active.");const ev=crimeCaseById(ctx.game,evidenceId);if(!ev)return sendText(env,interaction,"❌ That evidence no longer exists.");const state=ctx.privateState;if(!state.discovered.includes(evidenceId))state.discovered.push(evidenceId);if(ctx.mode==="multi"){if(!ctx.game.discovered.includes(evidenceId))ctx.game.discovered.push(evidenceId);await saveCrimeGame(env,interaction.guild_id,ctx.game);}else{ctx.game.discovered=state.discovered;await savePlayer(env,ctx.player);}await sendText(env,interaction,`🔎 **${ev.title}**\n\n${ev.text}`,crimePrivateRows(ctx.game,state));}
+async function handleCrimeInterrogateMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active detective case.");await sendText(env,interaction,"💬 **WHO DO YOU WANT TO INTERROGATE?**\n\nChoose anyone you have not personally questioned yet. Other detectives can question the same suspects independently.",crimeInterrogateRows(ctx.game,ctx.privateState));}
+async function handleCrimeTheory(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");const s=ctx.privateState;await sendText(env,interaction,`🧠 **YOUR CASE THEORY**\n\nEvidence YOU found: **${s.discovered.length}/${ctx.game.evidence.length}**\nPeople YOU questioned: **${s.interrogated.length}**\nConflicts YOU found: **${s.contradictions.length}**\n\nNo automatic lie detector. No clue names the thief for you. Cross-reference times, locations, access, routes, and statements. 😈`,crimePrivateRows(ctx.game,s));}
 async function handleCrimeAccuseMenu(env,interaction,gameId){
   const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");
   if(ctx.mode==="multi"){
     const uid=getUserFromInteraction(interaction)?.id;
-    if(uid&&ctx.game.playerGuesses?.[uid])return sendText(env,interaction,`🗳️ **YOUR GUESS IS LOCKED IN.**\n\nYou guessed **${ctx.game.suspects.find(s=>s.id===ctx.game.playerGuesses[uid])?.name||"Unknown"}**.\n\nWait for the other detectives to submit their guesses.`,crimePrivateRows(ctx.game));
+    if(uid&&ctx.game.playerGuesses?.[uid])return sendText(env,interaction,`🗳️ **YOUR GUESS IS LOCKED IN.**\n\nYou guessed **${ctx.game.suspects.find(s=>s.id===ctx.game.playerGuesses[uid])?.name||"Unknown"}**.\n\nWait for the other detectives to submit their guesses.`,crimePrivateRows(ctx.game,ctx.privateState));
   }
   await sendText(env,interaction,"🗳️ **WHO DO YOU ACCUSE?**\n\nYour accusation is **your own private guess**. In multiplayer, every detective gets one independent guess. The case closes after everyone has submitted.",crimeAccusationRows(ctx.game));
 }
@@ -21228,7 +21255,7 @@ async function handleCrimeAccusePick(env,interaction,gameId,suspectId){
   const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");
   const g=ctx.game,u=getUserFromInteraction(interaction);if(!u)return;
   if(ctx.mode!=="multi")return handleCrimeSoloAccuse(env,interaction,suspectId);
-  if(g.playerGuesses?.[u.id])return sendText(env,interaction,"🗳️ **YOU ALREADY SUBMITTED YOUR GUESS.**",crimePrivateRows(g));
+  if(g.playerGuesses?.[u.id])return sendText(env,interaction,"🗳️ **YOU ALREADY SUBMITTED YOUR GUESS.**",crimePrivateRows(g,ctx.privateState));
   if(!g.playerGuesses)g.playerGuesses={};if(!g.playerIncorrectAccusations)g.playerIncorrectAccusations={};
   g.playerGuesses[u.id]=suspectId;
   const correct=suspectId===g.culpritId;
@@ -21237,7 +21264,7 @@ async function handleCrimeAccusePick(env,interaction,gameId,suspectId){
   const submitted=Object.keys(g.playerGuesses).length;
   if(submitted<totalPlayers){
     await saveCrimeGame(env,interaction.guild_id,g);
-    return sendText(env,interaction,`🗳️ **GUESS LOCKED IN.**\n\nYour guess: **${g.suspects.find(s=>s.id===suspectId)?.name||"Unknown"}**\n${correct?"🟢 Your guess is correct!":"🔴 Your guess is not correct."}\n\n⏳ **${submitted}/${totalPlayers} detectives have submitted a guess.**\n\nYour guess is private until the case closes.`,crimePrivateRows(g));
+    return sendText(env,interaction,`🗳️ **GUESS LOCKED IN.**\n\nYour guess: **${g.suspects.find(s=>s.id===suspectId)?.name||"Unknown"}**\n${correct?"🟢 Your guess is correct!":"🔴 Your guess is not correct."}\n\n⏳ **${submitted}/${totalPlayers} detectives have submitted a guess.**\n\nYour guess is private until the case closes.`,crimePrivateRows(g,ctx.privateState));
   }
 
   g.status="solved";
@@ -21245,7 +21272,7 @@ async function handleCrimeAccusePick(env,interaction,gameId,suspectId){
   for(const uid of Object.keys(g.players||{})){
     const pl=await getPlayer(env,uid);
     const playerCorrect=g.playerGuesses[uid]===g.culpritId;
-    const r=await crimeSavePlayerResult(env,pl,g,"multi",g.discovered.length>=g.evidence.length,playerCorrect);
+    const playerState=g.privateInvestigations?.[uid]||{discovered:[],interrogated:[],contradictions:[]};const r=await crimeSavePlayerResult(env,pl,g,"multi",playerState.discovered.length>=g.evidence.length,playerCorrect,playerState);
     results.push(`${playerCorrect?"🟢":"🔴"} <@${uid}> — **${g.suspects.find(s=>s.id===g.playerGuesses[uid])?.name||"Unknown"}** ${playerCorrect?`(+${r.reward.toLocaleString()} ✨)`:"(incorrect)"}`);
   }
   await saveCrimeGame(env,interaction.guild_id,g);
@@ -21255,7 +21282,7 @@ async function handleCrimeAccusePick(env,interaction,gameId,suspectId){
   return sendText(env,interaction,"🧑‍⚖️ **CASE CLOSED!**\n\nThe full results have been posted publicly in the case channel.",[]);
 }
 async function handleCrimeAccompliceMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceId)return sendText(env,interaction,"🧹 This case has no accomplice.");await sendText(env,interaction,"🤝 **WHO WAS THE ACCOMPLICE?**",crimeAccompliceRows(ctx.game));}
-async function handleCrimeAccomplicePick(env,interaction,gameId,suspectId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceGuesses)ctx.game.accompliceGuesses={};ctx.game.accompliceGuesses[getUserFromInteraction(interaction)?.id]=suspectId;ctx.game.accompliceGuess=suspectId;if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);return sendText(env,interaction,suspectId===ctx.game.accompliceId?"🤝 **CORRECT!** You identified the accomplice.":"❌ **Not the accomplice.** Keep investigating.",crimePrivateRows(ctx.game));}
+async function handleCrimeAccomplicePick(env,interaction,gameId,suspectId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceGuesses)ctx.game.accompliceGuesses={};ctx.game.accompliceGuesses[getUserFromInteraction(interaction)?.id]=suspectId;ctx.game.accompliceGuess=suspectId;if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);return sendText(env,interaction,suspectId===ctx.game.accompliceId?"🤝 **CORRECT!** You identified the accomplice.":"❌ **Not the accomplice.** Keep investigating.",crimePrivateRows(ctx.game,ctx.privateState));}
 async function handleSparkleCrimeCommand(env,interaction){
   const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"solo";
   const u=getUserFromInteraction(interaction);
@@ -21265,7 +21292,7 @@ async function handleSparkleCrimeCommand(env,interaction){
     if(!u)return;
     const p=await getPlayer(env,u.id),g=p.sparkleCrimeSolo;
     if(!g||g.status!=="playing")return sendText(env,interaction,"🔎 You do not have an active solo detective case. Use `/sparklecrime solo` to open one.");
-    return sendText(env,interaction,crimeCaseText(g,true),crimePrivateRows(g));
+    return sendText(env,interaction,crimeCaseText(g,true),crimePrivateRows(g,ctx.privateState));
   }
   if(sub==="solo-end"){
     if(!u)return;
