@@ -30345,65 +30345,49 @@ export default {
     }
 
     // Sparkle Crime can do several KV reads/writes while generating a case.
-    // Give Discord a COMPLETE response immediately instead of a type-5
-    // deferred response, so the command can never sit on "thinking..." while
-    // the detective case is being generated. The real case replaces this
-    // placeholder through @original once the background work finishes.
+    // Use Discord's native deferred response directly instead of first creating
+    // a placeholder message with a separate callback POST. That placeholder
+    // could remain stuck if the follow-up edit never got scheduled.
     if (isCrimeCommand) {
-      try {
-        const ack = await fetch(
-          `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: 4,
-              data: {
-                content: "🔎🕵️ **Opening your detective case...**\n\nThe raccoons are securing the crime scene. 🦝🔐",
-                flags: 64
-              }
-            })
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = true;
+
+      ctx.waitUntil((async () => {
+        try {
+          const user = getUserFromInteraction(interaction);
+          const blacklisted = user && user.id !== env.OWNER_ID
+            ? await isUserBlacklisted(env, String(user.id))
+            : false;
+          if (blacklisted) {
+            await editOriginalResponse(env, interaction, {
+              content: "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.",
+              components: []
+            });
+            return;
           }
-        );
-        if (!ack.ok) {
-          console.error("Sparkle Crime initial response failed:", ack.status, await ack.text());
-          return new Response("OK", { status: 200 });
-        }
-        interaction.__deferred = true;
-        interaction.__deferredUpdate = false;
-        interaction.__deferredEphemeral = true;
-        ctx.waitUntil((async () => {
+          await handleCommand(env, interaction);
+          await maybeShowNews(env, interaction);
+        } catch (error) {
+          console.error("Sparkle Crime interaction error:", error);
           try {
-            const user = getUserFromInteraction(interaction);
-            const blacklisted = user && user.id !== env.OWNER_ID
-              ? await isUserBlacklisted(env, String(user.id))
-              : false;
-            if (blacklisted) {
-              await editOriginalResponse(env, interaction, {
-                content: "🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.",
-                components: []
-              });
-              return;
-            }
-            await handleCommand(env, interaction);
-            await maybeShowNews(env, interaction);
-          } catch (error) {
-            console.error("Sparkle Crime interaction error:", error);
-            try {
-              await editOriginalResponse(env, interaction, {
-                content: `❌ **Sparkle Crime crashed while opening the case.**\n\n\`${error?.message || "Unknown error"}\``,
-                components: []
-              });
-            } catch (editError) {
-              console.error("Could not send Sparkle Crime error:", editError);
-            }
+            await editOriginalResponse(env, interaction, {
+              content: `❌ **Sparkle Crime crashed while opening the case.**\n\n\`${error?.message || "Unknown error"}\``,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Sparkle Crime error:", editError);
           }
-        })());
-        return new Response("OK", { status: 200 });
-      } catch (error) {
-        console.error("Sparkle Crime acknowledgement error:", error);
-        return new Response("OK", { status: 200 });
-      }
+        }
+      })());
+
+      return new Response(
+        JSON.stringify({ type: 5, data: { flags: 64 } }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
     }
 
     if (relevant) {
