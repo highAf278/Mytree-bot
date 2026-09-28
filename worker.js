@@ -1,5 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 
+// Sparkle Vault deployment verification — no behavior change.
+
 /* =========================================================
    WEREWIVES TREE BOT
    EXISTING BINDINGS ONLY:
