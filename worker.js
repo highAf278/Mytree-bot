@@ -21179,10 +21179,48 @@ async function handleCrimeAccompliceMenu(env,interaction,gameId){const ctx=await
 async function handleCrimeAccomplicePick(env,interaction,gameId,suspectId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceGuesses)ctx.game.accompliceGuesses={};ctx.game.accompliceGuesses[getUserFromInteraction(interaction)?.id]=suspectId;ctx.game.accompliceGuess=suspectId;if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);return sendText(env,interaction,suspectId===ctx.game.accompliceId?"🤝 **CORRECT!** You identified the accomplice.":"❌ **Not the accomplice.** Keep investigating.",crimePrivateRows(ctx.game));}
 async function handleSparkleCrimeCommand(env,interaction){
   const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"solo";
+  const u=getUserFromInteraction(interaction);
   if(sub==="solo")return handleCrimeSoloStart(env,interaction);
   if(sub==="create")return handleCrimeCreate(env,interaction);
-  if(sub==="status"){const g=await getCrimeGame(env,interaction.guild_id);return g?sendText(env,interaction,crimeCaseText(g,false),crimePublicRows(g)):sendText(env,interaction,"🔎 No active multiplayer case. Use `/sparklecrime solo` or `/sparklecrime create`.");}
-  if(sub==="end"){const g=await getCrimeGame(env,interaction.guild_id),u=getUserFromInteraction(interaction);if(!g)return sendText(env,interaction,"❌ No active multiplayer case.");if(g.ownerId!==u?.id&&u?.id!==env.OWNER_ID)return sendText(env,interaction,"❌ Only the case host or bot owner can end it.");g.status="ended";await saveCrimeGame(env,interaction.guild_id,g);return sendText(env,interaction,"🛑 **Sparkle Crime ended.**");}
+  if(sub==="solo-status"){
+    if(!u)return;
+    const p=await getPlayer(env,u.id),g=p.sparkleCrimeSolo;
+    if(!g||g.status!=="playing")return sendText(env,interaction,"🔎 You do not have an active solo detective case. Use `/sparklecrime solo` to open one.");
+    return sendText(env,interaction,crimeCaseText(g,true),crimePrivateRows(g));
+  }
+  if(sub==="solo-end"){
+    if(!u)return;
+    const p=await getPlayer(env,u.id);
+    if(!p.sparkleCrimeSolo||p.sparkleCrimeSolo.status!=="playing")return sendText(env,interaction,"🔎 You do not have an active solo detective case.");
+    const caseName=p.sparkleCrimeSolo.name;
+    p.sparkleCrimeSolo=null;
+    await savePlayer(env,p);
+    return sendText(env,interaction,`🗑️ **Solo detective case abandoned.**\n\n📁 **${caseName}** has been closed. No reward was given.`);
+  }
+  if(sub==="status"){
+    if(u){
+      const p=await getPlayer(env,u.id);
+      const solo=p.sparkleCrimeSolo;
+      if(solo&&solo.status==="playing")return sendText(env,interaction,crimeCaseText(solo,true),crimePrivateRows(solo));
+    }
+    const g=await getCrimeGame(env,interaction.guild_id);
+    return g?sendText(env,interaction,crimeCaseText(g,false),crimePublicRows(g)):sendText(env,interaction,"🔎 No active Sparkle Crime case. Use `/sparklecrime solo` or `/sparklecrime create`." );
+  }
+  if(sub==="end"){
+    if(u){
+      const p=await getPlayer(env,u.id);
+      if(p.sparkleCrimeSolo&&p.sparkleCrimeSolo.status==="playing"){
+        const caseName=p.sparkleCrimeSolo.name;
+        p.sparkleCrimeSolo=null;
+        await savePlayer(env,p);
+        return sendText(env,interaction,`🗑️ **Solo detective case abandoned.**\n\n📁 **${caseName}** has been closed. No reward was given.`);
+      }
+    }
+    const g=await getCrimeGame(env,interaction.guild_id);
+    if(!g)return sendText(env,interaction,"❌ No active Sparkle Crime case to end.");
+    if(g.ownerId!==u?.id&&u?.id!==env.OWNER_ID)return sendText(env,interaction,"❌ Only the case host or bot owner can end the multiplayer case.");
+    g.status="ended";await saveCrimeGame(env,interaction.guild_id,g);return sendText(env,interaction,"🛑 **Sparkle Crime multiplayer case ended.**");
+  }
   if(sub==="leaderboard"){let b=[];try{b=JSON.parse(await env.TREE_DATA.get("sparklecrime:leaderboard")||"[]")}catch{};b=Array.isArray(b)?b:[];return sendText(env,interaction,`🏆 **SPARKLE CRIME LEADERBOARD**\n\n${b.length?b.map((x,i)=>`${i+1}. **${x.name}** — ${Number(x.reward).toLocaleString()} ✨ — ${x.caseName}`).join("\n"):"No solved cases yet."}`);}
 }
 /* =========================================================
@@ -28934,9 +28972,11 @@ const COMMANDS = [
     options: [
       { type: 1, name: "solo", description: "Open a private detective case" },
       { type: 1, name: "create", description: "Create a multiplayer detective case" },
-      { type: 1, name: "status", description: "View the active multiplayer case" },
+      { type: 1, name: "status", description: "View your solo case or the active multiplayer case" },
       { type: 1, name: "leaderboard", description: "View the Sparkle Crime leaderboard" },
-      { type: 1, name: "end", description: "End the active multiplayer case" }
+      { type: 1, name: "end", description: "End your solo case or the active multiplayer case" },
+      { type: 1, name: "solo-status", description: "View your current solo detective case" },
+      { type: 1, name: "solo-end", description: "Abandon your current solo detective case" }
     ]
   },
 
