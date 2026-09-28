@@ -765,7 +765,10 @@ function defaultPlayer() {
       cheese_wheel: 0,
       judges_robe: 0,
       raccoon_hitman: 0,
-      raccoon_empire: 0
+      raccoon_empire: 0,
+      raccoon_suit: 0,
+      raccoon_boomerang: 0,
+      pickle_slap: 0
     },
     ceaseDesistTargetId: "",
     ceaseDesistUntil: 0,
@@ -8073,6 +8076,16 @@ const RACCOON_MART_ITEMS = {
     name: "🦝💼 Raccoon Suit",
     price: 350000,
     description: "A one-time **24-hour payday event**. Activate the suit and receive **one random sparkle payout every hour for 24 hours**. Hourly payouts range from **15,000 ✨ to 300,000 ✨**, with rare jackpot payouts. The suit is consumed when activated."
+  },
+  raccoon_boomerang: {
+    name: "🦝🪃 Raccoon Boomerang",
+    price: 2000,
+    description: "Pick a player and steal **2,500–5,000 ✨** from them. There is a **20% chance the boomerang backfires**, making you lose **2,500–5,000 ✨** instead. One-time use."
+  },
+  pickle_slap: {
+    name: "🥒💥 Pickle Slap",
+    price: 1500,
+    description: "Pick a player and slap them with a virtual pickle. They lose **1,000–3,000 ✨** and you receive the stolen sparkles. There is a **15% chance the pickle backfires**, making you lose **1,000–3,000 ✨** instead. One-time use."
   }
 };
 
@@ -8703,6 +8716,94 @@ async function useMegaphone(env, interaction, targetId) {
   await sendText(env, interaction, `📢🦝 **MEGAPHONE FIRED!**\n\n<@${targetId}> is now getting the full Raccoon Megaphone treatment. 😭\n\n📣 Announcements: **4 total** — now, +15m, +30m, +45m.\n📦 Megaphones remaining: **${raccoonMartCount(player, "raccoon_megaphone")}**`, raccoonMartHomeRows(player));
 }
 
+async function useRaccoonBoomerang(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) {
+    return sendText(env, interaction, "🦝🪃 Choose another player for the Raccoon Boomerang.");
+  }
+
+  const player = await getPlayer(env, user.id);
+  const target = await getPlayer(env, targetId);
+  const targetSparkles = Math.max(0, Number(target.sparkles || 0));
+
+  if (targetSparkles < 2500) {
+    return sendText(env, interaction, `❌ <@${targetId}> doesn't have enough sparkles for the Raccoon Boomerang. They need at least **2,500 ✨**.`);
+  }
+  if (!consumeRaccoonMartItem(player, "raccoon_boomerang")) {
+    return sendText(env, interaction, "❌ You don't have a Raccoon Boomerang.");
+  }
+
+  const amount = randomInt(2500, 5000);
+  const backfire = Math.random() < 0.20;
+
+  if (backfire) {
+    const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
+    await savePlayer(env, player, user.id);
+    return sendText(env, interaction,
+      `🦝🪃💥 **THE RACCOON BOOMERANG BACKFIRED!**\n\nThe boomerang completely ignored <@${targetId}> and came flying straight back at you. 😭\n\n💸 **You lost ${lost.toLocaleString()} ✨.**\n\n📦 Boomerangs remaining: **${raccoonMartCount(player, "raccoon_boomerang")}**`,
+      raccoonMartHomeRows(player)
+    );
+  }
+
+  const stolen = Math.min(amount, targetSparkles);
+  target.sparkles = Math.max(0, targetSparkles - stolen);
+  player.sparkles = Number(player.sparkles || 0) + stolen;
+  player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+  player.badgeStats.sparklesStolen = Number(player.badgeStats.sparklesStolen || 0) + stolen;
+
+  await savePlayer(env, target, targetId);
+  await savePlayer(env, player, user.id);
+  return sendText(env, interaction,
+    `🦝🪃 **RACCOON BOOMERANG!**\n\nYou launched a boomerang at <@${targetId}> and successfully stole **${stolen.toLocaleString()} ✨**! 😭\n\n💰 **Your haul:** +${stolen.toLocaleString()} ✨\n📦 Boomerangs remaining: **${raccoonMartCount(player, "raccoon_boomerang")}**`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+async function usePickleSlap(env, interaction, targetId) {
+  const user = getUserFromInteraction(interaction);
+  if (!user || !targetId || targetId === user.id) {
+    return sendText(env, interaction, "🥒 Choose another player for the Pickle Slap.");
+  }
+
+  const player = await getPlayer(env, user.id);
+  const target = await getPlayer(env, targetId);
+  const targetSparkles = Math.max(0, Number(target.sparkles || 0));
+
+  if (targetSparkles < 1000) {
+    return sendText(env, interaction, `❌ <@${targetId}> doesn't have enough sparkles for the Pickle Slap. They need at least **1,000 ✨**.`);
+  }
+  if (!consumeRaccoonMartItem(player, "pickle_slap")) {
+    return sendText(env, interaction, "❌ You don't have a Pickle Slap.");
+  }
+
+  const amount = randomInt(1000, 3000);
+  const backfire = Math.random() < 0.15;
+
+  if (backfire) {
+    const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
+    await savePlayer(env, player, user.id);
+    return sendText(env, interaction,
+      `🥒💥 **PICKLE SLAP BACKFIRE!**\n\nYou swung that pickle way too confidently and it smacked YOU instead. 😭\n\n💸 **You lost ${lost.toLocaleString()} ✨.**\n\n📦 Pickle Slaps remaining: **${raccoonMartCount(player, "pickle_slap")}**`,
+      raccoonMartHomeRows(player)
+    );
+  }
+
+  const stolen = Math.min(amount, targetSparkles);
+  target.sparkles = Math.max(0, targetSparkles - stolen);
+  player.sparkles = Number(player.sparkles || 0) + stolen;
+  player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+  player.badgeStats.sparklesStolen = Number(player.badgeStats.sparklesStolen || 0) + stolen;
+
+  await savePlayer(env, target, targetId);
+  await savePlayer(env, player, user.id);
+  return sendText(env, interaction,
+    `🥒💥 **PICKLE SLAP!**\n\nYou absolutely SMACKED <@${targetId}> with a pickle and stole **${stolen.toLocaleString()} ✨**! 😭\n\n💰 **Your haul:** +${stolen.toLocaleString()} ✨\n📦 Pickle Slaps remaining: **${raccoonMartCount(player, "pickle_slap")}**`,
+    raccoonMartHomeRows(player)
+  );
+}
+
 async function useHandcuffs(env, interaction, targetId) {
   const user = getUserFromInteraction(interaction);
   if (!user || !targetId || targetId === user.id) return sendText(env, interaction, "⛓️ Choose another player for the Handcuffs.");
@@ -8717,7 +8818,9 @@ async function showRaccoonMartTargetMenu(env, interaction, itemId) {
     handcuffs: ["⛓️ **HANDCUFFS**", "Choose the player you want to send to Court."],
     raccoon_megaphone: ["📢 **RACCOON MEGAPHONE**", "Choose the player who deserves a public raccoon announcement."],
     sparkle_magnet: ["🧲 **SPARKLE MAGNET**", "Choose the player whose sparkles you want to magnetically yoink."],
-    cease_desist: ["⚖️ **CEASE & DESIST**", "Choose the player who is being legally forbidden from raccoon attacks against you."]
+    cease_desist: ["⚖️ **CEASE & DESIST**", "Choose the player who is being legally forbidden from raccoon attacks against you."],
+    raccoon_boomerang: ["🦝🪃 **RACCOON BOOMERANG**", "Choose the player you want to hit with the boomerang and try to steal 2,500–5,000 ✨ from."],
+    pickle_slap: ["🥒💥 **PICKLE SLAP**", "Choose the player you want to absolutely smack with a pickle for 1,000–3,000 ✨."]
   };
   const entry = labels[itemId];
   if (!entry) return sendText(env, interaction, "❌ That RaccoonMart action needs no target.");
@@ -13277,6 +13380,9 @@ async function handleComponent(
       if (itemId === "raccoon_hitman") return useRaccoonHitman(env, interaction);
       if (itemId === "raccoon_suit") return useRaccoonSuit(env, interaction);
       if (itemId === "judges_robe") return useJudgesRobe(env, interaction);
+      if (itemId === "raccoon_boomerang" || itemId === "pickle_slap") {
+        return showRaccoonMartTargetMenu(env, interaction, itemId);
+      }
       if (itemId === "raccoon_empire") {
         return sendText(
           env,
@@ -13303,6 +13409,8 @@ async function handleComponent(
       if (itemId === "raccoon_megaphone") return useMegaphone(env, interaction, targetId);
       if (itemId === "sparkle_magnet") return useSparkleMagnet(env, interaction, targetId);
       if (itemId === "cease_desist") return useCeaseDesist(env, interaction, targetId);
+      if (itemId === "raccoon_boomerang") return useRaccoonBoomerang(env, interaction, targetId);
+      if (itemId === "pickle_slap") return usePickleSlap(env, interaction, targetId);
       return sendText(env, interaction, "❌ That RaccoonMart item could not be used.");
     }
     return;
