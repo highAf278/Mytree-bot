@@ -30351,6 +30351,12 @@ export default {
     if (isCrimeCommand) {
       const crimeSub = interaction.data?.options?.find(option => option.type === 1)?.name || "solo";
       if (crimeSub === "solo") {
+        // Mark the interaction synchronously so every background crime response
+        // uses PATCH @original after Discord sends the type-5 acknowledgement.
+        interaction.__deferred = true;
+        interaction.__deferredUpdate = false;
+        interaction.__deferredEphemeral = true;
+
         ctx.waitUntil((async () => {
           try {
             const user = getUserFromInteraction(interaction);
@@ -30364,9 +30370,6 @@ export default {
               });
               return;
             }
-            interaction.__deferred = true;
-            interaction.__deferredUpdate = false;
-            interaction.__deferredEphemeral = true;
             await handleCrimeSoloStart(env, interaction);
           } catch (error) {
             console.error("Sparkle Crime solo start error:", error);
