@@ -25747,6 +25747,27 @@ async function handleFree(env, interaction, guess) {
     return;
   }
 
+  if (normalized === "racsui") {
+    if (user.id !== env.OWNER_ID) {
+      await sendText(env, interaction, "❌ This free code is owner-only.");
+      return;
+    }
+
+    player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object"
+      ? player.raccoonMart
+      : {};
+
+    player.raccoonMart.raccoon_suit = Number(player.raccoonMart.raccoon_suit || 0) + 1;
+    await savePlayer(env, player);
+
+    await sendText(
+      env,
+      interaction,
+      "🦝💼 **RACCOON SUIT UNLOCKED!**\n\nYou received **1 Raccoon Suit** for free!\n\n📦 It has been added to your **RaccoonMart inventory**.\n⏰ Activate it from **My RaccoonMart** whenever you're ready to start the 24-hour payday event."
+    );
+    return;
+  }
+
   await sendText(env, interaction, "🎁 **FREE GIFT**\n\n❌ That code isn't active.");
 }
 
