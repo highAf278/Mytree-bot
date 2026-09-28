@@ -26132,6 +26132,32 @@ async function handleFree(env, interaction, guess) {
     return;
   }
 
+  if (normalized === "pariss") {
+    player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object"
+      ? player.raccoonMart
+      : {};
+
+    if (Number(player.raccoonMart.raccoon_empire || 0) > 0) {
+      await sendText(
+        env,
+        interaction,
+        "🏛️🦝 You already own the **Raccoon Empire License**!\n\nYour Empire is permanent, so this free code cannot be redeemed twice."
+      );
+      return;
+    }
+
+    player.raccoonMart.raccoon_empire = 1;
+    player.raccoonEmpireLastDividendAt = Date.now();
+    await savePlayer(env, player);
+
+    await sendText(
+      env,
+      interaction,
+      "🏛️🦝 **RACCOON EMPIRE LICENSE UNLOCKED!**\n\nYou received **1 Raccoon Empire License** for FREE! 👑🦝\n\n📦 It has been added to your **RaccoonMart inventory**.\n💰 Your permanent Empire benefits are now active.\n📅 Your first **20,000 ✨ weekly dividend** will be paid after 7 days.\n✨ You also receive the permanent **20% bonus on positive sparkle earnings**."
+    );
+    return;
+  }
+
   if (normalized === "racsui") {
     if (user.id !== env.OWNER_ID) {
       await sendText(env, interaction, "❌ This free code is owner-only.");
