@@ -29967,7 +29967,7 @@ async function processRaccoonSuitPaydays(env) {
         player.raccoonSuitNextPayoutAt = nextAt;
         player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
         player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + payouts.reduce((a,b) => a + b, 0);
-        await savePlayer(env, player, userId);
+        await savePlayer(env, player, userId, { skipSparkleMagnet: true });
 
         if (payouts.length === 1) {
           const amount = payouts[0];
