@@ -21079,58 +21079,57 @@ function crimeCreateCase(playerCount=1,forcedDifficulty=null){
     alibis[su.id]={location:claimedLocation,time:claimedTime};
   });
 
-  // Evidence deliberately describes facts, objects, routes and timestamps instead of naming the culprit.
-  // The player must combine several clues with suspect alibis rather than solving the case from clue #1.
+  // Build a solvable evidence chain. The evidence never names the thief directly;
+  // instead it gives facts the players can cross-reference against the suspect dossiers.
   const evidence=[]; const add=(id,title,text,truth="neutral",importance=1)=>evidence.push({id,title,text,truth,importance});
-  add("vaultlog","🏦 Treasury Log",`The treasury was opened at **${culpritTime}** using **${method}**. The log does not identify who used it.`,"neutral",3);
-  add("camera","📸 Camera Fragment",`A blurry figure is visible near **${crimeLocation}** shortly before the theft. The image is too unclear to identify the person, but they appear to be carrying something consistent with **${method}**.`,"neutral",3);
-  add("motive","💰 Suspicious Motive",`Someone involved in the theft had a plausible reason to want **${stolen.toLocaleString()} ✨**. Motive alone does not identify the thief.`,"neutral",2);
-  add("receipt","🧾 Receipt",`A receipt was timestamped **${culpritTime}** at a location that could not be reached from **${crimeLocation}** in the available time. Compare this with each suspect's claimed whereabouts.`,"timeline",3);
-  add("key","🔑 Access Record",`The stolen method was **${method}**. The access record shows it was available to only a few people, but the record does not name the thief.`,"access",3);
-  add("witness","👀 Witness Statement",`A witness saw a figure carrying something suspicious shortly before the theft. They could identify the route taken, but not the person's face.`,"neutral",2);
-  add("footprints","👣 Footprints",`Footprints leave **${crimeLocation}** and head toward **${locations[1]||locations[0]}**. The print pattern is distinctive, but several suspects could plausibly have made it.`,"route",2);
-  add("inventory","📦 Inventory Mismatch",`An item connected to **${method}** was signed out shortly before the theft and never properly returned. The signature is partially smudged.`,"access",2);
-
+  const accessPool=crimeShuffle(suspects.filter(s=>s.id!==culprit.id)).slice(0,Math.min(2,suspects.length-1));
+  const accessEligible=crimeShuffle([culprit,...accessPool]);
+  const accessNames=accessEligible.map(s=>`${s.emoji} ${s.name}`).join(", ");
+  add("vaultlog","🏦 Treasury Log",`The treasury was opened at **${culpritTime}** using **${method}**. The log records the exact time, but not the thief.` ,"timeline",3);
+  add("access","🔑 Access Register",`The ${method} was available to exactly **${accessEligible.length}** suspects: ${accessNames}. Anyone outside this group could not have used that method.` ,"access",4);
+  add("camera","📸 Camera Fragment",`A blurry figure reached **${crimeLocation}** shortly before the theft. The figure's face is obscured; the camera timestamp matches the treasury log.` ,"timeline",3);
+  add("route","👣 Escape Route",`The thief left **${crimeLocation}** toward **${locations[1]||locations[0]}**. Anyone claiming to be somewhere else at the theft time must explain how they could have reached the scene and returned.` ,"route",3);
+  add("receipt","🧾 Time-Stamped Receipt",`A receipt at **${locations[1]||locations[0]}** is timestamped **${culpritTime}**. It proves that anyone claiming to be there at that exact time was not at the treasury.` ,"alibi",3);
+  add("inventory","📦 Inventory Mismatch",`The item needed for **${method}** was signed out shortly before **${culpritTime}**. The record contains a partial signature matching the access register group, but not a full name.` ,"access",3);
+  add("witness","👀 Witness Statement",`A witness saw the thief leave the treasury immediately after **${culpritTime}**. They could not identify a face, but they confirm the escape route.` ,"route",2);
+  add("motive","💰 Motive File",`The thief had a plausible reason to want **${stolen.toLocaleString()} ✨**. Motive is supporting evidence only; it cannot establish guilt by itself.` ,"motive",1);
   const innocent=suspects.filter(s=>s.id!==culprit.id);
-  if(innocent[0])add("planted","🎭 Planted Evidence",`${innocent[0].emoji} ${innocent[0].name}'s item was found in a suspicious place, but its timestamp shows it was planted **after** the theft.`,"red",2);
-  if(innocent[1])add("alibi","🕐 Alibi Receipt",`${innocent[1].emoji} ${innocent[1].name} has a receipt supporting part of their alibi. It confirms a location, but not the entire timeline.`,"red",1);
-  if(innocent[2])add("witness2","🗣️ Confused Witness",`A witness initially points at ${innocent[2].emoji} ${innocent[2].name}, but admits they saw the person from too far away to be certain.`,"red",1);
-  if(accomplice)add("accomplice","🤝 Second Set of Footprints",`A second person helped cover the escape. The evidence proves there was another participant, but does not identify them yet.`,"accomplice",3);
+  if(innocent[0])add("planted","🎭 Planted Evidence",`${innocent[0].emoji} ${innocent[0].name}'s item was found near the treasury, but its timestamp proves it arrived **after** the theft.` ,"red",2);
+  if(innocent[1])add("alibi","🕐 Alibi Receipt",`${innocent[1].emoji} ${innocent[1].name} has a receipt confirming part of their claimed whereabouts.` ,"red",1);
+  if(innocent[2])add("witness2","🗣️ Confused Witness",`A witness initially points toward ${innocent[2].emoji} ${innocent[2].name}, then admits the viewing distance made the identification unreliable.` ,"red",1);
+  if(accomplice)add("accomplice","🤝 Second Set of Footprints",`A second person helped cover the escape. The pattern proves an accomplice existed, but does not identify them.` ,"accomplice",3);
   else add("decoy","🧀 Extremely Suspicious Cheese","A half-eaten cheese wheel was found near the treasury. It is extremely suspicious. It is also completely unrelated.","decoy",0);
 
-  // The strongest clue is no longer guaranteed to be present or to name anyone.
-  add("finalclue","🧩 Final Connection",`A comparison of the timeline, access record and camera route reveals that **one suspect's alibi cannot fit all three facts at once**. The suspect must be identified by comparing the evidence with the statements.`,"timeline",4);
-
-  let selected=crimeShuffle(evidence).slice(0,cfg.evidence);
-  // Always give the player enough core information to reason, but never a one-click culprit reveal.
-  for(const id of ["vaultlog","receipt","key"]){
-    const req=evidence.find(e=>e.id===id);
-    if(req&&!selected.some(e=>e.id===id))selected[randomInt(0,Math.max(0,selected.length-1))]=req;
-  }
+  const coreIds=["vaultlog","access","camera","receipt","route"];
+  const coreEvidence=coreIds.map(id=>evidence.find(e=>e.id===id)).filter(Boolean);
+  const optionalEvidence=crimeShuffle(evidence.filter(e=>!coreIds.includes(e.id)));
+  const selected=[...coreEvidence,...optionalEvidence].slice(0,cfg.evidence);
 
   const suspectStatements={};
   suspects.forEach((su,i)=>{
     const isC=su.id===culprit.id,isA=accomplice?.id===su.id;
     const t=alibis[su.id].time,loc=alibis[su.id].location;
-    const statements=[
-      `I was at ${loc} around ${t}.`,
-      `I had nothing to do with the treasury.`,
-      `I don't remember seeing anyone suspicious.`,
-      `I was busy with my own business that night.`
-    ];
-    if(isC)statements[0]=`I was at ${loc} around ${t}. That's all I remember.`;
+    const statements=[`I was at ${loc} around ${t}.`,`I had nothing to do with the treasury.`,`I don't remember seeing anyone suspicious.`,`I was busy with my own business that night.`];
+    if(isC)statements[0]=`I was at ${loc} around ${t}. I wasn't anywhere near the treasury.`;
     if(isA)statements[2]=`I never helped anyone get into the treasury.`;
     suspectStatements[su.id]=statements;
   });
 
-  return {id:`crime-${Date.now()}-${randomInt(1000,9999)}`,name:crimeCaseName(),difficulty,type:type.id,typeName:type.name,typeDescription:type.desc,twist,culpritId:culprit.id,accompliceId:accomplice?.id||"",suspects,locations,crimeLocation,method,motive,stolen,evidence:crimeShuffle(selected),suspectStatements,alibis,discovered:[],interrogated:[],contradictions:[],accusation:null,accompliceGuess:"",accompliceGuesses:{},status:"playing",startedAt:Date.now(),incorrectAccusations:0,perfect:true};
+  return {id:`crime-${Date.now()}-${randomInt(1000,9999)}`,name:crimeCaseName(),difficulty,type:type.id,typeName:type.name,typeDescription:type.desc,twist,culpritId:culprit.id,accompliceId:accomplice?.id||"",suspects,locations,crimeLocation,method,motive,stolen,evidence:crimeShuffle(selected),suspectStatements,alibis,accessEligibleIds:accessEligible.map(s=>s.id),discovered:[],interrogated:[],contradictions:[],playerGuesses:{},playerIncorrectAccusations:{},accusation:null,accompliceGuess:"",accompliceGuesses:{},status:"playing",startedAt:Date.now(),incorrectAccusations:0,perfect:true};
 }
+
 function crimeCaseById(game,id){return (game.evidence||[]).find(e=>e.id===id);}
 function crimeCaseText(game,privateMode=false){
   const found=game.discovered?.length||0,total=game.evidence?.length||0;
-  const suspects=(game.suspects||[]).map(s=>`${s.emoji} **${s.name}**`).join(" • ");
-  return [`🔎 **WHO STOLE THE SPARKLES?**`,`📁 **${game.name}**`,`${game.typeName} • ${CRIME_DIFFICULTIES[game.difficulty]?.name||game.difficulty}`,"",`💰 **Stolen:** ${Number(game.stolen||0).toLocaleString()} ✨`,`🏦 **Scene:** ${game.crimeLocation}`,`🔎 **Evidence:** ${found}/${total}`,`💬 **Interrogations:** ${game.interrogated?.length||0}`,`🚨 **Contradictions:** ${game.contradictions?.length||0}`,"",`👤 **Suspects**`,suspects,"",`_${game.typeDescription}_`,...(privateMode?["","🔐 **PRIVATE INVESTIGATION PANEL**","Inspect evidence, interrogate suspects, build your theory, then accuse."]:["","🕵️ Use **Investigate** to open your private detective panel."])].join("\n");
+  const suspects=(game.suspects||[]).map(s=>{
+    const a=game.alibis?.[s.id];
+    return `${s.emoji} **${s.name}** — claims **${a?.location||"unknown"}** at **${a?.time||"unknown"}**`;
+  }).join("\n");
+  const playerCount=Object.keys(game.players||{}).length;
+  const guessCount=Object.keys(game.playerGuesses||{}).length;
+  return [`🔎 **WHO STOLE THE SPARKLES?**`,`📁 **${game.name}**`,`${game.typeName} • ${CRIME_DIFFICULTIES[game.difficulty]?.name||game.difficulty}`,"",`💰 **Stolen:** ${Number(game.stolen||0).toLocaleString()} ✨`,`🏦 **Scene:** ${game.crimeLocation}`,`🔎 **Evidence:** ${found}/${total}`,`💬 **Interrogations:** ${game.interrogated?.length||0}`,`🚨 **Contradictions:** ${game.contradictions?.length||0}`,game.mode==="multi"?`🗳️ **Guesses submitted:** ${guessCount}/${playerCount}`:"",`👤 **Suspect Dossiers**`,suspects,"",`_${game.typeDescription}_`,...(privateMode?["","🔐 **PRIVATE INVESTIGATION PANEL**","Use the evidence and suspect alibis together. Interrogations can confirm a contradiction, but they are not the only way to solve the case."]: ["","🕵️ Use **Investigate** to open your private detective panel."])].filter(Boolean).join("\n");
 }
+
 function crimePublicRows(game){
   if(game.status==="lobby")return [row(button("➕ Join Case",`crime:join:${game.id}`,1),button("🚨 Start Case",`crime:start:${game.id}`,3)),row(button("🛑 Leave Case",`crime:leave:${game.id}`,4))];
   if(game.status==="playing")return [row(button("🔎 Investigate",`crime:investigate:${game.id}`,1),button("📊 Case Status",`crime:status:${game.id}`,2)),row(button("🗳️ Make Accusation",`crime:accuse:${game.id}`,4)),row(button("🛑 End Case",`crime:end:${game.id}`,4))];
@@ -21168,14 +21167,15 @@ function crimeUnlockTitles(player,stats){
   if(!Array.isArray(player.titles))player.titles=[];const out=[];const unlock=id=>{if(!player.titles.includes(id)){player.titles.push(id);out.push(id);}};
   if(stats.solved>=1)unlock("case_cracker");if(stats.evidence>=25)unlock("evidence_goblin");if(stats.contradictions>=10)unlock("lie_detector");if(stats.solved>=10)unlock("red_string_menace");if(stats.masterPerfect)unlock("master_detective");if(stats.solved>=25)unlock("raccoon_sherlock");if(stats.cleanCases>=5)unlock("clean_record");if(stats.interrogations>=25)unlock("interrogator");if(stats.reward>=10000)unlock("cold_case_crusher");if(stats.allEvidence)unlock("crime_scene_diva");if(stats.accomplice)unlock("accomplice_hunter");return out;
 }
-async function crimeSavePlayerResult(env,player,game,mode,allEvidence=false){
+async function crimeSavePlayerResult(env,player,game,mode,allEvidence=false,correctGuess=true){
   const reward=Math.max(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[0]||250,Math.min(CRIME_DIFFICULTIES[game.difficulty]?.reward?.[1]||15000,Math.floor(Number(game.stolen||0)*.12+(game.discovered?.length||0)*100+(game.contradictions?.length||0)*175)));
   const solved=game.status==="solved";
+  const playerSolved=mode==="multi" ? (solved&&correctGuess) : solved;
   player.crimeCases=Number(player.crimeCases||0)+1;
-  if(solved){player.crimeSolved=Number(player.crimeSolved||0)+1;player.crimeBestCase=Math.max(Number(player.crimeBestCase||0),Number(game.stolen||0));if(mode==="solo")player.crimeSoloWins=Number(player.crimeSoloWins||0)+1;else player.crimeMultiplayerWins=Number(player.crimeMultiplayerWins||0)+1;if(game.incorrectAccusations===0)player.crimePerfectCases=Number(player.crimePerfectCases||0)+1;player.crimeEvidenceFound=Number(player.crimeEvidenceFound||0)+(game.discovered?.length||0);player.crimeContradictions=Number(player.crimeContradictions||0)+(game.contradictions?.length||0);player.crimeInterrogations=Number(player.crimeInterrogations||0)+(game.interrogated?.length||0);player.crimeAccusations=Number(player.crimeAccusations||0)+1;player.crimeCorrectAccusations=Number(player.crimeCorrectAccusations||0)+1;player.crimeBestReward=Math.max(Number(player.crimeBestReward||0),reward);player.crimeDailyCases=Number(player.crimeDailyCases||0)+1;player.sparkles=Number(player.sparkles||0)+reward;}
-  const stats={solved:Number(player.crimeSolved||0),evidence:Number(player.crimeEvidenceFound||0),contradictions:Number(player.crimeContradictions||0),interrogations:Number(player.crimeInterrogations||0),cleanCases:Number(player.crimePerfectCases||0),reward:Number(player.crimeBestReward||0),allEvidence,masterPerfect:solved&&game.difficulty==="master"&&game.incorrectAccusations===0&&allEvidence,accomplice:solved&&game.accompliceGuesses?.[player.userId]===game.accompliceId};
+  if(playerSolved){player.crimeSolved=Number(player.crimeSolved||0)+1;player.crimeBestCase=Math.max(Number(player.crimeBestCase||0),Number(game.stolen||0));if(mode==="solo")player.crimeSoloWins=Number(player.crimeSoloWins||0)+1;else player.crimeMultiplayerWins=Number(player.crimeMultiplayerWins||0)+1;if(game.incorrectAccusations===0)player.crimePerfectCases=Number(player.crimePerfectCases||0)+1;player.crimeEvidenceFound=Number(player.crimeEvidenceFound||0)+(game.discovered?.length||0);player.crimeContradictions=Number(player.crimeContradictions||0)+(game.contradictions?.length||0);player.crimeInterrogations=Number(player.crimeInterrogations||0)+(game.interrogated?.length||0);player.crimeAccusations=Number(player.crimeAccusations||0)+1;player.crimeCorrectAccusations=Number(player.crimeCorrectAccusations||0)+1;player.crimeBestReward=Math.max(Number(player.crimeBestReward||0),reward);player.crimeDailyCases=Number(player.crimeDailyCases||0)+1;player.sparkles=Number(player.sparkles||0)+reward;}
+  const stats={solved:Number(player.crimeSolved||0),evidence:Number(player.crimeEvidenceFound||0),contradictions:Number(player.crimeContradictions||0),interrogations:Number(player.crimeInterrogations||0),cleanCases:Number(player.crimePerfectCases||0),reward:Number(player.crimeBestReward||0),allEvidence,masterPerfect:playerSolved&&game.difficulty==="master"&&game.incorrectAccusations===0&&allEvidence,accomplice:playerSolved&&game.accompliceGuesses?.[player.userId]===game.accompliceId};
   const titles=crimeUnlockTitles(player,stats);await savePlayer(env,player);
-  if(solved&&reward>0){let raw=await env.TREE_DATA.get("sparklecrime:leaderboard"),board=[];try{board=raw?JSON.parse(raw):[]}catch{}if(!Array.isArray(board))board=[];board.push({userId:player.userId,name:player.displayName||player.username||"Werewife",reward,caseName:game.name});board.sort((a,b)=>Number(b.reward)-Number(a.reward));await env.TREE_DATA.put("sparklecrime:leaderboard",JSON.stringify(board.slice(0,25)));}
+  if(playerSolved&&reward>0){let raw=await env.TREE_DATA.get("sparklecrime:leaderboard"),board=[];try{board=raw?JSON.parse(raw):[]}catch{}if(!Array.isArray(board))board=[];board.push({userId:player.userId,name:player.displayName||player.username||"Werewife",reward,caseName:game.name});board.sort((a,b)=>Number(b.reward)-Number(a.reward));await env.TREE_DATA.put("sparklecrime:leaderboard",JSON.stringify(board.slice(0,25)));}
   return {reward,titles};
 }
 async function getCrimeGame(env,guildId){return (await getGuildState(env,guildId)).sparkleCrime||null;}
@@ -21191,8 +21191,12 @@ async function crimeInterrogateOne(env,interaction,ctx,suspectId){
   const game=ctx.game,suspect=game.suspects.find(s=>s.id===suspectId);if(!suspect)return sendText(env,interaction,"❌ That suspect is unavailable.");
   if(!game.interrogated.includes(suspectId))game.interrogated.push(suspectId);
   const statements=game.suspectStatements[suspectId]||[],line=statements[randomInt(0,statements.length-1)];
-  const contradiction=(suspectId===game.culpritId&&Math.random()<.75)||(suspectId!==game.culpritId&&Math.random()<.22);
-  let extra="";if(contradiction&&!game.contradictions.includes(suspectId)){game.contradictions.push(suspectId);extra="\n\n🚨 **CONTRADICTION DETECTED.** Their story does not fit the timeline.";};
+  const alibi=game.alibis?.[suspectId];
+  const hasTimelineConflict=alibi?.time===game.evidence?.find(e=>e.id==="vaultlog")?.text.match(/\*\*(.*?)\*\*/)?.[1] && alibi?.location!==game.crimeLocation;
+  const hasAccessConflict=Array.isArray(game.accessEligibleIds)&&!game.accessEligibleIds.includes(suspectId);
+  const contradiction=(suspectId===game.culpritId)||(hasTimelineConflict&&!hasAccessConflict);
+  let extra="";
+  if(contradiction&&!game.contradictions.includes(suspectId)){game.contradictions.push(suspectId);extra="\n\n🚨 **CONTRADICTION FOUND.** Their claimed whereabouts do not fit the documented crime timeline.";}
   if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,game);else{ctx.player.crimeInterrogations=Number(ctx.player.crimeInterrogations||0)+1;await savePlayer(env,ctx.player);}
   await sendText(env,interaction,`💬 **${suspect.emoji} ${suspect.name}**\n\n> ${line}\n\n_${suspect.cover}._${extra}`,crimePrivateRows(game));
 }
@@ -21212,9 +21216,43 @@ async function handleCrimeInvestigate(env,interaction){const g=await getCrimeGam
 async function handleCrimeEvidence(env,interaction,gameId,evidenceId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ That detective case is no longer active.");const ev=crimeCaseById(ctx.game,evidenceId);if(!ev)return sendText(env,interaction,"❌ That evidence no longer exists.");if(!ctx.game.discovered.includes(evidenceId))ctx.game.discovered.push(evidenceId);if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);await sendText(env,interaction,`🔎 **${ev.title}**\n\n${ev.text}`,crimePrivateRows(ctx.game));}
 async function handleCrimeInterrogateMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active detective case.");await sendText(env,interaction,"💬 **WHO DO YOU WANT TO INTERROGATE?**",crimeInterrogateRows(ctx.game));}
 async function handleCrimeTheory(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");await sendText(env,interaction,`🧠 **YOUR CASE THEORY**\n\nEvidence: **${ctx.game.discovered.length}/${ctx.game.evidence.length}**\nInterrogations: **${ctx.game.interrogated.length}**\nContradictions: **${ctx.game.contradictions.length}**\n\nThe bot will not tell you whether you're right. That's your job, detective. 😈`,crimePrivateRows(ctx.game));}
-async function handleCrimeAccuseMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");await sendText(env,interaction,"🗳️ **WHO DO YOU ACCUSE?**\n\nA wrong accusation leaves the case open but destroys your perfect-case record.",crimeAccusationRows(ctx.game));}
-async function handleCrimeAccusePick(env,interaction,gameId,suspectId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");const g=ctx.game;if(suspectId!==g.culpritId){g.incorrectAccusations++;g.perfect=false;if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,g);else await savePlayer(env,ctx.player);return sendText(env,interaction,"❌ **WRONG ACCUSATION.** The case remains open. Keep investigating.",crimePrivateRows(g));}g.status="solved";if(ctx.mode==="multi"){const results=[];for(const uid of Object.keys(g.players)){const pl=await getPlayer(env,uid);const r=await crimeSavePlayerResult(env,pl,g,"multi",g.discovered.length>=g.evidence.length);results.push(`<@${uid}> +${r.reward.toLocaleString()} ✨`);}await saveCrimeGame(env,interaction.guild_id,g);const culprit=g.suspects.find(s=>s.id===g.culpritId),acc=g.accompliceId?g.suspects.find(s=>s.id===g.accompliceId):null;return editOriginalResponse(env,interaction,{content:[`🧑‍⚖️ **CASE CLOSED — ${g.name}**`,"",`🚨 **THIEF:** ${culprit.emoji} **${culprit.name}**`,g.accompliceId?`🤝 **ACCOMPLICE:** ${acc?.emoji} **${acc?.name}**`:"🤝 **ACCOMPLICE:** None",`🔐 **METHOD:** ${g.method}`,`🎭 **MOTIVE:** They ${g.motive}.`,`🧩 **CASE TYPE:** ${g.typeName}`,`🧠 **THE TWIST:** ${g.twist}`,"",`💰 **${Number(g.stolen).toLocaleString()} ✨ recovered!**`,"",`🏆 **REWARDS**\n${results.join("\n")}`].join("\n"),components:[row(button("🔎 New Solo Case","crime:solo:new",1),button("🔎 New Multiplayer Case","crime:create",2))]});}
-  const r=await crimeSavePlayerResult(env,ctx.player,g,"solo",g.discovered.length>=g.evidence.length);ctx.player.sparkleCrimeSolo=null;await savePlayer(env,ctx.player);const culprit=g.suspects.find(s=>s.id===g.culpritId),acc=g.accompliceId?g.suspects.find(s=>s.id===g.accompliceId):null;const titleText=r.titles.length?`\n🏷️ **NEW TITLES:** ${r.titles.map(t=>SOLO_TITLES[t].name).join(", ")}`:"";return sendText(env,interaction,[`🧑‍⚖️ **CASE CLOSED — ${g.name}**`,"",`🚨 **THIEF:** ${culprit.emoji} **${culprit.name}**`,g.accompliceId?`🤝 **ACCOMPLICE:** ${acc?.emoji} **${acc?.name}**`:"🤝 **ACCOMPLICE:** None",`🔐 **METHOD:** ${g.method}`,`🎭 **MOTIVE:** They ${g.motive}.`,`🧩 **CASE TYPE:** ${g.typeName}`,`🧠 **THE TWIST:** ${g.twist}`,"",`🔎 Evidence: **${g.discovered.length}/${g.evidence.length}**`,`🚨 Contradictions: **${g.contradictions.length}**`,`✨ **REWARD: +${r.reward.toLocaleString()} ✨**`,titleText].join("\n"),[row(button("🔎 New Case","crime:solo:new",1),button("🎮 Games","games:menu",2))]);
+async function handleCrimeAccuseMenu(env,interaction,gameId){
+  const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");
+  if(ctx.mode==="multi"){
+    const uid=getUserFromInteraction(interaction)?.id;
+    if(uid&&ctx.game.playerGuesses?.[uid])return sendText(env,interaction,`🗳️ **YOUR GUESS IS LOCKED IN.**\n\nYou guessed **${ctx.game.suspects.find(s=>s.id===ctx.game.playerGuesses[uid])?.name||"Unknown"}**.\n\nWait for the other detectives to submit their guesses.`,crimePrivateRows(ctx.game));
+  }
+  await sendText(env,interaction,"🗳️ **WHO DO YOU ACCUSE?**\n\nYour accusation is **your own private guess**. In multiplayer, every detective gets one independent guess. The case closes after everyone has submitted.",crimeAccusationRows(ctx.game));
+}
+async function handleCrimeAccusePick(env,interaction,gameId,suspectId){
+  const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");
+  const g=ctx.game,u=getUserFromInteraction(interaction);if(!u)return;
+  if(ctx.mode!=="multi")return handleCrimeSoloAccuse(env,interaction,suspectId);
+  if(g.playerGuesses?.[u.id])return sendText(env,interaction,"🗳️ **YOU ALREADY SUBMITTED YOUR GUESS.**",crimePrivateRows(g));
+  if(!g.playerGuesses)g.playerGuesses={};if(!g.playerIncorrectAccusations)g.playerIncorrectAccusations={};
+  g.playerGuesses[u.id]=suspectId;
+  const correct=suspectId===g.culpritId;
+  if(!correct){g.playerIncorrectAccusations[u.id]=Number(g.playerIncorrectAccusations[u.id]||0)+1;g.incorrectAccusations++;g.perfect=false;}
+  const totalPlayers=Object.keys(g.players||{}).length;
+  const submitted=Object.keys(g.playerGuesses).length;
+  if(submitted<totalPlayers){
+    await saveCrimeGame(env,interaction.guild_id,g);
+    return sendText(env,interaction,`🗳️ **GUESS LOCKED IN.**\n\nYour guess: **${g.suspects.find(s=>s.id===suspectId)?.name||"Unknown"}**\n${correct?"🟢 Your guess is correct!":"🔴 Your guess is not correct."}\n\n⏳ **${submitted}/${totalPlayers} detectives have submitted a guess.**\n\nYour guess is private until the case closes.`,crimePrivateRows(g));
+  }
+
+  g.status="solved";
+  const results=[];
+  for(const uid of Object.keys(g.players||{})){
+    const pl=await getPlayer(env,uid);
+    const playerCorrect=g.playerGuesses[uid]===g.culpritId;
+    const r=await crimeSavePlayerResult(env,pl,g,"multi",g.discovered.length>=g.evidence.length,playerCorrect);
+    results.push(`${playerCorrect?"🟢":"🔴"} <@${uid}> — **${g.suspects.find(s=>s.id===g.playerGuesses[uid])?.name||"Unknown"}** ${playerCorrect?`(+${r.reward.toLocaleString()} ✨)`:"(incorrect)"}`);
+  }
+  await saveCrimeGame(env,interaction.guild_id,g);
+  const culprit=g.suspects.find(s=>s.id===g.culpritId),acc=g.accompliceId?g.suspects.find(s=>s.id===g.accompliceId):null;
+  const ending=[`🧑‍⚖️ **CASE CLOSED — ${g.name}**`,"",`🚨 **THIEF:** ${culprit.emoji} **${culprit.name}**`,g.accompliceId?`🤝 **ACCOMPLICE:** ${acc?.emoji} **${acc?.name}**`:"🤝 **ACCOMPLICE:** None",`🔐 **METHOD:** ${g.method}`,`🎭 **MOTIVE:** They ${g.motive}.`,`🧩 **CASE TYPE:** ${g.typeName}`,`🧠 **THE TWIST:** ${g.twist}`,"",`💰 **${Number(g.stolen).toLocaleString()} ✨ recovered!**`,"",`🕵️ **DETECTIVE GUESSES**`,results.join("\n")].join("\n");
+  await sendChannelMessage(env,interaction.channel_id,ending,[row(button("🔎 New Multiplayer Case","crime:create",2),button("🔎 New Solo Case","crime:solo:new",1))]);
+  return sendText(env,interaction,"🧑‍⚖️ **CASE CLOSED!**\n\nThe full results have been posted publicly in the case channel.",[]);
 }
 async function handleCrimeAccompliceMenu(env,interaction,gameId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceId)return sendText(env,interaction,"🧹 This case has no accomplice.");await sendText(env,interaction,"🤝 **WHO WAS THE ACCOMPLICE?**",crimeAccompliceRows(ctx.game));}
 async function handleCrimeAccomplicePick(env,interaction,gameId,suspectId){const ctx=await getCrimePrivateGame(env,interaction,gameId);if(!ctx)return sendText(env,interaction,"❌ No active case.");if(!ctx.game.accompliceGuesses)ctx.game.accompliceGuesses={};ctx.game.accompliceGuesses[getUserFromInteraction(interaction)?.id]=suspectId;ctx.game.accompliceGuess=suspectId;if(ctx.mode==="multi")await saveCrimeGame(env,interaction.guild_id,ctx.game);else await savePlayer(env,ctx.player);return sendText(env,interaction,suspectId===ctx.game.accompliceId?"🤝 **CORRECT!** You identified the accomplice.":"❌ **Not the accomplice.** Keep investigating.",crimePrivateRows(ctx.game));}
