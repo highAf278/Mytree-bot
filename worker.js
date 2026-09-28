@@ -36,6 +36,251 @@ const CHAOS_INTERVAL = 60 * 60 * 1000;
 const CHAOS_SCHEDULE_VERSION = 5;
 const STONED_GIFT_SPARKLES = 300;
 
+
+/* =========================================================
+   REAL-MONEY SPARKLE VAULT — MANUAL FRIEND PURCHASES
+   Payments are verified manually by the Werewives owner.
+   Never place passwords, card numbers, or other secrets here.
+========================================================= */
+const SPARKLE_PAYMENT_INFO = {
+  venmo: "@AlyssaAnn1003",
+  appleCash: "4344391313"
+};
+
+const SPARKLE_PURCHASE_PACKS = {
+  pocketful: { name: "💗 Pocketful of Sparkles", price: 1, sparkles: 10000 },
+  sprinkle: { name: "🌸 Sparkle Sprinkle", price: 3, sparkles: 35000 },
+  rush: { name: "🌈 Sparkle Rush", price: 5, sparkles: 65000 },
+  moonlight: { name: "🌙 Moonlight Hoard", price: 10, sparkles: 150000 },
+  starry: { name: "⭐ Starry Vault", price: 20, sparkles: 350000 },
+  royalty: { name: "👑 Raccoon Royalty", price: 35, sparkles: 650000 },
+  heist: { name: "💎 THE BIG SPARKLE HEIST", price: 50, sparkles: 1000000 }
+};
+
+function sparklePurchaseKey(id) {
+  return `sparkle_purchase:${String(id)}`;
+}
+
+function sparklePurchaseId() {
+  return `WW-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 9999)}`;
+}
+
+function sparkleShopPackRows() {
+  const packs = Object.entries(SPARKLE_PURCHASE_PACKS);
+  const rows = [];
+  for (let i = 0; i < packs.length; i += 4) {
+    rows.push(row(...packs.slice(i, i + 4).map(([id, pack]) =>
+      button(`${pack.name} — $${pack.price}`, `sparkleshop:pack:${id}`, 1)
+    )));
+  }
+  return rows;
+}
+
+function sparkleShopHomeText() {
+  return [
+    "💎🦝 **THE WEREWIVES SPARKLE VAULT** 🦝💎",
+    "",
+    "*Totally legitimate. Probably.* 😭",
+    "",
+    ...Object.values(SPARKLE_PURCHASE_PACKS).map(pack =>
+      `${pack.name} — **$${pack.price}** → **${pack.sparkles.toLocaleString()} ✨**`
+    ),
+    "",
+    "💳 Choose a Sparkle Pack below.",
+    "💜 Payments are manually verified by the Werewives owner."
+  ].join("\n");
+}
+
+async function handleSparkleShop(env, interaction) {
+  return sendText(env, interaction, sparkleShopHomeText(), sparkleShopPackRows());
+}
+
+async function handleSparkleShopComponent(env, interaction) {
+  const id = String(interaction.data?.custom_id || "");
+  const parts = id.split(":");
+  const action = parts[1];
+
+  if (action === "home") {
+    return sendText(env, interaction, sparkleShopHomeText(), sparkleShopPackRows());
+  }
+
+  if (action === "pack") {
+    const packId = parts[2];
+    const pack = SPARKLE_PURCHASE_PACKS[packId];
+    if (!pack) return sendText(env, interaction, "❌ That Sparkle Pack no longer exists.");
+
+    const rows = [
+      row(
+        button("💜 Venmo", `sparkleshop:method:${packId}:venmo`, 1),
+        button("🍎 Apple Cash", `sparkleshop:method:${packId}:apple`, 1)
+      ),
+      row(button("⬅️ Back to Sparkle Packs", "sparkleshop:home", 2))
+    ];
+
+    return sendText(
+      env,
+      interaction,
+      `💎 **${pack.name}**\n\n💰 **Price:** $${pack.price}\n✨ **You receive:** ${pack.sparkles.toLocaleString()} Sparkles\n\nChoose how you'd like to pay:`,
+      rows
+    );
+  }
+
+  if (action === "method") {
+    const packId = parts[2];
+    const method = parts[3];
+    const pack = SPARKLE_PURCHASE_PACKS[packId];
+    if (!pack || !["venmo", "apple"].includes(method)) {
+      return sendText(env, interaction, "❌ That payment option is no longer available.");
+    }
+
+    const paymentText = method === "venmo"
+      ? `💜 **VENMO**\n\nSend **$${pack.price}** to:\n**${SPARKLE_PAYMENT_INFO.venmo}**`
+      : `🍎 **APPLE CASH**\n\nSend **$${pack.price}** using Apple Cash to:\n**${SPARKLE_PAYMENT_INFO.appleCash}**`;
+
+    return sendText(
+      env,
+      interaction,
+      `💎 **${pack.name}**\n\n✨ **${pack.sparkles.toLocaleString()} Sparkles**\n💵 **$${pack.price}**\n\n${paymentText}\n\n⚠️ After you have actually sent the payment, press **I've Paid** below. Your purchase will be sent to the owner for manual verification.`,
+      [
+        row(button("✅ I've Paid", `sparkleshop:paid:${packId}:${method}`, 3)),
+        row(button("⬅️ Choose Another Payment Method", `sparkleshop:pack:${packId}`, 2))
+      ]
+    );
+  }
+
+  if (action === "paid") {
+    const packId = parts[2];
+    const method = parts[3];
+    const pack = SPARKLE_PURCHASE_PACKS[packId];
+    const user = getUserFromInteraction(interaction);
+    if (!pack || !user || !["venmo", "apple"].includes(method)) {
+      return sendText(env, interaction, "❌ That purchase request is invalid.");
+    }
+
+    const player = await getPlayer(env, user.id);
+    const existingId = String(player.sparklePendingPurchaseId || "");
+    if (existingId) {
+      const existingRaw = await env.TREE_DATA.get(sparklePurchaseKey(existingId));
+      if (existingRaw) {
+        try {
+          const existing = JSON.parse(existingRaw);
+          if (existing.status === "pending") {
+            return sendText(env, interaction, `⏳ **You already have a pending Sparkle purchase.**\n\n🆔 \\`${existing.id}\\`\n💵 **$${existing.price}**\n✨ **${Number(existing.sparkles).toLocaleString()} Sparkles**\n\nPlease wait for the owner to verify your payment.`);
+          }
+        } catch {}
+      }
+      player.sparklePendingPurchaseId = "";
+    }
+
+    const purchase = {
+      id: sparklePurchaseId(),
+      status: "pending",
+      userId: String(user.id),
+      username: String(user.username || "Unknown"),
+      displayName: String(player.displayName || user.username || "Unknown"),
+      packId,
+      packName: pack.name,
+      price: pack.price,
+      sparkles: pack.sparkles,
+      method,
+      createdAt: Date.now()
+    };
+
+    player.sparklePendingPurchaseId = purchase.id;
+    await savePlayer(env, player, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+    await env.TREE_DATA.put(sparklePurchaseKey(purchase.id), JSON.stringify(purchase), { expirationTtl: 30 * 24 * 60 * 60 });
+
+    const ownerDm = await discordRequest(env, "/users/@me/channels", {
+      method: "POST",
+      body: JSON.stringify({ recipients: [env.OWNER_ID] })
+    });
+
+    let ownerNotified = false;
+    if (ownerDm.ok) {
+      const channel = await ownerDm.json();
+      const methodLabel = method === "venmo" ? "💜 Venmo" : "🍎 Apple Cash";
+      const ownerMessage = await discordRequest(env, `/channels/${channel.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({
+          content: `💰💎 **SPARKLE PURCHASE PENDING**\n\n👤 **Player:** <@${user.id}> (${user.username || "Unknown"})\n💵 **Amount:** $${purchase.price}\n✨ **Sparkles:** ${purchase.sparkles.toLocaleString()}\n${methodLabel}\n🆔 **Purchase:** \\`${purchase.id}\\`\n\nCheck your ${method === "venmo" ? "Venmo" : "Apple Cash"} manually, then approve or reject this request.`,
+          components: [row(
+            button("✅ APPROVE & SEND SPARKLES", `sparklepurchase:approve:${purchase.id}`, 3),
+            button("❌ REJECT", `sparklepurchase:reject:${purchase.id}`, 4)
+          )]
+        })
+      });
+      ownerNotified = ownerMessage.ok;
+    }
+
+    const notifyLine = ownerNotified
+      ? "📨 The owner has been notified for manual verification."
+      : "⚠️ The purchase was recorded, but the owner could not be notified automatically. Contact the owner directly.";
+
+    return sendText(
+      env,
+      interaction,
+      `⏳ **PAYMENT SUBMITTED!**\n\n🆔 Purchase: \\`${purchase.id}\\`\n💵 **$${purchase.price}**\n✨ **${purchase.sparkles.toLocaleString()} Sparkles**\n\n${notifyLine}\n\nYour Sparkles will be added **only after the payment is manually verified**. 💎🦝`
+    );
+  }
+
+  return sendText(env, interaction, "❌ Unknown Sparkle Vault action.");
+}
+
+async function handleSparklePurchaseComponent(env, interaction) {
+  const id = String(interaction.data?.custom_id || "");
+  const parts = id.split(":");
+  const action = parts[1];
+  const purchaseId = parts.slice(2).join(":");
+
+  if (!await requireOwner(env, interaction)) return;
+  const raw = await env.TREE_DATA.get(sparklePurchaseKey(purchaseId));
+  if (!raw) return sendText(env, interaction, "❌ That Sparkle purchase record has expired or does not exist.");
+
+  let purchase;
+  try { purchase = JSON.parse(raw); } catch { return sendText(env, interaction, "❌ That purchase record is corrupted."); }
+
+  if (purchase.status !== "pending") {
+    const statusText = purchase.status === "approved" ? "already been approved" : "already been rejected";
+    return sendText(env, interaction, `⚠️ This purchase has ${statusText}.\n\n🆔 \\`${purchase.id}\\``);
+  }
+
+  if (action === "reject") {
+    purchase.status = "rejected";
+    purchase.processedAt = Date.now();
+    purchase.processedBy = String(env.OWNER_ID);
+    await env.TREE_DATA.put(sparklePurchaseKey(purchase.id), JSON.stringify(purchase), { expirationTtl: 30 * 24 * 60 * 60 });
+
+    const player = await getPlayer(env, purchase.userId);
+    if (String(player.sparklePendingPurchaseId || "") === purchase.id) {
+      player.sparklePendingPurchaseId = "";
+      await savePlayer(env, player, purchase.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+    }
+
+    await sendUserDM(env, purchase.userId, `❌💎 **SPARKLE PURCHASE REJECTED**\n\nYour purchase \\`${purchase.id}\\` for **$${purchase.price}** was rejected by the Werewives owner.\n\nIf you believe this was a mistake, contact the owner directly.`);
+    return sendText(env, interaction, `❌ **Purchase rejected.**\n\n🆔 \\`${purchase.id}\\`\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**`);
+  }
+
+  if (action === "approve") {
+    const player = await getPlayer(env, purchase.userId);
+    player.sparkles = Number(player.sparkles || 0) + Number(purchase.sparkles || 0);
+    player.sparklePendingPurchaseId = "";
+    player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+    player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + Number(purchase.sparkles || 0);
+    await savePlayer(env, player, purchase.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+
+    purchase.status = "approved";
+    purchase.processedAt = Date.now();
+    purchase.processedBy = String(env.OWNER_ID);
+    await env.TREE_DATA.put(sparklePurchaseKey(purchase.id), JSON.stringify(purchase), { expirationTtl: 30 * 24 * 60 * 60 });
+
+    await sendUserDM(env, purchase.userId, `💎🦝 **SPARKLES DELIVERED!** 🦝💎\n\nYour **${purchase.sparkles.toLocaleString()} ✨** purchase has been approved!\n\n💵 **Paid:** $${purchase.price}\n🆔 **Purchase:** \\`${purchase.id}\\`\n✨ **New balance:** ${Number(player.sparkles).toLocaleString()} Sparkles\n\nThank you for funding the raccoon economy. 😭💗`);
+
+    return sendText(env, interaction, `✅💎 **PURCHASE APPROVED!**\n\n👤 <@${purchase.userId}>\n💵 **$${purchase.price}**\n✨ **${Number(purchase.sparkles).toLocaleString()} Sparkles delivered.**\n🆔 \\`${purchase.id}\\``);
+  }
+
+  return sendText(env, interaction, "❌ Unknown purchase action.");
+}
+
 const BASE_URL =
   "https://pub-c9c053d25cdd42cca1319756c46f9cfa.r2.dev/";
 
@@ -871,7 +1116,8 @@ function defaultPlayer() {
     coupBlocksSuccessful: 0,
     coupAssassinations: 0,
     coupCoups: 0,
-    seenNewsIds: []
+    seenNewsIds: [],
+    sparklePendingPurchaseId: ""
   };
 }
 
@@ -13278,6 +13524,9 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
+  if (id.startsWith("sparklepurchase:")) return handleSparklePurchaseComponent(env, interaction);
+
   if (id.startsWith("coup:")) {
     const parts=id.split(":"); const action=parts[1]; const gameId=parts[2];
     if(action==="join") return coupJoin(env,interaction,gameId);
@@ -25266,6 +25515,7 @@ function helpText(){return [
   "`/present @player item` • `/delete item` • `/achievements`",
   "",
   "✨ **SPARKLES & COMMUNITY**",
+  "`/sparkleshop` — Buy Sparkles from the Sparkle Vault",
   "`/gift @player amount` • `/recycle amount`",
   "`/daily-riddle` • `/free` • `/raccoon @player`",
   "`/suggest` — Send a suggestion or bug report privately",
@@ -26884,6 +27134,11 @@ async function handleCommand(
 
   if (name === "sparkle") {
     await handleSparkleBalance(env, interaction);
+    return;
+  }
+
+  if (name === "sparkleshop") {
+    await handleSparkleShop(env, interaction);
     return;
   }
 
@@ -29626,6 +29881,11 @@ const COMMANDS = [
   },
 
   {
+    name: "sparkleshop",
+    description: "Open the Werewives Sparkle Vault"
+  },
+
+  {
     name: "fortune",
     description: "Ask the Fortune Tree for a silly fortune"
   },
@@ -30409,6 +30669,8 @@ export default {
     const isCourtCommand =
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
+    const isSparkleShopCommand = interaction.type === 2 && interaction.data?.name === "sparkleshop";
+    const isSparkleShopComponent = interaction.type === 3 && (customId.startsWith("sparkleshop:") || customId.startsWith("sparklepurchase:"));
     const isNewsComponent = interaction.type === 3 && customId.startsWith("news:ok:");
     const isRumbleCommand = interaction.type === 2 && interaction.data?.name === "rumble";
     const isCoupCommand = interaction.type === 2 && interaction.data?.name === "coup";
@@ -30657,7 +30919,9 @@ export default {
       let update = false;
       let ephemeral = false;
 
-      if (isNewsCommand || isBlacklistCommand) {
+      if (isSparkleShopCommand) {
+        ephemeral = true;
+      } else if (isNewsCommand || isBlacklistCommand) {
         ephemeral = true;
       } else if (isBattleCommand) {
         ephemeral = interaction.data?.name === "battleshop" || interaction.data?.name === "battle-end";
@@ -30738,6 +31002,9 @@ export default {
         update = true;
       } else if (isTitlesComponent) {
         update = true;
+      } else if (isSparkleShopComponent) {
+        update = true;
+        ephemeral = true;
       } else if (isNewsComponent) {
         update = true;
         ephemeral = true;
