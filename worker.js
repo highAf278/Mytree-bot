@@ -13635,52 +13635,55 @@ function bombId() {
   return `BOMB-${Date.now().toString(36)}-${randomInt(1000, 9999)}`;
 }
 
+function bombIntroText() {
+  return [
+    "💣🦝 **WEREWIVES BOMB SHOP** 🦝💣",
+    "",
+    "Buy ridiculous bombs, pick a target, and make them face a **40-second wire puzzle**. 😈",
+    "",
+    "💥 Wrong wire or time runs out = BOOM + punishment.",
+    "🛡️ Correct wire = bomb defused.",
+    "",
+    "👀 **Everything is public.** The server gets to watch the target panic, the detonation, and the punishment.",
+    "",
+    "👇 Tap below to open the Bomb Shop!"
+  ].join("\n");
+}
+
+function bombIntroRows() {
+  return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
+}
+
 function bombShopText() {
   return [
     "💣🦝 **THE WEREWIVES BOMB SHOP** 🦝💣",
     "",
-    "*Everything here is virtual. The raccoons have been informed.* 😭",
+    "Choose your weapon. Buy it, choose your victim, and let the server watch the chaos. 😈",
     "",
-    "💗 **LOVE BOMB — 500 ✨**",
-    "⏱️ 1-minute Discord timeout",
-    "💘 LOVE-STRUCK for 30 minutes — randomly blocks eligible bot actions with ridiculous love errors.",
+    "💗 **Love Bomb** — 500 ✨",
+    "🌪️ **Chaos Bomb** — 1,500 ✨",
+    "✨ **Glitter Bomb** — 750 ✨",
+    "🥒 **Pickle Bomb** — 1,000 ✨",
+    "🦝 **Raccoon Bomb** — 4,000 ✨",
     "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "",
-    "🌪️ **CHAOS BOMB — 1,500 ✨**",
-    "⏱️ 5-minute Discord timeout",
-    "🌪️ CHAOS MARK for 1 hour — secretly rolls a chaotic curse that the target discovers when it hits.",
-    "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "",
-    "✨ **GLITTER BOMB — 750 ✨**",
-    "⏱️ 3-minute Discord timeout",
-    "✨ GLITTERED for 15 minutes — blocks ALL WereWives commands and interactions.",
-    "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "",
-    "🥒 **PICKLE BOMB — 1,000 ✨**",
-    "⏱️ 2-minute Discord timeout",
-    "🥒 Automatically performs the existing Pickle Slap rules: 1,000–3,000 ✨ with the normal 15% backfire chance.",
-    "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "",
-    "🦝 **RACCOON BOMB — 4,000 ✨**",
-    "⏱️ 10-minute Discord timeout",
-    "🦝 RACCOON BEEF for 1 hour — every 15 minutes the raccoons steal 200–1,000 ✨ and occasionally trash-talk the target.",
-    "",
-    "💣 Buy a bomb below, then choose who gets it. The whole server sees the wire puzzle and the punishment."
+    "⏱️ Every bomb uses a freshly randomized **40-second wire puzzle**.",
+    "👀 The target, wire puzzle, detonation, and punishment are all public."
   ].join("\n");
 }
 
 function bombShopRows() {
-  return [row(
-    button("💗 Love — 500 ✨", "bomb:buy:love", 1),
-    button("🌪️ Chaos — 1,500 ✨", "bomb:buy:chaos", 1),
-    button("✨ Glitter — 750 ✨", "bomb:buy:glitter", 1),
-    button("🥒 Pickle — 1,000 ✨", "bomb:buy:pickle", 1),
-    button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1)
-  )];
+  return [
+    row(
+      button("💗 Love — 500 ✨", "bomb:buy:love", 1),
+      button("🌪️ Chaos — 1,500 ✨", "bomb:buy:chaos", 1),
+      button("✨ Glitter — 750 ✨", "bomb:buy:glitter", 1)
+    ),
+    row(
+      button("🥒 Pickle — 1,000 ✨", "bomb:buy:pickle", 1),
+      button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1)
+    ),
+    row(button("⬅️ Back", "bomb:back", 2))
+  ];
 }
 
 function bombTargetRows(bomb) {
@@ -13832,9 +13835,6 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
       attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - lost);
       await savePlayer(env, attacker, bomb.attackerId);
       effectText = `🥒💥 **PICKLE SLAP BACKFIRED!** The pickle ignored <@${bomb.targetId}> and smacked <@${bomb.attackerId}> instead.\n\n💸 <@${bomb.attackerId}> lost **${lost.toLocaleString()} ✨**.`;
-    } else if (targetSparkles < 1000) {
-      await savePlayer(env, target, bomb.targetId);
-      effectText = `🥒 **PICKLE SLAP FAILED TO COLLECT!** <@${bomb.targetId}> has less than **1,000 ✨**, so the pickle couldn't collect a full slap amount.`;
     } else {
       const stolen = Math.min(amount, targetSparkles);
       target.sparkles = Math.max(0, targetSparkles - stolen);
@@ -13877,7 +13877,7 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
 
 async function handleBombCommand(env, interaction) {
   if (!interaction.guild_id) return sendPublicText(env, interaction, "❌ The Bomb Shop only works inside a server.");
-  return sendPublicText(env, interaction, bombShopText(), bombShopRows());
+  return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
 }
 
 async function handleBombComponent(env, interaction) {
@@ -13887,7 +13887,8 @@ async function handleBombComponent(env, interaction) {
   const user = getUserFromInteraction(interaction);
   if (!user) return sendPublicText(env, interaction, "❌ I couldn't identify you.");
 
-  if (action === "shop") return sendPublicText(env, interaction, bombShopText(), bombShopRows());
+  if (action === "open" || action === "shop") return sendPublicText(env, interaction, bombShopText(), bombShopRows());
+  if (action === "back") return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
 
   if (action === "buy") {
     const typeId = parts[2];
@@ -31359,6 +31360,34 @@ export default {
       );
 
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
+
+    // BOMB FAST PATH: acknowledge bomb buttons immediately as a PUBLIC update,
+    // then do the KV/Discord work in waitUntil(). This keeps the Bomb Shop
+    // buttons from being delayed or swallowed by unrelated bot middleware.
+    if (isBombComponent) {
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = true;
+      interaction.__deferredEphemeral = false;
+      ctx.waitUntil((async () => {
+        try {
+          await handleBombComponent(env, interaction);
+        } catch (error) {
+          console.error("Bomb component error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ **Bomb Shop error:** ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Bomb Shop error:", editError);
+          }
+        }
+      })());
+      return new Response(JSON.stringify({ type: 6 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
