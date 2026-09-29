@@ -44,7 +44,8 @@ const STONED_GIFT_SPARKLES = 300;
 ========================================================= */
 const SPARKLE_PAYMENT_INFO = {
   venmo: "@AlyssaAnn1003",
-  appleCash: "4344391313"
+  appleCash: "4344391313",
+  paypal: "AlyssaAnn33"
 };
 
 const SPARKLE_PURCHASE_PACKS = {
@@ -112,7 +113,8 @@ async function handleSparkleShopComponent(env, interaction) {
     const rows = [
       row(
         button("💜 Venmo", `sparkleshop:method:${packId}:venmo`, 1),
-        button("🍎 Apple Cash", `sparkleshop:method:${packId}:apple`, 1)
+        button("🍎 Apple Cash", `sparkleshop:method:${packId}:apple`, 1),
+        button("💙 PayPal", `sparkleshop:method:${packId}:paypal`, 1)
       ),
       row(button("⬅️ Back to Sparkle Packs", "sparkleshop:home", 2))
     ];
@@ -129,13 +131,15 @@ async function handleSparkleShopComponent(env, interaction) {
     const packId = parts[2];
     const method = parts[3];
     const pack = SPARKLE_PURCHASE_PACKS[packId];
-    if (!pack || !["venmo", "apple"].includes(method)) {
+    if (!pack || !["venmo", "apple", "paypal"].includes(method)) {
       return sendText(env, interaction, "❌ That payment option is no longer available.");
     }
 
     const paymentText = method === "venmo"
       ? `💜 **VENMO**\n\nSend **$${pack.price}** to:\n**${SPARKLE_PAYMENT_INFO.venmo}**`
-      : `🍎 **APPLE CASH**\n\nSend **$${pack.price}** using Apple Cash to:\n**${SPARKLE_PAYMENT_INFO.appleCash}**`;
+      : method === "apple"
+        ? `🍎 **APPLE CASH**\n\nSend **$${pack.price}** using Apple Cash to:\n**${SPARKLE_PAYMENT_INFO.appleCash}**`
+        : `💙 **PAYPAL**\n\nSend **$${pack.price}** to:\n**${SPARKLE_PAYMENT_INFO.paypal}**`;
 
     return sendText(
       env,
@@ -153,7 +157,7 @@ async function handleSparkleShopComponent(env, interaction) {
     const method = parts[3];
     const pack = SPARKLE_PURCHASE_PACKS[packId];
     const user = getUserFromInteraction(interaction);
-    if (!pack || !user || !["venmo", "apple"].includes(method)) {
+    if (!pack || !user || !["venmo", "apple", "paypal"].includes(method)) {
       return sendText(env, interaction, "❌ That purchase request is invalid.");
     }
 
@@ -198,11 +202,11 @@ async function handleSparkleShopComponent(env, interaction) {
     let ownerNotified = false;
     if (ownerDm.ok) {
       const channel = await ownerDm.json();
-      const methodLabel = method === "venmo" ? "💜 Venmo" : "🍎 Apple Cash";
+      const methodLabel = method === "venmo" ? "💜 Venmo" : method === "apple" ? "🍎 Apple Cash" : "💙 PayPal";
       const ownerMessage = await discordRequest(env, `/channels/${channel.id}/messages`, {
         method: "POST",
         body: JSON.stringify({
-          content: `💰💎 **SPARKLE PURCHASE PENDING**\n\n👤 **Player:** <@${user.id}> (${user.username || "Unknown"})\n💵 **Amount:** $${purchase.price}\n✨ **Sparkles:** ${purchase.sparkles.toLocaleString()}\n${methodLabel}\n🆔 **Purchase:** **${purchase.id}**\n\nCheck your ${method === "venmo" ? "Venmo" : "Apple Cash"} manually, then approve or reject this request.`,
+          content: `💰💎 **SPARKLE PURCHASE PENDING**\n\n👤 **Player:** <@${user.id}> (${user.username || "Unknown"})\n💵 **Amount:** $${purchase.price}\n✨ **Sparkles:** ${purchase.sparkles.toLocaleString()}\n${methodLabel}\n🆔 **Purchase:** **${purchase.id}**\n\nCheck your ${method === "venmo" ? "Venmo" : method === "apple" ? "Apple Cash" : "PayPal"} manually, then approve or reject this request.`,
           components: [row(
             button("✅ APPROVE & SEND SPARKLES", `sparklepurchase:approve:${purchase.id}`, 3),
             button("❌ REJECT", `sparklepurchase:reject:${purchase.id}`, 4)
