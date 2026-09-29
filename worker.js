@@ -13516,6 +13516,582 @@ async function handleCoupCommand(env,interaction){
   return sendText(env,interaction,"❌ Unknown Coup action.");
 }
 
+
+/* =========================================================
+   BOMB SHOP — PUBLIC SERVER GAMEPLAY
+
+   Every bomb is a Discord-only game mechanic. The shop, target,
+   wire puzzle, countdown result, timeout, and lingering punishment
+   are public so the whole server gets to watch the chaos.
+========================================================= */
+const BOMB_WIRE_TIMER = 40 * 1000;
+const BOMB_WIRE_COLORS = ["🔴 RED", "🔵 BLUE", "🟢 GREEN", "🟡 YELLOW"];
+
+const BOMB_TYPES = {
+  love: {
+    name: "💗 LOVE BOMB",
+    price: 500,
+    timeoutMinutes: 1,
+    effectName: "💘 LOVE-STRUCK",
+    durationMs: 30 * 60 * 1000,
+    gif: "IMG_8006.gif"
+  },
+  chaos: {
+    name: "🌪️ CHAOS BOMB",
+    price: 1500,
+    timeoutMinutes: 5,
+    effectName: "🌪️ CHAOS MARK",
+    durationMs: 60 * 60 * 1000,
+    gif: "IMG_8008.gif"
+  },
+  glitter: {
+    name: "✨ GLITTER BOMB",
+    price: 750,
+    timeoutMinutes: 3,
+    effectName: "✨ GLITTERED",
+    durationMs: 15 * 60 * 1000,
+    gif: "IMG_8007.gif"
+  },
+  pickle: {
+    name: "🥒 PICKLE BOMB",
+    price: 1000,
+    timeoutMinutes: 2,
+    effectName: "🥒 PICKLE SLAP",
+    durationMs: 0,
+    gif: "IMG_8010.gif"
+  },
+  raccoon: {
+    name: "🦝 RACCOON BOMB",
+    price: 4000,
+    timeoutMinutes: 10,
+    effectName: "🦝 RACCOON BEEF",
+    durationMs: 60 * 60 * 1000,
+    gif: "IMG_8009.gif"
+  }
+};
+
+const BOMB_LOVE_MESSAGES = [
+  "💘 OH NOOO... You're far too love-struck to use that WereWives command right now. Your brain is currently occupied with butterflies. 🦋💕",
+  "💕 LOVE-STRUCK! You tried to cause some chaos, but you're too busy staring dreamily into the distance. 😭",
+  "💘 Critical Love-Struck Condition: Your brain has temporarily been replaced with 💗 feelings. Try again later.",
+  "🦋 The butterflies have taken over. That command has been postponed until your brain returns from its romantic vacation. 💕"
+];
+
+const BOMB_GLITTER_MESSAGES = [
+  "✨ GLITTER ERROR — The glitter got stuck in the button. Please wait while we scrape it off. 😭",
+  "✨ SYSTEM GLITTER JAM — The glitter got stuck in the machinery.",
+  "💎 GLITTER OVERFLOW — The bot attempted to process your request and accidentally produced 4,827 sparkles instead. Request denied.",
+  "✨ BUTTON FAILURE — Your button is currently covered in glitter. Nobody knows where the glitter came from. Actually, we know. It was you.",
+  "🌈 GLITTER CONTAMINATION DETECTED — WereWives systems have temporarily been declared glitter unsafe.",
+  "✨ ERROR: TOO FABULOUS — Your request cannot be processed at this time. The bot is currently blinded by glitter.",
+  "💅 GLITTER INCIDENT #472 — Someone tried to use a command while covered in glitter. The command has been confiscated.",
+  "✨ PLEASE STOP TOUCHING THINGS — Every button you press creates more glitter. You're making it worse.",
+  "🚨✨ GLITTER EMERGENCY — The raccoons have been called in to clean up. They immediately made it worse.",
+  "✨ GLITTER HAS ENTERED THE SERVER. It has reached places glitter should never be able to reach. Your command has been cancelled."
+];
+
+const BOMB_CHAOS_CURSES = [
+  "command_lock",
+  "raccoon_warning",
+  "pickle_interrupt",
+  "delayed_chaos",
+  "chaos_roll"
+];
+
+const BOMB_RACCOON_MESSAGES = [
+  "🦝 RACCOON WARNING — The raccoons have located you. We will drag you.",
+  "🦝💢 RACCOON BEEF UPDATE — The raccoons would like you to know that they still have a problem with you.",
+  "🦝 YOU. Yes, you. The raccoons are not over it.",
+  "🦝💥 RACCOON THREAT DETECTED — The raccoons have collectively decided: ‘Nah, we don't like this one.’",
+  "🦝 RACCOON COUNCIL MEETING — Your name has come up again. Unfortunately, the meeting is not going well for you.",
+  "🦝💢 THE BEEF CONTINUES. The raccoons have nothing else to do today. Guess who's their problem now?",
+  "🦝 RACCOON SURVEILLANCE REPORT: Target located. Target annoying. Proceed with beef.",
+  "🦝💀 THE RACCOONS WILL DRAG YOU. This message has been approved by the entire raccoon council.",
+  "🦝📢 PUBLIC ANNOUNCEMENT — The target is currently beefing with several raccoons. The raccoons are winning."
+];
+
+function bombInventory(player) {
+  player.bombs = player.bombs && typeof player.bombs === "object" ? player.bombs : {};
+  for (const id of Object.keys(BOMB_TYPES)) player.bombs[id] = Math.max(0, Number(player.bombs[id] || 0));
+  return player.bombs;
+}
+
+function bombCount(player, id) {
+  return Number(bombInventory(player)[id] || 0);
+}
+
+function bombAdd(player, id, amount = 1) {
+  const inv = bombInventory(player);
+  inv[id] = Math.max(0, Number(inv[id] || 0) + Number(amount || 0));
+}
+
+function bombTake(player, id) {
+  if (bombCount(player, id) < 1) return false;
+  bombInventory(player)[id] -= 1;
+  return true;
+}
+
+function bombId() {
+  return `BOMB-${Date.now().toString(36)}-${randomInt(1000, 9999)}`;
+}
+
+function bombShopText() {
+  return [
+    "💣🦝 **THE WEREWIVES BOMB SHOP** 🦝💣",
+    "",
+    "*Everything here is virtual. The raccoons have been informed.* 😭",
+    "",
+    "💗 **LOVE BOMB — 500 ✨**",
+    "⏱️ 1-minute Discord timeout",
+    "💘 LOVE-STRUCK for 30 minutes — randomly blocks eligible bot actions with ridiculous love errors.",
+    "",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "",
+    "🌪️ **CHAOS BOMB — 1,500 ✨**",
+    "⏱️ 5-minute Discord timeout",
+    "🌪️ CHAOS MARK for 1 hour — secretly rolls a chaotic curse that the target discovers when it hits.",
+    "",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "",
+    "✨ **GLITTER BOMB — 750 ✨**",
+    "⏱️ 3-minute Discord timeout",
+    "✨ GLITTERED for 15 minutes — blocks ALL WereWives commands and interactions.",
+    "",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "",
+    "🥒 **PICKLE BOMB — 1,000 ✨**",
+    "⏱️ 2-minute Discord timeout",
+    "🥒 Automatically performs the existing Pickle Slap rules: 1,000–3,000 ✨ with the normal 15% backfire chance.",
+    "",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "",
+    "🦝 **RACCOON BOMB — 4,000 ✨**",
+    "⏱️ 10-minute Discord timeout",
+    "🦝 RACCOON BEEF for 1 hour — every 15 minutes the raccoons steal 200–1,000 ✨ and occasionally trash-talk the target.",
+    "",
+    "💣 Buy a bomb below, then choose who gets it. The whole server sees the wire puzzle and the punishment."
+  ].join("\n");
+}
+
+function bombShopRows() {
+  return [row(
+    button("💗 Love — 500 ✨", "bomb:buy:love", 1),
+    button("🌪️ Chaos — 1,500 ✨", "bomb:buy:chaos", 1),
+    button("✨ Glitter — 750 ✨", "bomb:buy:glitter", 1),
+    button("🥒 Pickle — 1,000 ✨", "bomb:buy:pickle", 1),
+    button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1)
+  )];
+}
+
+function bombTargetRows(bomb) {
+  return [
+    [{ type: 1, components: [{
+      type: 5,
+      custom_id: `bomb:target:${bomb.id}`,
+      placeholder: `🎯 Choose who gets the ${bomb.type.name}...`,
+      min_values: 1,
+      max_values: 1
+    }] }],
+    row(button("💣 Back to Bomb Shop", "bomb:shop", 2))
+  ];
+}
+
+function bombWireRows(bomb) {
+  const rows = [];
+  for (let i = 0; i < bomb.wires.length; i += 2) {
+    rows.push(row(
+      ...bomb.wires.slice(i, i + 2).map(color =>
+        button(color, `bomb:wire:${bomb.id}:${encodeURIComponent(color)}`, 2)
+      )
+    ));
+  }
+  return rows;
+}
+
+function bombWireText(bomb) {
+  const remaining = Math.max(0, Math.ceil((Number(bomb.expiresAt) - Date.now()) / 1000));
+  return [
+    `🚨💣 **BOMB DEFUSAL — ${bomb.type.name}**`,
+    "",
+    `💥 <@${bomb.attackerId}> threw this bomb at <@${bomb.targetId}>!`,
+    "",
+    `⏱️ **${Math.max(0, remaining)} seconds remaining!**`,
+    "✂️ One wire defuses it. The other three make the bomb go BOOM.",
+    "",
+    "🎯 **<@" + bomb.targetId + "> — choose a wire below!**",
+    "",
+    "⚠️ The correct wire is randomized for THIS bomb. Nobody can memorize the pattern."
+  ].join("\n");
+}
+
+async function bombSetDiscordTimeout(env, guildId, userId, minutes) {
+  if (!guildId || !userId || !minutes) return false;
+  const until = new Date(Date.now() + Number(minutes) * 60 * 1000).toISOString();
+  const response = await discordRequest(env, `/guilds/${guildId}/members/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ communication_disabled_until: until })
+  });
+  if (!response.ok) {
+    console.error("Bomb timeout failed:", response.status, await response.text());
+    return false;
+  }
+  return true;
+}
+
+async function bombEditPublicMessage(env, bomb, content, components = []) {
+  if (!bomb.channelId || !bomb.messageId) return false;
+  const response = await discordRequest(env, `/channels/${bomb.channelId}/messages/${bomb.messageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ content, components })
+  });
+  if (!response.ok) console.error("Bomb public message edit failed:", response.status, await response.text());
+  return response.ok;
+}
+
+async function bombSendGif(env, bomb, content) {
+  return sendChannelMessage(
+    env,
+    bomb.channelId,
+    content,
+    [],
+    { embeds: [{ image: { url: imageUrl(bomb.type.gif) } }] }
+  );
+}
+
+async function applyBombChaos(env, bomb, target, state) {
+  const curse = BOMB_CHAOS_CURSES[randomInt(0, BOMB_CHAOS_CURSES.length - 1)];
+  target.chaosMarkUntil = Date.now() + BOMB_TYPES.chaos.durationMs;
+  target.chaosBombCurse = curse;
+
+  if (curse === "command_lock") {
+    target.chaosBlockedUntil = Date.now() + randomInt(10, 20) * 60 * 1000;
+    await savePlayer(env, target, bomb.targetId);
+    return `🔒 **CHAOS CURSE: COMMAND LOCK!**\n\nThe raccoons have randomly locked your WereWives commands for **${Math.ceil((target.chaosBlockedUntil - Date.now()) / 60000)} minutes**. Good luck. 😭`;
+  }
+
+  if (curse === "raccoon_warning") {
+    await savePlayer(env, target, bomb.targetId);
+    return `🦝 **CHAOS CURSE: RACCOON SURVEILLANCE!**\n\nThe raccoons have selected you for an hour of unsolicited surveillance. Expect random public warnings. 😭`;
+  }
+
+  if (curse === "pickle_interrupt") {
+    target.chaosNextInterruptAt = Date.now() + randomInt(3, 12) * 60 * 1000;
+    await savePlayer(env, target, bomb.targetId);
+    return `🥒 **CHAOS CURSE: PICKLE INTERRUPTION!**\n\nAt a completely random moment during the next hour, a pickle is going to interrupt you. Nobody knows when. 😭`;
+  }
+
+  if (curse === "delayed_chaos") {
+    target.chaosNextInterruptAt = Date.now() + randomInt(5, 30) * 60 * 1000;
+    await savePlayer(env, target, bomb.targetId);
+    return `🌪️ **CHAOS CURSE: DELAYED CHAOS!**\n\nThe bomb has scheduled one more completely unnecessary chaos event sometime during the next hour. 😈`;
+  }
+
+  target.chaosNextInterruptAt = Date.now() + randomInt(2, 15) * 60 * 1000;
+  await savePlayer(env, target, bomb.targetId);
+  return `🎲 **CHAOS CURSE: CHAOS ROLL!**\n\nThe raccoons have loaded a random nonsense event into your next hour. You have absolutely no idea what it will be. 😭`;
+}
+
+async function applyBombDetonation(env, bomb, reason = "wrong") {
+  if (!bomb || bomb.status !== "pending") return false;
+
+  const state = await getGuildState(env, bomb.guildId);
+  state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+  const live = state.bombs[bomb.id];
+  if (!live || live.status !== "pending") return false;
+  bomb = live;
+
+  const target = await getPlayer(env, bomb.targetId);
+  const attacker = await getPlayer(env, bomb.attackerId);
+  const now = Date.now();
+  const type = bomb.type;
+
+  bomb.status = "detonated";
+  bomb.resolvedAt = now;
+  state.bombs[bomb.id] = bomb;
+
+  await bombSetDiscordTimeout(env, bomb.guildId, bomb.targetId, type.timeoutMinutes);
+
+  let effectText = "";
+
+  if (bomb.typeId === "love") {
+    target.loveStruckUntil = now + type.durationMs;
+    await savePlayer(env, target, bomb.targetId);
+    effectText = `💘 **LOVE-STRUCK for 30 minutes!** Random WereWives actions may be rejected because your brain is currently 100% butterflies.`;
+  } else if (bomb.typeId === "glitter") {
+    target.glitteredUntil = now + type.durationMs;
+    await savePlayer(env, target, bomb.targetId);
+    effectText = `✨ **GLITTERED for 15 minutes!** ALL WereWives bot commands and interactions are blocked while the glitter incident is active.`;
+  } else if (bomb.typeId === "chaos") {
+    effectText = await applyBombChaos(env, bomb, target, state);
+  } else if (bomb.typeId === "pickle") {
+    const targetSparkles = Math.max(0, Number(target.sparkles || 0));
+    const amount = randomInt(1000, 3000);
+    const backfire = Math.random() < 0.15;
+    if (backfire) {
+      const lost = Math.min(amount, Math.max(0, Number(attacker.sparkles || 0)));
+      attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - lost);
+      await savePlayer(env, attacker, bomb.attackerId);
+      effectText = `🥒💥 **PICKLE SLAP BACKFIRED!** The pickle ignored <@${bomb.targetId}> and smacked <@${bomb.attackerId}> instead.\n\n💸 <@${bomb.attackerId}> lost **${lost.toLocaleString()} ✨**.`;
+    } else if (targetSparkles < 1000) {
+      await savePlayer(env, target, bomb.targetId);
+      effectText = `🥒 **PICKLE SLAP FAILED TO COLLECT!** <@${bomb.targetId}> has less than **1,000 ✨**, so the pickle couldn't collect a full slap amount.`;
+    } else {
+      const stolen = Math.min(amount, targetSparkles);
+      target.sparkles = Math.max(0, targetSparkles - stolen);
+      attacker.sparkles = Number(attacker.sparkles || 0) + stolen;
+      attacker.badgeStats = attacker.badgeStats && typeof attacker.badgeStats === "object" ? attacker.badgeStats : {};
+      attacker.badgeStats.sparklesStolen = Number(attacker.badgeStats.sparklesStolen || 0) + stolen;
+      await savePlayer(env, target, bomb.targetId);
+      await savePlayer(env, attacker, bomb.attackerId);
+      effectText = `🥒💥 **PICKLE SLAP!** <@${bomb.targetId}> lost **${stolen.toLocaleString()} ✨** and <@${bomb.attackerId}> received them.`;
+    }
+  } else if (bomb.typeId === "raccoon") {
+    target.raccoonBeefUntil = now + type.durationMs;
+    target.raccoonBeefNextAt = now + 15 * 60 * 1000;
+    target.raccoonBeefCollections = 0;
+    target.raccoonBeefChannelId = bomb.channelId;
+    await savePlayer(env, target, bomb.targetId);
+    effectText = `🦝 **RACCOON BEEF for 1 hour!** Every 15 minutes the raccoons will collect **200–1,000 ✨** and occasionally send public trash-talk.`;
+  }
+
+  const why = reason === "expired"
+    ? "⏰ The 40-second timer expired."
+    : "✂️ The wrong wire was cut.";
+
+  await saveGuildState(env, bomb.guildId, state);
+  await bombSendGif(
+    env,
+    bomb,
+    `💥💣 **BOOM! — ${type.name} DETONATED!**\n\n${why}\n\n🎯 **Target:** <@${bomb.targetId}>\n💣 **Thrown by:** <@${bomb.attackerId}>\n⏱️ **Discord timeout:** ${type.timeoutMinutes} minute${type.timeoutMinutes === 1 ? "" : "s"}\n\n${effectText}`
+  );
+
+  await bombEditPublicMessage(
+    env,
+    bomb,
+    `💥💣 **${type.name} DETONATED!**\n\n${why}\n\n🎯 <@${bomb.targetId}> was hit by <@${bomb.attackerId}>'s bomb.\n⏱️ **${type.timeoutMinutes}-minute Discord timeout applied.**\n\n${effectText}`,
+    []
+  );
+
+  return true;
+}
+
+async function handleBombCommand(env, interaction) {
+  if (!interaction.guild_id) return sendPublicText(env, interaction, "❌ The Bomb Shop only works inside a server.");
+  return sendPublicText(env, interaction, bombShopText(), bombShopRows());
+}
+
+async function handleBombComponent(env, interaction) {
+  const id = String(interaction.data?.custom_id || "");
+  const parts = id.split(":");
+  const action = parts[1];
+  const user = getUserFromInteraction(interaction);
+  if (!user) return sendPublicText(env, interaction, "❌ I couldn't identify you.");
+
+  if (action === "shop") return sendPublicText(env, interaction, bombShopText(), bombShopRows());
+
+  if (action === "buy") {
+    const typeId = parts[2];
+    const type = BOMB_TYPES[typeId];
+    if (!type) return sendPublicText(env, interaction, "❌ That bomb doesn't exist.");
+    const player = await getPlayer(env, user.id);
+    if (Number(player.sparkles || 0) < type.price) {
+      return sendPublicText(env, interaction, `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${Number(player.sparkles || 0).toLocaleString()} ✨**.`);
+    }
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - type.price);
+    await savePlayer(env, player, user.id);
+
+    const bomb = { id: bombId(), typeId, type, attackerId: user.id, guildId: interaction.guild_id, channelId: interaction.channel_id, status: "targeting", createdAt: Date.now() };
+    const state = await getGuildState(env, interaction.guild_id);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    state.bombs[bomb.id] = bomb;
+    await saveGuildState(env, interaction.guild_id, state);
+
+    return sendPublicText(
+      env,
+      interaction,
+      `💣 **${type.name} PURCHASED!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n\n🎯 **Choose the player who gets this bomb.**\n\nEveryone will see the target and the 40-second wire puzzle. 😈`,
+      bombTargetRows(bomb)
+    );
+  }
+
+  if (action === "target") {
+    const bombIdValue = parts[2];
+    const state = await getGuildState(env, interaction.guild_id);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    const bomb = state.bombs[bombIdValue];
+    if (!bomb || bomb.status !== "targeting") return sendPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
+    if (String(user.id) !== String(bomb.attackerId)) return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target.");
+    const targetId = String(interaction.data?.values?.[0] || "");
+    if (!targetId || targetId === bomb.attackerId) return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player.");
+
+    const members = await getGuildMembers(env, interaction.guild_id);
+    const targetMember = members.find(m => String(m.id) === targetId);
+    if (!targetMember) return sendPublicText(env, interaction, "❌ That player isn't available in this server.");
+
+    bomb.targetId = targetId;
+    bomb.status = "pending";
+    bomb.wires = shuffleArray(BOMB_WIRE_COLORS.slice());
+    bomb.correctWire = bomb.wires[randomInt(0, bomb.wires.length - 1)];
+    bomb.startedAt = Date.now();
+    bomb.expiresAt = Date.now() + BOMB_WIRE_TIMER;
+    bomb.channelId = interaction.channel_id;
+    state.bombs[bomb.id] = bomb;
+    await saveGuildState(env, interaction.guild_id, state);
+
+    const response = await sendPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb));
+    try {
+      const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
+      if (original.ok) {
+        const message = await original.json();
+        bomb.messageId = message.id;
+        state.bombs[bomb.id] = bomb;
+        await saveGuildState(env, interaction.guild_id, state);
+      }
+    } catch (error) {
+      console.error("Bomb original message capture failed:", error);
+    }
+
+    // Keep the 40-second timer tied to this interaction when possible.
+    // Scheduled processing below is the recovery path if the Worker is
+    // restarted before the in-process timer fires.
+    await new Promise(resolve => setTimeout(resolve, BOMB_WIRE_TIMER));
+    const latestState = await getGuildState(env, interaction.guild_id);
+    const latestBomb = latestState.bombs?.[bomb.id];
+    if (latestBomb?.status === "pending" && Date.now() >= Number(latestBomb.expiresAt || 0)) {
+      await applyBombDetonation(env, latestBomb, "expired");
+    }
+    return response;
+  }
+
+  if (action === "wire") {
+    const bombIdValue = parts[2];
+    const selectedWire = decodeURIComponent(parts.slice(3).join(":"));
+    const state = await getGuildState(env, interaction.guild_id);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    const bomb = state.bombs[bombIdValue];
+    if (!bomb || bomb.status !== "pending") return sendPublicText(env, interaction, "❌ That bomb has already been resolved.");
+    if (String(user.id) !== String(bomb.targetId)) return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire.");
+    if (Date.now() >= Number(bomb.expiresAt || 0)) {
+      await applyBombDetonation(env, bomb, "expired");
+      return;
+    }
+
+    if (selectedWire === bomb.correctWire) {
+      bomb.status = "defused";
+      bomb.resolvedAt = Date.now();
+      state.bombs[bomb.id] = bomb;
+      await saveGuildState(env, interaction.guild_id, state);
+      await bombEditPublicMessage(env, bomb, `🛡️💣 **BOMB DEFUSED!**\n\n<@${bomb.targetId}> cut the **${selectedWire}** wire and survived! 😭🎉\n\n💗 <@${bomb.attackerId}>'s ${bomb.type.name} has been wasted.`, []);
+      return sendPublicText(env, interaction, `🛡️💣 **BOMB DEFUSED!**\n\n<@${bomb.targetId}> cut the **${selectedWire}** wire! 🎉\n\nNo timeout. No punishment. The bomb is gone. 😭` , []);
+    }
+
+    await applyBombDetonation(env, bomb, "wrong");
+    return;
+  }
+
+  return sendPublicText(env, interaction, "❌ Unknown Bomb action.");
+}
+
+async function processBombTimers(env) {
+  const guildIds = await getKnownGuildIds(env);
+  const now = Date.now();
+
+  for (const guildId of guildIds) {
+    try {
+      const state = await getGuildState(env, guildId);
+      state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+
+      for (const bomb of Object.values(state.bombs)) {
+        if (!bomb || !bomb.id) continue;
+
+        if (bomb.status === "pending" && Number(bomb.expiresAt || 0) <= now) {
+          await applyBombDetonation(env, bomb, "expired");
+          continue;
+        }
+
+        if (bomb.typeId === "raccoon" && bomb.status === "detonated" && bomb.targetId) {
+          const target = await getPlayer(env, bomb.targetId);
+          if (Number(target.raccoonBeefUntil || 0) <= 0) continue;
+
+          if (target.raccoonBeefUntil <= now) {
+            if (target.raccoonBeefChannelId) {
+              await sendChannelMessage(
+                env,
+                target.raccoonBeefChannelId,
+                `🦝 **RACCOON BEEF: OVER** — <@${bomb.targetId}> the raccoons have finished collecting their debts. They still don't like you. But the beef has officially ended. 🦝`
+              );
+            }
+            target.raccoonBeefUntil = 0;
+            target.raccoonBeefNextAt = 0;
+            target.raccoonBeefCollections = 0;
+            target.raccoonBeefChannelId = "";
+            await savePlayer(env, target, bomb.targetId);
+            continue;
+          }
+
+          if (Number(target.raccoonBeefNextAt || 0) <= now) {
+            const requested = randomInt(200, 1000);
+            const balance = Math.max(0, Number(target.sparkles || 0));
+            const actual = Math.min(requested, balance);
+            target.sparkles = Math.max(0, balance - actual);
+            target.raccoonBeefCollections = Number(target.raccoonBeefCollections || 0) + 1;
+            target.raccoonBeefNextAt = Math.min(target.raccoonBeefUntil, now + 15 * 60 * 1000);
+
+            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)];
+            if (target.raccoonBeefChannelId) {
+              await sendChannelMessage(
+                env,
+                target.raccoonBeefChannelId,
+                `${flavor}\n\n💸 The raccoons collected **${actual.toLocaleString()} ✨** from <@${bomb.targetId}>.${actual < requested ? `\n😭 They only had **${actual.toLocaleString()} ✨**, so they took everything.` : ""}`
+              );
+            }
+            await savePlayer(env, target, bomb.targetId);
+          }
+        }
+
+        if (bomb.typeId === "chaos" && bomb.status === "detonated" && bomb.targetId) {
+          const target = await getPlayer(env, bomb.targetId);
+          if (Number(target.chaosMarkUntil || 0) <= now) continue;
+          if (Number(target.chaosNextInterruptAt || 0) <= now) {
+            const chaosMessages = [
+              `🌪️ **CHAOS MARK TRIGGERED!** <@${bomb.targetId}> has been randomly selected for nonsense. The raccoons demand you know: **WHY ARE YOU LIKE THIS?** 😭`,
+              `🥒🌪️ **CHAOS INTERRUPTION!** A completely unnecessary pickle event has occurred near <@${bomb.targetId}>. Nobody can explain it.`,
+              `🦝🌪️ **CHAOS EVENT!** The raccoons have issued an unsolicited public warning to <@${bomb.targetId}>. This was not a democracy.`,
+              `🎲🌪️ **CHAOS ROLL!** The universe rolled a random number and unfortunately it landed on <@${bomb.targetId}>. 😭`
+            ];
+            await sendChannelMessage(env, bomb.channelId, chaosMessages[randomInt(0, chaosMessages.length - 1)]);
+            target.chaosNextInterruptAt = 0;
+            await savePlayer(env, target, bomb.targetId);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Bomb timer processing failed for guild ${guildId}:`, error);
+    }
+  }
+}
+
+async function checkBombRestriction(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user?.id) return null;
+  const player = await getPlayer(env, user.id);
+  const now = Date.now();
+
+  if (Number(player.glitteredUntil || 0) > now) {
+    return BOMB_GLITTER_MESSAGES[randomInt(0, BOMB_GLITTER_MESSAGES.length - 1)];
+  }
+
+  if (Number(player.chaosBlockedUntil || 0) > now) {
+    return `🌪️ **CHAOS MARK — COMMAND LOCKED!**\n\nThe raccoons have temporarily locked your WereWives controls. Try again in **${Math.max(1, Math.ceil((player.chaosBlockedUntil - now) / 60000))} minutes**. 😭`;
+  }
+
+  if (Number(player.loveStruckUntil || 0) > now && Math.random() < 0.35) {
+    return BOMB_LOVE_MESSAGES[randomInt(0, BOMB_LOVE_MESSAGES.length - 1)];
+  }
+
+  return null;
+}
+
 /* =========================================================
    COMPONENT ROUTER
 ========================================================= */
@@ -13528,6 +14104,7 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
   if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
   if (id.startsWith("sparklepurchase:")) return handleSparklePurchaseComponent(env, interaction);
 
@@ -27073,6 +27650,8 @@ async function handleCommand(
   if (name === "birthday-name") { await ensureBirthdayEvent(env, interaction.guild_id); await handleBirthdayNameBingo(env, interaction); return; }
   if (name === "birthday-force") { await forceBirthdayServerEvent(env, interaction); return; }
 
+  if (name === "bomb") { await handleBombCommand(env, interaction); return; }
+
   if (name === "games") {
     await handleGamesMenu(env, interaction);
     return;
@@ -29434,6 +30013,10 @@ const COMMANDS = [
     ]
   },
   {
+    name: "bomb",
+    description: "Open the public WereWives Bomb Shop"
+  },
+  {
     name: "games",
     description: "Open the Werewives games menu"
   },
@@ -30700,7 +31283,9 @@ export default {
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
     const isSparkleShopCommand = interaction.type === 2 && interaction.data?.name === "sparkleshop";
+    const isBombCommand = interaction.type === 2 && interaction.data?.name === "bomb";
     const isSparkleShopComponent = interaction.type === 3 && (customId.startsWith("sparkleshop:") || customId.startsWith("sparklepurchase:"));
+    const isBombComponent = interaction.type === 3 && customId.startsWith("bomb:");
     const isNewsComponent = interaction.type === 3 && customId.startsWith("news:ok:");
     const isRumbleCommand = interaction.type === 2 && interaction.data?.name === "rumble";
     const isCoupCommand = interaction.type === 2 && interaction.data?.name === "coup";
@@ -31032,6 +31617,11 @@ export default {
         update = true;
       } else if (isTitlesComponent) {
         update = true;
+      } else if (isBombComponent) {
+        // Bomb Shop gameplay is PUBLIC. Wire choices and all punishment results
+        // must edit the public bomb board so the entire server can watch.
+        update = true;
+        ephemeral = false;
       } else if (isSparkleShopComponent) {
         update = true;
         ephemeral = true;
@@ -31093,6 +31683,13 @@ export default {
           await maybeCourtWatch(env, interaction);
           await maybePublicShame(env, interaction);
           await maybeSpoonInvestigation(env, interaction);
+          if (interaction.type === 2 || interaction.type === 3) {
+            const bombRestriction = await checkBombRestriction(env, interaction);
+            if (bombRestriction) {
+              await sendPublicText(env, interaction, bombRestriction, []);
+              return;
+            }
+          }
           if (interaction.type === 2) {
             await handleCommand(env, interaction);
           } else {
@@ -31173,6 +31770,7 @@ export default {
         processRaccoonMegaphoneJobs(env),
         processRaccoonSuitPaydays(env),
         processRaccoonEmpireDividends(env)
+        ,processBombTimers(env)
       ])
     );
   }
