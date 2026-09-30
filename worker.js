@@ -13875,6 +13875,25 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
   return true;
 }
 
+async function bombDeleteInteractionResponse(env, interaction) {
+  try {
+    const response = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+      console.error("Bomb working-message delete failed:", response.status, await response.text());
+    }
+    return response.ok || response.status === 404;
+  } catch (error) {
+    console.error("Bomb working-message delete error:", error);
+    return false;
+  }
+}
+
+async function sendBombPublicText(env, interaction, content, components = []) {
+  const message = await sendChannelMessage(env, interaction.channel_id, content, components);
+  await bombDeleteInteractionResponse(env, interaction);
+  return message;
+}
+
 async function handleBombCommand(env, interaction) {
   if (!interaction.guild_id) return sendPublicText(env, interaction, "❌ The Bomb Shop only works inside a server.");
   return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
@@ -13885,18 +13904,18 @@ async function handleBombComponent(env, interaction) {
   const parts = id.split(":");
   const action = parts[1];
   const user = getUserFromInteraction(interaction);
-  if (!user) return sendPublicText(env, interaction, "❌ I couldn't identify you.");
+  if (!user) return sendBombPublicText(env, interaction, "❌ I couldn't identify you.");
 
-  if (action === "open" || action === "shop") return sendPublicText(env, interaction, bombShopText(), bombShopRows());
-  if (action === "back") return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
+  if (action === "open" || action === "shop") return sendBombPublicText(env, interaction, bombShopText(), bombShopRows());
+  if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
 
   if (action === "buy") {
     const typeId = parts[2];
     const type = BOMB_TYPES[typeId];
-    if (!type) return sendPublicText(env, interaction, "❌ That bomb doesn't exist.");
+    if (!type) return sendBombPublicText(env, interaction, "❌ That bomb doesn't exist.");
     const player = await getPlayer(env, user.id);
     if (Number(player.sparkles || 0) < type.price) {
-      return sendPublicText(env, interaction, `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${Number(player.sparkles || 0).toLocaleString()} ✨**.`);
+      return sendBombPublicText(env, interaction, `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${Number(player.sparkles || 0).toLocaleString()} ✨**.`);
     }
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - type.price);
     await savePlayer(env, player, user.id);
@@ -13907,7 +13926,7 @@ async function handleBombComponent(env, interaction) {
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
 
-    return sendPublicText(
+    return sendBombPublicText(
       env,
       interaction,
       `💣 **${type.name} PURCHASED!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n\n🎯 **Choose the player who gets this bomb.**\n\nEveryone will see the target and the 40-second wire puzzle. 😈`,
@@ -13920,14 +13939,14 @@ async function handleBombComponent(env, interaction) {
     const state = await getGuildState(env, interaction.guild_id);
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
-    if (!bomb || bomb.status !== "targeting") return sendPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
-    if (String(user.id) !== String(bomb.attackerId)) return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target.");
+    if (!bomb || bomb.status !== "targeting") return sendBombPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
+    if (String(user.id) !== String(bomb.attackerId)) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target."); }
     const targetId = String(interaction.data?.values?.[0] || "");
-    if (!targetId || targetId === bomb.attackerId) return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player.");
+    if (!targetId || targetId === bomb.attackerId) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player."); }
 
     const members = await getGuildMembers(env, interaction.guild_id);
     const targetMember = members.find(m => String(m.id) === targetId);
-    if (!targetMember) return sendPublicText(env, interaction, "❌ That player isn't available in this server.");
+    if (!targetMember) return sendBombPublicText(env, interaction, "❌ That player isn't available in this server.");
 
     bomb.targetId = targetId;
     bomb.status = "pending";
@@ -13939,17 +13958,11 @@ async function handleBombComponent(env, interaction) {
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
 
-    const response = await sendPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb));
-    try {
-      const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
-      if (original.ok) {
-        const message = await original.json();
-        bomb.messageId = message.id;
-        state.bombs[bomb.id] = bomb;
-        await saveGuildState(env, interaction.guild_id, state);
-      }
-    } catch (error) {
-      console.error("Bomb original message capture failed:", error);
+    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb));
+    if (response?.id) {
+      bomb.messageId = response.id;
+      state.bombs[bomb.id] = bomb;
+      await saveGuildState(env, interaction.guild_id, state);
     }
 
     // Keep the 40-second timer tied to this interaction when possible.
@@ -13970,10 +13983,11 @@ async function handleBombComponent(env, interaction) {
     const state = await getGuildState(env, interaction.guild_id);
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
-    if (!bomb || bomb.status !== "pending") return sendPublicText(env, interaction, "❌ That bomb has already been resolved.");
-    if (String(user.id) !== String(bomb.targetId)) return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire.");
+    if (!bomb || bomb.status !== "pending") return sendBombPublicText(env, interaction, "❌ That bomb has already been resolved.");
+    if (String(user.id) !== String(bomb.targetId)) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire."); }
     if (Date.now() >= Number(bomb.expiresAt || 0)) {
       await applyBombDetonation(env, bomb, "expired");
+      await bombDeleteInteractionResponse(env, interaction);
       return;
     }
 
@@ -13983,14 +13997,16 @@ async function handleBombComponent(env, interaction) {
       state.bombs[bomb.id] = bomb;
       await saveGuildState(env, interaction.guild_id, state);
       await bombEditPublicMessage(env, bomb, `🛡️💣 **BOMB DEFUSED!**\n\n<@${bomb.targetId}> cut the **${selectedWire}** wire and survived! 😭🎉\n\n💗 <@${bomb.attackerId}>'s ${bomb.type.name} has been wasted.`, []);
-      return sendPublicText(env, interaction, `🛡️💣 **BOMB DEFUSED!**\n\n<@${bomb.targetId}> cut the **${selectedWire}** wire! 🎉\n\nNo timeout. No punishment. The bomb is gone. 😭` , []);
+      await bombDeleteInteractionResponse(env, interaction);
+      return;
     }
 
     await applyBombDetonation(env, bomb, "wrong");
+    await bombDeleteInteractionResponse(env, interaction);
     return;
   }
 
-  return sendPublicText(env, interaction, "❌ Unknown Bomb action.");
+  return sendBombPublicText(env, interaction, "❌ Unknown Bomb action.");
 }
 
 async function processBombTimers(env) {
@@ -31385,6 +31401,7 @@ export default {
       interaction.__deferred = true;
       interaction.__deferredUpdate = false;
       interaction.__deferredEphemeral = false;
+      interaction.__bombAck = true;
 
       ctx.waitUntil((async () => {
         try {
@@ -31393,13 +31410,13 @@ export default {
             ? await isUserBlacklisted(env, String(user.id))
             : false;
           if (blacklisted) {
-            await sendPublicText(env, interaction, `🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.`, []);
+            await sendBombPublicText(env, interaction, `🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.`, []);
             return;
           }
 
           const bombRestriction = await checkBombRestriction(env, interaction);
           if (bombRestriction) {
-            await sendPublicText(env, interaction, bombRestriction, []);
+            await sendBombPublicText(env, interaction, bombRestriction, []);
             return;
           }
 
@@ -31407,12 +31424,9 @@ export default {
         } catch (error) {
           console.error("Bomb interaction error:", error);
           try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ **Bomb error:** ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Bomb error message:", editError);
+            await sendBombPublicText(env, interaction, `❌ **Bomb error:** ${error?.message || "Unknown error"}`, []);
+          } catch (sendError) {
+            console.error("Could not send Bomb error message:", sendError);
           }
         }
       })());
