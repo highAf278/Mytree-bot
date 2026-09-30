@@ -13730,32 +13730,30 @@ function bombIntroRows() {
   return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
 }
 
-function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES)) {
+function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES), player = null) {
+  const inventory = player ? bombInventory(player) : null;
   return ids
-    .map(id => BOMB_TYPES[id])
-    .filter(type => type && type.static)
-    .map(type => ({
+    .map(id => ({ id, type: BOMB_TYPES[id] }))
+    .filter(entry => entry.type && entry.type.static)
+    .map(({ id, type }) => ({
+      title: `${type.name} — ${type.price.toLocaleString()} ✨`,
+      description: inventory
+        ? `📦 **You own: ${Number(inventory[id] || 0)}**`
+        : "💣 Buy this bomb to store it for later.",
       thumbnail: { url: imageUrl(type.static) }
     }));
 }
 
 function bombShopText(player = null) {
-  const inventory = player ? bombInventory(player) : null;
-  const inventoryLines = inventory
-    ? Object.entries(BOMB_TYPES).map(([id, type]) => `${type.name} — **${type.price.toLocaleString()} ✨** • You own **${Number(inventory[id] || 0)}**`)
-    : Object.entries(BOMB_TYPES).map(([id, type]) => `${type.name} — **${type.price.toLocaleString()} ✨**`);
-
   return [
     "💣🦝 **THE WEREWIVES BOMB SHOP** 🦝💣",
     "",
-    "Buy bombs and store them for later. **Buying does NOT launch a bomb.** 😈",
-    "",
-    ...inventoryLines,
+    "Buy bombs and store them for later — **buying does NOT launch a bomb.** 😈",
     "",
     "📦 Your Bomb Inventory is separate from your normal cosmetic inventory.",
-    "🎯 When you're ready, open **My Bombs** and choose **Use**.",
-    "⏱️ Every deployed bomb gets a freshly randomized **40-second wire puzzle**.",
-    "👀 The target, wire puzzle, detonation, and punishment are all public."
+    "🎯 Use **My Bombs** when you're ready to deploy one.",
+    "⏱️ Every deployed bomb gets a randomized **40-second wire puzzle**.",
+    "👀 The target, puzzle, detonation, and punishment are public."
   ].join("\n");
 }
 
@@ -14056,7 +14054,7 @@ async function handleBombComponent(env, interaction) {
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player), { embeds: bombStaticEmbeds() });
+    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES), player) });
   }
 
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
@@ -14065,7 +14063,7 @@ async function handleBombComponent(env, interaction) {
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0)) });
+    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0), player) });
   }
 
   if (action === "buy") {
