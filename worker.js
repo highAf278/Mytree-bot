@@ -14582,7 +14582,6 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
             liveBomb.messageId = String(publicJson.id);
             liveState.bombs[bomb.id] = liveBomb;
             await saveGuildState(env, interaction.guild_id, liveState);
-            bomb = liveBomb;
           } else {
             console.error("Bomb state disappeared before public message capture:", bomb.id);
           }
