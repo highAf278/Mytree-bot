@@ -31760,6 +31760,78 @@ export default {
       }
     }
 
+    // =========================================================
+    // BOMB FAST-PATH
+    //
+    // Bomb components can perform KV reads/writes. Do NOT use a type-6
+    // component update here: Discord can reject that acknowledgement when
+    // the Bomb message/component is not in the exact state Discord expects.
+    // A normal public type-5 deferred response is much more reliable. It
+    // creates a public @original immediately, and the Bomb handler edits
+    // that response after the KV work finishes.
+    // =========================================================
+    if (isBombComponent) {
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 5, data: {} })
+        }
+      );
+
+      if (!ack.ok) {
+        console.error("Bomb deferred response failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = false;
+
+      ctx.waitUntil((async () => {
+        try {
+          const user = getUserFromInteraction(interaction);
+          const blacklisted = user && user.id !== env.OWNER_ID
+            ? await isUserBlacklisted(env, String(user.id))
+            : false;
+
+          if (blacklisted) {
+            await sendBombPublicText(
+              env,
+              interaction,
+              `🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.`,
+              []
+            );
+            return;
+          }
+
+          const bombRestriction = await checkBombRestriction(env, interaction);
+          if (bombRestriction) {
+            await sendBombPublicText(env, interaction, bombRestriction, []);
+            return;
+          }
+
+          await handleBombComponent(env, interaction);
+        } catch (error) {
+          console.error("Bomb interaction error:", error);
+          try {
+            const response = await editOriginalResponse(env, interaction, {
+              content: `❌ **Bomb error:** ${error?.message || "Unknown error"}`,
+              components: []
+            });
+            if (!response.ok) {
+              console.error("Bomb error response edit failed:", response.status, await response.text());
+            }
+          } catch (editError) {
+            console.error("Could not send Bomb error message:", editError);
+          }
+        }
+      })());
+
+      return new Response("OK", { status: 200 });
+    }
+
     if (relevant) {
       let update = false;
       let ephemeral = false;
@@ -31846,10 +31918,6 @@ export default {
       } else if (isBirthdayComponent) {
         update = true;
       } else if (isTitlesComponent) {
-        update = true;
-      } else if (isBombComponent) {
-        // Bomb interactions are PUBLIC. Defer as a type-6 update so the
-        // existing public Bomb message is edited after KV work completes.
         update = true;
       } else if (isSparkleShopComponent) {
         update = true;
