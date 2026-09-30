@@ -27026,87 +27026,35 @@ async function handleFree(env, interaction, guess) {
 
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
-  player.inventory = Array.isArray(player.inventory) ? player.inventory : [];
+  bombInventory(player);
 
-  if (normalized === "gold") {
-    const inventoryId = "profile_frame_royal_gold";
-    if (player.inventory.includes(inventoryId)) {
-      await sendText(env, interaction, "👑 You already own the FREE **Royal Gold Profile Frame**!\n\nUse **/profile → Frames** to equip it.");
-      return;
-    }
-
-    player.inventory.push(inventoryId);
-    await savePlayer(env, player);
-
-    await sendText(
-      env,
-      interaction,
-      `👑 **ROYAL GOLD UNLOCKED!**\n\nYou received the FREE **Royal Gold Profile Frame**!\n\n🖤 Antique gold + black royal frame\n❤️ Ruby gems\n💙 Royal blue gems\n👑 Crown crest\n\nOpen **/profile → Frames** to equip it. ✨`
-    );
-    return;
-  }
-
-  if (normalized === "globe") {
-    const inventoryId = "globe_animated_effect";
-    if (player.inventory.includes(inventoryId)) {
-      await sendText(env, interaction, "🌎✨ You already own the FREE **Worldlight Globe** effect!\n\nUse **/profile → Customize → Effects** to equip it.");
-      return;
-    }
-
-    player.inventory.push(inventoryId);
-    await savePlayer(env, player);
-
-    await sendText(
-      env,
-      interaction,
-      "🌎✨ You got the **Worldlight Globe** effect!"
-    );
-    return;
-  }
-
-  if (normalized === "pariss") {
-    player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object"
-      ? player.raccoonMart
+  // GIFTBOMBS is the only active /free code.
+  // One redemption per player; each redemption gives 2 of every bomb.
+  if (normalized === "giftbombs") {
+    player.freeGiftCodesRedeemed = player.freeGiftCodesRedeemed && typeof player.freeGiftCodesRedeemed === "object"
+      ? player.freeGiftCodesRedeemed
       : {};
 
-    if (Number(player.raccoonMart.raccoon_empire || 0) > 0) {
+    if (player.freeGiftCodesRedeemed.giftbombs) {
       await sendText(
         env,
         interaction,
-        "🏛️🦝 You already own the **Raccoon Empire License**!\n\nYour Empire is permanent, so this free code cannot be redeemed twice."
+        "💣🎁 **GIFTBOMBS ALREADY REDEEMED!**\n\nYou already claimed your **2 of every bomb** from this code. 🦝💥"
       );
       return;
     }
 
-    player.raccoonMart.raccoon_empire = 1;
-    player.raccoonEmpireLastDividendAt = Date.now();
-    await savePlayer(env, player);
-
-    await sendText(
-      env,
-      interaction,
-      "🏛️🦝 **RACCOON EMPIRE LICENSE UNLOCKED!**\n\nYou received **1 Raccoon Empire License** for FREE! 👑🦝\n\n📦 It has been added to your **RaccoonMart inventory**.\n💰 Your permanent Empire benefits are now active.\n📅 Your first **20,000 ✨ weekly dividend** will be paid after 7 days.\n✨ You also receive the permanent **20% bonus on positive sparkle earnings**."
-    );
-    return;
-  }
-
-  if (normalized === "racsui") {
-    if (user.id !== env.OWNER_ID) {
-      await sendText(env, interaction, "❌ This free code is owner-only.");
-      return;
+    for (const bombId of Object.keys(BOMB_TYPES)) {
+      bombAdd(player, bombId, 2);
     }
 
-    player.raccoonMart = player.raccoonMart && typeof player.raccoonMart === "object"
-      ? player.raccoonMart
-      : {};
-
-    player.raccoonMart.raccoon_suit = Number(player.raccoonMart.raccoon_suit || 0) + 1;
+    player.freeGiftCodesRedeemed.giftbombs = true;
     await savePlayer(env, player);
 
     await sendText(
       env,
       interaction,
-      "🦝💼 **RACCOON SUIT UNLOCKED!**\n\nYou received **1 Raccoon Suit** for free!\n\n📦 It has been added to your **RaccoonMart inventory**.\n⏰ Activate it from **My RaccoonMart** whenever you're ready to start the 24-hour payday event."
+      "💣🎁 **GIFTBOMBS REDEEMED!**\n\nYou received **2 of EVERY bomb** for FREE! 💥\n\n💗 2 Love Bombs\n🌪️ 2 Chaos Bombs\n✨ 2 Glitter Bombs\n🥒 2 Pickle Bombs\n🦝 2 Raccoon Bombs\n\n📦 Open **My Bombs** in the Bomb Shop to use them whenever you're ready. 😈"
     );
     return;
   }
@@ -30942,7 +30890,7 @@ const COMMANDS = [
 
   {
     name: "free",
-    description: "Enter a free gift code to unlock a cosmetic reward",
+    description: "Enter a free gift code to claim a WereWives reward",
     options: [
       { type: 3, name: "guess", description: "Secret gift code", required: true }
     ]
