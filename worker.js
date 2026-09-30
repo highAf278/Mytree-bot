@@ -13735,7 +13735,7 @@ function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES)) {
     .map(id => BOMB_TYPES[id])
     .filter(type => type && type.static)
     .map(type => ({
-      image: { url: imageUrl(type.static) }
+      thumbnail: { url: imageUrl(type.static) }
     }));
 }
 
@@ -14112,7 +14112,7 @@ async function handleBombComponent(env, interaction) {
       interaction,
       `💣 **${type.name} ADDED TO YOUR BOMB INVENTORY!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n💎 **Balance:** ${player.sparkles.toLocaleString()} ✨\n\n📦 **You now own ${bombCount(player, typeId)} ${type.name}.**\n\nNothing has been thrown yet. Use it whenever you want from **My Bombs**. 😈`,
       bombShopRows(player),
-      { embeds: [{ image: { url: imageUrl(type.static) } }] }
+      { embeds: [{ thumbnail: { url: imageUrl(type.static) } }] }
     );
   }
 
@@ -14188,7 +14188,7 @@ async function handleBombComponent(env, interaction) {
       interaction,
       `💣 **${type.name} ARMED!**\n\n<@${user.id}> is preparing a bomb from their inventory.\n\n🎯 **Choose the player who gets this bomb.**\n\n📦 One bomb has been removed from your stored inventory. If you cancel, it will be returned.`,
       bombTargetRows(bomb),
-      { embeds: [{ image: { url: imageUrl(type.static) } }] }
+      { embeds: [{ thumbnail: { url: imageUrl(type.static) } }] }
     );
   }
 
@@ -14269,7 +14269,7 @@ async function handleBombComponent(env, interaction) {
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
 
-    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb), { embeds: [{ image: { url: imageUrl(bomb.type.static) } }] });
+    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb), { embeds: [{ thumbnail: { url: imageUrl(bomb.type.static) } }] });
     if (response?.ok) {
       try {
         const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
