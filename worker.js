@@ -13542,7 +13542,8 @@ const BOMB_TYPES = {
     timeoutMinutes: 1,
     effectName: "💘 LOVE-STRUCK",
     durationMs: 30 * 60 * 1000,
-    gif: "IMG_8006.gif"
+    gif: "IMG_8006.gif",
+    static: "IMG_8002.png"
   },
   chaos: {
     name: "🌪️ CHAOS BOMB",
@@ -13550,7 +13551,8 @@ const BOMB_TYPES = {
     timeoutMinutes: 5,
     effectName: "🌪️ CHAOS MARK",
     durationMs: 60 * 60 * 1000,
-    gif: "IMG_8008.gif"
+    gif: "IMG_8008.gif",
+    static: "IMG_8003.png"
   },
   glitter: {
     name: "✨ GLITTER BOMB",
@@ -13558,7 +13560,8 @@ const BOMB_TYPES = {
     timeoutMinutes: 3,
     effectName: "✨ GLITTERED",
     durationMs: 15 * 60 * 1000,
-    gif: "IMG_8007.gif"
+    gif: "IMG_8007.gif",
+    static: "IMG_7996.png"
   },
   pickle: {
     name: "🥒 PICKLE BOMB",
@@ -13566,7 +13569,8 @@ const BOMB_TYPES = {
     timeoutMinutes: 2,
     effectName: "🥒 PICKLE SLAP",
     durationMs: 0,
-    gif: "IMG_8010.gif"
+    gif: "IMG_8010.gif",
+    static: "IMG_7997.png"
   },
   raccoon: {
     name: "🦝 RACCOON BOMB",
@@ -13574,7 +13578,8 @@ const BOMB_TYPES = {
     timeoutMinutes: 10,
     effectName: "🦝 RACCOON BEEF",
     durationMs: 60 * 60 * 1000,
-    gif: "IMG_8009.gif"
+    gif: "IMG_8009.gif",
+    static: "IMG_7998.png"
   }
 };
 
@@ -13723,6 +13728,15 @@ function bombIntroText() {
 
 function bombIntroRows() {
   return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
+}
+
+function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES)) {
+  return ids
+    .map(id => BOMB_TYPES[id])
+    .filter(type => type && type.static)
+    .map(type => ({
+      image: { url: imageUrl(type.static) }
+    }));
 }
 
 function bombShopText(player = null) {
@@ -13999,7 +14013,7 @@ async function bombDeleteInteractionResponse(env, interaction) {
   }
 }
 
-async function sendBombPublicText(env, interaction, content, components = []) {
+async function sendBombPublicText(env, interaction, content, components = [], extra = {}) {
   // Bomb component interactions are already acknowledged with a public type-4
   // response by the dedicated bomb router above. That response creates
   // @original, so edit it directly instead of creating a second channel
@@ -14008,7 +14022,8 @@ async function sendBombPublicText(env, interaction, content, components = []) {
   if (interaction.__bombAck || interaction.__deferred) {
     const response = await editOriginalResponse(env, interaction, {
       content,
-      components
+      components,
+      ...extra
     });
     if (!response.ok) {
       console.error("Bomb original response edit failed:", response.status, await response.text());
@@ -14016,7 +14031,7 @@ async function sendBombPublicText(env, interaction, content, components = []) {
     return response;
   }
 
-  const message = await sendChannelMessage(env, interaction.channel_id, content, components);
+  const message = await sendChannelMessage(env, interaction.channel_id, content, components, extra);
   return message;
 }
 
@@ -14041,7 +14056,7 @@ async function handleBombComponent(env, interaction) {
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player));
+    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player), { embeds: bombStaticEmbeds() });
   }
 
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
@@ -14050,7 +14065,7 @@ async function handleBombComponent(env, interaction) {
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player));
+    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0)) });
   }
 
   if (action === "buy") {
@@ -14096,7 +14111,8 @@ async function handleBombComponent(env, interaction) {
       env,
       interaction,
       `💣 **${type.name} ADDED TO YOUR BOMB INVENTORY!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n💎 **Balance:** ${player.sparkles.toLocaleString()} ✨\n\n📦 **You now own ${bombCount(player, typeId)} ${type.name}.**\n\nNothing has been thrown yet. Use it whenever you want from **My Bombs**. 😈`,
-      bombShopRows(player)
+      bombShopRows(player),
+      { embeds: [{ image: { url: imageUrl(type.static) } }] }
     );
   }
 
@@ -14171,7 +14187,8 @@ async function handleBombComponent(env, interaction) {
       env,
       interaction,
       `💣 **${type.name} ARMED!**\n\n<@${user.id}> is preparing a bomb from their inventory.\n\n🎯 **Choose the player who gets this bomb.**\n\n📦 One bomb has been removed from your stored inventory. If you cancel, it will be returned.`,
-      bombTargetRows(bomb)
+      bombTargetRows(bomb),
+      { embeds: [{ image: { url: imageUrl(type.static) } }] }
     );
   }
 
@@ -14252,7 +14269,7 @@ async function handleBombComponent(env, interaction) {
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
 
-    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb));
+    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb), { embeds: [{ image: { url: imageUrl(bomb.type.static) } }] });
     if (response?.ok) {
       try {
         const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
