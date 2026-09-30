@@ -988,6 +988,14 @@ function defaultPlayer() {
     unlockedBadges: [],
     vipBadge: false,
     badgeStats: { sparklesSpent: 0, sparklesStolen: 0, coupWins: 0, bluffsCaught: 0, badInfluence: 0, speedWins: 0, uniqueRaccoonTargets: [] },
+    // Bombs are stored items, separate from active bomb games.
+    bombs: {
+      love: 0,
+      chaos: 0,
+      glitter: 0,
+      pickle: 0,
+      raccoon: 0
+    },
     storeTestFrame: "",
     storeTestBadge: "",
     storeTestBadges: [],
@@ -13654,25 +13662,28 @@ function bombIntroRows() {
   return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
 }
 
-function bombShopText() {
+function bombShopText(player = null) {
+  const inventory = player ? bombInventory(player) : null;
+  const inventoryLines = inventory
+    ? Object.entries(BOMB_TYPES).map(([id, type]) => `${type.name} — **${type.price.toLocaleString()} ✨** • You own **${Number(inventory[id] || 0)}**`)
+    : Object.entries(BOMB_TYPES).map(([id, type]) => `${type.name} — **${type.price.toLocaleString()} ✨**`);
+
   return [
     "💣🦝 **THE WEREWIVES BOMB SHOP** 🦝💣",
     "",
-    "Choose your weapon. Buy it, choose your victim, and let the server watch the chaos. 😈",
+    "Buy bombs and store them for later. **Buying does NOT launch a bomb.** 😈",
     "",
-    "💗 **Love Bomb** — 500 ✨",
-    "🌪️ **Chaos Bomb** — 1,500 ✨",
-    "✨ **Glitter Bomb** — 750 ✨",
-    "🥒 **Pickle Bomb** — 1,000 ✨",
-    "🦝 **Raccoon Bomb** — 4,000 ✨",
+    ...inventoryLines,
     "",
-    "⏱️ Every bomb uses a freshly randomized **40-second wire puzzle**.",
+    "📦 Your Bomb Inventory is separate from your normal cosmetic inventory.",
+    "🎯 When you're ready, open **My Bombs** and choose **Use**.",
+    "⏱️ Every deployed bomb gets a freshly randomized **40-second wire puzzle**.",
     "👀 The target, wire puzzle, detonation, and punishment are all public."
   ].join("\n");
 }
 
-function bombShopRows() {
-  return [
+function bombShopRows(player = null) {
+  const rows = [
     row(
       button("💗 Love — 500 ✨", "bomb:buy:love", 1),
       button("🌪️ Chaos — 1,500 ✨", "bomb:buy:chaos", 1),
@@ -13680,10 +13691,44 @@ function bombShopRows() {
     ),
     row(
       button("🥒 Pickle — 1,000 ✨", "bomb:buy:pickle", 1),
-      button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1)
+      button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1),
+      button("📦 My Bombs", "bomb:inventory", 2)
     ),
     row(button("⬅️ Back", "bomb:back", 2))
   ];
+  return rows;
+}
+
+function bombInventoryRows(player) {
+  const rows = [];
+  const owned = Object.entries(BOMB_TYPES).filter(([id]) => bombCount(player, id) > 0);
+
+  if (owned.length) {
+    const buttons = owned.map(([id, type]) =>
+      button(`💣 Use ${type.name.replace(/^\S+\s*/, "")} ×${bombCount(player, id)}`, `bomb:use:${id}`, 1)
+    );
+    for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  }
+
+  rows.push(row(button("🛒 Back to Bomb Shop", "bomb:shop", 2)));
+  return rows;
+}
+
+function bombInventoryText(player) {
+  const lines = Object.entries(BOMB_TYPES).map(([id, type]) =>
+    `${type.name}: **${bombCount(player, id)}**`
+  );
+  const total = Object.keys(BOMB_TYPES).reduce((sum, id) => sum + bombCount(player, id), 0);
+  return [
+    "📦💣 **YOUR BOMB INVENTORY** 💣📦",
+    "",
+    ...lines,
+    "",
+    `💣 **Total stored bombs: ${total}**`,
+    "",
+    "Choose **Use** when you actually want to deploy one.",
+    "Buying bombs only stores them — it never targets anyone automatically. 😈"
+  ].join("\n");
 }
 
 function bombTargetRows(bomb) {
@@ -13695,7 +13740,7 @@ function bombTargetRows(bomb) {
       min_values: 1,
       max_values: 1
     }] }],
-    row(button("💣 Back to Bomb Shop", "bomb:shop", 2))
+    row(button("↩️ Cancel & Return Bomb", `bomb:cancel:${bomb.id}`, 2))
   ];
 }
 
@@ -13889,40 +13934,33 @@ async function bombDeleteInteractionResponse(env, interaction) {
 }
 
 async function sendBombPublicText(env, interaction, content, components = []) {
-  // Bomb component interactions are acknowledged publicly by the dedicated
-  // bomb router. Normally we edit that @original response. If Discord rejects
-  // that edit (or the interaction webhook has become unavailable), FALL BACK
-  // to a real public channel message so the bomb action can never get stuck
-  // forever on "💣 Working on that bomb...".
-  if (interaction.__bombAck) {
-    try {
-      const response = await editOriginalResponse(env, interaction, {
-        content,
-        components
-      });
-      if (response.ok) return response;
-
-      const detail = await response.text();
-      console.error("Bomb original response edit failed:", response.status, detail);
-    } catch (error) {
-      console.error("Bomb original response edit threw:", error);
+  // Bomb component interactions are already acknowledged with a public type-4
+  // response by the dedicated bomb router above. That response creates
+  // @original, so edit it directly instead of creating a second channel
+  // message and deleting the acknowledgement. Deleting the acknowledgement
+  // was the reason the Bomb UI appeared to simply vanish.
+  if (interaction.__bombAck || interaction.__deferred) {
+    const response = await editOriginalResponse(env, interaction, {
+      content,
+      components
+    });
+    if (!response.ok) {
+      console.error("Bomb original response edit failed:", response.status, await response.text());
     }
-
-    // The actual result is more important than preserving the temporary
-    // acknowledgement. Send the real public result, then remove the stale
-    // working message if Discord lets us.
-    const fallback = await sendChannelMessage(env, interaction.channel_id, content, components);
-    if (fallback?.ok) {
-      await bombDeleteInteractionResponse(env, interaction);
-    }
-    return fallback;
+    return response;
   }
 
-  return sendChannelMessage(env, interaction.channel_id, content, components);
+  const message = await sendChannelMessage(env, interaction.channel_id, content, components);
+  return message;
 }
 
 async function handleBombCommand(env, interaction) {
   if (!interaction.guild_id) return sendPublicText(env, interaction, "❌ The Bomb Shop only works inside a server.");
+  const user = getUserFromInteraction(interaction);
+  if (!user) return sendPublicText(env, interaction, "❌ I couldn't identify you.");
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+  bombInventory(player);
   return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
 }
 
@@ -13933,48 +13971,109 @@ async function handleBombComponent(env, interaction) {
   const user = getUserFromInteraction(interaction);
   if (!user) return sendBombPublicText(env, interaction, "❌ I couldn't identify you.");
 
-  if (action === "open" || action === "shop") return sendBombPublicText(env, interaction, bombShopText(), bombShopRows());
+  if (action === "open" || action === "shop") {
+    const player = await getPlayer(env, user.id);
+    updatePlayerIdentity(player, interaction);
+    bombInventory(player);
+    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player));
+  }
+
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
+
+  if (action === "inventory") {
+    const player = await getPlayer(env, user.id);
+    updatePlayerIdentity(player, interaction);
+    bombInventory(player);
+    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player));
+  }
 
   if (action === "buy") {
     const typeId = parts[2];
     const type = BOMB_TYPES[typeId];
     if (!type) return sendBombPublicText(env, interaction, "❌ That bomb doesn't exist.");
 
-    // REAL PURCHASE TRANSACTION
-    // -------------------------
-    // This branch is deliberately separate from the Discord response work.
-    // A successful button click is NOT considered a purchase until the
-    // player's persisted Sparkle balance has been changed and the active
-    // bomb has been written to guild state.
+    // BUY ONLY STORES THE BOMB.
+    // It does NOT create an active target/puzzle and does NOT launch anything.
     const player = await getPlayer(env, user.id);
+    updatePlayerIdentity(player, interaction);
+    bombInventory(player);
     const beforeSparkles = Number(player.sparkles || 0);
 
     if (beforeSparkles < type.price) {
       return sendBombPublicText(
         env,
         interaction,
-        `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${beforeSparkles.toLocaleString()} ✨**.`
+        `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${beforeSparkles.toLocaleString()} ✨**.`,
+        bombShopRows(player)
       );
     }
 
-    const afterSparkles = beforeSparkles - type.price;
-    player.sparkles = afterSparkles;
+    player.sparkles = beforeSparkles - type.price;
+    bombAdd(player, typeId, 1);
+    player.shopPurchases = Number(player.shopPurchases || 0) + 1;
+    player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+    player.badgeStats.sparklesSpent = Number(player.badgeStats.sparklesSpent || 0) + type.price;
 
-    // Persist the actual charge first. The bomb is NOT announced as purchased
-    // until this save completes successfully.
     try {
       await savePlayer(env, player, user.id);
     } catch (error) {
-      console.error("Bomb purchase sparkle save failed:", error);
+      console.error("Bomb inventory purchase save failed:", error);
       return sendBombPublicText(
         env,
         interaction,
-        `❌ **Purchase failed.** Your Sparkles were not charged.\n\n<@${user.id}> still has **${beforeSparkles.toLocaleString()} ✨**.`
+        `❌ **Purchase failed.** Your Sparkles were not charged and no bomb was added.\n\n<@${user.id}> still has **${beforeSparkles.toLocaleString()} ✨**.`,
+        bombShopRows(player)
       );
     }
 
-    // Create the actual bomb only after the Sparkle charge has persisted.
+    return sendBombPublicText(
+      env,
+      interaction,
+      `💣 **${type.name} ADDED TO YOUR BOMB INVENTORY!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n💎 **Balance:** ${player.sparkles.toLocaleString()} ✨\n\n📦 **You now own ${bombCount(player, typeId)} ${type.name}.**\n\nNothing has been thrown yet. Use it whenever you want from **My Bombs**. 😈`,
+      bombShopRows(player)
+    );
+  }
+
+  if (action === "use") {
+    const typeId = parts[2];
+    const type = BOMB_TYPES[typeId];
+    if (!type) return sendBombPublicText(env, interaction, "❌ That bomb doesn't exist.");
+
+    const player = await getPlayer(env, user.id);
+    updatePlayerIdentity(player, interaction);
+    bombInventory(player);
+
+    if (bombCount(player, typeId) < 1) {
+      return sendBombPublicText(env, interaction, `❌ You don't have a ${type.name} in your Bomb Inventory.`, bombInventoryRows(player));
+    }
+
+    // Prevent a player from reserving several bombs at once while one is
+    // already waiting for a target.
+    const state = await getGuildState(env, interaction.guild_id);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    const existing = Object.values(state.bombs).find(b =>
+      b && String(b.attackerId) === String(user.id) &&
+      (b.status === "targeting" || b.status === "pending")
+    );
+    if (existing) {
+      return sendBombPublicText(
+        env,
+        interaction,
+        `💣 <@${user.id}> you already have a bomb being prepared or deployed. Finish that one first.`,
+        bombTargetRows(existing)
+      );
+    }
+
+    // Reserve one bomb now. If the user cancels, it is returned to inventory.
+    bombTake(player, typeId);
+    try {
+      await savePlayer(env, player, user.id);
+    } catch (error) {
+      console.error("Bomb inventory use save failed:", error);
+      bombAdd(player, typeId, 1);
+      return sendBombPublicText(env, interaction, "❌ I couldn't reserve that bomb. It is still in your inventory.", bombInventoryRows(player));
+    }
+
     const bomb = {
       id: bombId(),
       typeId,
@@ -13984,39 +14083,52 @@ async function handleBombComponent(env, interaction) {
       channelId: interaction.channel_id,
       status: "targeting",
       createdAt: Date.now(),
-      purchasePrice: type.price,
-      purchaseBeforeSparkles: beforeSparkles,
-      purchaseAfterSparkles: afterSparkles
+      inventoryConsumed: true
     };
 
     try {
-      const state = await getGuildState(env, interaction.guild_id);
-      state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
       state.bombs[bomb.id] = bomb;
       await saveGuildState(env, interaction.guild_id, state);
     } catch (error) {
-      // If creating the active bomb fails, refund the exact charge before
-      // telling the user that the purchase failed.
-      console.error("Bomb state creation failed after charge:", error);
+      console.error("Bomb active-state creation failed after inventory reservation:", error);
       try {
         const refundPlayer = await getPlayer(env, user.id);
-        refundPlayer.sparkles = Number(refundPlayer.sparkles || 0) + type.price;
+        bombAdd(refundPlayer, typeId, 1);
         await savePlayer(env, refundPlayer, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
       } catch (refundError) {
-        console.error("Bomb purchase refund failed:", refundError);
+        console.error("Bomb inventory refund failed:", refundError);
       }
-      return sendBombPublicText(
-        env,
-        interaction,
-        `❌ **Purchase failed while creating the bomb.**\n\nYour **${type.price.toLocaleString()} ✨** charge was refunded. Please try again.`
-      );
+      return sendBombPublicText(env, interaction, "❌ I couldn't prepare that bomb. The bomb was returned to your inventory.", bombInventoryRows(player));
     }
 
     return sendBombPublicText(
       env,
       interaction,
-      `💣 **${type.name} PURCHASED!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n💎 **Balance after purchase: ${afterSparkles.toLocaleString()} ✨**\n🧾 **Purchase confirmed.**\n\n🎯 **Choose the player who gets this bomb.**\n\nEveryone will see the target and the 40-second wire puzzle. 😈`,
+      `💣 **${type.name} ARMED!**\n\n<@${user.id}> is preparing a bomb from their inventory.\n\n🎯 **Choose the player who gets this bomb.**\n\n📦 One bomb has been removed from your stored inventory. If you cancel, it will be returned.`,
       bombTargetRows(bomb)
+    );
+  }
+
+  if (action === "cancel") {
+    const bombIdValue = parts[2];
+    const state = await getGuildState(env, interaction.guild_id);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    const bomb = state.bombs[bombIdValue];
+    if (!bomb || bomb.status !== "targeting") return sendBombPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
+    if (String(user.id) !== String(bomb.attackerId)) return sendEphemeralFollowup(env, interaction, "❌ Only the person using this bomb can cancel it.");
+
+    delete state.bombs[bomb.id];
+    await saveGuildState(env, interaction.guild_id, state);
+
+    const player = await getPlayer(env, user.id);
+    bombAdd(player, bomb.typeId, 1);
+    await savePlayer(env, player, user.id);
+
+    return sendBombPublicText(
+      env,
+      interaction,
+      `↩️ **BOMB RETURNED TO INVENTORY**\n\n${bomb.type.name} was cancelled and returned to <@${user.id}>'s Bomb Inventory.\n\n📦 You now own **${bombCount(player, bomb.typeId)}**.`,
+      bombInventoryRows(player)
     );
   }
 
@@ -14026,9 +14138,9 @@ async function handleBombComponent(env, interaction) {
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
     if (!bomb || bomb.status !== "targeting") return sendBombPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
-    if (String(user.id) !== String(bomb.attackerId)) { return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target."); }
+    if (String(user.id) !== String(bomb.attackerId)) return sendEphemeralFollowup(env, interaction, "❌ Only the person using this bomb can choose its target.");
     const targetId = String(interaction.data?.values?.[0] || "");
-    if (!targetId || targetId === bomb.attackerId) { return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player."); }
+    if (!targetId || targetId === bomb.attackerId) return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player.");
 
     const members = await getGuildMembers(env, interaction.guild_id);
     const targetMember = members.find(m => String(m.id) === targetId);
@@ -14063,9 +14175,8 @@ async function handleBombComponent(env, interaction) {
       }
     }
 
-    // Keep the 40-second timer tied to this interaction when possible.
-    // Scheduled processing below is the recovery path if the Worker is
-    // restarted before the in-process timer fires.
+    // Keep the exact 40-second fallback when this Worker invocation remains
+    // alive. processBombTimers() is the recovery path if the Worker restarts.
     await new Promise(resolve => setTimeout(resolve, BOMB_WIRE_TIMER));
     const latestState = await getGuildState(env, interaction.guild_id);
     const latestBomb = latestState.bombs?.[bomb.id];
@@ -14082,7 +14193,7 @@ async function handleBombComponent(env, interaction) {
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
     if (!bomb || bomb.status !== "pending") return sendBombPublicText(env, interaction, "❌ That bomb has already been resolved.");
-    if (String(user.id) !== String(bomb.targetId)) { return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire."); }
+    if (String(user.id) !== String(bomb.targetId)) return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire.");
     if (Date.now() >= Number(bomb.expiresAt || 0)) {
       await applyBombDetonation(env, bomb, "expired");
       return;
@@ -31472,62 +31583,12 @@ export default {
 
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
-    // Bomb buttons are public and can perform several KV operations. Send a
-    // real public type-4 response immediately instead of Discord's type-5
-    // loading state. The handler edits this message when the work finishes,
-    // so Discord never gets stuck showing "Bot is thinking...".
-    if (isBombComponent) {
-      const ack = await fetch(
-        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: 4,
-            data: { content: "💣 Working on that bomb..." }
-          })
-        }
-      );
-      if (!ack.ok) {
-        console.error("Bomb initial response failed:", ack.status, await ack.text());
-        return new Response("OK", { status: 200 });
-      }
-
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = false;
-      interaction.__bombAck = true;
-
-      ctx.waitUntil((async () => {
-        try {
-          const user = getUserFromInteraction(interaction);
-          const blacklisted = user && user.id !== env.OWNER_ID
-            ? await isUserBlacklisted(env, String(user.id))
-            : false;
-          if (blacklisted) {
-            await sendBombPublicText(env, interaction, `🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.`, []);
-            return;
-          }
-
-          const bombRestriction = await checkBombRestriction(env, interaction);
-          if (bombRestriction) {
-            await sendBombPublicText(env, interaction, bombRestriction, []);
-            return;
-          }
-
-          await handleBombComponent(env, interaction);
-        } catch (error) {
-          console.error("Bomb interaction error:", error);
-          try {
-            await sendBombPublicText(env, interaction, `❌ **Bomb error:** ${error?.message || "Unknown error"}`, []);
-          } catch (sendError) {
-            console.error("Could not send Bomb error message:", sendError);
-          }
-        }
-      })());
-
-      return new Response("OK", { status: 200 });
-    }
+    // Bomb buttons are public and can perform several KV operations.
+    // Use the same immediate type-6 public ACK as the other long-running
+    // component handlers. The Bomb handler then edits @original after its KV
+    // work completes. This is important because charging Sparkles, creating
+    // the bomb record, and building the target menu can take longer than
+    // Discord's 3-second initial interaction window.
 
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
@@ -31785,6 +31846,10 @@ export default {
       } else if (isBirthdayComponent) {
         update = true;
       } else if (isTitlesComponent) {
+        update = true;
+      } else if (isBombComponent) {
+        // Bomb interactions are PUBLIC. Defer as a type-6 update so the
+        // existing public Bomb message is edited after KV work completes.
         update = true;
       } else if (isSparkleShopComponent) {
         update = true;
