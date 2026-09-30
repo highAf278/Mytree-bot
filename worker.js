@@ -13893,10 +13893,13 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
   } else if (bomb.typeId === "raccoon") {
     target.raccoonBeefUntil = now + type.durationMs;
     target.raccoonBeefNextAt = now + 15 * 60 * 1000;
+    // Separate random public trash-talk timer. This is intentionally independent
+    // from the 15-minute Sparkle collection timer.
+    target.raccoonBeefNextTalkAt = now + randomInt(3, 10) * 60 * 1000;
     target.raccoonBeefCollections = 0;
     target.raccoonBeefChannelId = bomb.channelId;
     await savePlayer(env, target, bomb.targetId);
-    effectText = `🦝 **RACCOON BEEF for 1 hour!** Every 15 minutes the raccoons will collect **200–1,000 ✨** and occasionally send public trash-talk.`;
+    effectText = `🦝 **RACCOON BEEF for 1 hour!** The raccoons collect **200–1,000 ✨ every 15 minutes** and will also randomly show up to talk trash between collections.`;
   }
 
   const why = reason === "expired"
@@ -14205,14 +14208,9 @@ async function handleBombComponent(env, interaction) {
       }
     }
 
-    // Keep the exact 40-second fallback when this Worker invocation remains
-    // alive. processBombTimers() is the recovery path if the Worker restarts.
-    await new Promise(resolve => setTimeout(resolve, BOMB_WIRE_TIMER));
-    const latestState = await getGuildState(env, interaction.guild_id);
-    const latestBomb = latestState.bombs?.[bomb.id];
-    if (latestBomb?.status === "pending" && Date.now() >= Number(latestBomb.expiresAt || 0)) {
-      await applyBombDetonation(env, latestBomb, "expired");
-    }
+    // Automatic expiration is handled ONLY by processBombTimers().
+    // Do not sleep here: a second 40-second fallback can race the scheduler
+    // and detonate the same bomb twice.
     return response;
   }
 
@@ -14276,11 +14274,14 @@ async function processBombTimers(env) {
             }
             target.raccoonBeefUntil = 0;
             target.raccoonBeefNextAt = 0;
+            target.raccoonBeefNextTalkAt = 0;
             target.raccoonBeefCollections = 0;
             target.raccoonBeefChannelId = "";
             await savePlayer(env, target, bomb.targetId);
             continue;
           }
+
+          let collectionHappened = false;
 
           if (Number(target.raccoonBeefNextAt || 0) <= now) {
             const requested = randomInt(200, 1000);
@@ -14289,6 +14290,7 @@ async function processBombTimers(env) {
             target.sparkles = Math.max(0, balance - actual);
             target.raccoonBeefCollections = Number(target.raccoonBeefCollections || 0) + 1;
             target.raccoonBeefNextAt = Math.min(target.raccoonBeefUntil, now + 15 * 60 * 1000);
+            collectionHappened = true;
 
             const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)];
             if (target.raccoonBeefChannelId) {
@@ -14298,8 +14300,26 @@ async function processBombTimers(env) {
                 `${flavor}\n\n💸 The raccoons collected **${actual.toLocaleString()} ✨** from <@${bomb.targetId}>.${actual < requested ? `\n😭 They only had **${actual.toLocaleString()} ✨**, so they took everything.` : ""}`
               );
             }
-            await savePlayer(env, target, bomb.targetId);
           }
+
+          // Separate from Sparkle collections: the raccoons can randomly
+          // appear and publicly talk trash between collections too.
+          if (!collectionHappened && Number(target.raccoonBeefNextTalkAt || 0) <= now) {
+            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)];
+            if (target.raccoonBeefChannelId) {
+              await sendChannelMessage(
+                env,
+                target.raccoonBeefChannelId,
+                `${flavor}\n\n🎯 <@${bomb.targetId}> the raccoons are still thinking about you. Unfortunately.`
+              );
+            }
+            target.raccoonBeefNextTalkAt = Math.min(
+              target.raccoonBeefUntil,
+              now + randomInt(5, 12) * 60 * 1000
+            );
+          }
+
+          await savePlayer(env, target, bomb.targetId);
         }
 
         if (bomb.typeId === "chaos" && bomb.status === "detonated" && bomb.targetId) {
