@@ -31361,6 +31361,65 @@ export default {
 
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
+    // Bomb buttons are public and can perform several KV operations. Send a
+    // real public type-4 response immediately instead of Discord's type-5
+    // loading state. The handler edits this message when the work finishes,
+    // so Discord never gets stuck showing "Bot is thinking...".
+    if (isBombComponent) {
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: 4,
+            data: { content: "💣 Working on that bomb..." }
+          })
+        }
+      );
+      if (!ack.ok) {
+        console.error("Bomb initial response failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = false;
+
+      ctx.waitUntil((async () => {
+        try {
+          const user = getUserFromInteraction(interaction);
+          const blacklisted = user && user.id !== env.OWNER_ID
+            ? await isUserBlacklisted(env, String(user.id))
+            : false;
+          if (blacklisted) {
+            await sendPublicText(env, interaction, `🚫 **Access Restricted**\n\nYou currently cannot use the Werewives bot.`, []);
+            return;
+          }
+
+          const bombRestriction = await checkBombRestriction(env, interaction);
+          if (bombRestriction) {
+            await sendPublicText(env, interaction, bombRestriction, []);
+            return;
+          }
+
+          await handleBombComponent(env, interaction);
+        } catch (error) {
+          console.error("Bomb interaction error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ **Bomb error:** ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Bomb error message:", editError);
+          }
+        }
+      })());
+
+      return new Response("OK", { status: 200 });
+    }
+
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
       try {
