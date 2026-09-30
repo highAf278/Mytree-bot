@@ -13916,35 +13916,15 @@ function bombShopRows(player = null, page = 1) {
     row(button("⬅️ Back", "bomb:back", 2))
   ];
 }
-function bombInventoryPageData(player, page = 0) {
-  const owned = Object.entries(BOMB_TYPES).filter(([id]) => bombCount(player, id) > 0);
-  const pageSize = 6;
-  const totalPages = Math.max(1, Math.ceil(owned.length / pageSize));
-  const currentPage = Math.max(0, Math.min(Number(page) || 0, totalPages - 1));
-  const items = owned.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
-  return { owned, items, page: currentPage, totalPages };
-}
-
-function bombInventoryRows(player, page = 0) {
-  const { items, page: currentPage, totalPages } = bombInventoryPageData(player, page);
+function bombInventoryRows(player) {
   const rows = [];
+  const owned = Object.entries(BOMB_TYPES).filter(([id]) => bombCount(player, id) > 0);
 
-  if (items.length) {
-    const buttons = items.map(([id, type]) =>
+  if (owned.length) {
+    const buttons = owned.map(([id, type]) =>
       button(`💣 Use ${type.name.replace(/^\S+\s*/, "")} ×${bombCount(player, id)}`, `bomb:use:${id}`, 1)
     );
     for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
-  }
-
-  if (totalPages > 1) {
-    const navButtons = [];
-    if (currentPage > 0) {
-      navButtons.push(button("⬅️ Previous", `bomb:inventory_page:${currentPage - 1}`, 2));
-    }
-    if (currentPage < totalPages - 1) {
-      navButtons.push(button("Next ➡️", `bomb:inventory_page:${currentPage + 1}`, 2));
-    }
-    rows.push(row(...navButtons));
   }
 
   rows.push(row(button("🛒 Back to Bomb Shop", "bomb:shop", 2)));
@@ -14196,13 +14176,6 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
   if (!live || live.status !== "pending") return false;
   bomb = live;
 
-  // Remove the dedicated expiration timer as soon as this bomb resolves.
-  try {
-    await env.TREE_DATA.delete(`bombtimer:${bomb.id}`);
-  } catch (error) {
-    console.error("Bomb timer cleanup failed:", error);
-  }
-
   const target = await getPlayer(env, bomb.targetId);
   const attacker = await getPlayer(env, bomb.attackerId);
   const now = Date.now();
@@ -14375,21 +14348,11 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
 
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
 
-  if (action === "inventory" || action === "inventory_page") {
+  if (action === "inventory") {
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    const requestedPage = action === "inventory_page" ? Number(parts[2] || 0) : 0;
-    const { items, page, totalPages } = bombInventoryPageData(player, requestedPage);
-    const pageIds = items.map(([id]) => id);
-    const pageText = `${bombInventoryText(player)}\n\n📄 **Page ${page + 1} of ${totalPages}**`;
-    return sendBombPublicText(
-      env,
-      interaction,
-      pageText,
-      bombInventoryRows(player, page),
-      { embeds: bombStaticEmbeds(pageIds, player) }
-    );
+    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0), player) });
   }
 
   if (action === "buy") {
@@ -14592,13 +14555,6 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     bomb.channelId = interaction.channel_id;
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
-    // Keep a dedicated KV timer entry so scheduled bomb expiration does not
-    // depend on scanning the entire guild-state list.
-    await env.TREE_DATA.put(`bombtimer:${bomb.id}`, JSON.stringify({
-      bombId: bomb.id,
-      guildId: interaction.guild_id,
-      expiresAt: bomb.expiresAt
-    }));
 
     // Everything up to this point was private. The target selection is the
     // exact moment the bomb becomes a public server event.
@@ -14614,9 +14570,35 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       try {
         const publicJson = await publicMessage.json();
         if (publicJson?.id) {
-          bomb.messageId = String(publicJson.id);
-          state.bombs[bomb.id] = bomb;
-          await saveGuildState(env, interaction.guild_id, state);
+          const messageId = String(publicJson.id);
+
+          // IMPORTANT: do not save our old `pending` copy back over a bomb
+          // that may have expired while Discord was creating the public
+          // message. The timer/scheduler can resolve a bomb during this tiny
+          // window. Re-read KV and merge ONLY the Discord message ID.
+          const liveState = await getGuildState(env, interaction.guild_id);
+          liveState.bombs = liveState.bombs && typeof liveState.bombs === "object" ? liveState.bombs : {};
+          const liveBomb = liveState.bombs[bomb.id];
+
+          if (liveBomb) {
+            liveBomb.messageId = messageId;
+            liveState.bombs[bomb.id] = liveBomb;
+            await saveGuildState(env, interaction.guild_id, liveState);
+            bomb = liveBomb;
+
+            // If the bomb already detonated while the message was being
+            // created, finish the Discord UI now instead of leaving live wire
+            // buttons attached to an already-resolved bomb.
+            if (liveBomb.status === "detonated") {
+              const why = "⏰ The 40-second timer expired.";
+              await bombEditPublicMessage(
+                env,
+                liveBomb,
+                `💥💣 **${liveBomb.type.name} DETONATED!**\n\n${why}\n\n🎯 <@${liveBomb.targetId}> was hit by <@${liveBomb.attackerId}>'s bomb.`,
+                []
+              );
+            }
+          }
         }
       } catch (error) {
         console.error("Bomb public message capture failed:", error);
@@ -14671,46 +14653,6 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
   }
 
   return sendBombPublicText(env, interaction, "❌ Unknown Bomb action.");
-}
-
-async function processBombExpirationTimers(env) {
-  const now = Date.now();
-  let cursor = undefined;
-
-  try {
-    do {
-      const page = await env.TREE_DATA.list({ prefix: "bombtimer:", limit: 1000, cursor });
-
-      for (const key of page.keys || []) {
-        try {
-          const raw = await env.TREE_DATA.get(key.name);
-          if (!raw) continue;
-
-          const timer = JSON.parse(raw);
-          if (!timer?.bombId || !timer?.guildId) continue;
-          if (Number(timer.expiresAt || 0) > now) continue;
-
-          const state = await getGuildState(env, timer.guildId);
-          state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
-          const bomb = state.bombs[timer.bombId];
-
-          if (bomb?.status === "pending" && Number(bomb.expiresAt || 0) <= now) {
-            await applyBombDetonation(env, bomb, "expired");
-          }
-
-          // The bomb is now resolved, or the timer is stale. Either way the
-          // timer key no longer needs to be scanned on future cron passes.
-          await env.TREE_DATA.delete(key.name);
-        } catch (error) {
-          console.error(`Bomb expiration timer failed for ${key.name}:`, error);
-        }
-      }
-
-      cursor = page.list_complete ? undefined : page.cursor;
-    } while (cursor);
-  } catch (error) {
-    console.error("processBombExpirationTimers failed:", error);
-  }
 }
 
 async function processBombTimers(env) {
@@ -32631,9 +32573,8 @@ export default {
         expireBirthdayEventState(env),
         processRaccoonMegaphoneJobs(env),
         processRaccoonSuitPaydays(env),
-        processRaccoonEmpireDividends(env),
-        processBombExpirationTimers(env),
-        processBombTimers(env)
+        processRaccoonEmpireDividends(env)
+        ,processBombTimers(env)
       ])
     );
   }
