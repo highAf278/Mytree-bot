@@ -13889,24 +13889,36 @@ async function bombDeleteInteractionResponse(env, interaction) {
 }
 
 async function sendBombPublicText(env, interaction, content, components = []) {
-  // Bomb component interactions are already acknowledged with a public type-4
-  // response by the dedicated bomb router above. That response creates
-  // @original, so edit it directly instead of creating a second channel
-  // message and deleting the acknowledgement. Deleting the acknowledgement
-  // was the reason the Bomb UI appeared to simply vanish.
+  // Bomb component interactions are acknowledged publicly by the dedicated
+  // bomb router. Normally we edit that @original response. If Discord rejects
+  // that edit (or the interaction webhook has become unavailable), FALL BACK
+  // to a real public channel message so the bomb action can never get stuck
+  // forever on "💣 Working on that bomb...".
   if (interaction.__bombAck) {
-    const response = await editOriginalResponse(env, interaction, {
-      content,
-      components
-    });
-    if (!response.ok) {
-      console.error("Bomb original response edit failed:", response.status, await response.text());
+    try {
+      const response = await editOriginalResponse(env, interaction, {
+        content,
+        components
+      });
+      if (response.ok) return response;
+
+      const detail = await response.text();
+      console.error("Bomb original response edit failed:", response.status, detail);
+    } catch (error) {
+      console.error("Bomb original response edit threw:", error);
     }
-    return response;
+
+    // The actual result is more important than preserving the temporary
+    // acknowledgement. Send the real public result, then remove the stale
+    // working message if Discord lets us.
+    const fallback = await sendChannelMessage(env, interaction.channel_id, content, components);
+    if (fallback?.ok) {
+      await bombDeleteInteractionResponse(env, interaction);
+    }
+    return fallback;
   }
 
-  const message = await sendChannelMessage(env, interaction.channel_id, content, components);
-  return message;
+  return sendChannelMessage(env, interaction.channel_id, content, components);
 }
 
 async function handleBombCommand(env, interaction) {
