@@ -990,12 +990,30 @@ function defaultPlayer() {
     badgeStats: { sparklesSpent: 0, sparklesStolen: 0, coupWins: 0, bluffsCaught: 0, badInfluence: 0, speedWins: 0, uniqueRaccoonTargets: [] },
     // Bombs are stored items, separate from active bomb games.
     bombs: {
-      love: 0,
-      chaos: 0,
-      glitter: 0,
-      pickle: 0,
-      raccoon: 0
+      love: 0, chaos: 0, glitter: 0, pickle: 0, raccoon: 0,
+      fire: 0, stink: 0, jester: 0, fake_id: 0, double: 0
     },
+    fireBombUntil: 0,
+    stinkBombUntil: 0,
+    stinkBombNextAt: 0,
+    stinkBombChannelId: "",
+    stinkBombPreviousTitle: "",
+    stinkBombPreviousTree: "",
+    stinkBombPreviousEquipped: null,
+    jesterBombUntil: 0,
+    jesterBombNextEventAt: 0,
+    fakeIdentityUntil: 0,
+    fakeIdentityPrevious: null,
+    doubleBombUntil: 0,
+    doubleBombPartnerId: "",
+    doubleBombNextAt: 0,
+    doubleBombEventsRemaining: 0,
+    doubleBombCommandLockUntil: 0,
+    doubleBombChannelId: "",
+    chaosNextEventAt: 0,
+    chaosEventsRemaining: 0,
+    chaosLockedCommand: "",
+    chaosLockedUntil: 0,
     storeTestFrame: "",
     storeTestBadge: "",
     storeTestBadges: [],
@@ -1235,7 +1253,8 @@ const PROFILE_FRAMES = {
   toxic_green: { name: "☢️ Toxic Green", label: "TOXIC GREEN", style: "toxic" },
   midnight_chrome: { name: "🖤 Midnight Chrome", label: "MIDNIGHT CHROME", style: "chrome" },
   black_ice: { name: "🧊 Black Ice", label: "BLACK ICE", style: "black_ice" },
-  haunted_manor: { name: "🎃 Haunted Manor", label: "HAUNTED MANOR", style: "haunted" }
+  haunted_manor: { name: "🎃 Haunted Manor", label: "HAUNTED MANOR", style: "haunted" },
+  millionaire_vault: { name: "🏦 Fortune Vault", label: "FORTUNE VAULT", style: "millionaire" }
 };
 
 const PROFILE_BADGES = {
@@ -1278,7 +1297,8 @@ const NAME_EFFECTS = {
   frostbite: { name: "❄️ Frostbite", requirement: "Win 25 Color Chaos games." },
   golden: { name: "💛✨ Golden", requirement: "Reach 100,000 sparkles." },
   spooky: { name: "👻 Spooky", requirement: "Own the complete Halloween set." },
-  black_ice: { name: "🧊 Black Ice", requirement: "Own the complete Black Ice limited set." }
+  black_ice: { name: "🧊 Black Ice", requirement: "Own the complete Black Ice limited set." },
+  millionaire: { name: "💰 Money Shower", requirement: "Reach 1,000,000 sparkles." }
 };
 
 function unlockOwnedTitle(player, id) {
@@ -1338,7 +1358,8 @@ function unlockNameEffects(player) {
     frostbite: Number(player.pastelWins || 0) >= 25,
     golden: Number(player.sparkles || 0) >= 100000,
     spooky: halloweenComplete,
-    black_ice: ["black_ice_tree", "black_ice_background", "black_ice_decoration", "black_ice_snow_animated_effect"].every(id => owned.includes(id))
+    black_ice: ["black_ice_tree", "black_ice_background", "black_ice_decoration", "black_ice_snow_animated_effect"].every(id => owned.includes(id)),
+    millionaire: Number(player.sparkles || 0) >= 1000000
   };
   for (const [id, ok] of Object.entries(checks)) if (ok && !player.unlockedNameEffects.includes(id)) player.unlockedNameEffects.push(id);
   if (checks.firework) unlockOwnedTitle(player, "firework_fiend");
@@ -1351,6 +1372,8 @@ function unlockNameEffects(player) {
   if (checks.golden) unlockOwnedTitle(player, "golden_legend");
   if (checks.spooky) unlockOwnedTitle(player, "haunted");
   if (checks.black_ice) unlockOwnedTitle(player, "frostborn");
+  if (checks.millionaire) unlockOwnedTitle(player, "millionaire");
+  if (checks.millionaire && !player.inventory.includes("profile_frame_millionaire_vault")) player.inventory.push("profile_frame_millionaire_vault");
   if (player.equippedNameEffect && !player.unlockedNameEffects.includes(player.equippedNameEffect)) player.equippedNameEffect = "";
 }
 
@@ -2546,6 +2569,8 @@ function updatePlayerIdentity(player, interaction) {
 
   player.userId = user.id;
   player.username = user.username || "";
+
+  if (Number(player.fakeIdentityUntil || 0) > Date.now() && player.fakeIdentityPrevious) return;
 
   player.displayName =
     interaction.member?.nick ||
@@ -3878,7 +3903,8 @@ function profileEffectColors(id){
     frostbite:[[255,255,255],[190,240,255],[105,210,255],[220,250,255]],
     golden:[[255,255,230],[255,220,85],[255,245,150],[220,165,35]],
     spooky:[[255,255,255],[215,165,255],[255,160,90],[155,110,255]],
-    black_ice:[[245,253,255],[185,239,255],[95,195,235],[45,86,120]]
+    black_ice:[[245,253,255],[185,239,255],[95,195,235],[45,86,120]],
+    millionaire:[[255,250,205],[255,220,95],[214,155,28],[255,238,145]]
   }[id] || [profileEffectColor(id)];
 }
 function profileEffectColorAt(id,index,phase){
@@ -4171,6 +4197,7 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
   else if(effectId==="golden") baseY+=Math.round(Math.sin(t*1.3)*1);
   else if(effectId==="spooky") baseY+=Math.round(Math.sin(t*1.7)*1.5);
   else if(effectId==="black_ice") baseY+=Math.round(Math.sin(t*0.35)*0.25);
+  else if(effectId==="millionaire") baseY+=Math.round(Math.sin(t*0.45)*0.25);
 
   for(const ch of str){
     if(ch===" "){px+=3*drawScale;charIndex++;continue;}
@@ -4236,6 +4263,15 @@ function drawAnimatedProfileTitle(frame,text,x,y,scale,effectId,phase,maxWidth=n
       yy+=Math.round(Math.sin(t*2+charIndex*0.8)*1.5);
       xx+=Math.round(Math.sin(t+charIndex*0.35));
       color=(Math.sin(t*1.5+charIndex)>0)?[180,105,235]:[115,65,175];
+    } else if(effectId==="millionaire"){
+      const sweep=(phase*1.35 + charIndex/Math.max(1,str.length))%1;
+      const distance=Math.abs(sweep-0.5);
+      const glint=Math.max(0,1-distance*8.0);
+      if(glint>0.35) color=[255,255,235];
+      else if(charIndex%4===0) color=[255,241,150];
+      else if(charIndex%4===1) color=[235,185,45];
+      else if(charIndex%4===2) color=[205,145,20];
+      else color=[255,220,85];
     } else if(effectId==="black_ice"){
       // BLACK ICE V3: frozen-glass lettering. Keep the word still and readable;
       // the animation comes from the moving reflection, not bouncing letters.
@@ -4424,6 +4460,20 @@ function drawProfileEffectParticles(frame,effectId,phase){
         else profileStar(frame,Math.round(xx),Math.round(yy),2+(i%2),[255,215,70],220);
         if(i%2===0) profileDiamond(frame,Math.round(xx+5),Math.round(yy-4),2,[255,245,170],180);
       });
+      break;
+    }
+    case "millionaire": {
+      const pts=[[355,139,0],[400,225,.12],[445,145,.24],[492,229,.36],[540,139,.48],[588,225,.60],[636,145,.72],[682,229,.84],[735,140,.96]];
+      pts.forEach(([x,y,o],i)=>{
+        const xx=Math.round(x+Math.sin(p*0.55+o*8)*7);
+        const yy=Math.round(y+Math.cos(p*0.62+o*7)*6);
+        if(i%3===0) profileCoin(frame,xx,yy,5+(i%2),[225,165,35]);
+        else if(i%3===1) profileDiamond(frame,xx,yy,3,[255,232,115],220);
+        else profileStar(frame,xx,yy,2+(i%2),[255,245,170],220);
+      });
+      const sweepX=365+((phase*420)%380);
+      profileStar(frame,Math.round(sweepX),134,3,[255,255,235],220);
+      profileStar(frame,Math.round(745-(phase*420)%380),229,2,[255,238,145],190);
       break;
     }
     case "black_ice": {
@@ -5223,6 +5273,40 @@ function drawProfileFrame(frame, frameId, phase=0){
         profileSmoothCircle(frame,gx,gy,3.0+2.2*q,[255,225,120],Math.round(150+100*q),true);
       }
     });
+  } else if(style==='millionaire'){
+    const black=[10,11,10], black2=[20,28,23], emeraldDark=[16,62,42];
+    const antique=[178,128,28], gold=[225,177,48], bright=[255,232,125];
+    profileSmoothRoundedRect(frame,x,y,w,h,19,black,255,9.0);
+    profileSmoothRoundedRect(frame,x+7,y+7,w-14,h-14,14,emeraldDark,255,6.0);
+    profileSmoothRoundedRect(frame,x+14,y+14,w-28,h-28,10,black2,255,4.0);
+    profileSmoothLine(frame,x+24,y+23,x+w-24,y+23,4.5,gold,250);
+    profileSmoothLine(frame,x+24,y+h-23,x+w-24,y+h-23,4.5,gold,250);
+    profileSmoothLine(frame,x+23,y+25,x+23,y+h-25,4.5,gold,250);
+    profileSmoothLine(frame,x+w-23,y+25,x+w-23,y+h-25,4.5,gold,250);
+    const cx=x+w/2, cy=y+h/2;
+    profileSmoothRing(frame,cx,cy,18,antique,235,4.0);
+    profileSmoothRing(frame,cx,cy,10,gold,245,2.5);
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4 + phase*0.25;
+      profileSmoothLine(frame,cx+Math.cos(a)*10,cy+Math.sin(a)*10,cx+Math.cos(a)*29,cy+Math.sin(a)*29,3.0,antique,220);
+    }
+    profileSmoothCircle(frame,cx,cy,6,black,255,true);
+    profileSmoothCircle(frame,cx,cy,4,bright,245,true);
+    const jewels=[[x+15,y+15],[x+w-15,y+15],[x+w-15,y+h-15],[x+15,y+h-15]];
+    jewels.forEach(([jx,jy],i)=>{
+      profileDiamond(frame,jx,jy,6,antique,250);
+      profileDiamond(frame,jx,jy,3.2,i%2?[40,150,100]:bright,245);
+    });
+    profileCrown(frame,cx,y+31,6,bright);
+    profileSmoothRoundedRect(frame,cx-48,y+h-40,96,18,6,black,245,2.0);
+    drawBitmapText(frame,"1,000,000",cx-42,y+h-36,1,gold,95);
+    const sweep=(phase*2)%1, sx=x+28+sweep*(w-56);
+    profileSmoothLine(frame,sx,y+26,sx+18,y+26,3.0,bright,150);
+    profileSmoothLine(frame,sx,y+h-26,sx-18,y+h-26,3.0,bright,130);
+    if(Math.sin(phase*Math.PI*2)>0.45){
+      profileSmoothStar(frame,x+w-18,y+18,2.5,bright,180);
+      profileSmoothStar(frame,x+18,y+h-18,2.0,bright,160);
+    }
   } else if(style==='crimson'||style==='haunted'){
     profileCrown(frame,x+31,y+12,5,hi);
     profileCrown(frame,x+w-31,y+12,5,hi);
@@ -6776,6 +6860,17 @@ function drawAnimatedExperimentalEffect(frame, phase=0) {
   }
 }
 
+function drawFireBombOverlay(frame, phase=0) {
+  const flames=[[0.19,0.90,0.72],[0.25,0.84,0.55],[0.32,0.91,0.82],[0.40,0.86,0.60],[0.50,0.92,0.88],[0.59,0.85,0.62],[0.68,0.91,0.78],[0.75,0.84,0.58],[0.82,0.90,0.70],[0.23,0.72,0.44],[0.77,0.72,0.46]];
+  for(let i=0;i<flames.length;i++){
+    const [nx,ny,scale]=flames[i]; const sway=Math.sin(phase*Math.PI*2+i*1.7)*9*scale;
+    const x=nx*frame.width+sway, base=ny*frame.height, h=(62+18*Math.sin(phase*Math.PI*2+i))*scale, w=(30+10*Math.sin(phase*Math.PI*2+i*.7))*scale, top=base-h;
+    for(let r=0;r<8;r++){ const tt=r/7, shape=Math.sin(Math.PI*tt)*.88+.12, ww=Math.max(3,w*shape), yy=top+tt*h, xx=x-ww/2+Math.sin(i+r+phase*8)*3; profileBlendFill(frame,Math.round(xx),Math.round(yy),Math.round(ww),Math.ceil(h/8)+1,255,70+Math.round(35*Math.sin(i)),8,235); }
+    for(let r=0;r<5;r++){ const tt=r/4, ww=Math.max(2,w*.55*(.25+.75*Math.sin(Math.PI*tt/2))), yy=base-h*.62+tt*h*.62; profileBlendFill(frame,Math.round(x-ww/2),Math.round(yy),Math.round(ww),Math.ceil(h/5)+1,255,175,35,245); }
+  }
+  for(let i=0;i<22;i++){ const tt=(phase*1.1+i/22)%1; effectDisc(frame,Math.round((.18+((i*37)%64)/100+Math.sin(tt*8+i)*.012)*frame.width),Math.round((.88-tt*.58)*frame.height),2+(i%3),[255,145,25],220); }
+}
+
 async function renderTreeDirectFallback(env, player) {
   // CPU-safe render size: keep the same proportions as the known-good 1024px
   // renderer, but use 768px so the Worker does substantially less pixel work.
@@ -6957,7 +7052,16 @@ function drawAnimatedGlobe(frame, phase = 0) {
   }
 }
 
-const animatedEffectDrawers = {
+if (Number(player.fireBombUntil || 0) > Date.now()) {
+    const frames=[]; const frameCount=6; const baseData=scene.data.slice();
+    for(let i=0;i<frameCount;i++){
+      const frame={width,height,data:new Uint8Array(baseData)};
+      drawFireBombOverlay(frame,i/frameCount);
+      frames.push(rgbaToRgbPng(frame));
+    }
+    return { bytes: await encodePNGFramesToGIF(frames,width,height,10), animated:true };
+  }
+  const animatedEffectDrawers = {
     globe_animated: drawAnimatedGlobe,
     black_ice_snow_animated: drawAnimatedBlackIceSnow,
     petal_storm_animated: drawAnimatedPetalStorm,
@@ -9803,6 +9907,7 @@ async function showProfileFrames(env, interaction, targetId) {
   const player = await getPlayer(env, user.id);
   const owned = [];
   if (player.inventory.includes("profile_frame_royal_gold")) owned.push("royal_gold");
+  if (player.inventory.includes("profile_frame_millionaire_vault")) owned.push("millionaire_vault");
 
   const rows = [];
   for (const frameId of owned) {
@@ -11059,7 +11164,7 @@ const INVENTORY_CATEGORY_IDS = {
   backgrounds: ["pink_sky_background", "candyland_background", "halloween_background", "stoned_birthday_background", "birthday_background", "magic_mushroom_background", "field_day_background", "red_forest_background", "cozy_cat_background", "green_glow_background", "prism_flutter_background", "lavender_twilight_background", "world_of_flags_background", "ocean_opal_background", "fairy_hollow_background", "glam_background", "black_cat_magic_background", "dragon_realm_background", "inferno_king_background", "thunder_god_background", "black_ice_background", "werewives_background", "golden_pickle_background", "midnight_rider_background"],
   effects: ["butterflies_effect", "hearts_effect", "purr_princess_effect", "green_glow_effect", "candy_effect", "halloween_effect", "prism_flutter_effect", "lavender_twilight_effect", "world_of_flags_effect", "ocean_opal_effect", "fairy_hollow_effect", "glam_effect", "black_cat_magic_effect", "dragon_realm_effect", "inferno_king_effect", "thunder_god_effect", "werewives_effect", "golden_pickle_effect", "midnight_rider_effect", "birthday_effect", "birthday_confetti", "birthday_cupcake_chaos_effect", "birthday_raccoon_party_effect", "birthday_balloon_float_effect", "birthday_pumpkin_sparkle_effect", "petal_storm_animated_effect", "butterfly_garden_animated_effect", "rainbow_trail_animated_effect", "ember_glow_animated_effect", "meteor_shower_animated_effect", "cosmic_rift_animated_effect", "fairy_flight_animated_effect", "crystal_aura_animated_effect", "starfall_animated_effect", "unicorn_sparkle_animated_effect", "snowfall_animated_effect", "flower_bloom_animated_effect", "bubble_pop_animated_effect", "candy_storm_animated_effect", "kitty_parade_animated_effect", "electric_storm_animated_effect", "experimental_effect_animated_effect", "black_ice_snow_animated_effect", "globe_animated_effect", "beans_effect"],
   decorations: ["pumpkin_cat_decoration", "panda_decoration", "cat_decoration", "raccoon_thief_decoration", "frank_frog_decoration", "duck_hat_boots_decoration", "cheddar_falls_decoration", "stoned_balloon_decoration", "birthday_decoration", "eggward_decoration", "hedgy_decoration", "black_ice_decoration"],
-  frames: ["profile_frame_royal_gold"],
+  frames: ["profile_frame_royal_gold", "profile_frame_millionaire_vault"],
   gifts: ["werewives_tree", "werewives_background", "werewives_effect", "golden_pickle_tree", "golden_pickle_background", "golden_pickle_effect", "midnight_rider_tree", "midnight_rider_background", "midnight_rider_effect"]
 };
 
@@ -11091,7 +11196,7 @@ async function showInventoryCategory(env, interaction, category, page = 0) {
   page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
   const pageItems = owned.slice(page * pageSize, page * pageSize + pageSize);
   const lines = pageItems.map(id => {
-    const label = id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || (id === "profile_frame_royal_gold" ? "👑 Royal Gold Profile Frame" : SHOP_ITEMS[id]?.name || id));
+    const label = id === "cherry" ? "🌸 Cherry Tree" : (INVENTORY_NAMES[id] || (id === "profile_frame_royal_gold" ? "👑 Royal Gold Profile Frame" : (id === "profile_frame_millionaire_vault" ? "🏦 Fortune Vault Frame" : SHOP_ITEMS[id]?.name || id)));
     return `• ${label} — ID: \`${id}\``;
   });
   const rows = [];
@@ -13573,13 +13678,34 @@ const BOMB_TYPES = {
     static: "IMG_7997.png"
   },
   raccoon: {
-    name: "🦝 RACCOON BOMB",
-    price: 4000,
-    timeoutMinutes: 10,
-    effectName: "🦝 RACCOON BEEF",
-    durationMs: 60 * 60 * 1000,
-    gif: "IMG_8009.gif",
-    static: "IMG_7998.png"
+    name: "🦝 RACCOON BOMB", price: 4000, timeoutMinutes: 10,
+    effectName: "🦝 RACCOON BEEF", durationMs: 60 * 60 * 1000,
+    gif: "IMG_8009.gif", static: "IMG_7998.png"
+  },
+  fire: {
+    name: "🔥 FIRE BOMB", price: 7500, timeoutMinutes: 5,
+    effectName: "🔥 TREE ON FIRE", durationMs: 2 * 60 * 60 * 1000,
+    gif: "IMG_8049.gif", static: "IMG_8037.png"
+  },
+  stink: {
+    name: "🦨 STINK BOMB", price: 3500, timeoutMinutes: 3,
+    effectName: "🦨 STINKY", durationMs: 12 * 60 * 60 * 1000,
+    gif: "IMG_8047.gif", static: "IMG_8039.png"
+  },
+  jester: {
+    name: "🃏 JESTER BOMB", price: 5000, timeoutMinutes: 4,
+    effectName: "🃏 JESTERED", durationMs: 6 * 60 * 60 * 1000,
+    gif: "IMG_8048.gif", static: "IMG_8038.png"
+  },
+  fake_id: {
+    name: "🪪 FAKE ID BOMB", price: 6000, timeoutMinutes: 3,
+    effectName: "🪪 FAKE IDENTITY", durationMs: 6 * 60 * 60 * 1000,
+    gif: "IMG_8050.gif", static: "IMG_8040.png"
+  },
+  double: {
+    name: "👯 DOUBLE BOMB", price: 8000, timeoutMinutes: 5,
+    effectName: "👯 DOUBLE LINK", durationMs: 6 * 60 * 60 * 1000,
+    gif: "IMG_8051.gif", static: "IMG_8041.png"
   }
 };
 
@@ -13715,19 +13841,20 @@ function bombIntroText() {
   return [
     "💣🦝 **WEREWIVES BOMB SHOP** 🦝💣",
     "",
-    "Buy ridiculous bombs, pick a target, and make them face a **40-second wire puzzle**. 😈",
+    "Buy ridiculous bombs privately, store them in your inventory, and deploy them whenever you're ready. 😈",
     "",
-    "💥 Wrong wire or time runs out = BOOM + punishment.",
-    "🛡️ Correct wire = bomb defused.",
+    "💥 Once you choose a target, THAT is when the bomb becomes public.",
+    "🛡️ Correct wire = defused. Wrong wire or time runs out = BOOM + punishment.",
     "",
-    "👀 **Everything is public.** The server gets to watch the target panic, the detonation, and the punishment.",
+    "🤫 Shop browsing, purchases, inventory, and bomb setup stay private.",
+    "👀 The actual attack, wire puzzle, detonation, and punishment are public.",
     "",
-    "👇 Tap below to open the Bomb Shop!"
+    "👇 Pick what you want below."
   ].join("\n");
 }
 
 function bombIntroRows() {
-  return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
+  return [row(button("💣 Open Bomb Shop", "bomb:open", 1), button("📦 My Bombs", "bomb:inventory", 1))];
 }
 
 function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES), player = null) {
@@ -13744,21 +13871,36 @@ function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES), player = null) {
     }));
 }
 
-function bombShopText(player = null) {
+function bombShopText(player = null, page = 1) {
+  const label = Number(page) === 2 ? "PAGE 2 — NEW BOMBS" : "PAGE 1 — ORIGINAL BOMBS";
   return [
     "💣🦝 **THE WEREWIVES BOMB SHOP** 🦝💣",
+    `**${label}**`,
     "",
     "Buy bombs and store them for later — **buying does NOT launch a bomb.** 😈",
     "",
-    "📦 Your Bomb Inventory is separate from your normal cosmetic inventory.",
-    "🎯 Use **My Bombs** when you're ready to deploy one.",
-    "⏱️ Every deployed bomb gets a randomized **40-second wire puzzle**.",
-    "👀 The target, puzzle, detonation, and punishment are public."
+    "🤫 This shop is private. Purchases and inventory are visible only to you.",
+    "💥 The moment you select a target, the actual bomb becomes a public server event.",
+    "⏱️ Every deployed bomb gets a freshly randomized **40-second wire puzzle**."
   ].join("\n");
 }
 
-function bombShopRows(player = null) {
-  const rows = [
+function bombShopRows(player = null, page = 1) {
+  if (Number(page) === 2) {
+    return [
+      row(
+        button("🔥 Fire — 7,500 ✨", "bomb:buy:fire", 1),
+        button("🦨 Stink — 3,500 ✨", "bomb:buy:stink", 1),
+        button("🃏 Jester — 5,000 ✨", "bomb:buy:jester", 1)
+      ),
+      row(
+        button("🪪 Fake ID — 6,000 ✨", "bomb:buy:fake_id", 1),
+        button("👯 Double — 8,000 ✨", "bomb:buy:double", 1)
+      ),
+      row(button("⬅️ Page 1", "bomb:shop:1", 2), button("📦 My Bombs", "bomb:inventory", 2))
+    ];
+  }
+  return [
     row(
       button("💗 Love — 500 ✨", "bomb:buy:love", 1),
       button("🌪️ Chaos — 1,500 ✨", "bomb:buy:chaos", 1),
@@ -13769,11 +13911,10 @@ function bombShopRows(player = null) {
       button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1),
       button("📦 My Bombs", "bomb:inventory", 2)
     ),
+    row(button("➡️ Bomb Shop Page 2", "bomb:shop:2", 2)),
     row(button("⬅️ Back", "bomb:back", 2))
   ];
-  return rows;
 }
-
 function bombInventoryRows(player) {
   const rows = [];
   const owned = Object.entries(BOMB_TYPES).filter(([id]) => bombCount(player, id) > 0);
@@ -13881,37 +14022,148 @@ async function bombSendGif(env, bomb, content) {
   );
 }
 
-async function applyBombChaos(env, bomb, target, state) {
-  const curse = BOMB_CHAOS_CURSES[randomInt(0, BOMB_CHAOS_CURSES.length - 1)];
-  target.chaosMarkUntil = Date.now() + BOMB_TYPES.chaos.durationMs;
-  target.chaosBombCurse = curse;
 
-  if (curse === "command_lock") {
-    target.chaosBlockedUntil = Date.now() + randomInt(10, 20) * 60 * 1000;
-    await savePlayer(env, target, bomb.targetId);
-    return `🔒 **CHAOS CURSE: COMMAND LOCK!**\n\nThe raccoons have randomly locked your WereWives commands for **${Math.ceil((target.chaosBlockedUntil - Date.now()) / 60000)} minutes**. Good luck. 😭`;
+function isBombTreeCommand(interaction) {
+  const command = String(interaction.data?.name || "").toLowerCase();
+  if (["tree","water","catch","sparkle","fortune","rename"].includes(command)) return command;
+  const id = String(interaction.data?.custom_id || "");
+  if (id.startsWith("tree:")) return String(id.split(":")[2] || id.split(":")[1] || "tree").toLowerCase();
+  if (["water","catch","catch_sparkle","daily_riddle"].includes(id)) return id.toLowerCase();
+  return "";
+}
+
+const JESTER_MESSAGES = [
+  "🃏 **JESTER OVERRIDE!** The button you wanted has been replaced with nonsense. 😭",
+  "🃏 **THE JESTER SAYS NO.** Your request has been denied for absolutely no professional reason.",
+  "🃏 **JESTER ERROR 404:** Your dignity could not be located.",
+  "🃏 The Jester has reviewed your request and chosen **chaos** instead.",
+  "🃏 **WRONG BUTTON!** You definitely pressed the correct one. The Jester simply disagrees.",
+  "🃏 Your command has been forwarded to the Jester Department. They are currently laughing."
+];
+
+const FAKE_IDENTITIES = [
+  {name:"Randy the Raccoon Intern", bio:"Please direct all complaints to my supervisor. I do not have a supervisor."},
+  {name:"Gregory, Senior Garbage Analyst", bio:"I have reviewed the trash. It is acceptable."},
+  {name:"Raccoon Tax Collector", bio:"You appear to be hiding taxable cheese."},
+  {name:"Barbara, Facebook Administrator", bio:"I don't understand this Discord but I'm very disappointed."},
+  {name:"Susan, HOA President", bio:"Your decoration violates Section 4B."},
+  {name:"Duck CEO", bio:"Quack. Translation unavailable."},
+  {name:"Goose Lawyer", bio:"HONK. I object."},
+  {name:"Professional Cheese Tester", bio:"This tree has insufficient cheese."},
+  {name:"Steve, Certified Tree Inspector", bio:"Yep. That's definitely a tree."},
+  {name:"Suspiciously Normal Person", bio:"Hello. I am definitely a normal human."}
+];
+
+const FAKE_TREES = ["shadow","pine","red","golden_pickle","midnight_rider","black_cat_magic","halloween_tree"];
+const FAKE_BACKGROUNDS = ["halloween","magic_mushroom","field_day","red_forest","midnight_rider","black_cat_magic"];
+const FAKE_EFFECTS = ["candy_rush","halloween","green_glow","golden_pickle","midnight_rider","black_cat_magic"];
+const FAKE_DECORATIONS = ["raccoon_thief","frank_frog","duck_hat_boots","cheddar_falls","panda","cat"];
+const FAKE_FRAMES = Object.keys(PROFILE_FRAMES).filter(id => id !== "millionaire_vault");
+
+function randomFakeIdentity(player) {
+  const preset = FAKE_IDENTITIES[randomInt(0, FAKE_IDENTITIES.length - 1)];
+  const titleIds = Object.keys(SOLO_TITLES).filter(id => !["criminal","stinky"].includes(id));
+  const titleId = titleIds[randomInt(0, titleIds.length - 1)];
+  return {
+    name: preset.name,
+    bio: preset.bio,
+    tree: FAKE_TREES[randomInt(0, FAKE_TREES.length - 1)],
+    background: FAKE_BACKGROUNDS[randomInt(0, FAKE_BACKGROUNDS.length - 1)],
+    effect: FAKE_EFFECTS[randomInt(0, FAKE_EFFECTS.length - 1)],
+    decoration: FAKE_DECORATIONS[randomInt(0, FAKE_DECORATIONS.length - 1)],
+    frame: FAKE_FRAMES[randomInt(0, FAKE_FRAMES.length - 1)],
+    title: titleId
+  };
+}
+
+async function applyFakeIdentity(env, target, bomb, now) {
+  if (!target.fakeIdentityPrevious) {
+    target.fakeIdentityPrevious = {
+      displayName: target.displayName || target.username || "Werewife",
+      treeName: target.treeName || "Cherry Blossom",
+      equipped: { ...(target.equipped || {}) },
+      equippedTitle: target.equippedTitle || "",
+      fakeBio: target.fakeBio || ""
+    };
   }
-
-  if (curse === "raccoon_warning") {
-    await savePlayer(env, target, bomb.targetId);
-    return `🦝 **CHAOS CURSE: RACCOON SURVEILLANCE!**\n\nThe raccoons have selected you for an hour of unsolicited surveillance. Expect random public warnings. 😭`;
-  }
-
-  if (curse === "pickle_interrupt") {
-    target.chaosNextInterruptAt = Date.now() + randomInt(3, 12) * 60 * 1000;
-    await savePlayer(env, target, bomb.targetId);
-    return `🥒 **CHAOS CURSE: PICKLE INTERRUPTION!**\n\nAt a completely random moment during the next hour, a pickle is going to interrupt you. Nobody knows when. 😭`;
-  }
-
-  if (curse === "delayed_chaos") {
-    target.chaosNextInterruptAt = Date.now() + randomInt(5, 30) * 60 * 1000;
-    await savePlayer(env, target, bomb.targetId);
-    return `🌪️ **CHAOS CURSE: DELAYED CHAOS!**\n\nThe bomb has scheduled one more completely unnecessary chaos event sometime during the next hour. 😈`;
-  }
-
-  target.chaosNextInterruptAt = Date.now() + randomInt(2, 15) * 60 * 1000;
+  const fake = randomFakeIdentity(target);
+  target.displayName = fake.name;
+  target.fakeBio = fake.bio;
+  target.treeName = fake.name;
+  target.equipped = { ...(target.equipped || {}), tree: fake.tree, theme: fake.background, effect: fake.effect, decoration: fake.decoration, frame: fake.frame };
+  target.equippedTitle = fake.title;
+  target.fakeIdentityUntil = now + bomb.type.durationMs;
   await savePlayer(env, target, bomb.targetId);
-  return `🎲 **CHAOS CURSE: CHAOS ROLL!**\n\nThe raccoons have loaded a random nonsense event into your next hour. You have absolutely no idea what it will be. 😭`;
+  return `🪪 **FAKE IDENTITY ACTIVATED!**\n\n<@${bomb.targetId}> is now temporarily **${fake.name}**.\n🏷️ **Title:** ${SOLO_TITLES[fake.title]?.name || "Unknown"}\n🌳 **Tree:** ${fake.tree}\n📝 **Bio:** ${fake.bio}\n\n⏱️ The entire fake identity lasts **6 hours**. Their original cosmetics and identity will return automatically.`;
+}
+
+async function restoreFakeIdentityIfExpired(env, player, userId, now) {
+  if (!Number(player.fakeIdentityUntil || 0) || player.fakeIdentityUntil > now || !player.fakeIdentityPrevious) return false;
+  const prev = player.fakeIdentityPrevious;
+  player.displayName = prev.displayName || player.username || "Werewife";
+  player.treeName = prev.treeName || "Cherry Blossom";
+  player.equipped = prev.equipped || player.equipped;
+  player.equippedTitle = prev.equippedTitle || "";
+  player.fakeBio = prev.fakeBio || "";
+  player.fakeIdentityUntil = 0;
+  player.fakeIdentityPrevious = null;
+  await savePlayer(env, player, userId);
+  return true;
+}
+
+async function applyStinkBomb(env, target, bomb, now) {
+  if (!target.stinkBombPreviousEquipped) {
+    target.stinkBombPreviousEquipped = { ...(target.equipped || {}) };
+    target.stinkBombPreviousTitle = target.equippedTitle || "";
+    target.stinkBombPreviousTree = target.treeName || "Cherry Blossom";
+  }
+  target.equipped = { ...(target.equipped || {}), tree: "raccoon_court", effect: "raccoon_court_stink" };
+  target.equippedTitle = "stinky";
+  target.stinkBombUntil = now + bomb.type.durationMs;
+  target.stinkBombNextAt = now + 60 * 60 * 1000;
+  target.stinkBombChannelId = bomb.channelId;
+  await savePlayer(env, target, bomb.targetId);
+  return `🦨 **STINKY for 12 hours!** Your tree is officially disgusting. The server will receive random odor reports every hour. 😭`;
+}
+
+async function restoreStinkIfExpired(env, player, userId, now) {
+  if (!Number(player.stinkBombUntil || 0) || player.stinkBombUntil > now) return false;
+  if (player.stinkBombPreviousEquipped) player.equipped = player.stinkBombPreviousEquipped;
+  if (player.stinkBombPreviousTree) player.treeName = player.stinkBombPreviousTree;
+  player.equippedTitle = player.stinkBombPreviousTitle || "";
+  player.stinkBombUntil = 0;
+  player.stinkBombNextAt = 0;
+  player.stinkBombChannelId = "";
+  player.stinkBombPreviousEquipped = null;
+  player.stinkBombPreviousTitle = "";
+  player.stinkBombPreviousTree = "";
+  await savePlayer(env, player, userId);
+  return true;
+}
+
+async function applyDoubleBomb(env, target, partner, bomb, now) {
+  const until = now + bomb.type.durationMs;
+  for (const [player, partnerId] of [[target, partner.userId],[partner, target.userId]]) {
+    player.doubleBombUntil = until;
+    player.doubleBombPartnerId = String(partnerId);
+    player.doubleBombNextAt = now + randomInt(8, 18) * 60 * 1000;
+    player.doubleBombEventsRemaining = 3;
+    player.doubleBombChannelId = bomb.channelId;
+  }
+  await savePlayer(env, target, bomb.targetId);
+  await savePlayer(env, partner, partner.userId);
+  return { until };
+}
+
+async function applyBombChaos(env, bomb, target, state) {
+  const now = Date.now();
+  target.chaosMarkUntil = now + BOMB_TYPES.chaos.durationMs;
+  target.chaosEventsRemaining = 3;
+  target.chaosNextEventAt = now + randomInt(8, 18) * 60 * 1000;
+  target.chaosLockedCommand = "";
+  target.chaosLockedUntil = 0;
+  await savePlayer(env, target, bomb.targetId);
+  return `🌪️ **CHAOS MARK for 1 hour!**\n\nThis is no longer a message-spam curse. 😈 The bomb has loaded **3 surprise chaos events** into the next hour. They trigger at random times and actually interfere with gameplay.`;
 }
 
 async function applyBombDetonation(env, bomb, reason = "wrong") {
@@ -13946,6 +14198,40 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     effectText = `✨ **GLITTERED for 15 minutes!** ALL WereWives bot commands and interactions are blocked while the glitter incident is active.`;
   } else if (bomb.typeId === "chaos") {
     effectText = await applyBombChaos(env, bomb, target, state);
+  } else if (bomb.typeId === "fire") {
+    target.fireBombUntil = now + type.durationMs;
+    await savePlayer(env, target, bomb.targetId);
+    effectText = `🔥 **TREE ON FIRE for 2 HOURS!** ALL tree commands are disabled while the flames are active. Games still work normally.`;
+  } else if (bomb.typeId === "stink") {
+    effectText = await applyStinkBomb(env, target, bomb, now);
+  } else if (bomb.typeId === "jester") {
+    target.jesterBombUntil = now + type.durationMs;
+    target.jesterBombNextEventAt = now + randomInt(15, 35) * 60 * 1000;
+    await savePlayer(env, target, bomb.targetId);
+    effectText = `🃏 **JESTERED for 6 HOURS!** The Jester can hijack commands, reject buttons, and randomly interfere with WereWives controls. Good luck. 😭`;
+  } else if (bomb.typeId === "fake_id") {
+    effectText = await applyFakeIdentity(env, target, bomb, now);
+  } else if (bomb.typeId === "double") {
+    const members = await getGuildMembers(env, bomb.guildId);
+    const candidates = members.filter(m => m?.user?.id && String(m.user.id) !== String(bomb.attackerId) && String(m.user.id) !== String(bomb.targetId) && !m.user.bot);
+    if (!candidates.length) {
+      effectText = `👯 **DOUBLE LINK FAILED TO FIND A SECOND PLAYER.** The bomb has been refunded to <@${bomb.attackerId}>.`;
+      bomb.status = "refunded";
+      bomb.refundReason = "No eligible second player";
+      bombAdd(attacker, bomb.typeId, 1);
+      await savePlayer(env, attacker, bomb.attackerId);
+    } else {
+      const partnerMember = candidates[randomInt(0, candidates.length - 1)];
+      const partner = await getPlayer(env, partnerMember.user.id);
+      updatePlayerIdentity(partner, { user: partnerMember.user, member: partnerMember });
+      await applyDoubleBomb(env, target, partner, bomb, now);
+      bomb.doublePartnerId = String(partnerMember.user.id);
+      effectText = `👯 **DOUBLE LINK ACTIVATED for 6 HOURS!**
+
+<@${bomb.targetId}> has been secretly linked to **one random player**. Neither linked player chose the pairing.
+
+🔒 The second identity is hidden for now. The link will create surprise shared events before the final reveal.`;
+    }
   } else if (bomb.typeId === "pickle") {
     const targetSparkles = Math.max(0, Number(target.sparkles || 0));
     const amount = randomInt(1000, 3000);
@@ -14040,7 +14326,7 @@ async function handleBombCommand(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   bombInventory(player);
-  return sendPublicText(env, interaction, bombIntroText(), bombIntroRows());
+  return sendText(env, interaction, bombIntroText(), bombIntroRows());
 }
 
 async function handleBombComponent(env, interaction) {
@@ -14051,10 +14337,12 @@ async function handleBombComponent(env, interaction) {
   if (!user) return sendBombPublicText(env, interaction, "❌ I couldn't identify you.");
 
   if (action === "open" || action === "shop") {
+    const page = parts[2] === "2" ? 2 : 1;
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombShopText(player), bombShopRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES), player) });
+    const ids = page === 2 ? ["fire","stink","jester","fake_id","double"] : ["love","chaos","glitter","pickle","raccoon"];
+    return sendBombPublicText(env, interaction, bombShopText(player, page), bombShopRows(player, page), { embeds: bombStaticEmbeds(ids, player) });
   }
 
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
@@ -14267,22 +14555,26 @@ async function handleBombComponent(env, interaction) {
     state.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, state);
 
-    const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb), { embeds: [{ thumbnail: { url: imageUrl(bomb.type.static) } }] });
-    if (response?.ok) {
+    // Everything up to this point was private. The target selection is the
+    // exact moment the bomb becomes a public server event.
+    await bombDeleteInteractionResponse(env, interaction);
+    const publicMessage = await sendChannelMessage(
+      env,
+      bomb.channelId,
+      bombWireText(bomb),
+      bombWireRows(bomb),
+      { embeds: [{ thumbnail: { url: imageUrl(bomb.type.static) } }] }
+    );
+    if (publicMessage?.ok) {
       try {
-        const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
-        if (original.ok) {
-          const message = await original.json();
-          if (message?.id) {
-            bomb.messageId = String(message.id);
-            state.bombs[bomb.id] = bomb;
-            await saveGuildState(env, interaction.guild_id, state);
-          }
-        } else {
-          console.error("Bomb original message lookup failed:", original.status, await original.text());
+        const publicJson = await publicMessage.json();
+        if (publicJson?.id) {
+          bomb.messageId = String(publicJson.id);
+          state.bombs[bomb.id] = bomb;
+          await saveGuildState(env, interaction.guild_id, state);
         }
       } catch (error) {
-        console.error("Bomb original message capture failed:", error);
+        console.error("Bomb public message capture failed:", error);
       }
     }
 
@@ -14403,16 +14695,101 @@ async function processBombTimers(env) {
         if (bomb.typeId === "chaos" && bomb.status === "detonated" && bomb.targetId) {
           const target = await getPlayer(env, bomb.targetId);
           if (Number(target.chaosMarkUntil || 0) <= now) continue;
-          if (Number(target.chaosNextInterruptAt || 0) <= now) {
-            const chaosMessages = [
-              `🌪️ **CHAOS MARK TRIGGERED!** <@${bomb.targetId}> has been randomly selected for nonsense. The raccoons demand you know: **WHY ARE YOU LIKE THIS?** 😭`,
-              `🥒🌪️ **CHAOS INTERRUPTION!** A completely unnecessary pickle event has occurred near <@${bomb.targetId}>. Nobody can explain it.`,
-              `🦝🌪️ **CHAOS EVENT!** The raccoons have issued an unsolicited public warning to <@${bomb.targetId}>. This was not a democracy.`,
-              `🎲🌪️ **CHAOS ROLL!** The universe rolled a random number and unfortunately it landed on <@${bomb.targetId}>. 😭`
+          if (Number(target.chaosEventsRemaining || 0) <= 0) continue;
+          if (Number(target.chaosNextEventAt || 0) <= now) {
+            const events = [
+              { id:"water", minutes: randomInt(8,15), text:`💧 **CHAOS EVENT!** <@${bomb.targetId}>'s watering privileges have been suspended for **{minutes} minutes**. The tree can wait. 😭` },
+              { id:"fortune", minutes: randomInt(8,15), text:`🔮 **CHAOS EVENT!** <@${bomb.targetId}> has been temporarily locked out of **/fortune** for **{minutes} minutes**. The universe said no.` },
+              { id:"catch", minutes: randomInt(8,15), text:`✨ **CHAOS EVENT!** <@${bomb.targetId}> has been temporarily locked out of **catching Sparkles** for **{minutes} minutes**. The Sparkles escaped.` },
+              { id:"fine", amount: randomInt(100,500), text:`💸 **CHAOS EVENT!** <@${bomb.targetId}> was hit with a completely unnecessary **{amount} ✨ chaos fine**.` }
             ];
-            await sendChannelMessage(env, bomb.channelId, chaosMessages[randomInt(0, chaosMessages.length - 1)]);
-            target.chaosNextInterruptAt = 0;
-            await savePlayer(env, target, bomb.targetId);
+            const event=events[randomInt(0,events.length-1)];
+            if(event.id === "fine") {
+              const fine=Math.min(Number(event.amount||0),Math.max(0,Number(target.sparkles||0)));
+              target.sparkles=Math.max(0,Number(target.sparkles||0)-fine);
+              await sendChannelMessage(env,bomb.channelId,event.text.replace("{amount}",fine.toLocaleString()));
+            } else {
+              target.chaosLockedCommand=event.id;
+              target.chaosLockedUntil=now+Number(event.minutes)*60*1000;
+              await sendChannelMessage(env,bomb.channelId,event.text.replace("{minutes}",String(event.minutes)));
+            }
+            target.chaosEventsRemaining=Number(target.chaosEventsRemaining||0)-1;
+            target.chaosNextEventAt=target.chaosEventsRemaining>0 ? Math.min(target.chaosMarkUntil,now+randomInt(10,20)*60*1000) : 0;
+            await savePlayer(env,target,bomb.targetId);
+          }
+        }
+
+        if (bomb.status === "detonated" && bomb.targetId) {
+          const target = await getPlayer(env, bomb.targetId);
+
+          if (Number(target.fireBombUntil || 0) > 0 && target.fireBombUntil <= now) {
+            target.fireBombUntil=0;
+            await savePlayer(env,target,bomb.targetId);
+            if (bomb.channelId) await sendChannelMessage(env,bomb.channelId,`🔥🌳 **THE FIRE IS OUT!** <@${bomb.targetId}>'s tree has survived the Fire Bomb. Tree commands are back!`);
+          }
+
+          if (Number(target.jesterBombUntil || 0) > 0 && target.jesterBombUntil <= now) {
+            target.jesterBombUntil=0;
+            target.jesterBombNextEventAt=0;
+            await savePlayer(env,target,bomb.targetId);
+            if (bomb.channelId) await sendChannelMessage(env,bomb.channelId,`🃏 **THE JESTER HAS LEFT THE BUILDING!** <@${bomb.targetId}> is finally free from Jester interference.`);
+          }
+
+          if (Number(target.fakeIdentityUntil || 0) > 0) {
+            await restoreFakeIdentityIfExpired(env,target,bomb.targetId,now);
+          }
+
+          if (Number(target.stinkBombUntil || 0) > 0) {
+            if (target.stinkBombUntil <= now) {
+              await restoreStinkIfExpired(env,target,bomb.targetId,now);
+              if (bomb.channelId) await sendChannelMessage(env,bomb.channelId,`🦨✨ **THE STINK HAS FINALLY LEFT THE BUILDING!** <@${bomb.targetId}> is no longer STINKY. The air is safe again. The flowers have reopened. The raccoons have returned. Society may now begin rebuilding.`);
+            } else if (Number(target.stinkBombNextAt || 0) <= now && target.stinkBombChannelId) {
+              const stinkMessages=[
+                `BREAKING NEWS: <@${bomb.targetId}> still smells absolutely terrible. Scientists have been notified.`,
+                `<@${bomb.targetId}> has been emitting a smell so powerful that the raccoons have requested evacuation.`,
+                `STINK ALERT: Please remain calm. <@${bomb.targetId}> has entered the room.`,
+                `Researchers attempted to measure <@${bomb.targetId}>'s stink. The equipment gave up.`,
+                `The wind has changed direction. Everyone blame <@${bomb.targetId}>.`,
+                `<@${bomb.targetId}>'s deodorant has officially resigned.`,
+                `PUBLIC SERVICE ANNOUNCEMENT: If you see <@${bomb.targetId}>, hold your nose.`,
+                `Even the garbage can is like, “Okay, that's enough.” <@${bomb.targetId}> remains STINKY.`
+              ];
+              await sendChannelMessage(env,target.stinkBombChannelId,`🦨 ${stinkMessages[randomInt(0,stinkMessages.length-1)]}`);
+              target.stinkBombNextAt=Math.min(target.stinkBombUntil,now+60*60*1000);
+              await savePlayer(env,target,bomb.targetId);
+            }
+          }
+
+          if (Number(target.doubleBombUntil || 0) > 0) {
+            if (target.doubleBombUntil <= now) {
+              const partnerId=target.doubleBombPartnerId;
+              target.doubleBombUntil=0; target.doubleBombPartnerId=""; target.doubleBombNextAt=0; target.doubleBombEventsRemaining=0; target.doubleBombCommandLockUntil=0; target.doubleBombChannelId="";
+              await savePlayer(env,target,bomb.targetId);
+              if (partnerId) {
+                const partner=await getPlayer(env,partnerId);
+                partner.doubleBombUntil=0; partner.doubleBombPartnerId=""; partner.doubleBombNextAt=0; partner.doubleBombEventsRemaining=0; partner.doubleBombCommandLockUntil=0; partner.doubleBombChannelId="";
+                await savePlayer(env,partner,partnerId);
+                if (bomb.channelId) await sendChannelMessage(env,bomb.channelId,`👯💥 **DOUBLE BOMB REVEALED!** <@${bomb.targetId}> and <@${partnerId}> were secretly linked for 6 hours. Relationship status: **COMPLICATED.** 😭`);
+              }
+            } else if (Number(target.doubleBombEventsRemaining||0)>0 && Number(target.doubleBombNextAt||0)<=now) {
+              const partnerId=target.doubleBombPartnerId;
+              const partner=partnerId ? await getPlayer(env,partnerId) : null;
+              if (partner) {
+                const shared=[
+                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}> and their mystery partner both received a mysterious **10-minute command lock**. Nobody knows why.`,
+                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}> accidentally triggered a shared WereWives incident with their mystery partner. The server knows something happened.`,
+                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}>'s tree and their mystery partner's tree have both been marked **SUSPICIOUS**. 😭`
+                ];
+                target.doubleBombCommandLockUntil=now+10*60*1000;
+                partner.doubleBombCommandLockUntil=now+10*60*1000;
+                await sendChannelMessage(env,bomb.channelId,shared[randomInt(0,shared.length-1)]);
+                target.doubleBombEventsRemaining=Number(target.doubleBombEventsRemaining)-1;
+                partner.doubleBombEventsRemaining=target.doubleBombEventsRemaining;
+                const next=target.doubleBombEventsRemaining>0 ? Math.min(target.doubleBombUntil,now+randomInt(20,45)*60*1000) : 0;
+                target.doubleBombNextAt=next; partner.doubleBombNextAt=next;
+                await savePlayer(env,target,bomb.targetId); await savePlayer(env,partner,partnerId);
+              }
+            }
           }
         }
       }
@@ -14428,18 +14805,28 @@ async function checkBombRestriction(env, interaction) {
   const player = await getPlayer(env, user.id);
   const now = Date.now();
 
-  if (Number(player.glitteredUntil || 0) > now) {
-    return BOMB_GLITTER_MESSAGES[randomInt(0, BOMB_GLITTER_MESSAGES.length - 1)];
+  if (Number(player.fireBombUntil || 0) > now) {
+    const treeAction = isBombTreeCommand(interaction);
+    if (treeAction) return `🔥 **YOUR TREE IS ON FIRE!**\n\n<@${user.id}>'s tree is currently engulfed in flames. **Tree commands are disabled for ${Math.max(1,Math.ceil((player.fireBombUntil-now)/60000))} more minutes.**\n\n🎮 Games still work. 🔥🌳`;
   }
 
-  if (Number(player.chaosBlockedUntil || 0) > now) {
-    return `🌪️ **CHAOS MARK — COMMAND LOCKED!**\n\nThe raccoons have temporarily locked your WereWives controls. Try again in **${Math.max(1, Math.ceil((player.chaosBlockedUntil - now) / 60000))} minutes**. 😭`;
+  if (Number(player.jesterBombUntil || 0) > now && Math.random() < 0.45) {
+    return JESTER_MESSAGES[randomInt(0,JESTER_MESSAGES.length-1)];
   }
 
-  if (Number(player.loveStruckUntil || 0) > now && Math.random() < 0.35) {
-    return BOMB_LOVE_MESSAGES[randomInt(0, BOMB_LOVE_MESSAGES.length - 1)];
+  if (Number(player.doubleBombCommandLockUntil || 0) > now) {
+    return `👯 **DOUBLE BOMB LINK EFFECT!** <@${user.id}> is temporarily caught in the shared chaos. Try again in **${Math.max(1,Math.ceil((player.doubleBombCommandLockUntil-now)/60000))} minutes**.`;
   }
 
+  if (Number(player.chaosLockedUntil || 0) > now) {
+    const command = String(interaction.data?.name || "").toLowerCase();
+    const id = String(interaction.data?.custom_id || "").toLowerCase();
+    const blocked = player.chaosLockedCommand === "catch" ? (command === "catch" || id.includes("catch")) : (command === player.chaosLockedCommand || id.includes(player.chaosLockedCommand));
+    if (blocked) return `🌪️ **CHAOS EVENT!** The universe temporarily locked **/${player.chaosLockedCommand}**. Try again in **${Math.max(1,Math.ceil((player.chaosLockedUntil-now)/60000))} minutes**.`;
+  }
+
+  if (Number(player.glitteredUntil || 0) > now) return BOMB_GLITTER_MESSAGES[randomInt(0, BOMB_GLITTER_MESSAGES.length - 1)];
+  if (Number(player.loveStruckUntil || 0) > now && Math.random() < 0.35) return BOMB_LOVE_MESSAGES[randomInt(0, BOMB_LOVE_MESSAGES.length - 1)];
   return null;
 }
 
@@ -21951,7 +22338,9 @@ const SOLO_TITLES = {
   golden_legend: { name: "the Golden Legend", description: "Reach 100,000 sparkles." },
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
   frostborn: { name: "Frostborn", description: "Own the complete Black Ice limited set." },
+  millionaire: { name: "the Millionaire", description: "Reach 1,000,000 sparkles." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
+  stinky: { name: "STINKY", description: "Currently serving a Stink Bomb sentence. 🦨" },
   court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
   court_favorite: { name: "the Raccoons' Favorite Criminal", description: "Earned by holding the highest number of guilty Raccoon Court verdicts. 🦝⚖️" },
   rumble_first: { name: "the Trash Panda Supreme", description: "Win your first Raccoon Rumble." },
@@ -31733,7 +32122,7 @@ export default {
       // edited by sendText/editOriginalResponse after the KV work completes.
       interaction.__deferred = true;
       interaction.__deferredUpdate = false;
-      interaction.__deferredEphemeral = false;
+      interaction.__deferredEphemeral = true;
       const page = Number(customId.split(":")[2] || 0);
       ctx.waitUntil((async () => {
         try {
@@ -31852,7 +32241,7 @@ export default {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: 5, data: {} })
+          body: JSON.stringify({ type: 5, data: { flags: 64 } })
         }
       );
 
