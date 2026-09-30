@@ -14142,9 +14142,39 @@ async function handleBombComponent(env, interaction) {
     const targetId = String(interaction.data?.values?.[0] || "");
     if (!targetId || targetId === bomb.attackerId) return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player.");
 
-    const members = await getGuildMembers(env, interaction.guild_id);
-    const targetMember = members.find(m => String(m.id) === targetId);
-    if (!targetMember) return sendBombPublicText(env, interaction, "❌ That player isn't available in this server.");
+    // Validate the selected Discord user directly instead of downloading the
+    // entire guild member list. This is important for large servers and also
+    // avoids pagination/cache issues where a perfectly valid selected member
+    // is not present in the first member-list page.
+    let targetMember = null;
+    try {
+      const memberResponse = await discordRequest(
+        env,
+        `/guilds/${interaction.guild_id}/members/${targetId}`
+      );
+      if (memberResponse.ok) {
+        const member = await memberResponse.json();
+        if (member?.user?.id) {
+          targetMember = member;
+        }
+      } else {
+        console.error(
+          "Bomb target member lookup failed:",
+          memberResponse.status,
+          await memberResponse.text()
+        );
+      }
+    } catch (error) {
+      console.error("Bomb target member lookup error:", error);
+    }
+
+    if (!targetMember) {
+      return sendBombPublicText(
+        env,
+        interaction,
+        "❌ That player isn't available in this server."
+      );
+    }
 
     bomb.targetId = targetId;
     bomb.status = "pending";
