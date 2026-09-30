@@ -13889,8 +13889,23 @@ async function bombDeleteInteractionResponse(env, interaction) {
 }
 
 async function sendBombPublicText(env, interaction, content, components = []) {
+  // Bomb component interactions are already acknowledged with a public type-4
+  // response by the dedicated bomb router above. That response creates
+  // @original, so edit it directly instead of creating a second channel
+  // message and deleting the acknowledgement. Deleting the acknowledgement
+  // was the reason the Bomb UI appeared to simply vanish.
+  if (interaction.__bombAck) {
+    const response = await editOriginalResponse(env, interaction, {
+      content,
+      components
+    });
+    if (!response.ok) {
+      console.error("Bomb original response edit failed:", response.status, await response.text());
+    }
+    return response;
+  }
+
   const message = await sendChannelMessage(env, interaction.channel_id, content, components);
-  await bombDeleteInteractionResponse(env, interaction);
   return message;
 }
 
@@ -13913,23 +13928,82 @@ async function handleBombComponent(env, interaction) {
     const typeId = parts[2];
     const type = BOMB_TYPES[typeId];
     if (!type) return sendBombPublicText(env, interaction, "❌ That bomb doesn't exist.");
-    const player = await getPlayer(env, user.id);
-    if (Number(player.sparkles || 0) < type.price) {
-      return sendBombPublicText(env, interaction, `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${Number(player.sparkles || 0).toLocaleString()} ✨**.`);
-    }
-    player.sparkles = Math.max(0, Number(player.sparkles || 0) - type.price);
-    await savePlayer(env, player, user.id);
 
-    const bomb = { id: bombId(), typeId, type, attackerId: user.id, guildId: interaction.guild_id, channelId: interaction.channel_id, status: "targeting", createdAt: Date.now() };
-    const state = await getGuildState(env, interaction.guild_id);
-    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
-    state.bombs[bomb.id] = bomb;
-    await saveGuildState(env, interaction.guild_id, state);
+    // REAL PURCHASE TRANSACTION
+    // -------------------------
+    // This branch is deliberately separate from the Discord response work.
+    // A successful button click is NOT considered a purchase until the
+    // player's persisted Sparkle balance has been changed and the active
+    // bomb has been written to guild state.
+    const player = await getPlayer(env, user.id);
+    const beforeSparkles = Number(player.sparkles || 0);
+
+    if (beforeSparkles < type.price) {
+      return sendBombPublicText(
+        env,
+        interaction,
+        `❌ <@${user.id}> you need **${type.price.toLocaleString()} ✨** to buy the ${type.name}. You only have **${beforeSparkles.toLocaleString()} ✨**.`
+      );
+    }
+
+    const afterSparkles = beforeSparkles - type.price;
+    player.sparkles = afterSparkles;
+
+    // Persist the actual charge first. The bomb is NOT announced as purchased
+    // until this save completes successfully.
+    try {
+      await savePlayer(env, player, user.id);
+    } catch (error) {
+      console.error("Bomb purchase sparkle save failed:", error);
+      return sendBombPublicText(
+        env,
+        interaction,
+        `❌ **Purchase failed.** Your Sparkles were not charged.\n\n<@${user.id}> still has **${beforeSparkles.toLocaleString()} ✨**.`
+      );
+    }
+
+    // Create the actual bomb only after the Sparkle charge has persisted.
+    const bomb = {
+      id: bombId(),
+      typeId,
+      type,
+      attackerId: user.id,
+      guildId: interaction.guild_id,
+      channelId: interaction.channel_id,
+      status: "targeting",
+      createdAt: Date.now(),
+      purchasePrice: type.price,
+      purchaseBeforeSparkles: beforeSparkles,
+      purchaseAfterSparkles: afterSparkles
+    };
+
+    try {
+      const state = await getGuildState(env, interaction.guild_id);
+      state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+      state.bombs[bomb.id] = bomb;
+      await saveGuildState(env, interaction.guild_id, state);
+    } catch (error) {
+      // If creating the active bomb fails, refund the exact charge before
+      // telling the user that the purchase failed.
+      console.error("Bomb state creation failed after charge:", error);
+      try {
+        const refundPlayer = await getPlayer(env, user.id);
+        refundPlayer.sparkles = Number(refundPlayer.sparkles || 0) + type.price;
+        await savePlayer(env, refundPlayer, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+      } catch (refundError) {
+        console.error("Bomb purchase refund failed:", refundError);
+      }
+      return sendBombPublicText(
+        env,
+        interaction,
+        `❌ **Purchase failed while creating the bomb.**\n\nYour **${type.price.toLocaleString()} ✨** charge was refunded. Please try again.`
+      );
+    }
 
     return sendBombPublicText(
       env,
       interaction,
-      `💣 **${type.name} PURCHASED!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n\n🎯 **Choose the player who gets this bomb.**\n\nEveryone will see the target and the 40-second wire puzzle. 😈`,
+      `💣 **${type.name} PURCHASED!**\n\n<@${user.id}> spent **${type.price.toLocaleString()} ✨**.\n💎 **Balance after purchase: ${afterSparkles.toLocaleString()} ✨**\n🧾 **Purchase confirmed.**\n\n🎯 **Choose the player who gets this bomb.**\n\nEveryone will see the target and the 40-second wire puzzle. 😈`,
       bombTargetRows(bomb)
     );
   }
@@ -13940,9 +14014,9 @@ async function handleBombComponent(env, interaction) {
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
     if (!bomb || bomb.status !== "targeting") return sendBombPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
-    if (String(user.id) !== String(bomb.attackerId)) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target."); }
+    if (String(user.id) !== String(bomb.attackerId)) { return sendEphemeralFollowup(env, interaction, "❌ Only the person who bought this bomb can choose its target."); }
     const targetId = String(interaction.data?.values?.[0] || "");
-    if (!targetId || targetId === bomb.attackerId) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player."); }
+    if (!targetId || targetId === bomb.attackerId) { return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player."); }
 
     const members = await getGuildMembers(env, interaction.guild_id);
     const targetMember = members.find(m => String(m.id) === targetId);
@@ -13959,10 +14033,22 @@ async function handleBombComponent(env, interaction) {
     await saveGuildState(env, interaction.guild_id, state);
 
     const response = await sendBombPublicText(env, interaction, bombWireText(bomb), bombWireRows(bomb));
-    if (response?.id) {
-      bomb.messageId = response.id;
-      state.bombs[bomb.id] = bomb;
-      await saveGuildState(env, interaction.guild_id, state);
+    if (response?.ok) {
+      try {
+        const original = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`);
+        if (original.ok) {
+          const message = await original.json();
+          if (message?.id) {
+            bomb.messageId = String(message.id);
+            state.bombs[bomb.id] = bomb;
+            await saveGuildState(env, interaction.guild_id, state);
+          }
+        } else {
+          console.error("Bomb original message lookup failed:", original.status, await original.text());
+        }
+      } catch (error) {
+        console.error("Bomb original message capture failed:", error);
+      }
     }
 
     // Keep the 40-second timer tied to this interaction when possible.
@@ -13984,10 +14070,9 @@ async function handleBombComponent(env, interaction) {
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
     const bomb = state.bombs[bombIdValue];
     if (!bomb || bomb.status !== "pending") return sendBombPublicText(env, interaction, "❌ That bomb has already been resolved.");
-    if (String(user.id) !== String(bomb.targetId)) { await bombDeleteInteractionResponse(env, interaction); return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire."); }
+    if (String(user.id) !== String(bomb.targetId)) { return sendEphemeralFollowup(env, interaction, "❌ Only the bomb's target can cut a wire."); }
     if (Date.now() >= Number(bomb.expiresAt || 0)) {
       await applyBombDetonation(env, bomb, "expired");
-      await bombDeleteInteractionResponse(env, interaction);
       return;
     }
 
@@ -13997,12 +14082,10 @@ async function handleBombComponent(env, interaction) {
       state.bombs[bomb.id] = bomb;
       await saveGuildState(env, interaction.guild_id, state);
       await bombEditPublicMessage(env, bomb, `🛡️💣 **BOMB DEFUSED!**\n\n<@${bomb.targetId}> cut the **${selectedWire}** wire and survived! 😭🎉\n\n💗 <@${bomb.attackerId}>'s ${bomb.type.name} has been wasted.`, []);
-      await bombDeleteInteractionResponse(env, interaction);
       return;
     }
 
     await applyBombDetonation(env, bomb, "wrong");
-    await bombDeleteInteractionResponse(env, interaction);
     return;
   }
 
@@ -31691,13 +31774,6 @@ export default {
         update = true;
       } else if (isTitlesComponent) {
         update = true;
-      } else if (isBombComponent) {
-        // Bomb Shop gameplay is PUBLIC. Use a public type-5 defer here instead
-        // of a type-6 update: bomb purchases perform KV reads/writes, and the
-        // handler then edits the acknowledged public response. This prevents
-        // button clicks from silently failing while keeping the whole flow public.
-        update = false;
-        ephemeral = false;
       } else if (isSparkleShopComponent) {
         update = true;
         ephemeral = true;
