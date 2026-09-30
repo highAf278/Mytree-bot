@@ -1,3 +1,4 @@
+// WereWives bomb deployment refresh — no functional change
 import puppeteer from "@cloudflare/puppeteer";
 
 /* =========================================================
