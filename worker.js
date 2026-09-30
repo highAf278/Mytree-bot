@@ -13733,13 +13733,13 @@ function bombInventoryText(player) {
 
 function bombTargetRows(bomb) {
   return [
-    [{ type: 1, components: [{
+    { type: 1, components: [{
       type: 5,
       custom_id: `bomb:target:${bomb.id}`,
       placeholder: `🎯 Choose who gets the ${bomb.type.name}...`,
       min_values: 1,
       max_values: 1
-    }] }],
+    }] },
     row(button("↩️ Cancel & Return Bomb", `bomb:cancel:${bomb.id}`, 2))
   ];
 }
