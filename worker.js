@@ -13615,7 +13615,70 @@ const BOMB_RACCOON_MESSAGES = [
   "🦝💢 THE BEEF CONTINUES. The raccoons have nothing else to do today. Guess who's their problem now?",
   "🦝 RACCOON SURVEILLANCE REPORT: Target located. Target annoying. Proceed with beef.",
   "🦝💀 THE RACCOONS WILL DRAG YOU. This message has been approved by the entire raccoon council.",
-  "🦝📢 PUBLIC ANNOUNCEMENT — The target is currently beefing with several raccoons. The raccoons are winning."
+  "🦝📢 PUBLIC ANNOUNCEMENT — The target is currently beefing with several raccoons. The raccoons are winning.",
+  "🦝💢 {target}, you're the reason shampoo has instructions.",
+  "🦝 {target}, I've seen trash cans with better personalities than you.",
+  "🦝💢 {target}, your last two brain cells are fighting for third place.",
+  "🦝 {target}, you have the confidence of someone who is consistently wrong.",
+  "🦝 {target}, I've seen smarter decisions made by a vending machine.",
+  "🦝 {target}, even the raccoons are embarrassed for you.",
+  "🦝 {target}, your brain is buffering. Please wait indefinitely.",
+  "🦝 {target}, I would explain it to you, but I left my crayons at home.",
+  "🦝 {target}, your common sense filed for unemployment.",
+  "🦝 {target}, I've seen wet cardboard put up more of a fight.",
+  "🦝 {target}, even autocorrect gave up on you.",
+  "🦝 {target}, you're getting outsmarted by an animal that lives in a dumpster.",
+  "🦝 {target}, I've seen potatoes with better strategic thinking.",
+  "🦝 {target}, you couldn't win an argument with a loading screen.",
+  "🦝 {target}, your decision-making needs adult supervision.",
+  "🦝 {target}, you have the survival instincts of a decorative pillow.",
+  "🦝 {target}, I wouldn't trust you to guard an unattended sandwich.",
+  "🦝 {target}, you're arguing with a raccoon and somehow losing.",
+  "🦝 {target}, your brain took a lunch break and never came back.",
+  "🦝 {target}, you're making this way too easy.",
+  "🦝 {target}, your Sparkles aren't the only thing you're lacking.",
+  "🦝 {target}, I've seen better comebacks from a broken Wi-Fi router.",
+  "🦝 {target}, your brain has the processing power of a potato.",
+  "🦝 {target}, you bring absolutely nothing to this conversation except Sparkles.",
+  "🦝 {target}, I stole your Sparkles AND your dignity. You're welcome.",
+  "🦝 {target}, imagine getting roasted by a raccoon. Couldn't be me.",
+  "🦝 {target}, I've reviewed your life choices. The report is terrible.",
+  "🦝 {target}, you're not exactly the brightest bulb in the trash can.",
+  "🦝 {target}, I've seen NPCs with more personality.",
+  "🦝 {target}, your strategy has all the sophistication of throwing a shoe at a problem.",
+  "🦝 {target}, I expected competition. Then I met you.",
+  "🦝 {target}, you're making the raccoons look like the intelligent ones.",
+  "🦝 {target}, your plan has one major flaw: it involves you.",
+  "🦝 {target}, I have seen better judgment from a squirrel crossing traffic.",
+  "🦝 {target}, you couldn't organize a one-item grocery list.",
+  "🦝 {target}, you're proof that confidence and competence are completely unrelated.",
+  "🦝 {target}, I would call you a snack, but even the raccoons have standards.",
+  "🦝 {target}, your Sparkle balance is doing more work than your brain.",
+  "🦝 {target}, I've encountered smarter rocks. They were very impressive rocks.",
+  "🦝 {target}, you have the tactical awareness of a sleeping goldfish.",
+  "🦝 {target}, even your own decisions are trying to distance themselves from you.",
+  "🦝 {target}, I checked your inventory and immediately understood why you're losing.",
+  "🦝 {target}, I would insult your tree, but it didn't do anything wrong.",
+  "🦝 {target}, your tree has more personality than you do. That's rough.",
+  "🦝 {target}, your entire profile is giving 'forgot what the button does.'",
+  "🦝 {target}, I robbed you because your Sparkles clearly weren't safe with you.",
+  "🦝 {target}, I've seen better comebacks from a microwave.",
+  "🦝 {target}, you're getting bullied by a raccoon and somehow making the raccoon feel bad for you.",
+  "🦝 {target}, I came for your Sparkles and stayed because you're hilarious to argue with.",
+  "🦝 {target}, you're not losing to the raccoons. You're losing to your own decisions.",
+  "🦝 {target}, congratulations: you're officially the easiest person in this server to annoy.",
+  "🦝 {target}, I have no idea what you're doing, but please keep doing it. This is entertaining.",
+  "🦝 {target}, your biggest enemy isn't me. It's that confidence of yours.",
+  "🦝 {target}, I've met smarter people in a loading screen.",
+  "🦝 {target}, you couldn't intimidate a slice of cheese.",
+  "🦝 {target}, even the trash can is asking why you're like this.",
+  "🦝 {target}, your argument has been reviewed and rejected by the raccoon committee.",
+  "🦝 {target}, you have been personally selected for today's nonsense because apparently you earned it.",
+  "🦝 {target}, you're lucky the raccoons are busy stealing your Sparkles or we'd have more to say.",
+  "🦝 {target}, I know you're trying your best. That's the funniest part.",
+  "🦝 {target}, I've seen a raccoon fight a trash bag with more dignity than this.",
+  "🦝 {target}, you're talking a lot for somebody whose Sparkles are currently funding my lifestyle.",
+  "🦝 {target}, I don't need a reason to roast you. Look at you."
 ];
 
 function bombInventory(player) {
@@ -14292,7 +14355,7 @@ async function processBombTimers(env) {
             target.raccoonBeefNextAt = Math.min(target.raccoonBeefUntil, now + 15 * 60 * 1000);
             collectionHappened = true;
 
-            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)];
+            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)].replaceAll("{target}", `<@${bomb.targetId}>`);
             if (target.raccoonBeefChannelId) {
               await sendChannelMessage(
                 env,
@@ -14305,7 +14368,7 @@ async function processBombTimers(env) {
           // Separate from Sparkle collections: the raccoons can randomly
           // appear and publicly talk trash between collections too.
           if (!collectionHappened && Number(target.raccoonBeefNextTalkAt || 0) <= now) {
-            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)];
+            const flavor = BOMB_RACCOON_MESSAGES[randomInt(0, BOMB_RACCOON_MESSAGES.length - 1)].replaceAll("{target}", `<@${bomb.targetId}>`);
             if (target.raccoonBeefChannelId) {
               await sendChannelMessage(
                 env,
