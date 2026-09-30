@@ -14570,34 +14570,21 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       try {
         const publicJson = await publicMessage.json();
         if (publicJson?.id) {
-          const messageId = String(publicJson.id);
-
-          // IMPORTANT: do not save our old `pending` copy back over a bomb
-          // that may have expired while Discord was creating the public
-          // message. The timer/scheduler can resolve a bomb during this tiny
-          // window. Re-read KV and merge ONLY the Discord message ID.
+          // Re-read the live bomb before saving the Discord message ID.
+          // The timer can detonate the bomb while the public message is being
+          // created. Saving the stale `bomb` object here could otherwise
+          // resurrect a detonated bomb back to `pending`.
           const liveState = await getGuildState(env, interaction.guild_id);
           liveState.bombs = liveState.bombs && typeof liveState.bombs === "object" ? liveState.bombs : {};
           const liveBomb = liveState.bombs[bomb.id];
 
           if (liveBomb) {
-            liveBomb.messageId = messageId;
+            liveBomb.messageId = String(publicJson.id);
             liveState.bombs[bomb.id] = liveBomb;
             await saveGuildState(env, interaction.guild_id, liveState);
             bomb = liveBomb;
-
-            // If the bomb already detonated while the message was being
-            // created, finish the Discord UI now instead of leaving live wire
-            // buttons attached to an already-resolved bomb.
-            if (liveBomb.status === "detonated") {
-              const why = "⏰ The 40-second timer expired.";
-              await bombEditPublicMessage(
-                env,
-                liveBomb,
-                `💥💣 **${liveBomb.type.name} DETONATED!**\n\n${why}\n\n🎯 <@${liveBomb.targetId}> was hit by <@${liveBomb.attackerId}>'s bomb.`,
-                []
-              );
-            }
+          } else {
+            console.error("Bomb state disappeared before public message capture:", bomb.id);
           }
         }
       } catch (error) {
