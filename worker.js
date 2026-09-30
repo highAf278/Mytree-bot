@@ -31361,34 +31361,6 @@ export default {
 
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
-    // BOMB FAST PATH: acknowledge bomb buttons immediately as a PUBLIC update,
-    // then do the KV/Discord work in waitUntil(). This keeps the Bomb Shop
-    // buttons from being delayed or swallowed by unrelated bot middleware.
-    if (isBombComponent) {
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = true;
-      interaction.__deferredEphemeral = false;
-      ctx.waitUntil((async () => {
-        try {
-          await handleBombComponent(env, interaction);
-        } catch (error) {
-          console.error("Bomb component error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ **Bomb Shop error:** ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Bomb Shop error:", editError);
-          }
-        }
-      })());
-      return new Response(JSON.stringify({ type: 6 }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
     // Color Key is a private, player-only response. It never edits the public game board.
     if (isPastelComponent && /^pastel:colorkey:[^:]+$/.test(customId)) {
       try {
@@ -31647,9 +31619,11 @@ export default {
       } else if (isTitlesComponent) {
         update = true;
       } else if (isBombComponent) {
-        // Bomb Shop gameplay is PUBLIC. Wire choices and all punishment results
-        // must edit the public bomb board so the entire server can watch.
-        update = true;
+        // Bomb Shop gameplay is PUBLIC. Use a public type-5 defer here instead
+        // of a type-6 update: bomb purchases perform KV reads/writes, and the
+        // handler then edits the acknowledged public response. This prevents
+        // button clicks from silently failing while keeping the whole flow public.
+        update = false;
         ephemeral = false;
       } else if (isSparkleShopComponent) {
         update = true;
