@@ -14330,7 +14330,7 @@ async function handleBombCommand(env, interaction) {
   return sendText(env, interaction, bombIntroText(), bombIntroRows());
 }
 
-async function handleBombComponent(env, interaction) {
+async function handleBombComponent(env, interaction, executionCtx = null) {
   const id = String(interaction.data?.custom_id || "");
   const parts = id.split(":");
   const action = parts[1];
@@ -14579,9 +14579,24 @@ async function handleBombComponent(env, interaction) {
       }
     }
 
-    // Automatic expiration is handled ONLY by processBombTimers().
-    // Do not sleep here: a second 40-second fallback can race the scheduler
-    // and detonate the same bomb twice.
+    // The scheduler remains the durable backup, but it is not precise enough
+    // to guarantee the 40-second wire deadline. Start a one-shot 40-second
+    // expiration from the same request that armed the bomb. applyBombDetonation()
+    // re-checks the live KV state before doing anything, so if the target cuts
+    // a wire first (or the scheduler already detonated it), this timer becomes
+    // a harmless no-op instead of causing a double detonation.
+    if (executionCtx?.waitUntil) {
+      const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
+      executionCtx.waitUntil((async () => {
+        await new Promise(resolve => setTimeout(resolve, remainingMs));
+        try {
+          await applyBombDetonation(env, bomb, "expired");
+        } catch (error) {
+          console.error("Bomb 40-second expiration failed:", error);
+        }
+      })());
+    }
+
     return response;
   }
 
@@ -32278,7 +32293,7 @@ export default {
             return;
           }
 
-          await handleBombComponent(env, interaction);
+          await handleBombComponent(env, interaction, ctx);
         } catch (error) {
           console.error("Bomb interaction error:", error);
           try {
