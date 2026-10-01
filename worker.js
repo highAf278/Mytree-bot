@@ -13936,7 +13936,12 @@ function bombIntroText() {
 }
 
 function bombIntroRows() {
-  return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
+  return [
+    row(
+      button("💣 Open Bomb Shop", "bomb:open", 1),
+      button("📦 My Bombs", "bomb:inventory", 2)
+    )
+  ];
 }
 
 function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES), player = null) {
