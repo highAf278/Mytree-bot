@@ -14282,9 +14282,19 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
   const now = Date.now();
   const type = bomb.type;
 
-  bomb.status = "detonated";
+  // CLAIM THE BOMB BEFORE DOING ANY SIDE EFFECTS.
+  // The 40-second waitUntil timer and the scheduled backup can reach this
+  // function at the same time. Previously both callers could read `pending`,
+  // both apply the punishment, and both send BOOM messages before either one
+  // saved the final `detonated` state.
+  //
+  // `detonating` is the durable in-progress lock. Any second caller sees it
+  // and immediately exits, so one bomb can only punish/send its explosion once.
+  bomb.status = "detonating";
+  bomb.detonationStartedAt = now;
   bomb.resolvedAt = now;
   state.bombs[bomb.id] = bomb;
+  await saveGuildState(env, bomb.guildId, state);
 
   await bombSetDiscordTimeout(env, bomb.guildId, bomb.targetId, type.timeoutMinutes);
 
@@ -14376,6 +14386,14 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     ? "⏰ The 40-second timer expired."
     : "✂️ The wrong wire was cut.";
 
+  // Mark the completed result only after all bomb-specific effects are ready.
+  // Normal detonations finish as `detonated`; the Double-bomb no-partner path
+  // may have changed this to `refunded` above.
+  if (bomb.status === "detonating") {
+    bomb.status = "detonated";
+  }
+  bomb.resolvedAt = now;
+  state.bombs[bomb.id] = bomb;
   await saveGuildState(env, bomb.guildId, state);
   await bombSendGif(
     env,
