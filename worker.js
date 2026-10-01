@@ -13992,7 +13992,7 @@ async function bombSendGif(env, bomb, content) {
 
 function isBombTreeCommand(interaction) {
   const command = String(interaction.data?.name || "").toLowerCase();
-  if (["tree","water","catch","sparkle","fortune","rename"].includes(command)) return command;
+  if (["water","catch","sparkle","fortune","rename"].includes(command)) return command;
   const id = String(interaction.data?.custom_id || "");
   if (id.startsWith("tree:")) return String(id.split(":")[2] || id.split(":")[1] || "tree").toLowerCase();
   if (["water","catch","catch_sparkle","daily_riddle"].includes(id)) return id.toLowerCase();
