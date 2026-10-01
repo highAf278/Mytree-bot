@@ -14481,7 +14481,7 @@ async function handleBombCommand(env, interaction) {
   return sendText(env, interaction, bombIntroText(), bombIntroRows());
 }
 
-async function handleBombComponent(env, interaction, executionCtx = null) {
+async function handleBombComponent(env, interaction, executionCtx = null, workerOrigin = "") {
   const id = String(interaction.data?.custom_id || "");
   const parts = id.split(":");
   const action = parts[1];
@@ -14769,16 +14769,25 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       }
     }
 
-    // Cloudflare's scheduler remains the durable backup. This one-shot timer
-    // guarantees the 40-second deadline even when the cron interval is longer.
-    if (executionCtx?.waitUntil) {
-      const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
+    // Cloudflare Workers can terminate a waitUntil task before a 40-second
+    // sleep finishes. Use two short Worker executions instead: the first
+    // waits 20 seconds, then starts a second Worker request; that second
+    // execution waits the remaining 20 seconds and performs the expiration.
+    // The scheduled processBombTimers() remains only as a durable backup.
+    if (executionCtx?.waitUntil && workerOrigin) {
+      const timerUrl =
+        `${workerOrigin}/__werewives_bomb_expire?guild=${encodeURIComponent(String(bomb.guildId))}&bomb=${encodeURIComponent(String(bomb.id))}`;
+
       executionCtx.waitUntil((async () => {
-        await new Promise(resolve => setTimeout(resolve, remainingMs));
+        await new Promise(resolve => setTimeout(resolve, 20 * 1000));
         try {
-          await applyBombDetonation(env, bomb, "expired");
+          // Deliberately do not await this request. The second Worker
+          // execution owns the remaining 20-second wait independently.
+          void fetch(timerUrl).catch(error => {
+            console.error("Bomb second-stage expiration request failed:", error);
+          });
         } catch (error) {
-          console.error("Bomb 40-second expiration failed:", error);
+          console.error("Bomb expiration scheduling failed:", error);
         }
       })());
     }
@@ -31982,6 +31991,31 @@ async function processRaccoonEmpireDividends(env) {
 }
 
 
+async function handleBombExpirationRequest(env, ctx, guildId, bombId) {
+  if (!guildId || !bombId) return;
+
+  // Keep this execution comfortably below Cloudflare's request lifetime.
+  await new Promise(resolve => setTimeout(resolve, 20 * 1000));
+
+  try {
+    const state = await getGuildState(env, guildId);
+    state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
+    const bomb = state.bombs[bombId];
+
+    // The live-state check inside applyBombDetonation() is the final guard
+    // against defused/wrong-wire/already-detonated bombs.
+    if (
+      bomb &&
+      bomb.status === "pending" &&
+      Number(bomb.expiresAt || 0) <= Date.now()
+    ) {
+      await applyBombDetonation(env, bomb, "expired");
+    }
+  } catch (error) {
+    console.error("Bomb second-stage expiration failed:", error);
+  }
+}
+
 export default {
   async fetch(
     request,
@@ -31992,6 +32026,22 @@ export default {
       new URL(
         request.url
       );
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/__werewives_bomb_expire"
+    ) {
+      const guildId = url.searchParams.get("guild");
+      const bombId = url.searchParams.get("bomb");
+
+      // A timer request is only allowed to detonate a bomb whose persisted
+      // expiresAt has actually passed. It cannot force an early explosion.
+      ctx.waitUntil(
+        handleBombExpirationRequest(env, ctx, guildId, bombId)
+      );
+
+      return new Response("Bomb expiration timer armed.", { status: 202 });
+    }
 
     if (
       request.method ===
@@ -32512,7 +32562,7 @@ export default {
             return;
           }
 
-          await handleBombComponent(env, interaction, ctx);
+          await handleBombComponent(env, interaction, ctx, url.origin);
         } catch (error) {
           console.error("Bomb interaction error:", error);
           try {
