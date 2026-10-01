@@ -14755,14 +14755,15 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     // guarantees the 40-second deadline even when the cron interval is longer.
     if (executionCtx?.waitUntil) {
       const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
-      executionCtx.waitUntil((async () => {
-        await new Promise(resolve => setTimeout(resolve, remainingMs));
-        try {
-          await applyBombDetonation(env, bomb, "expired");
-        } catch (error) {
-          console.error("Bomb 40-second expiration failed:", error);
-        }
-      })());
+      // The Bomb component router is already running inside the outer
+      // executionCtx.waitUntil(). Do not create a second nested waitUntil;
+      // keep that same Worker invocation alive until the 40-second deadline.
+      await new Promise(resolve => setTimeout(resolve, remainingMs));
+      try {
+        await applyBombDetonation(env, bomb, "expired");
+      } catch (error) {
+        console.error("Bomb 40-second expiration failed:", error);
+      }
     }
 
     return new Response(null, { status: 204 });
