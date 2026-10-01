@@ -14325,7 +14325,19 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     effectText = await applyFakeIdentity(env, target, bomb, now);
   } else if (bomb.typeId === "double") {
     const members = await getGuildMembers(env, bomb.guildId);
-    const candidates = members.filter(m => m?.user?.id && String(m.user.id) !== String(bomb.attackerId) && String(m.user.id) !== String(bomb.targetId) && !m.user.bot);
+
+    // getGuildMembers() returns normalized members as:
+    // { id, username, displayName }
+    // It does NOT return Discord's raw { user: {...}, ... } shape.
+    // The old code checked m.user.id here, which meant every candidate
+    // failed the filter and Double Bomb could NEVER find a partner.
+    const candidates = members.filter(
+      m =>
+        m?.id &&
+        String(m.id) !== String(bomb.attackerId) &&
+        String(m.id) !== String(bomb.targetId)
+    );
+
     if (!candidates.length) {
       effectText = `👯 **DOUBLE LINK FAILED TO FIND A SECOND PLAYER.** The bomb has been refunded to <@${bomb.attackerId}>.`;
       bomb.status = "refunded";
@@ -14334,10 +14346,23 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
       await savePlayer(env, attacker, bomb.attackerId);
     } else {
       const partnerMember = candidates[randomInt(0, candidates.length - 1)];
-      const partner = await getPlayer(env, partnerMember.user.id);
-      updatePlayerIdentity(partner, { user: partnerMember.user, member: partnerMember });
+      const partner = await getPlayer(env, partnerMember.id);
+
+      // Rebuild the small Discord-like shape expected by
+      // updatePlayerIdentity(), because partnerMember is normalized.
+      updatePlayerIdentity(partner, {
+        user: {
+          id: partnerMember.id,
+          username: partnerMember.username || "",
+          global_name: partnerMember.displayName || partnerMember.username || ""
+        },
+        member: {
+          nick: partnerMember.displayName || partnerMember.username || ""
+        }
+      });
+
       await applyDoubleBomb(env, target, partner, bomb, now);
-      bomb.doublePartnerId = String(partnerMember.user.id);
+      bomb.doublePartnerId = String(partnerMember.id);
       effectText = `👯 **DOUBLE LINK ACTIVATED for 6 HOURS!**
 
 <@${bomb.targetId}> has been secretly linked to **one random player**. Neither linked player chose the pairing.
