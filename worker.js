@@ -14009,12 +14009,17 @@ function bombInventoryRows(player, page = 1) {
   const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
   const pageItems = owned.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  for (const [id, type] of pageItems) {
-    rows.push(row(button(
+  // Discord allows only 5 component rows per message. Put two bomb buttons
+  // on each row so five bombs + navigation + Back always fit cleanly.
+  const buttons = pageItems.map(([id, type]) =>
+    button(
       `💣 Use ${type.name.replace(/^\S+\s*/, "")} ×${bombCount(player, id)}`,
       `bomb:use:${id}`,
       1
-    )));
+    )
+  );
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(row(...buttons.slice(i, i + 2)));
   }
 
   const nav = [];
