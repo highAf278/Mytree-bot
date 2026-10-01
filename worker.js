@@ -14315,19 +14315,12 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     effectText = await applyFakeIdentity(env, target, bomb, now);
   } else if (bomb.typeId === "double") {
     const members = await getGuildMembers(env, bomb.guildId);
-
-    // getGuildMembers() returns normalized members as:
-    // { id, username, displayName }
-    // It does NOT return Discord's raw { user: {...}, ... } shape.
-    // The old code checked m.user.id here, which meant every candidate
-    // failed the filter and Double Bomb could NEVER find a partner.
     const candidates = members.filter(
       m =>
         m?.id &&
         String(m.id) !== String(bomb.attackerId) &&
         String(m.id) !== String(bomb.targetId)
     );
-
     if (!candidates.length) {
       effectText = `👯 **DOUBLE LINK FAILED TO FIND A SECOND PLAYER.** The bomb has been refunded to <@${bomb.attackerId}>.`;
       bomb.status = "refunded";
@@ -14337,9 +14330,6 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     } else {
       const partnerMember = candidates[randomInt(0, candidates.length - 1)];
       const partner = await getPlayer(env, partnerMember.id);
-
-      // Rebuild the small Discord-like shape expected by
-      // updatePlayerIdentity(), because partnerMember is normalized.
       updatePlayerIdentity(partner, {
         user: {
           id: partnerMember.id,
@@ -14350,7 +14340,6 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
           nick: partnerMember.displayName || partnerMember.username || ""
         }
       });
-
       await applyDoubleBomb(env, target, partner, bomb, now);
       bomb.doublePartnerId = String(partnerMember.id);
       effectText = `👯 **DOUBLE LINK ACTIVATED for 6 HOURS!**
@@ -14755,15 +14744,14 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     // guarantees the 40-second deadline even when the cron interval is longer.
     if (executionCtx?.waitUntil) {
       const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
-      // The Bomb component router is already running inside the outer
-      // executionCtx.waitUntil(). Do not create a second nested waitUntil;
-      // keep that same Worker invocation alive until the 40-second deadline.
-      await new Promise(resolve => setTimeout(resolve, remainingMs));
-      try {
-        await applyBombDetonation(env, bomb, "expired");
-      } catch (error) {
-        console.error("Bomb 40-second expiration failed:", error);
-      }
+      executionCtx.waitUntil((async () => {
+        await new Promise(resolve => setTimeout(resolve, remainingMs));
+        try {
+          await applyBombDetonation(env, bomb, "expired");
+        } catch (error) {
+          console.error("Bomb 40-second expiration failed:", error);
+        }
+      })());
     }
 
     return new Response(null, { status: 204 });
