@@ -13936,7 +13936,7 @@ function bombIntroText() {
 }
 
 function bombIntroRows() {
-  return [row(button("💣 Open Bomb Shop", "bomb:open", 1), button("📦 My Bombs", "bomb:inventory", 1))];
+  return [row(button("💣 Open Bomb Shop", "bomb:open", 1))];
 }
 
 function bombStaticEmbeds(ids = Object.keys(BOMB_TYPES), player = null) {
@@ -13979,7 +13979,7 @@ function bombShopRows(player = null, page = 1) {
         button("🪪 Fake ID — 6,000 ✨", "bomb:buy:fake_id", 1),
         button("👯 Double — 8,000 ✨", "bomb:buy:double", 1)
       ),
-      row(button("⬅️ Page 1", "bomb:shop:1", 2), button("📦 My Bombs", "bomb:inventory", 2))
+      row(button("⬅️ Page 1", "bomb:shop:1", 2))
     ];
   }
   return [
@@ -13990,24 +13990,32 @@ function bombShopRows(player = null, page = 1) {
     ),
     row(
       button("🥒 Pickle — 1,000 ✨", "bomb:buy:pickle", 1),
-      button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1),
-      button("📦 My Bombs", "bomb:inventory", 2)
+      button("🦝 Raccoon — 4,000 ✨", "bomb:buy:raccoon", 1)
     ),
     row(button("➡️ Bomb Shop Page 2", "bomb:shop:2", 2)),
     row(button("⬅️ Back", "bomb:back", 2))
   ];
 }
-function bombInventoryRows(player) {
+function bombInventoryRows(player, page = 1) {
   const rows = [];
   const owned = Object.entries(BOMB_TYPES).filter(([id]) => bombCount(player, id) > 0);
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(owned.length / pageSize));
+  const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const pageItems = owned.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  if (owned.length) {
-    const buttons = owned.map(([id, type]) =>
-      button(`💣 Use ${type.name.replace(/^\S+\s*/, "")} ×${bombCount(player, id)}`, `bomb:use:${id}`, 1)
-    );
-    for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  for (const [id, type] of pageItems) {
+    rows.push(row(button(
+      `💣 Use ${type.name.replace(/^\S+\s*/, "")} ×${bombCount(player, id)}`,
+      `bomb:use:${id}`,
+      1
+    )));
   }
 
+  const nav = [];
+  if (currentPage > 1) nav.push(button("⬅️ Previous", `bomb:inventory:${currentPage - 1}`, 2));
+  if (currentPage < totalPages) nav.push(button("➡️ Next", `bomb:inventory:${currentPage + 1}`, 2));
+  if (nav.length) rows.push(row(...nav));
   rows.push(row(button("🛒 Back to Bomb Shop", "bomb:shop", 2)));
   return rows;
 }
@@ -14439,10 +14447,23 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
   if (action === "back") return sendBombPublicText(env, interaction, bombIntroText(), bombIntroRows());
 
   if (action === "inventory") {
+    const page = Math.max(1, Number(parts[2] || 1));
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    return sendBombPublicText(env, interaction, bombInventoryText(player), bombInventoryRows(player), { embeds: bombStaticEmbeds(Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0), player) });
+    const ownedIds = Object.keys(BOMB_TYPES).filter(id => bombCount(player, id) > 0);
+    const pageSize = 5;
+    const totalPages = Math.max(1, Math.ceil(ownedIds.length / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const pageIds = ownedIds.slice((safePage - 1) * pageSize, safePage * pageSize);
+    const pageLabel = totalPages > 1 ? `\n\n📖 **Page ${safePage} of ${totalPages}**` : "";
+    return sendBombPublicText(
+      env,
+      interaction,
+      bombInventoryText(player) + pageLabel,
+      bombInventoryRows(player, safePage),
+      { embeds: bombStaticEmbeds(pageIds, player) }
+    );
   }
 
   if (action === "buy") {
@@ -14627,42 +14648,21 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     const targetId = String(interaction.data?.values?.[0] || "");
     if (!targetId || targetId === bomb.attackerId) return sendEphemeralFollowup(env, interaction, "❌ You can't bomb yourself. Pick another player.");
 
-    // Validate the selected Discord user directly instead of downloading the
-    // entire guild member list. This is important for large servers and also
-    // avoids pagination/cache issues where a perfectly valid selected member
-    // is not present in the first member-list page.
     let targetMember = null;
     try {
-      const memberResponse = await discordRequest(
-        env,
-        `/guilds/${interaction.guild_id}/members/${targetId}`
-      );
+      const memberResponse = await discordRequest(env, `/guilds/${interaction.guild_id}/members/${targetId}`);
       if (memberResponse.ok) {
         const member = await memberResponse.json();
-        if (member?.user?.id) {
-          targetMember = member;
-        }
+        if (member?.user?.id) targetMember = member;
       } else {
-        console.error(
-          "Bomb target member lookup failed:",
-          memberResponse.status,
-          await memberResponse.text()
-        );
+        console.error("Bomb target member lookup failed:", memberResponse.status, await memberResponse.text());
       }
     } catch (error) {
       console.error("Bomb target member lookup error:", error);
     }
 
-    if (!targetMember) {
-      return sendBombPublicText(
-        env,
-        interaction,
-        "❌ That player isn't available in this server."
-      );
-    }
+    if (!targetMember) return sendBombPublicText(env, interaction, "❌ That player isn't available in this server.");
 
-    // Re-read the bomb immediately before arming it. This prevents a stale
-    // targeting object from overwriting a concurrent cancel/detonation.
     const liveState = await getGuildState(env, interaction.guild_id);
     liveState.bombs = liveState.bombs && typeof liveState.bombs === "object" ? liveState.bombs : {};
     const liveBomb = liveState.bombs[bomb.id];
@@ -14689,8 +14689,6 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     liveState.bombs[bomb.id] = bomb;
     await saveGuildState(env, interaction.guild_id, liveState);
 
-    // Everything up to this point was private. The target selection is the
-    // exact moment the bomb becomes a public server event.
     await bombDeleteInteractionResponse(env, interaction);
     const publicMessage = await sendChannelMessage(
       env,
@@ -14699,24 +14697,18 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       bombWireRows(bomb),
       { embeds: [{ thumbnail: { url: imageUrl(bomb.type.static) } }] }
     );
+
     if (publicMessage?.ok) {
       try {
         const publicJson = await publicMessage.json();
         if (publicJson?.id) {
-          // Re-read the live bomb before saving the Discord message ID.
-          // The timer can detonate the bomb while the public message is being
-          // created. Saving the stale `bomb` object here could otherwise
-          // resurrect a detonated bomb back to `pending`.
-          const liveState = await getGuildState(env, interaction.guild_id);
-          liveState.bombs = liveState.bombs && typeof liveState.bombs === "object" ? liveState.bombs : {};
-          const liveBomb = liveState.bombs[bomb.id];
-
-          if (liveBomb) {
-            liveBomb.messageId = String(publicJson.id);
-            liveState.bombs[bomb.id] = liveBomb;
-            await saveGuildState(env, interaction.guild_id, liveState);
-          } else {
-            console.error("Bomb state disappeared before public message capture:", bomb.id);
+          const latestState = await getGuildState(env, interaction.guild_id);
+          latestState.bombs = latestState.bombs && typeof latestState.bombs === "object" ? latestState.bombs : {};
+          const latestBomb = latestState.bombs[bomb.id];
+          if (latestBomb && latestBomb.status === "pending") {
+            latestBomb.messageId = String(publicJson.id);
+            latestState.bombs[bomb.id] = latestBomb;
+            await saveGuildState(env, interaction.guild_id, latestState);
           }
         }
       } catch (error) {
@@ -14724,10 +14716,21 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       }
     }
 
-    // Automatic expiration is handled only by processBombTimers().
-    // This avoids two independent timers racing the same KV bomb record.
+    // Cloudflare's scheduler remains the durable backup. This one-shot timer
+    // guarantees the 40-second deadline even when the cron interval is longer.
+    if (executionCtx?.waitUntil) {
+      const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
+      executionCtx.waitUntil((async () => {
+        await new Promise(resolve => setTimeout(resolve, remainingMs));
+        try {
+          await applyBombDetonation(env, bomb, "expired");
+        } catch (error) {
+          console.error("Bomb 40-second expiration failed:", error);
+        }
+      })());
+    }
 
-    return response;
+    return new Response(null, { status: 204 });
   }
 
   if (action === "wire") {
