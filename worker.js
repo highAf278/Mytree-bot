@@ -1044,8 +1044,10 @@ function defaultPlayer() {
       raccoon_empire: 0,
       raccoon_suit: 0,
       raccoon_boomerang: 0,
-      pickle_slap: 0
+      pickle_slap: 0,
+      rubber_band: 0
     },
+    rubberBandUntil: 0,
     ceaseDesistTargetId: "",
     ceaseDesistUntil: 0,
     raccoonShieldUses: 0,
@@ -2221,14 +2223,25 @@ async function handleCourtLeaderboard(env, interaction) {
 
 async function handleCourt(env, interaction, forcedTargetId = null, forced = false, forcedPunishmentId = null) {
   const user=getUserFromInteraction(interaction); if(!user)return;
-  const targetId=forcedTargetId || getOption(interaction,"user");
+  let targetId=forcedTargetId || getOption(interaction,"user");
   if(!targetId)return sendText(env,interaction,"🦝⚖️ The Raccoon Court needs a defendant.");
   if(String(targetId)===String(user.id))return sendText(env,interaction,"🦝⚖️ You cannot put yourself on trial. The raccoons have standards. Barely.");
   const now=Date.now();
-  const accuser=await getPlayer(env,user.id); await refreshPunishmentState(env,accuser);
+  let accuserId=String(user.id);
+  let accuser=await getPlayer(env,accuserId); await refreshPunishmentState(env,accuser);
   const sixHours=6*60*60000;
   if(!forced && Number(accuser.courtLastFiledAt||0)>0 && now-Number(accuser.courtLastFiledAt)<sixHours)return sendText(env,interaction,`⏳🦝 **COURT IS CLOSED FOR YOU.**\n\nYou must wait **${punishmentTimeText(Number(accuser.courtLastFiledAt)+sixHours)}** before filing another case.`);
-  const target=await getPlayer(env,targetId); await refreshPunishmentState(env,target);
+  let target=await getPlayer(env,targetId); await refreshPunishmentState(env,target);
+
+  if (rubberBandActive(target, now)) {
+    const originalAccuserId = accuserId;
+    const originalAccuser = accuser;
+    accuserId = String(targetId);
+    targetId = originalAccuserId;
+    accuser = target;
+    target = originalAccuser;
+  }
+
   const day=courtDayKey();
   if(!forced && String(target.courtLastTargetedDay||"")===day)return sendText(env,interaction,"🚫🦝 **THIS DEFENDANT HAS ALREADY BEEN TO COURT TODAY.**\n\nThe raccoons will not hear another case against them until tomorrow.");
   accuser.courtLastFiledAt=now; target.courtLastTargetedDay=day;
@@ -2240,7 +2253,7 @@ async function handleCourt(env, interaction, forcedTargetId = null, forced = fal
   target.courtNotGuilty=Number(target.courtNotGuilty||0)+(guilty?0:1);
   let punishment="",punishmentName="";
   if(guilty){const chosen=forcedPunishmentId ? (COURT_PUNISHMENTS.find(p=>p.id===forcedPunishmentId) || COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)]) : COURT_PUNISHMENTS[randomInt(0,COURT_PUNISHMENTS.length-1)];punishmentName=chosen.name;if(chosen.id==="trash_release")target.courtTrashReleaseChannelId=String((await getGuildState(env,interaction.guild_id))?.announcementChannelId||interaction.channel_id||"");punishment=applyCourtPunishment(target,chosen.id)+`\n\n📜 ${courtRandomMessage(chosen.id)}`;}
-  await savePlayer(env,accuser,user.id); await savePlayer(env,target,targetId);
+  await savePlayer(env,accuser,accuserId); await savePlayer(env,target,targetId);
   if(guilty && Number(target.courtGuilty||0)>0){
     try{
       const rows=await getCourtLeaderboard(env);
@@ -2262,7 +2275,7 @@ async function handleCourt(env, interaction, forcedTargetId = null, forced = fal
     const publicEmbed={title:"🦝⚖️ THE RACCOON COURT",description:guilty?`**${verdict}**\n\n🔨 **SENTENCE:**\n**${punishmentName}**\n${punishment}`:`**${verdict}**\n\n${innocentLine}\n\n**CASE CLOSED.**`,color:guilty?0xD94A4A:0x4CAF50,fields:[{name:"👨‍⚖️ Judge",value:judge.name,inline:true},{name:"📁 Case",value:`**${caseNumber}**`,inline:true},{name:"👤 Defendant",value:`<@${targetId}>`,inline:true},{name:"📜 Charge",value:charge,inline:false}],author:{name:`${target.displayName||target.username||"Werewife"} — Court Defendant`,icon_url:avatarUrl},thumbnail:{url:avatarUrl},footer:{text:`Raccoon Court • ${judge.name} has spoken. 🦝⚖️`},timestamp:new Date().toISOString()};
     await sendChannelMessage(env,announcementChannelId,"🦝⚖️ **Raccoon Court Case Filed**",[],{embeds:[publicEmbed]});
   }
-  await sendText(env,interaction,`${forced ? "⛓️🦝 **HANDCUFFS USED!**\n\n" : ""}🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
+  await sendText(env,interaction,`${forced ? "⛓️🦝 **HANDCUFFS USED!**\n\n" : ""}${rubberBandActive(accuser, now) ? "🪢💥 **RUBBER BAND! COURT BOUNCED BACK!**\n\n" : ""}🦝⚖️ Court case **${caseNumber}** completed for <@${targetId}>.`);
 }
 
 async function handlePickleJail(env, interaction) {
@@ -8449,6 +8462,11 @@ const RACCOON_MART_ITEMS = {
     name: "🥒💥 Pickle Slap",
     price: 1500,
     description: "Pick a player and slap them with a virtual pickle. They lose **1,000–3,000 ✨** and you receive the stolen sparkles. There is a **15% chance the pickle backfires**, making you lose **1,000–3,000 ✨** instead. One-time use."
+  },
+  rubber_band: {
+    name: "🪢 Rubber Band",
+    price: 20000,
+    description: "Activate for **24 hours**. Negative actions used against you — including bombs, /raccoon, Pickle Slaps, Raccoon Boomerangs, and Raccoon Court — bounce back onto the person who used them. Any Sparkles they lose from the reflected action go to you."
   }
 };
 
@@ -9097,6 +9115,21 @@ async function useRaccoonBoomerang(env, interaction, targetId) {
   }
 
   const amount = randomInt(2500, 5000);
+
+  if (rubberBandActive(target)) {
+    const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
+    target.sparkles = Number(target.sparkles || 0) + lost;
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+    return sendText(
+      env,
+      interaction,
+      `🪢🪃💥 **RUBBER BAND!**\n\nThe Raccoon Boomerang bounced off <@${targetId}> and flew **RIGHT BACK** at <@${user.id}>! 😭\n\n💸 <@${user.id}> lost **${lost.toLocaleString()} ✨** and <@${targetId}> received them.`,
+      raccoonMartHomeRows(player)
+    );
+  }
+
   const backfire = Math.random() < 0.20;
 
   if (backfire) {
@@ -9141,6 +9174,21 @@ async function usePickleSlap(env, interaction, targetId) {
   }
 
   const amount = randomInt(1000, 3000);
+
+  if (rubberBandActive(target)) {
+    const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
+    target.sparkles = Number(target.sparkles || 0) + lost;
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+    return sendText(
+      env,
+      interaction,
+      `🪢🥒💥 **RUBBER BAND!**\n\nThe Pickle Slap bounced **RIGHT BACK** from <@${targetId}> to <@${user.id}>! 😭\n\n💸 <@${user.id}> lost **${lost.toLocaleString()} ✨** and <@${targetId}> received them.`,
+      raccoonMartHomeRows(player)
+    );
+  }
+
   const backfire = Math.random() < 0.15;
 
   if (backfire) {
@@ -9165,6 +9213,39 @@ async function usePickleSlap(env, interaction, targetId) {
     `🥒💥 **PICKLE SLAP!**\n\nYou absolutely SMACKED <@${targetId}> with a pickle and stole **${stolen.toLocaleString()} ✨**! 😭\n\n💰 **Your haul:** +${stolen.toLocaleString()} ✨\n📦 Pickle Slaps remaining: **${raccoonMartCount(player, "pickle_slap")}**`,
     raccoonMartHomeRows(player)
   );
+}
+
+async function useRubberBand(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  if (!user) return;
+
+  const player = await getPlayer(env, user.id);
+  updatePlayerIdentity(player, interaction);
+
+  if (raccoonMartCount(player, "rubber_band") < 1) {
+    return sendText(env, interaction, "❌ You do not own a Rubber Band.");
+  }
+
+  const now = Date.now();
+  if (Number(player.rubberBandUntil || 0) > now) {
+    const hours = Math.max(1, Math.ceil((Number(player.rubberBandUntil) - now) / 3600000));
+    return sendText(env, interaction, `🪢 **RUBBER BAND ALREADY ACTIVE!**\n\n⏳ About **${hours} hour${hours === 1 ? "" : "s"}** remaining.`);
+  }
+
+  consumeRaccoonMartItem(player, "rubber_band");
+  player.rubberBandUntil = now + 24 * 60 * 60 * 1000;
+  await savePlayer(env, player, user.id);
+
+  return sendText(
+    env,
+    interaction,
+    `🪢💥 **RUBBER BAND ACTIVATED!**\n\nFor the next **24 HOURS**, negative actions used against you will **BOUNCE RIGHT BACK**! 😭\n\n💣 Bombs\n🦝 /raccoon\n🥒 Pickle Slaps\n🦝🪃 Raccoon Boomerangs\n⚖️ Raccoon Court\n\n✨ Any Sparkles they lose from the reflected action go to **YOU**.\n\n🪢 *WHAT GOES AROUND COMES AROUND.*`,
+    raccoonMartHomeRows(player)
+  );
+}
+
+function rubberBandActive(player, now = Date.now()) {
+  return Number(player?.rubberBandUntil || 0) > now;
 }
 
 async function useHandcuffs(env, interaction, targetId) {
@@ -13978,7 +14059,9 @@ function bombWireText(bomb) {
   return [
     `🚨💣 **BOMB DEFUSAL — ${bomb.type.name}**`,
     "",
-    `💥 <@${bomb.attackerId}> threw this bomb at <@${bomb.targetId}>!`,
+    bomb.rubberBandReflected
+      ? `🪢💥 <@${bomb.attackerId}>'s bomb hit a Rubber Band and bounced **RIGHT BACK**!`
+      : `💥 <@${bomb.attackerId}> threw this bomb at <@${bomb.targetId}>!`,
     "",
     `⏱️ **${Math.max(0, remaining)} seconds remaining!**`,
     "✂️ One wire defuses it. The other three make the bomb go BOOM.",
@@ -14246,6 +14329,12 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
       const stolen = Math.min(amount, targetSparkles);
       target.sparkles = Math.max(0, targetSparkles - stolen);
       attacker.sparkles = Number(attacker.sparkles || 0) + stolen;
+      if (bomb.rubberBandReflected && bomb.rubberBandOwnerId) {
+        const owner = await getPlayer(env, bomb.rubberBandOwnerId);
+        owner.sparkles = Number(owner.sparkles || 0) + stolen;
+        await savePlayer(env, owner, bomb.rubberBandOwnerId);
+        attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - stolen);
+      }
       attacker.badgeStats = attacker.badgeStats && typeof attacker.badgeStats === "object" ? attacker.badgeStats : {};
       attacker.badgeStats.sparklesStolen = Number(attacker.badgeStats.sparklesStolen || 0) + stolen;
       await savePlayer(env, target, bomb.targetId);
@@ -14260,6 +14349,7 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     target.raccoonBeefNextTalkAt = now + randomInt(3, 10) * 60 * 1000;
     target.raccoonBeefCollections = 0;
     target.raccoonBeefChannelId = bomb.channelId;
+    target.rubberBandRaccoonOwnerId = bomb.rubberBandOwnerId || "";
     await savePlayer(env, target, bomb.targetId);
     effectText = `🦝 **RACCOON BEEF for 1 hour!** The raccoons collect **200–1,000 ✨ every 15 minutes** and will also randomly show up to talk trash between collections.`;
   }
@@ -14416,6 +14506,31 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       return sendBombPublicText(env, interaction, `❌ You don't have a ${type.name} in your Bomb Inventory.`, bombInventoryRows(player));
     }
 
+    // Clean up stale bomb records belonging to this player before checking
+    // whether they already have an active bomb. This prevents an abandoned
+    // old "targeting" record from trapping the player forever.
+    const cleanupState = await getGuildState(env, interaction.guild_id);
+    cleanupState.bombs = cleanupState.bombs && typeof cleanupState.bombs === "object" ? cleanupState.bombs : {};
+    const cleanupNow = Date.now();
+
+    for (const stale of Object.values(cleanupState.bombs)) {
+      if (!stale || String(stale.attackerId) !== String(user.id)) continue;
+
+      if (stale.status === "pending" && Number(stale.expiresAt || 0) <= cleanupNow) {
+        await applyBombDetonation(env, stale, "expired");
+        continue;
+      }
+
+      if (stale.status === "targeting" && cleanupNow - Number(stale.createdAt || 0) > 10 * 60 * 1000) {
+        delete cleanupState.bombs[stale.id];
+        const refundPlayer = await getPlayer(env, user.id);
+        bombAdd(refundPlayer, stale.typeId, 1);
+        await savePlayer(env, refundPlayer, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+      }
+    }
+
+    await saveGuildState(env, interaction.guild_id, cleanupState);
+
     // Prevent a player from reserving several bombs at once while one is
     // already waiting for a target.
     const state = await getGuildState(env, interaction.guild_id);
@@ -14506,7 +14621,7 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
     const bombIdValue = parts[2];
     const state = await getGuildState(env, interaction.guild_id);
     state.bombs = state.bombs && typeof state.bombs === "object" ? state.bombs : {};
-    const bomb = state.bombs[bombIdValue];
+    let bomb = state.bombs[bombIdValue];
     if (!bomb || bomb.status !== "targeting") return sendBombPublicText(env, interaction, "❌ That bomb is no longer waiting for a target.");
     if (String(user.id) !== String(bomb.attackerId)) return sendEphemeralFollowup(env, interaction, "❌ Only the person using this bomb can choose its target.");
     const targetId = String(interaction.data?.values?.[0] || "");
@@ -14546,15 +14661,33 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       );
     }
 
-    bomb.targetId = targetId;
+    // Re-read the bomb immediately before arming it. This prevents a stale
+    // targeting object from overwriting a concurrent cancel/detonation.
+    const liveState = await getGuildState(env, interaction.guild_id);
+    liveState.bombs = liveState.bombs && typeof liveState.bombs === "object" ? liveState.bombs : {};
+    const liveBomb = liveState.bombs[bomb.id];
+    if (!liveBomb || liveBomb.status !== "targeting") {
+      return sendBombPublicText(env, interaction, "❌ That bomb was already resolved or cancelled.");
+    }
+    bomb = liveBomb;
+
+    const selectedTarget = await getPlayer(env, targetId);
+    if (rubberBandActive(selectedTarget)) {
+      bomb.rubberBandOwnerId = String(targetId);
+      bomb.rubberBandReflected = true;
+      bomb.targetId = String(bomb.attackerId);
+    } else {
+      bomb.targetId = targetId;
+    }
+
     bomb.status = "pending";
     bomb.wires = shuffleArray(BOMB_WIRE_COLORS.slice());
     bomb.correctWire = bomb.wires[randomInt(0, bomb.wires.length - 1)];
     bomb.startedAt = Date.now();
     bomb.expiresAt = Date.now() + BOMB_WIRE_TIMER;
     bomb.channelId = interaction.channel_id;
-    state.bombs[bomb.id] = bomb;
-    await saveGuildState(env, interaction.guild_id, state);
+    liveState.bombs[bomb.id] = bomb;
+    await saveGuildState(env, interaction.guild_id, liveState);
 
     // Everything up to this point was private. The target selection is the
     // exact moment the bomb becomes a public server event.
@@ -14591,23 +14724,8 @@ async function handleBombComponent(env, interaction, executionCtx = null) {
       }
     }
 
-    // The scheduler remains the durable backup, but it is not precise enough
-    // to guarantee the 40-second wire deadline. Start a one-shot 40-second
-    // expiration from the same request that armed the bomb. applyBombDetonation()
-    // re-checks the live KV state before doing anything, so if the target cuts
-    // a wire first (or the scheduler already detonated it), this timer becomes
-    // a harmless no-op instead of causing a double detonation.
-    if (executionCtx?.waitUntil) {
-      const remainingMs = Math.max(0, Number(bomb.expiresAt || 0) - Date.now());
-      executionCtx.waitUntil((async () => {
-        await new Promise(resolve => setTimeout(resolve, remainingMs));
-        try {
-          await applyBombDetonation(env, bomb, "expired");
-        } catch (error) {
-          console.error("Bomb 40-second expiration failed:", error);
-        }
-      })());
-    }
+    // Automatic expiration is handled only by processBombTimers().
+    // This avoids two independent timers racing the same KV bomb record.
 
     return response;
   }
@@ -14675,6 +14793,7 @@ async function processBombTimers(env) {
             target.raccoonBeefNextTalkAt = 0;
             target.raccoonBeefCollections = 0;
             target.raccoonBeefChannelId = "";
+            target.rubberBandRaccoonOwnerId = "";
             await savePlayer(env, target, bomb.targetId);
             continue;
           }
@@ -14687,6 +14806,12 @@ async function processBombTimers(env) {
             const actual = Math.min(requested, balance);
             target.sparkles = Math.max(0, balance - actual);
             target.raccoonBeefCollections = Number(target.raccoonBeefCollections || 0) + 1;
+
+            if (target.rubberBandRaccoonOwnerId && actual > 0) {
+              const rubberOwner = await getPlayer(env, target.rubberBandRaccoonOwnerId);
+              rubberOwner.sparkles = Number(rubberOwner.sparkles || 0) + actual;
+              await savePlayer(env, rubberOwner, target.rubberBandRaccoonOwnerId);
+            }
             target.raccoonBeefNextAt = Math.min(target.raccoonBeefUntil, now + 15 * 60 * 1000);
             collectionHappened = true;
 
@@ -14975,6 +15100,7 @@ async function handleComponent(
       if (itemId === "cheese_wheel") return useCheeseProtection(env, interaction, itemId, 3 * 24 * 60 * 60 * 1000, 0);
       if (itemId === "raccoon_hitman") return useRaccoonHitman(env, interaction);
       if (itemId === "raccoon_suit") return useRaccoonSuit(env, interaction);
+      if (itemId === "rubber_band") return useRubberBand(env, interaction);
       if (itemId === "judges_robe") return useJudgesRobe(env, interaction);
       if (itemId === "raccoon_boomerang" || itemId === "pickle_slap") {
         return showRaccoonMartTargetMenu(env, interaction, itemId);
@@ -27214,6 +27340,31 @@ async function handleRaccoon(env, interaction) {
   await refreshPunishmentState(env, target);
 
   const now = Date.now();
+
+  if (rubberBandActive(target, now)) {
+    player.lastRaccoon = now;
+    player.raccoonRobberies = Number(player.raccoonRobberies || 0) + 1;
+
+    const requested = randomInt(0, 300);
+    const lost = Math.min(requested, Math.max(0, Number(player.sparkles || 0)));
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
+    target.sparkles = Number(target.sparkles || 0) + lost;
+
+    await savePlayer(env, player, user.id);
+    await savePlayer(env, target, targetId);
+
+    await sendText(
+      env,
+      interaction,
+      `🪢💥 **RUBBER BAND!**\n\nThe raccoon hit <@${targetId}>'s Rubber Band and bounced **RIGHT BACK** onto <@${user.id}>! 😭🦝\n\n💸 **${lost.toLocaleString()} ✨** bounced from the attacker to <@${targetId}>.`
+    );
+    await sendUserDM(
+      env,
+      targetId,
+      `🪢🦝 **RUBBER BAND REFLECTION!**\n\nA raccoon sent by <@${user.id}> bounced off your Rubber Band. 😭\n\n✨ You received **${lost.toLocaleString()} ✨** from the reflected attack.`
+    );
+    return;
+  }
 
   if (Number(target.ceaseDesistUntil || 0) > now && String(target.ceaseDesistTargetId || "") === String(user.id)) {
     await sendText(env, interaction, `⚖️🦝 **CEASE & DESIST ENFORCED!**\n\n<@${user.id}> has been legally forbidden from sending a raccoon after <@${targetId}> until **${punishmentTimeText(target.ceaseDesistUntil)}** from now.
