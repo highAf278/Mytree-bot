@@ -992,7 +992,7 @@ function defaultPlayer() {
     // Bombs are stored items, separate from active bomb games.
     bombs: {
       love: 0, chaos: 0, glitter: 0, pickle: 0, raccoon: 0,
-      fire: 0, stink: 0, jester: 0, fake_id: 0, double: 0
+      fire: 0, stink: 0, jester: 0, fake_id: 0, sweet: 0
     },
     fireBombUntil: 0,
     stinkBombUntil: 0,
@@ -1005,12 +1005,9 @@ function defaultPlayer() {
     jesterBombNextEventAt: 0,
     fakeIdentityUntil: 0,
     fakeIdentityPrevious: null,
-    doubleBombUntil: 0,
-    doubleBombPartnerId: "",
-    doubleBombNextAt: 0,
-    doubleBombEventsRemaining: 0,
-    doubleBombCommandLockUntil: 0,
-    doubleBombChannelId: "",
+    sweetBombUntil: 0,
+    sweetBombNextAt: 0,
+    sweetBombChannelId: "",
     chaosNextEventAt: 0,
     chaosEventsRemaining: 0,
     chaosLockedCommand: "",
@@ -3368,6 +3365,8 @@ function treeButtonAction(id) {
 /* =========================================================
    IMAGE RENDERING
 ========================================================= */
+
+const FIRE_TREE_OVERLAY_GIF = "IMG_8078.gif";
 
 function imageUrl(filename) {
   return `${BASE_URL}${filename}`;
@@ -7067,6 +7066,7 @@ function drawAnimatedGlobe(frame, phase = 0) {
 }
 
 if (Number(player.fireBombUntil || 0) > Date.now()) {
+    // Fallback animation if Browser Rendering cannot composite the real R2 GIF.
     const frames=[]; const frameCount=6; const baseData=scene.data.slice();
     for(let i=0;i<frameCount;i++){
       const frame={width,height,data:new Uint8Array(baseData)};
@@ -7158,29 +7158,22 @@ if (Number(player.fireBombUntil || 0) > Date.now()) {
 }
 
 async function renderTree(env, player) {
-  // Birthday Confetti is rendered as a real animated GIF: one static full-quality
-  // tree frame plus transparent confetti-only overlay frames. This avoids
-  // re-encoding the entire tree artwork for every animation frame.
   const wantsAnimatedConfetti = player.equipped?.effect === "birthday_confetti";
+  const wantsAnimatedFire = Number(player.fireBombUntil || 0) > Date.now();
   const fallback = async (reason) => {
     console.warn("Tree Browser Rendering unavailable; using direct fallback:", reason?.message || reason || "timeout");
     return await renderTreeDirectFallback(env, player);
   };
 
-  // Browser Rendering is currently timing out in this environment. Confetti
-  // does not need a browser anymore: the direct raster pipeline below can
-  // produce the full animated GIF without launching a browser at all.
-  if (wantsAnimatedConfetti) {
-    console.log("🎊 Birthday Confetti: using direct animated renderer (no Browser Rendering)");
+  // Keep ordinary /tree requests on the known-good direct renderer. Fire Bomb
+  // alone opts into Browser Rendering so the real transparent R2 fire GIF can
+  // be composited over the user's current tree.
+  if (!wantsAnimatedFire) {
+    if (wantsAnimatedConfetti) {
+      console.log("🎊 Birthday Confetti: using direct animated renderer (no Browser Rendering)");
+    }
     return await renderTreeDirectFallback(env, player);
   }
-
-  // Keep ordinary /tree requests out of Cloudflare Browser Rendering too.
-  // The browser path can leave non-animated users sitting on Discord's
-  // "MyTree is thinking..." state while the render waits or hangs. The direct
-  // renderer is already capable of producing the normal tree response without
-  // a browser, so use it for every tree request.
-  return await renderTreeDirectFallback(env, player);
 
   try {
     console.log("🎊 Birthday Confetti: launching Browser Rendering...");
@@ -7200,6 +7193,7 @@ async function renderTree(env, player) {
       const decoration = decorationFile ? imageUrl(decorationFile) : "";
       const effectFile = getEffectImage(player);
       const effect = effectFile ? imageUrl(effectFile) : "";
+      const fireOverlay = wantsAnimatedFire ? imageUrl(FIRE_TREE_OVERLAY_GIF) : "";
 
       const sparkleHTML = (player.sparklesOnTree || []).map(sparkle => {
         const left = Number(sparkle.x) || 50;
@@ -7222,6 +7216,10 @@ async function renderTree(env, player) {
         effectHTML = `<img src="${effect}" style="position:absolute;left:-5%;top:-5%;width:110%;height:110%;object-fit:contain;opacity:${player.equipped?.effect === "raccoon_court_stink" ? "0.90" : "0.42"};mix-blend-mode:${player.equipped?.effect === "raccoon_court_stink" ? "normal" : "screen"};z-index:2;pointer-events:none">`;
       }
 
+      const fireHTML = fireOverlay
+        ? `<img id="fire-overlay" src="${fireOverlay}" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;z-index:30;pointer-events:none">`
+        : "";
+
       const confettiHTML = (phase = 0) => wantsAnimatedConfetti
         ? Array.from({length:72},(_,i)=>{
             const x = (i * 47 + 7) % 96;
@@ -7236,7 +7234,7 @@ async function renderTree(env, player) {
           }).join("")
         : "";
 
-      const staticHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${sparkleHTML}</div></body></html>`;
+      const staticHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#ffd9ef}#scene{position:relative;width:1024px;height:1024px;overflow:hidden}#background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#tree{position:absolute;left:50%;top:63%;transform:translate(-50%,-50%);width:90%;height:90%;object-fit:contain;z-index:4}</style></head><body><div id="scene"><img id="background" src="${background}"><img id="tree" src="${tree}">${decorationHTML}${effectHTML}${sparkleHTML}${fireHTML}</div></body></html>`;
       const overlayHTML = (phase = 0) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:transparent}#scene{position:relative;width:1024px;height:1024px;overflow:hidden;background:transparent}</style></head><body><div id="scene">${confettiHTML(phase)}</div></body></html>`;
 
       await page.setContent(staticHTML, { waitUntil: "domcontentloaded", timeout: 8000 });
@@ -7259,31 +7257,35 @@ async function renderTree(env, player) {
       };
       await waitForImages();
 
-      if (wantsAnimatedConfetti) {
-        // CONFETTI ANIMATION V3:
-        // Do not use transparent overlay frames. Render the COMPLETE scene for
-        // every frame and encode those complete PNG frames into a conventional
-        // animated GIF. This removes the transparency/disposal layer entirely
-        // and matches the GIF pipeline already used by the working profile GIF.
+      if (wantsAnimatedFire) {
+        // The R2 GIF must stay mounted in one page so its animation clock keeps
+        // advancing. Re-loading the HTML for every frame would restart the GIF.
         const frames = [];
-        const frameCount = 6;
+        for (let i = 0; i < 12; i++) {
+          frames.push(await page.screenshot({ type: "png" }));
+          await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 80)));
+        }
+        return {
+          bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 8),
+          animated: true
+        };
+      }
 
-        for (let i = 0; i < frameCount; i++) {
-          const phase = i / frameCount;
+      if (wantsAnimatedConfetti) {
+        const frames = [];
+        for (let i = 0; i < 6; i++) {
+          const phase = i / 6;
           const frameHTML = staticHTML.replace(
             "</div></body></html>",
             `${confettiHTML(phase)}</div></body></html>`
           );
-
           await page.setContent(frameHTML, {
             waitUntil: "domcontentloaded",
             timeout: 8000
           });
           await waitForImages();
-
           frames.push(await page.screenshot({ type: "png" }));
         }
-
         return {
           bytes: await encodePNGFramesToGIF(frames, 1024, 1024, 12),
           animated: true
@@ -13784,12 +13786,25 @@ const BOMB_TYPES = {
     effectName: "🪪 FAKE IDENTITY", durationMs: 6 * 60 * 60 * 1000,
     gif: "IMG_8050.gif", static: "IMG_8040.png"
   },
-  double: {
-    name: "👯 DOUBLE BOMB", price: 8000, timeoutMinutes: 5,
-    effectName: "👯 DOUBLE LINK", durationMs: 6 * 60 * 60 * 1000,
-    gif: "IMG_8051.gif", static: "IMG_8041.png"
+  sweet: {
+    name: "🧁 SWEET BOMB", price: 8000, timeoutMinutes: 5,
+    effectName: "💗 SWEETHEART", durationMs: 6 * 60 * 60 * 1000,
+    gif: "IMG_8081.gif", static: "IMG_8080.png"
   }
 };
+
+const BOMB_SWEET_MESSAGES = [
+  "🧁💗 **SWEET BOMB CHECK-IN:** <@{target}>, just a reminder that you're doing better than you think you are. Keep going. 🌸",
+  "🍰✨ <@{target}>, the WereWives kindness department has reviewed your situation and officially says: **you've got this.** 💗",
+  "🍓💞 **SWEET MESSAGE:** <@{target}>, take a breath. You don't have to have everything figured out today. 🌷",
+  "🧁🌸 <@{target}>, somebody ordered you a little reminder that you're appreciated. No refunds. 💕",
+  "🍪💗 <@{target}>, your daily serving of encouragement has arrived: **keep being you. You're doing just fine.** ✨",
+  "🍨💖 <@{target}>, even on a messy day, you still deserve good things. Keep your head up. 🌈",
+  "🍓✨ **SWEET BOMB UPDATE:** <@{target}>, the raccoon council has no complaints today. That's basically a standing ovation. 🦝💗",
+  "🧁💕 <@{target}>, you've survived every bad day you've had so far. That's a pretty impressive streak. Keep going. 🌸",
+  "🍰💗 <@{target}>, tiny reminder: progress counts even when it feels small. You're allowed to be proud of yourself. ✨",
+  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗"
+];
 
 const BOMB_LOVE_MESSAGES = [
   "💘 OH NOOO... You're far too love-struck to use that WereWives command right now. Your brain is currently occupied with butterflies. 🦋💕",
@@ -13896,7 +13911,17 @@ const BOMB_RACCOON_MESSAGES = [
 
 function bombInventory(player) {
   player.bombs = player.bombs && typeof player.bombs === "object" ? player.bombs : {};
-  for (const id of Object.keys(BOMB_TYPES)) player.bombs[id] = Math.max(0, Number(player.bombs[id] || 0));
+
+  // Double Bomb was replaced by Sweet Bomb. Preserve already-owned Double
+  // Bombs by converting them to Sweet Bombs exactly once.
+  if (Number(player.bombs.double || 0) > 0) {
+    player.bombs.sweet = Number(player.bombs.sweet || 0) + Number(player.bombs.double || 0);
+    player.bombs.double = 0;
+  }
+
+  for (const id of Object.keys(BOMB_TYPES)) {
+    player.bombs[id] = Math.max(0, Number(player.bombs[id] || 0));
+  }
   return player.bombs;
 }
 
@@ -13982,7 +14007,7 @@ function bombShopRows(player = null, page = 1) {
       ),
       row(
         button("🪪 Fake ID — 6,000 ✨", "bomb:buy:fake_id", 1),
-        button("👯 Double — 8,000 ✨", "bomb:buy:double", 1)
+        button("🧁 Sweet — 8,000 ✨", "bomb:buy:sweet", 1)
       ),
       row(button("⬅️ Page 1", "bomb:shop:1", 2))
     ];
@@ -14243,18 +14268,12 @@ async function restoreStinkIfExpired(env, player, userId, now) {
   return true;
 }
 
-async function applyDoubleBomb(env, target, partner, bomb, now) {
-  const until = now + bomb.type.durationMs;
-  for (const [player, partnerId] of [[target, partner.userId],[partner, target.userId]]) {
-    player.doubleBombUntil = until;
-    player.doubleBombPartnerId = String(partnerId);
-    player.doubleBombNextAt = now + randomInt(8, 18) * 60 * 1000;
-    player.doubleBombEventsRemaining = 3;
-    player.doubleBombChannelId = bomb.channelId;
-  }
+async function applySweetBomb(env, target, bomb, now) {
+  target.sweetBombUntil = now + bomb.type.durationMs;
+  target.sweetBombNextAt = now + randomInt(12, 25) * 60 * 1000;
+  target.sweetBombChannelId = bomb.channelId;
   await savePlayer(env, target, bomb.targetId);
-  await savePlayer(env, partner, partner.userId);
-  return { until };
+  return { until: target.sweetBombUntil };
 }
 
 async function applyBombChaos(env, bomb, target, state) {
@@ -14323,52 +14342,9 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     effectText = `🃏 **JESTERED for 6 HOURS!** The Jester can hijack commands, reject buttons, and randomly interfere with WereWives controls. Good luck. 😭`;
   } else if (bomb.typeId === "fake_id") {
     effectText = await applyFakeIdentity(env, target, bomb, now);
-  } else if (bomb.typeId === "double") {
-    const members = await getGuildMembers(env, bomb.guildId);
-
-    // getGuildMembers() returns normalized members as:
-    // { id, username, displayName }
-    // It does NOT return Discord's raw { user: {...}, ... } shape.
-    // The old code checked m.user.id here, which meant every candidate
-    // failed the filter and Double Bomb could NEVER find a partner.
-    const candidates = members.filter(
-      m =>
-        m?.id &&
-        String(m.id) !== String(bomb.attackerId) &&
-        String(m.id) !== String(bomb.targetId)
-    );
-
-    if (!candidates.length) {
-      effectText = `👯 **DOUBLE LINK FAILED TO FIND A SECOND PLAYER.** The bomb has been refunded to <@${bomb.attackerId}>.`;
-      bomb.status = "refunded";
-      bomb.refundReason = "No eligible second player";
-      bombAdd(attacker, bomb.typeId, 1);
-      await savePlayer(env, attacker, bomb.attackerId);
-    } else {
-      const partnerMember = candidates[randomInt(0, candidates.length - 1)];
-      const partner = await getPlayer(env, partnerMember.id);
-
-      // Rebuild the small Discord-like shape expected by
-      // updatePlayerIdentity(), because partnerMember is normalized.
-      updatePlayerIdentity(partner, {
-        user: {
-          id: partnerMember.id,
-          username: partnerMember.username || "",
-          global_name: partnerMember.displayName || partnerMember.username || ""
-        },
-        member: {
-          nick: partnerMember.displayName || partnerMember.username || ""
-        }
-      });
-
-      await applyDoubleBomb(env, target, partner, bomb, now);
-      bomb.doublePartnerId = String(partnerMember.id);
-      effectText = `👯 **DOUBLE LINK ACTIVATED for 6 HOURS!**
-
-<@${bomb.targetId}> has been secretly linked to **one random player**. Neither linked player chose the pairing.
-
-🔒 The second identity is hidden for now. The link will create surprise shared events before the final reveal.`;
-    }
+  } else if (bomb.typeId === "sweet") {
+    await applySweetBomb(env, target, bomb, now);
+    effectText = `🧁 **SWEETHEART for 6 HOURS!** <@${bomb.targetId}> will receive random encouraging messages from the WereWives bot throughout the next six hours. 💗`;
   } else if (bomb.typeId === "pickle") {
     const targetSparkles = Math.max(0, Number(target.sparkles || 0));
     const amount = randomInt(1000, 3000);
@@ -14493,7 +14469,7 @@ async function handleBombComponent(env, interaction, executionCtx = null, worker
     const player = await getPlayer(env, user.id);
     updatePlayerIdentity(player, interaction);
     bombInventory(player);
-    const ids = page === 2 ? ["fire","stink","jester","fake_id","double"] : ["love","chaos","glitter","pickle","raccoon"];
+    const ids = page === 2 ? ["fire","stink","jester","fake_id","sweet"] : ["love","chaos","glitter","pickle","raccoon"];
     return sendBombPublicText(env, interaction, bombShopText(player, page), bombShopRows(player, page), { embeds: bombStaticEmbeds(ids, player) });
   }
 
@@ -14978,35 +14954,28 @@ async function processBombTimers(env) {
             }
           }
 
-          if (Number(target.doubleBombUntil || 0) > 0) {
-            if (target.doubleBombUntil <= now) {
-              const partnerId=target.doubleBombPartnerId;
-              target.doubleBombUntil=0; target.doubleBombPartnerId=""; target.doubleBombNextAt=0; target.doubleBombEventsRemaining=0; target.doubleBombCommandLockUntil=0; target.doubleBombChannelId="";
-              await savePlayer(env,target,bomb.targetId);
-              if (partnerId) {
-                const partner=await getPlayer(env,partnerId);
-                partner.doubleBombUntil=0; partner.doubleBombPartnerId=""; partner.doubleBombNextAt=0; partner.doubleBombEventsRemaining=0; partner.doubleBombCommandLockUntil=0; partner.doubleBombChannelId="";
-                await savePlayer(env,partner,partnerId);
-                if (bomb.channelId) await sendChannelMessage(env,bomb.channelId,`👯💥 **DOUBLE BOMB REVEALED!** <@${bomb.targetId}> and <@${partnerId}> were secretly linked for 6 hours. Relationship status: **COMPLICATED.** 😭`);
+          if (Number(target.sweetBombUntil || 0) > 0) {
+            if (target.sweetBombUntil <= now) {
+              target.sweetBombUntil = 0;
+              target.sweetBombNextAt = 0;
+              target.sweetBombChannelId = "";
+              await savePlayer(env, target, bomb.targetId);
+              if (bomb.channelId) {
+                await sendChannelMessage(
+                  env,
+                  bomb.channelId,
+                  `🧁💗 **THE SWEET BOMB HAS EXPIRED!** <@${bomb.targetId}> is officially off the kindness schedule. 😭💗`
+                );
               }
-            } else if (Number(target.doubleBombEventsRemaining||0)>0 && Number(target.doubleBombNextAt||0)<=now) {
-              const partnerId=target.doubleBombPartnerId;
-              const partner=partnerId ? await getPlayer(env,partnerId) : null;
-              if (partner) {
-                const shared=[
-                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}> and their mystery partner both received a mysterious **10-minute command lock**. Nobody knows why.`,
-                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}> accidentally triggered a shared WereWives incident with their mystery partner. The server knows something happened.`,
-                  `👯 **DOUBLE EVENT!** <@${bomb.targetId}>'s tree and their mystery partner's tree have both been marked **SUSPICIOUS**. 😭`
-                ];
-                target.doubleBombCommandLockUntil=now+10*60*1000;
-                partner.doubleBombCommandLockUntil=now+10*60*1000;
-                await sendChannelMessage(env,bomb.channelId,shared[randomInt(0,shared.length-1)]);
-                target.doubleBombEventsRemaining=Number(target.doubleBombEventsRemaining)-1;
-                partner.doubleBombEventsRemaining=target.doubleBombEventsRemaining;
-                const next=target.doubleBombEventsRemaining>0 ? Math.min(target.doubleBombUntil,now+randomInt(20,45)*60*1000) : 0;
-                target.doubleBombNextAt=next; partner.doubleBombNextAt=next;
-                await savePlayer(env,target,bomb.targetId); await savePlayer(env,partner,partnerId);
-              }
+            } else if (Number(target.sweetBombNextAt || 0) <= now && target.sweetBombChannelId) {
+              const sweet = BOMB_SWEET_MESSAGES[randomInt(0, BOMB_SWEET_MESSAGES.length - 1)]
+                .replaceAll("{target}", String(bomb.targetId));
+              await sendChannelMessage(env, target.sweetBombChannelId, sweet);
+              target.sweetBombNextAt = Math.min(
+                target.sweetBombUntil,
+                now + randomInt(12, 35) * 60 * 1000
+              );
+              await savePlayer(env, target, bomb.targetId);
             }
           }
         }
@@ -15025,15 +14994,11 @@ async function checkBombRestriction(env, interaction) {
 
   if (Number(player.fireBombUntil || 0) > now) {
     const treeAction = isBombTreeCommand(interaction);
-    if (treeAction) return `🔥 **YOUR TREE IS ON FIRE!**\n\n<@${user.id}>'s tree is currently engulfed in flames. **Tree commands are disabled for ${Math.max(1,Math.ceil((player.fireBombUntil-now)/60000))} more minutes.**\n\n🎮 Games still work. 🔥🌳`;
+    if (treeAction && treeAction !== "tree") return `🔥 **YOUR TREE IS ON FIRE!**\n\n<@${user.id}>'s tree is currently engulfed in flames. **Tree commands are disabled for ${Math.max(1,Math.ceil((player.fireBombUntil-now)/60000))} more minutes.**\n\n🎮 Games still work. Use **/tree** to admire the damage. 🔥🌳`;
   }
 
   if (Number(player.jesterBombUntil || 0) > now && Math.random() < 0.45) {
     return JESTER_MESSAGES[randomInt(0,JESTER_MESSAGES.length-1)];
-  }
-
-  if (Number(player.doubleBombCommandLockUntil || 0) > now) {
-    return `👯 **DOUBLE BOMB LINK EFFECT!** <@${user.id}> is temporarily caught in the shared chaos. Try again in **${Math.max(1,Math.ceil((player.doubleBombCommandLockUntil-now)/60000))} minutes**.`;
   }
 
   if (Number(player.chaosLockedUntil || 0) > now) {
