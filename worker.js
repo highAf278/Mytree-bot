@@ -12794,7 +12794,13 @@ async function forceBirthdayServerEvent(env,interaction){
   return sendText(env,interaction,`🧪 **Birthday server event forced:** ${action}\n\nThe event announcement was sent and the matching server Bingo square was marked.`);
 }
 
-async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);if(!people.length)continue;if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt)await spawnBirthdayHunt(env,guildId);if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
+async function processBirthdayEvent(env){const guildIds=await getKnownGuildIds(env);for(const guildId of guildIds){try{const {state,people}=await ensureBirthdayEvent(env,guildId);if(!people.length)continue;if(!state.birthday.announced){const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,birthdayMainText(state,people),birthdayMenuComponents(true));state.birthday.announced=true;await saveGuildState(env,guildId,state);}if(!state.birthday.nextFrightHuntAt||Date.now()>=state.birthday.nextFrightHuntAt){
+const spawnedHunt=await spawnBirthdayHunt(env,guildId);
+if(spawnedHunt){
+const refreshedHuntState=await getGuildState(env,guildId);
+if(refreshedHuntState?.birthday)state.birthday=refreshedHuntState.birthday;
+}
+}if(!state.birthday.serverEvents.pumpkin_appears&&Math.random()<0.12){state.birthday.serverEvents.pumpkin_appears=true;await markBirthdayServerSquare(env,guildId,"pumpkin_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🎃 **A Pumpkin Appears!** 🎃");}if(!state.birthday.serverEvents.ghost_appears&&Math.random()<0.12){state.birthday.serverEvents.ghost_appears=true;await markBirthdayServerSquare(env,guildId,"ghost_appears");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"👻 **A Ghost Appears!** 👻");}if(!state.birthday.serverEvents.bat_swarm&&Math.random()<0.12){state.birthday.serverEvents.bat_swarm=true;await markBirthdayServerSquare(env,guildId,"bat_swarm");const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;if(channel)await sendChannelMessage(env,channel,"🦇 **A Bat Swarm Appears!** 🦇");}await saveGuildState(env,guildId,state);}catch(error){console.error(`Birthday event processing failed for guild ${guildId}:`,error);}}}
 
 async function expireBirthdayEventState(env){
   const key=birthdayTodayKey();
@@ -33328,7 +33334,7 @@ async function birthdayMemoryAnswer(env, interaction) {
   return birthdayTalentReply(
     env,
     interaction,
-    `🔐 **SECRET BIRTHDAY ANSWER**\n\nNobody else can see this.\nPick what you think is the funniest/most accurate answer for yourself, **${g.targetName}**. 🤫`,
+    `🔐 **SECRET BIRTHDAY QUESTION**\n\nNobody else can see this.\n\n❓ **${g.question.question}**\n\nPick the answer that is the funniest/most accurate for yourself, **${g.targetName}**. 🤫`,
     birthdayMemoryAnswerMenu(g)
   );
 }
