@@ -12753,14 +12753,36 @@ async function birthdayBossAction(env,interaction,action){const state=await getG
 async function forceBirthdayServerEvent(env,interaction){
   if(!(await requireOwner(env,interaction)))return;
   const action=getOption(interaction,"event");
+  const guildId=interaction.guild_id;
+  if(!guildId)return sendText(env,interaction,"❌ Birthday server events can only be forced inside a server.");
+
+  // Owner-only testing control: immediately close today's Birthday Party.
+  // Clear both guild state and the dedicated birthday registry so the party
+  // cannot be recreated by the next /birthday request or background event pass.
+  if(action==="birthday_end"){
+    const state=await getGuildState(env,guildId);
+    state.birthday={
+      ...(state.birthday||{}),
+      active:false,
+      activeDate:null,
+      birthdayIds:[],
+      birthdayNames:[],
+      announced:false,
+      manualTestBirthdayIds:[]
+    };
+    await saveGuildState(env,guildId,state);
+    try{await env.TREE_DATA.delete(`birthday:${guildId}`);}catch(error){console.error(`Birthday registry delete failed for guild ${guildId}:`,error);}
+    const channel=state.announcementChannelId||(await getGuildTextChannels(env,guildId))[0]?.id;
+    if(channel)await sendChannelMessage(env,channel,"🕯️🎂 **THE BIRTHDAY PARTY HAS ENDED!** 🎂🕯️\n\nThe candles are out, the bats have gone home, and the Birthday Party is officially closed. 👻🦇");
+    return sendText(env,interaction,"🛑 **Birthday Party force-ended.**\n\nThe active birthday state and testing registry were cleared. 🎂🔒");
+  }
+
   const labels={
     pumpkin_appears:"🎃 **A Pumpkin Appears!** 🎃",
     ghost_appears:"👻 **A Ghost Appears!** 👻",
     bat_swarm:"🦇 **A Bat Swarm Appears!** 🦇"
   };
-  if(!labels[action])return sendText(env,interaction,"❌ Choose **pumpkin**, **ghost**, or **bats**.");
-  const guildId=interaction.guild_id;
-  if(!guildId)return sendText(env,interaction,"❌ Birthday server events can only be forced inside a server.");
+  if(!labels[action])return sendText(env,interaction,"❌ Choose **pumpkin**, **ghost**, **bats**, or **end birthday**.");
   const state=await getGuildState(env,guildId);
   if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 The Birthday Party is not active.");
   await markBirthdayServerSquare(env,guildId,action);
@@ -31098,7 +31120,8 @@ const COMMANDS = [
       choices: [
         { name: "🎃 Pumpkin Appears", value: "pumpkin_appears" },
         { name: "👻 Ghost Appears", value: "ghost_appears" },
-        { name: "🦇 Bat Swarm Appears", value: "bat_swarm" }
+        { name: "🦇 Bat Swarm Appears", value: "bat_swarm" },
+        { name: "🛑 End Birthday Party", value: "birthday_end" }
       ]
     }]
   },
