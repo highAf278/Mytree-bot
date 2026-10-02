@@ -1163,6 +1163,7 @@ async function getPlayer(env, userId) {
     player.userId = userId;
     player.personality =
       TREE_PERSONALITIES[randomInt(0, TREE_PERSONALITIES.length - 1)].id;
+    if (String(userId) === String(env.OWNER_ID)) player.unlockedBadges.push("bot_owner");
     return player;
   }
 
@@ -1217,8 +1218,13 @@ async function getPlayer(env, userId) {
 
     if (!merged.personality) {
       merged.personality =
-        TREE_PERSONALITIES[randomInt(0, TREE_PERSONALITIES.length - 1)].id;
+        TREE_PERSONALITIES[randomInt(0, TREE_PERSONALITIES - 1)].id;
       await savePlayer(env, merged);
+    }
+
+    if (String(userId) === String(env.OWNER_ID)) {
+      if (!Array.isArray(merged.unlockedBadges)) merged.unlockedBadges = [];
+      if (!merged.unlockedBadges.includes("bot_owner")) merged.unlockedBadges.push("bot_owner");
     }
 
     return merged;
@@ -1227,6 +1233,7 @@ async function getPlayer(env, userId) {
     player.userId = userId;
     player.personality =
       TREE_PERSONALITIES[randomInt(0, TREE_PERSONALITIES.length - 1)].id;
+    if (String(userId) === String(env.OWNER_ID)) player.unlockedBadges.push("bot_owner");
     return player;
   }
 }
@@ -1277,7 +1284,8 @@ const PROFILE_BADGES = {
   speed_demon: { name: "⚡ Speed Demon", label: "SPEED DEMON", icon: "SD", style: "speed" },
   raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon_boss" },
   diamond_darling: { name: "💎 Diamond Darling", label: "DIAMOND DARLING", icon: "DD", style: "black_ice" },
-  millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" }
+  millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" },
+  bot_owner: { name: "💗 Bot Owner", label: "BOT OWNER", icon: "♥", style: "owner_heart" }
 };
 
 const NAME_EFFECTS = {
@@ -5514,7 +5522,8 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     king:[[255,201,56],[255,241,155]], alpha:[[170,205,245],[255,255,255]],
     cool:[[65,190,255],[215,250,255]], danger:[[250,65,105],[255,195,170]],
     speed:[[55,211,255],[230,253,255]], raccoon_boss:[[240,175,80],[255,238,155]],
-    black_ice:[[45,170,255],[245,253,255]], millionaire:[[255,195,42],[255,241,145]]
+    black_ice:[[45,170,255],[245,253,255]], millionaire:[[255,195,42],[255,241,145]],
+    owner_heart:[[255,82,170],[255,220,240]]
   };
   const [base,hi]=palettes[b.style]||[[190,195,210],[255,255,255]];
 
@@ -5677,6 +5686,13 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     O(50,50,40,base,255); O(50,50,32,black,255); O(50,50,28,hi,255); O(50,50,23,black,255);
     L(35,72,35,30,7,hi,255); L(35,30,50,52,7,hi,255); L(50,52,65,30,7,hi,255); L(65,30,65,72,7,hi,255);
     O(18,22,4,white,225); O(82,78,4,hi,225);
+  } else if(b.style==='owner_heart'){
+    // Bot Owner: a cute pink heart, deliberately different from the crown/star badges.
+    POLY([[50,88],[15,49],[12,37],[16,25],[27,17],[39,18],[50,30],[61,18],[73,17],[84,25],[88,37],[85,49]],base,255);
+    O(32,33,17,base,255); O(68,33,17,base,255);
+    POLY([[50,79],[24,48],[22,36],[27,27],[37,25],[50,37],[63,25],[73,27],[78,36],[76,48]],hi,245);
+    O(39,34,4,white,220);
+    O(28,52,2.8,white,170); O(72,51,2.8,white,170);
   }
 
   // Downsample the large artwork to the exact tiny footprint used by the profile.
@@ -9724,7 +9740,8 @@ const PROFILE_BADGE_GUIDE = {
   speed_demon: "Win 10 speed-related games.",
   raccoon_boss: "Steal from 25 unique players.",
   diamond_darling: "Own at least one Black Ice collection item.",
-  millionaire: "Have 1,000,000 sparkles."
+  millionaire: "Have 1,000,000 sparkles.",
+  bot_owner: "The person who owns and runs the WereWives bot."
 };
 
 function profileBadgeGuideFromPage(userId,page=0,unlockedMask="0",equippedMask="0"){
