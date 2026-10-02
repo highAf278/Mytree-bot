@@ -11254,7 +11254,223 @@ const BIRTHDAY_STORIES = [
   { length: "long", reward: 400, prompts: ["adjective", "spooky creature", "verb", "food", "place", "color", "object", "sound", "verb", "adjective"], text: "On the strangest birthday ever, an [adjective] [spooky creature] appeared behind the cake. It demanded that the birthday person [verb] through a hallway filled with [food]. At the [place], the walls turned [color], revealing a hidden [object]. A distant '[sound]' echoed as the creature tried to [verb] the birthday candles, but the birthday person made one final [adjective] move." },
   { length: "long", reward: 400, prompts: ["spooky adjective", "noun", "animal", "verb", "dessert", "place", "monster", "color", "sound", "verb"], text: "The birthday person woke to a [spooky adjective] [noun] beside the bed and a [animal] wearing a tiny party hat. They had to [verb] past a river of [dessert] and enter the [place], where a [monster] guarded a [color] birthday candle. After hearing '[sound]' from the attic, they chose to [verb] into the final room." },
   { length: "long", reward: 400, prompts: ["adjective", "spooky noun", "verb", "food", "place", "animal", "object", "sound", "color", "verb"], text: "Every birthday candle vanished except one. The [adjective] [spooky noun] holding it demanded the birthday person [verb] across a table covered in [food]. The trail led to the [place], where a [animal] protected a mysterious [object]. A '[sound]' came from behind the door, the room flashed [color], and the birthday person had to [verb] before the final candle went out." }
+,
+{ length: "short", reward: 150, prompts: ["weather", "creature", "snack", "action", "room"], text: "The birthday person stepped outside just as [weather] covered the sky. A tiny [creature] handed the birthday person a [snack] and begged them to [action] inside the [room] before the birthday bells rang." },
+  { length: "short", reward: 150, prompts: ["strange adjective", "object", "animal", "noise", "destination"], text: "The birthday person found a [strange adjective] [object] sitting on the cake table. A [animal] appeared, made a '[noise]' sound, and led the birthday person toward the [destination]." },
+  { length: "short", reward: 150, prompts: ["color", "ghostly noun", "dessert", "verb", "location"], text: "The birthday person blew out a candle and everything turned [color]. A [ghostly noun] appeared holding [dessert] and told the birthday person to [verb] to the [location] before midnight." },
+  { length: "short", reward: 150, prompts: ["adjective", "monster", "food", "sound", "action"], text: "A [adjective] [monster] crashed the birthday party carrying a tray of [food]. The birthday person heard '[sound]' and decided to [action] before the monster could reach the cake." },
+  { length: "medium", reward: 250, prompts: ["spooky weather", "object", "creature", "verb", "dessert", "place", "sound"], text: "During [spooky weather], the birthday person discovered a glowing [object] beneath the cake. A [creature] appeared and demanded that the birthday person [verb] past a mountain of [dessert] and reach the [place]. From behind the door came a terrible '[sound].'" },
+  { length: "medium", reward: 250, prompts: ["adjective", "building", "animal", "food", "verb", "color", "artifact"], text: "The birthday person received an invitation to an [adjective] [building]. Inside, a [animal] guarded a table covered in [food]. The birthday person had to [verb] through a [color] hallway to recover the enchanted [artifact]." },
+  { length: "medium", reward: 250, prompts: ["spooky noun", "vehicle", "snack", "verb", "monster", "place", "sound"], text: "A [spooky noun] arrived outside the birthday party in a mysterious [vehicle]. The birthday person grabbed a [snack] and had to [verb] before a [monster] chased them toward the [place]. A '[sound]' echoed through the night." },
+  { length: "medium", reward: 250, prompts: ["color", "creature", "cake topping", "action", "room", "object", "emotion"], text: "The birthday person's candles suddenly burned [color], summoning a [creature] covered in [cake topping]. The birthday person had to [action] into the [room] and retrieve a cursed [object] while feeling completely [emotion]." },
+  { length: "long", reward: 400, prompts: ["adjective", "castle", "creature", "food", "verb", "place", "color", "object", "sound", "action"], text: "The birthday person woke to an [adjective] [castle] floating above the party. A [creature] invited the birthday person inside, where rivers of [food] flowed through the halls. The birthday person had to [verb] into the [place], where everything glowed [color]. A hidden [object] began making a '[sound]' and the birthday person had to [action] before the castle disappeared." },
+  { length: "long", reward: 400, prompts: ["spooky adjective", "machine", "animal", "dessert", "verb", "location", "monster", "color", "sound", "decision"], text: "At midnight, the birthday person discovered a [spooky adjective] [machine] underneath the cake. A [animal] pushed a mountain of [dessert] toward it, forcing the birthday person to [verb] into the [location]. There, a [monster] guarded a [color] door. Behind it came a '[sound]', and the birthday person had to make the impossible [decision]." },
+  { length: "long", reward: 400, prompts: ["weather", "spooky creature", "food", "object", "verb", "place", "animal", "sound", "color", "action"], text: "The birthday person's party was swallowed by [weather] when a [spooky creature] emerged from the cake carrying [food] and a mysterious [object]. The birthday person had to [verb] through the [place], where a [animal] blocked the path. A '[sound]' shook the walls, the candles turned [color], and the birthday person had to [action] to save the party." },
+  { length: "long", reward: 400, prompts: ["adjective", "haunted object", "creature", "snack", "verb", "building", "monster", "sound", "color", "ending action"], text: "The birthday person found an [adjective] [haunted object] beside the cake. When the birthday person touched it, a [creature] appeared with a basket of [snack]. The creature ordered the birthday person to [verb] through the [building], where a [monster] waited behind a locked door. A '[sound]' echoed as the room turned [color], and the birthday person performed one final [ending action] to break the curse." },
+  { length: "long", reward: 400, prompts: ["spooky adjective", "place", "animal", "cake flavor", "verb", "magical object", "monster", "noise", "color", "final action"], text: "The birthday person followed a [spooky adjective] trail into the [place], where a [animal] guarded a birthday cake flavored like [cake flavor]. The birthday person had to [verb] to retrieve a [magical object] from a [monster]. A '[noise]' shook the room, the walls became [color], and the birthday person used one [final action] to bring the birthday party back to life." }
 ];
+
+
+/* =========================================================
+   BIRTHDAY TALENT SHOW — HUGE PERFORMANCE PROMPT LIBRARY
+   Players perform by text or voice. Other players vote; raccoons judge too.
+========================================================= */
+const BIRTHDAY_TALENT_PROMPTS = [
+  ["🎤 Singing", "Sing Happy Birthday like an opera singer who has just discovered the cake is alive."],
+  ["🎤 Singing", "Sing a dramatic song about losing the last cupcake."],
+  ["🎤 Singing", "Sing like you are headlining the world's biggest haunted birthday concert."],
+  ["🎤 Singing", "Sing a lullaby to an angry raccoon."],
+  ["🎤 Singing", "Sing like you are furious at a birthday candle."],
+  ["🎤 Singing", "Sing a heartbreaking song about a balloon that floated away."],
+  ["🎤 Singing", "Sing like a tiny child who has just been told the birthday cake is for everyone."],
+  ["🎤 Singing", "Sing like a villain announcing the beginning of the birthday apocalypse."],
+  ["🎤 Singing", "Sing a love song to a slice of birthday cake."],
+  ["🎤 Singing", "Sing a dramatic song about a raccoon stealing your frosting."],
+  ["🎤 Singing", "Sing like you are auditioning to become the official singer of Raccoonland."],
+  ["🎤 Singing", "Sing the saddest possible song about an empty party plate."],
+  ["🎤 Singing", "Sing a spooky birthday lullaby while pretending something is hiding under the cake."],
+  ["🎤 Singing", "Sing like an angry country singer whose birthday cake betrayed them."],
+  ["🎤 Singing", "Sing a ridiculous birthday anthem using as much drama as possible."],
+  ["🎭 Impressions", "Do your best raccoon impression after being caught stealing birthday cake."],
+  ["🎭 Impressions", "Do a vampire impression trying to understand why humans celebrate birthdays."],
+  ["🎭 Impressions", "Do a witch impression who is furious because her birthday potion exploded."],
+  ["🎭 Impressions", "Do a ghost impression discovering a birthday party for the first time."],
+  ["🎭 Impressions", "Do an angry cupcake impression."],
+  ["🎭 Impressions", "Do a haunted birthday doll impression."],
+  ["🎭 Impressions", "Do a bat giving a very serious birthday speech."],
+  ["🎭 Impressions", "Do a cat who has just discovered a ghost in the birthday party."],
+  ["🎭 Impressions", "Do a dog who thinks the birthday cake belongs entirely to them."],
+  ["🎭 Impressions", "Do a confused wizard trying to cast a birthday spell."],
+  ["🎭 Impressions", "Do a dramatic movie villain who wants the birthday candles."],
+  ["🎭 Impressions", "Do a raccoon trying to sneak past security with an entire cake."],
+  ["🎭 Impressions", "Do a possessed birthday balloon."],
+  ["🎭 Impressions", "Do a tiny dragon demanding a birthday cupcake."],
+  ["🎭 Impressions", "Do a haunted house trying to sing Happy Birthday."],
+  ["🎭 Impressions", "Do a very suspicious birthday guest who definitely knows what happened to the cake."],
+  ["🔊 Sound Effects", "Make the sound of a birthday balloon slowly deflating."],
+  ["🔊 Sound Effects", "Make the sound of a haunted door opening."],
+  ["🔊 Sound Effects", "Make the creepiest ghost noise you can."],
+  ["🔊 Sound Effects", "Make a convincing wolf howl at a birthday party."],
+  ["🔊 Sound Effects", "Make the sound of an entire bat swarm arriving."],
+  ["🔊 Sound Effects", "Make the best witch cackle possible."],
+  ["🔊 Sound Effects", "Make the sound of a raccoon discovering an unlimited cake buffet."],
+  ["🔊 Sound Effects", "Make the sound of a birthday cake falling over in slow motion."],
+  ["🔊 Sound Effects", "Make the sound of a haunted music box."],
+  ["🔊 Sound Effects", "Make the most ridiculous evil laugh possible."],
+  ["🔊 Sound Effects", "Make a monster roar and then immediately realize it is at a birthday party."],
+  ["🔊 Sound Effects", "Make the sound of someone trying desperately not to sneeze during a spooky ritual."],
+  ["🔊 Sound Effects", "Make the sound of a balloon popping like it is the finale of an action movie."],
+  ["🔊 Sound Effects", "Create the entire soundscape of a haunted birthday party."],
+  ["🎬 Acting", "Act like you just discovered that your birthday cake can talk."],
+  ["🎬 Acting", "Act like a raccoon stole your birthday present right in front of you."],
+  ["🎬 Acting", "Act like you are being chased by 100 bats."],
+  ["🎬 Acting", "Act like your birthday balloon has escaped and you are determined to catch it."],
+  ["🎬 Acting", "Act like you opened the worst birthday present in history but have to pretend you love it."],
+  ["🎬 Acting", "Act like you just met a ghost who claims to be your birthday party planner."],
+  ["🎬 Acting", "Act like your cake has personally insulted you."],
+  ["🎬 Acting", "Act like you are a waiter serving a table full of vampires."],
+  ["🎬 Acting", "Act like you accidentally summoned something while blowing out your candles."],
+  ["🎬 Acting", "Act like you are being interviewed after surviving the world's worst birthday party."],
+  ["🎬 Acting", "Act like you are trying to sneak past a sleeping dragon carrying a birthday cake."],
+  ["🎬 Acting", "Act like you have been accused of eating the entire birthday cake and you are innocent."],
+  ["🎬 Acting", "Act like a birthday party has suddenly gone completely silent and you are the only person who noticed."],
+  ["🎬 Acting", "Act like your birthday candles are plotting against you."],
+  ["😂 Ridiculous", "Give a completely serious speech explaining why cake is dangerous."],
+  ["😂 Ridiculous", "Pretend you are selling the raccoons an imaginary product called Birthday Spray."],
+  ["😂 Ridiculous", "Give a dramatic weather report about a birthday party being attacked by frosting."],
+  ["😂 Ridiculous", "Announce a major sporting event where the competitors are raccoons."],
+  ["😂 Ridiculous", "Give a motivational speech to a cupcake."],
+  ["😂 Ridiculous", "Perform a dramatic breakup with a birthday balloon."],
+  ["😂 Ridiculous", "Give a breaking-news report about a raccoon stealing 47 cupcakes."],
+  ["😂 Ridiculous", "Pretend you are a tour guide showing people around a haunted birthday party."],
+  ["😂 Ridiculous", "Give a royal speech as the King or Queen of Birthday Cake."],
+  ["😂 Ridiculous", "Make an emergency announcement because the frosting has mysteriously disappeared."],
+  ["😂 Ridiculous", "Give a TED Talk about why raccoons deserve birthdays."],
+  ["😂 Ridiculous", "Explain to an imaginary courtroom why you absolutely did not eat the cake."],
+  ["😂 Ridiculous", "Sell an ordinary spoon like it is the most valuable magical artifact in existence."],
+  ["😂 Ridiculous", "Give a passionate speech defending the rights of birthday candles."],
+  ["👻 Spooky", "Perform the voice of a ghost who is extremely excited about someone's birthday."],
+  ["👻 Spooky", "Pretend you are a haunted mirror giving birthday advice."],
+  ["👻 Spooky", "Perform an evil witch welcoming everyone to a cursed birthday party."],
+  ["👻 Spooky", "Act like a monster who is terrified of birthday cakes."],
+  ["👻 Spooky", "Do the sound of a ghost trying to scare a raccoon and failing."],
+  ["👻 Spooky", "Perform a creepy birthday invitation as dramatically as possible."],
+  ["👻 Spooky", "Pretend you are the voice coming from inside a birthday present."],
+  ["👻 Spooky", "Perform a haunted version of a party host welcoming everyone."],
+  ["👻 Spooky", "Act like a vampire who accidentally arrived at the wrong birthday party."],
+  ["👻 Spooky", "Perform a monster audition for the position of Birthday Party Security."],
+  ["🦝 Raccoon", "Perform the exact sound a raccoon would make after finding an unattended birthday cake."],
+  ["🦝 Raccoon", "Give a raccoon acceptance speech after winning a lifetime supply of cupcakes."],
+  ["🦝 Raccoon", "Act like a raccoon trying to convince everyone that the cake theft was not your fault."],
+  ["🦝 Raccoon", "Perform a raccoon news report about the biggest birthday disaster ever."],
+  ["🦝 Raccoon", "Sing as a raccoon who has just discovered frosting."],
+  ["🦝 Raccoon", "Do a dramatic raccoon argument with an imaginary birthday ghost."],
+  ["🦝 Raccoon", "Pretend you are a raccoon security guard protecting the birthday presents."],
+  ["🦝 Raccoon", "Perform a raccoon trying to order an enormous birthday cake over the phone."],
+  ["🦝 Raccoon", "Give a heartfelt raccoon speech about why you deserve the last cupcake."],
+  ["🦝 Raccoon", "Act like a raccoon has been caught red-handed inside the birthday cake."],
+  ["🎪 Absurd", "Perform as an extremely emotional potato attending a birthday party."],
+  ["🎪 Absurd", "Pretend you are a refrigerator giving a birthday speech."],
+  ["🎪 Absurd", "Act like a haunted toaster has just become the birthday guest of honor."],
+  ["🎪 Absurd", "Perform as a pickle who believes it is destined to become a famous singer."],
+  ["🎪 Absurd", "Give a dramatic monologue as a birthday candle that has seen too much."],
+  ["🎪 Absurd", "Pretend you are the moon complaining about being invited to another birthday."],
+  ["🎪 Absurd", "Perform as a spoon who is furious about being left out of the birthday party."],
+  ["🎪 Absurd", "Act like a birthday hat has become your mortal enemy."],
+  ["🎪 Absurd", "Perform as a cupcake demanding better working conditions."],
+  ["🎪 Absurd", "Pretend you are a balloon giving a farewell speech before floating away."],
+  ["🎪 Absurd", "Give a dramatic courtroom defense as a slice of cake accused of disappearing."],
+  ["🎪 Absurd", "Perform as a birthday present that desperately does not want to be opened."],
+  ["🎪 Absurd", "Pretend you are a fork explaining why the cake should trust you."],
+  ["🎪 Absurd", "Perform as a chair that has been invited to a birthday party for the first time."],
+  ["🎪 Absurd", "Act like a birthday candle is running for president of the party."],
+  ["🎭 Character", "Be a dramatic birthday party host who has completely lost control of the event."],
+  ["🎭 Character", "Be a wizard whose only spell is making birthday candles appear."],
+  ["🎭 Character", "Be a vampire trying to politely ask for a slice of cake."],
+  ["🎭 Character", "Be a witch trying to explain why her birthday potion tastes like pickles."],
+  ["🎭 Character", "Be a dragon who has been hired to guard the birthday cake."],
+  ["🎭 Character", "Be a ghost who desperately wants to join the birthday party games."],
+  ["🎭 Character", "Be a royal servant announcing that the birthday cake has gone missing."],
+  ["🎭 Character", "Be a detective interrogating a suspicious cupcake."],
+  ["🎭 Character", "Be a pirate who discovers a treasure chest full of birthday presents."],
+  ["🎭 Character", "Be a dramatic actor auditioning to play a birthday candle."],
+  ["🎭 Character", "Be a news anchor reporting live from inside a haunted birthday cake."],
+  ["🎭 Character", "Be a party clown who has accidentally summoned a ghost."],
+  ["🎭 Character", "Be a magician whose grand finale is supposed to produce a birthday cake."],
+  ["🎭 Character", "Be a tiny fairy furious that someone ate her birthday cupcake."]
+];
+
+function birthdayTalentPrompt(){
+  const p=BIRTHDAY_TALENT_PROMPTS[randomInt(0,BIRTHDAY_TALENT_PROMPTS.length-1)];
+  return {category:p[0],prompt:p[1]};
+}
+function birthdayTalentSubmissionRows(g){
+  const entries=Object.values(g.submissions||{});
+  const rows=[];
+  for(let i=0;i<entries.length;i+=5){
+    rows.push(row(...entries.slice(i,i+5).map(x=>button(`🗳️ ${x.name}`.slice(0,80),`birthday:talentvote:${x.id}`,1))));
+  }
+  return rows;
+}
+function birthdayTalentButtons(g){
+  if(g.status==="voting") return [...birthdayTalentSubmissionRows(g),row(button("🏆 Reveal Results","birthday:talentreveal",3))];
+  if(g.status==="results") return [row(button("🎭 Next Talent Round","birthday:talentnext",3))];
+  return [row(button("✍️ Submit Text","birthday:talenttext",1),button("🏁 Start Voting","birthday:talentstartvote",3))];
+}
+function birthdayTalentReply(env,interaction,content,components=[]){
+  return interaction.__deferred ? sendEphemeralFollowup(env,interaction,content,components) : sendText(env,interaction,content,components);
+}
+function birthdayTalentText(g){
+  const count=Object.keys(g.submissions||{}).length;
+  const mode=g.status==="submitting"?"🎤 **SUBMISSIONS OPEN!**":"🗳️ **VOTING IS OPEN!**";
+  return `🎭🎂 **THE WEREWIVES BIRTHDAY TALENT SHOW** 🎂🎭\n\n${mode}\n\n${g.category} **PROMPT:**\n> ${g.prompt}\n\n👥 Performers: **${count}/10**\n\n✍️ Text performers can use **Submit Text** below.\n🎙️ Voice performers can use **/birthday-games → talent** and attach a voice message in the **voice** option.\n\n🦝 After voting, the raccoons will judge EVERY performance and award Birthday Candies based on how much they liked it. 😂🦝`;
+}
+async function editBirthdayTalentMessage(env,g,content=null,components=null){
+  if(!g?.channelId||!g?.messageId)return;
+  await discordRequest(env,`/channels/${g.channelId}/messages/${g.messageId}`,{method:"PATCH",body:JSON.stringify({content:content||birthdayTalentText(g),components:components||birthdayTalentButtons(g)})});
+}
+async function startBirthdayTalent(env,interaction){
+  const guildId=interaction.guild_id; if(!guildId)return birthdayTalentReply(env,interaction,"❌ Birthday Talent Show can only be used in a server.");
+  const {state,people}=await ensureBirthdayEvent(env,guildId); if(!people.length)return birthdayTalentReply(env,interaction,birthdayMainText(state,people),birthdayMenuComponents(false));
+  state.birthday.games=state.birthday.games||{}; const existing=state.birthday.games.talent;
+  if(existing?.status&&existing.status!=="results")return birthdayTalentReply(env,interaction,`🎭 **The Birthday Talent Show is already running!**\n\n${existing.category} **PROMPT:**\n> ${existing.prompt}\n\n👥 **${Object.keys(existing.submissions||{}).length}/10** performances submitted.`,[]);
+  const pick=birthdayTalentPrompt();
+  const g={active:true,status:"submitting",round:Number(existing?.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
+  state.birthday.games.talent=g; await saveGuildState(env,guildId,state);
+  const msg=await sendChannelMessage(env,g.channelId,birthdayTalentText(g),birthdayTalentButtons(g));
+  if(msg?.id){g.messageId=msg.id;await saveGuildState(env,guildId,state);}
+  return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**\n\n${g.category}\n> ${g.prompt}\n\nSubmit your ridiculous performance! 😂`);
+}
+async function showBirthdayTalentModal(env,interaction){
+  return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:9,data:{custom_id:"birthday:talentmodal",title:"🎭 Talent Show Performance",components:[{type:1,components:[{type:4,custom_id:"performance",label:"Your performance",style:2,placeholder:"Perform it! Text, dialogue, sound effects, actions...",required:true,max_length:1000}]}]}})});
+}
+function getBirthdayTalentAttachment(interaction){const id=getOption(interaction,"voice");if(!id)return null;return interaction.data?.resolved?.attachments?.[id]||null;}
+async function birthdayTalentAddSubmission(env,interaction,text,voiceAttachment=null){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.talent;const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="submitting")return birthdayTalentReply(env,interaction,"🎭 The Talent Show is not currently accepting performances.");
+  if(!user)return birthdayTalentReply(env,interaction,"❌ I couldn't identify your Discord account.");
+  if(Object.keys(g.submissions||{}).length>=10)return birthdayTalentReply(env,interaction,"🎭 This round already has 10 performers. Start voting! 🗳️");
+  if(g.submissions[user.id])return birthdayTalentReply(env,interaction,"🎭 You already submitted a performance for this round!");
+  if(!text&&!voiceAttachment)return birthdayTalentReply(env,interaction,"❌ Submit a text performance or attach a voice message.");
+  if(voiceAttachment){const type=String(voiceAttachment.content_type||"");if(!type.startsWith("audio/"))return birthdayTalentReply(env,interaction,"❌ The voice submission must be an audio/voice attachment.");}
+  const id=`${String(user.id).slice(-6)}${Date.now().toString(36).slice(-4)}`;
+  g.submissions[user.id]={id,userId:user.id,name:String(user.global_name||user.username||"Werewife").slice(0,20),text:text?String(text).slice(0,1000):"",voiceUrl:voiceAttachment?.url||"",votes:0};
+  await saveGuildState(env,interaction.guild_id,state);
+  await editBirthdayTalentMessage(env,g);
+  return birthdayTalentReply(env,interaction,`🎭 **Performance submitted!**\n\n${g.category}\n> ${g.prompt}\n\n🦝 The raccoons are already judging you. 😂`);
+}
+async function birthdayTalentVote(env,interaction,submissionId){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.talent;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="voting")return birthdayTalentReply(env,interaction,"🗳️ Voting is not open right now.");if(!user)return birthdayTalentReply(env,interaction,"❌ I couldn't identify you.");if(g.submissions?.[user.id])return birthdayTalentReply(env,interaction,"😂 You can't vote for your own performance!");g.votes=g.votes||{};if(g.votes[user.id])return birthdayTalentReply(env,interaction,"🗳️ You already voted this round!");const target=Object.values(g.submissions||{}).find(x=>x.id===submissionId);if(!target)return birthdayTalentReply(env,interaction,"❌ That performance is no longer available.");g.votes[user.id]=submissionId;target.votes=Number(target.votes||0)+1;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,"🗳️ **Vote counted!** May the raccoons judge wisely. 🦝");
+}
+async function birthdayTalentStartVoting(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.talent;if(!g?.active||g.status!=="submitting")return birthdayTalentReply(env,interaction,"🗳️ This Talent Show round is not waiting for voting.");const count=Object.keys(g.submissions||{}).length;if(count<2)return birthdayTalentReply(env,interaction,"🎭 We need at least **2 performances** before voting can begin!");g.status="voting";await saveGuildState(env,interaction.guild_id,state);const lines=Object.values(g.submissions).map((x,i)=>{const perf=x.voiceUrl?`🎙️ [Voice performance](${x.voiceUrl})`:`✍️ ${x.text}`;return `**${i+1}. ${x.name}**\n${perf}`;});await editBirthdayTalentMessage(env,g,`🎭🎂 **TALENT SHOW — VOTING OPEN!** 🎂🎭\n\n${g.category} **PROMPT:**\n> ${g.prompt}\n\n${lines.join("\n\n")}\n\n🗳️ Vote for your favorite performance below! You get **one vote**.\n🦝 After everyone has voted enough, reveal the results with **🏆 Reveal Results**.`);return birthdayTalentReply(env,interaction,"🗳️ **Voting is OPEN!**");
+}
+async function birthdayTalentReveal(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.talent;if(!g?.active||g.status!=="voting")return birthdayTalentReply(env,interaction,"🏆 There is no Talent Show vote to reveal.");const entries=Object.values(g.submissions||{});if(!entries.length)return birthdayTalentReply(env,interaction,"❌ There are no performances to judge.");const reactions=["🦝💗 THE RACCOONS LOVED IT!","🦝🔥 THE RACCOONS ARE LOSING THEIR MINDS!","🦝😭 A RACCOON IS CRYING. NOBODY KNOWS WHY.","🦝👑 THE RACCOON KING HAS APPROVED!","🦝😂 THE RACCOONS ARE WHEEZING!","🦝😐 THE RACCOONS ARE CONFUSED BUT SUPPORTIVE.","🦝💀 THE RACCOONS HAVE STOPPED MOVING.","🦝🍰 THE RACCOONS THREW CAKE AT THE STAGE."];const rewards=[300,275,250,225,200,100,50,25];let best=null;for(const x of entries){const raccoon=randomInt(0,rewards.length-1);x.raccoonScore=raccoon;x.raccoonReward=rewards[raccoon];x.raccoonReaction=reactions[raccoon];const playerReward=Number(x.votes||0)*20;const total=Number(x.raccoonReward||0)+playerReward;x.totalReward=total;const p=await getPlayer(env,x.userId);p.birthdayCandies=Number(p.birthdayCandies||0)+total;await savePlayer(env,p,x.userId);if(!best||Number(x.votes||0)>Number(best.votes||0)||(Number(x.votes||0)===Number(best.votes||0)&&Number(x.raccoonReward)>Number(best.raccoonReward)))best=x;}
+g.status="results";await saveGuildState(env,interaction.guild_id,state);const ranking=[...entries].sort((a,b)=>Number(b.votes||0)-Number(a.votes||0)||Number(b.raccoonReward||0)-Number(a.raccoonReward||0));const lines=ranking.map((x,i)=>`**${i+1}. ${x.name}** — 🗳️ ${x.votes||0} player vote(s) • ${x.raccoonReaction} • 🍬 **+${x.totalReward} Candies**`);const winner=best?`\n\n🏆 **AUDIENCE FAVORITE:** ${best.name}`:"";await editBirthdayTalentMessage(env,g,`🎭🎂 **TALENT SHOW RESULTS!** 🎂🎭\n\n${g.category} **PROMPT:**\n> ${g.prompt}\n\n${lines.join("\n")}\n${winner}\n\n🦝 Raccoon rewards were based on how much the raccoons liked each performance!`,[row(button("🎭 Next Talent Round","birthday:talentnext",3))]);return birthdayTalentReply(env,interaction,"🏆 **The Talent Show results are in!** 🎂🦝");
+}
+async function birthdayTalentNext(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const old=state.birthday?.games?.talent;if(!old?.active||old.status!=="results")return birthdayTalentReply(env,interaction,"🎭 Finish the current Talent Show round first.");const pick=birthdayTalentPrompt();const g={active:true,status:"submitting",round:Number(old.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:old.channelId,messageId:old.messageId,startedAt:Date.now()};state.birthday.games.talent=g;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**`);}
 
 function birthdayTodayKey(date = new Date()) { return easternDateKey(date); }
 function birthdayEventActive(state, date = new Date()) { return Boolean(state?.birthday?.active && state.birthday.activeDate === birthdayTodayKey(date)); }
@@ -11398,7 +11614,7 @@ function birthdayMenuComponents(active) {
     row(button("🛍️ Midnight Shop", "birthday:shop:0", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
-    row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1))
+    row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1), button("🎭 Talent Show", "birthday:talent", 1))
   ];
 }
 
@@ -11459,6 +11675,12 @@ async function handleBirthdayGamesCommand(env, interaction) {
   if (sub === "cupcake") return startBirthdayCupcake(env, interaction);
   if (sub === "bakery") return startBirthdayBakery(env, interaction);
   if (sub === "boss") return startBirthdayBoss(env, interaction);
+  if (sub === "talent") {
+    const text = getOption(interaction, "text");
+    const voice = getBirthdayTalentAttachment(interaction);
+    if (text || voice) return birthdayTalentAddSubmission(env, interaction, text, voice);
+    return startBirthdayTalent(env, interaction);
+  }
   return sendText(env, interaction, "🎮 Choose a Birthday Game from the menu.");
 }
 
@@ -15082,6 +15304,11 @@ async function handleComponent(
     if(action==="bossstart") return birthdayBossStart(env,interaction);
     if(action==="bossleave") return birthdayBossLeave(env,interaction);
     if(action==="bossaction") return birthdayBossAction(env,interaction,parts[2]);
+    if(action==="talent") return startBirthdayTalent(env,interaction);
+    if(action==="talentstartvote") return birthdayTalentStartVoting(env,interaction);
+    if(action==="talentvote") return birthdayTalentVote(env,interaction,parts[2]);
+    if(action==="talentreveal") return birthdayTalentReveal(env,interaction);
+    if(action==="talentnext") return birthdayTalentNext(env,interaction);
     return;
   }
 
@@ -30821,7 +31048,11 @@ const COMMANDS = [
       { type: 1, name: "curse", description: "The Birthday Curse", options: [{ type: 3, name: "answer", description: "Answer the current Birthday Curse word prompt", required: false, max_length: 60 }] },
       { type: 1, name: "cupcake", description: "Wicked Cupcake Tower" },
       { type: 1, name: "bakery", description: "Batty Cake Bakery" },
-      { type: 1, name: "boss", description: "Fight the Cursed Birthday Cake" }
+      { type: 1, name: "boss", description: "Fight the Cursed Birthday Cake" },
+      { type: 1, name: "talent", description: "Birthday Talent Show — submit text or a voice performance", options: [
+        { type: 3, name: "text", description: "Your text performance", required: false, max_length: 1000 },
+        { type: 11, name: "voice", description: "Attach a voice/audio performance", required: false }
+      ] }
     ]
   },
   {
@@ -32370,6 +32601,15 @@ export default {
     // clicked repeatedly.
     if (interaction.type === 3 && customId === "birthday:curseinput") {
       return showBirthdayCurseModal(env, interaction);
+    }
+
+    // Talent Show text submissions must open a modal as the initial response.
+    if (interaction.type === 3 && customId === "birthday:talenttext") {
+      return showBirthdayTalentModal(env, interaction);
+    }
+    if (interaction.type === 5 && customId === "birthday:talentmodal") {
+      const performance = getModalTextInput(interaction, "performance");
+      return birthdayTalentAddSubmission(env, interaction, performance, null);
     }
 
     // Sparkle Crime SOLO start: use a complete type-4 response as the
