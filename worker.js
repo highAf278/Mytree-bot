@@ -13665,7 +13665,7 @@ const BOMB_SWEET_MESSAGES = [
   "🍓✨ **SWEET BOMB UPDATE:** <@{target}>, the raccoon council has no complaints today. That's basically a standing ovation. 🦝💗",
   "🧁💕 <@{target}>, you've survived every bad day you've had so far. That's a pretty impressive streak. Keep going. 🌸",
   "🍰💗 <@{target}>, tiny reminder: progress counts even when it feels small. You're allowed to be proud of yourself. ✨",
-  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗",
+  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗"
 
   '🧁💗 **SWEET BOMB:** <@{target}>, you are allowed to have a day that is just okay. You do not have to be perfect. 🌷',
   '🌸✨ **SWEET BOMB:** <@{target}>, somebody in this server thinks you are pretty awesome. The Sweet Bomb has receipts. 💕',
@@ -13809,7 +13809,7 @@ const BOMB_RACCOON_MESSAGES = [
   "🦝 {target}, I know you're trying your best. That's the funniest part.",
   "🦝 {target}, I've seen a raccoon fight a trash bag with more dignity than this.",
   "🦝 {target}, you're talking a lot for somebody whose Sparkles are currently funding my lifestyle.",
-  "🦝 {target}, I don't need a reason to roast you. Look at you."
+  "🦝 {target}, I don't need a reason to roast you. Look at you.",
 
   '🦝 {target}, the raccoons reviewed your strategy and requested a refund.',
   '🦝 {target}, your plan has been placed in the recycling bin where it belongs.',
@@ -14224,7 +14224,7 @@ async function restoreStinkIfExpired(env, player, userId, now) {
 
 async function applySweetBomb(env, target, bomb, now) {
   target.sweetBombUntil = now + bomb.type.durationMs;
-  target.sweetBombNextAt = now + 60 * 60 * 1000;
+  target.sweetBombNextAt = now + randomInt(12, 25) * 60 * 1000;
   target.sweetBombChannelId = bomb.channelId;
   await savePlayer(env, target, bomb.targetId);
   return { until: target.sweetBombUntil };
@@ -14927,7 +14927,7 @@ async function processBombTimers(env) {
               await sendChannelMessage(env, target.sweetBombChannelId, sweet);
               target.sweetBombNextAt = Math.min(
                 target.sweetBombUntil,
-                now + 60 * 60 * 1000
+                now + randomInt(12, 35) * 60 * 1000
               );
               await savePlayer(env, target, bomb.targetId);
             }
