@@ -13665,7 +13665,7 @@ const BOMB_SWEET_MESSAGES = [
   "🍓✨ **SWEET BOMB UPDATE:** <@{target}>, the raccoon council has no complaints today. That's basically a standing ovation. 🦝💗",
   "🧁💕 <@{target}>, you've survived every bad day you've had so far. That's a pretty impressive streak. Keep going. 🌸",
   "🍰💗 <@{target}>, tiny reminder: progress counts even when it feels small. You're allowed to be proud of yourself. ✨",
-  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗"
+  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗",
 
   '🧁💗 **SWEET BOMB:** <@{target}>, you are allowed to have a day that is just okay. You do not have to be perfect. 🌷',
   '🌸✨ **SWEET BOMB:** <@{target}>, somebody in this server thinks you are pretty awesome. The Sweet Bomb has receipts. 💕',
@@ -13707,46 +13707,7 @@ const BOMB_SWEET_MESSAGES = [
   '🌷🫶 **SWEET BOMB:** <@{target}>, you do not need permission to take care of yourself. Go be kind to you. 💕',
   '💗🌈 **SWEET BOMB:** <@{target}>, there is still plenty of good ahead of you. ✨',
   '🍪🧁 **SWEET BOMB:** <@{target}>, your next little win is out there somewhere. Go find it, superstar. 💖',
-  '🌷💗 **SWEET BOMB:** <@{target}>, if nobody told you today: you are genuinely lovely to have around. 🌸',
-  '🧸🌸 **SWEET BOMB:** <@{target}>, your existence makes this little corner of the internet a bit brighter. 💕',
-  '🦋💖 **SWEET BOMB:** <@{target}>, I hope something tiny and wonderful surprises you today. You deserve little joys. ✨',
-  '🍓🫶 **SWEET BOMB:** <@{target}>, please remember that you are someone worth being gentle with. 💗',
-  '🌸🧁 **SWEET BOMB:** <@{target}>, the universe has officially filed a complaint because you are being too cute. Case dismissed. 😭💕',
-  '💐✨ **SWEET BOMB:** <@{target}>, may your day contain soft moments, good laughs, and at least one thing that makes you smile. 💖',
-  '🐻💗 **SWEET BOMB:** <@{target}>, tiny reminder from the kindness department: you are appreciated more than you probably realize. 🌷',
-  '🌈🧸 **SWEET BOMB:** <@{target}>, you deserve people who celebrate your little wins like they are giant victories. 🎉💞',
-  '🍰🌷 **SWEET BOMB:** <@{target}>, no matter how today goes, you are still worthy of kindness at the end of it. 💗',
-  '🧁🦋 **SWEET BOMB:** <@{target}>, sending you one pocket-sized dose of sunshine. Please keep it. ☀️💕',
-  '🌙💖 **SWEET BOMB:** <@{target}>, you do not have to shine every second. Resting does not make your light disappear. ✨',
-  '🍪💗 **SWEET BOMB:** <@{target}>, someone somewhere would be very happy to see you smile today. So here is your official reason to. 🌸',
-  '🌺🫶 **SWEET BOMB:** <@{target}>, your feelings are allowed to take up space. Be patient with your heart. 💕',
-  '🧸✨ **SWEET BOMB:** <@{target}>, you are not behind. You are on your own little timeline, and that is completely okay. 🌷',
-  '🍓💞 **SWEET BOMB:** <@{target}>, I hope you get a moment today where everything feels soft and peaceful. You deserve that. 🌸',
-  '🌼💗 **SWEET BOMB:** <@{target}>, you bring something to the world that nobody else can bring exactly the way you do. ✨',
-  '🧁🌈 **SWEET BOMB:** <@{target}>, consider this your reminder that being yourself is already enough. No upgrades required. 💕',
-  '💐🦋 **SWEET BOMB:** <@{target}>, your little efforts matter. Even the ones nobody claps for. Especially those. 💗',
-  '🐰🌸 **SWEET BOMB:** <@{target}>, sending you a tiny imaginary bouquet because flowers seemed appropriate for someone this precious. 💐💖',
-  '🍯💗 **SWEET BOMB:** <@{target}>, life does not have to be perfect to contain beautiful little moments. Keep noticing them. 🌷',
-  '🌷✨ **SWEET BOMB:** <@{target}>, you deserve to hear nice things without having to accomplish anything first. So: you are wonderful. 💕',
-  '🧸💞 **SWEET BOMB:** <@{target}>, if today feels heavy, take it one tiny piece at a time. You do not have to carry the whole day at once. 🌸',
-  '🍰🦋 **SWEET BOMB:** <@{target}>, your laugh, your weirdness, your little quirks—all of it belongs here. 💗',
-  '🌈💖 **SWEET BOMB:** <@{target}>, somewhere in the future, there are happy little moments you have not met yet. ✨',
-  '🫧🌸 **SWEET BOMB:** <@{target}>, take this as a reminder to make room for something fun today, even if it is tiny. 💕',
-  '🍓💗 **SWEET BOMB:** <@{target}>, you are allowed to enjoy good things without wondering whether you deserve them. 🌷',
-  '🧁💐 **SWEET BOMB:** <@{target}>, the kindness department has stamped your file: **VERY SPECIAL HUMAN.** 💖',
-  '🌙🦋 **SWEET BOMB:** <@{target}>, even quiet progress is progress. Your story does not need to be loud to be beautiful. ✨',
-  '🐣💗 **SWEET BOMB:** <@{target}>, fresh start energy has been delivered directly to your doorstep. Use whenever needed. 🌸',
-  '🍪🌈 **SWEET BOMB:** <@{target}>, you deserve a day with more giggles than worries. The raccoon council has ordered it. 🦝💕',
-  '🌸🫶 **SWEET BOMB:** <@{target}>, please accept this official permission slip to be proud of yourself for making it this far. 💗',
-  '🧸🍓 **SWEET BOMB:** <@{target}>, you are allowed to celebrate tiny victories. Tiny victories are still victories. 🎉💖',
-  '💗🌷 **SWEET BOMB:** <@{target}>, there is nothing embarrassing about needing encouragement sometimes. Everybody deserves a little softness. ✨',
-  '🦄🧁 **SWEET BOMB:** <@{target}>, you have been selected for one complimentary sprinkle of magic. No expiration date. ✨💕',
-  '🌼💞 **SWEET BOMB:** <@{target}>, I hope you remember that your best does not have to look the same every day. 💗',
-  '🍯🦋 **SWEET BOMB:** <@{target}>, you deserve friendships, moments, and memories that make your heart feel warm. 🌸',
-  '🎀💖 **SWEET BOMB:** <@{target}>, this is a tiny reminder that you are easy to root for. Now go be adorable. 😭💕',
-  '🌷🧸 **SWEET BOMB:** <@{target}>, if today gives you a reason to smile, please save that little moment somewhere in your heart. 💗',
-  '🍓✨ **SWEET BOMB:** <@{target}>, you are doing enough. You are enough. And yes, the kindness department has triple-checked the paperwork. 💕',
-  '💐🌈 **SWEET BOMB:** <@{target}>, may your next hour contain one unexpectedly lovely thing. That is your official mission. 🥹💗',];
+];
 
 const BOMB_LOVE_MESSAGES = [
   "💘 OH NOOO... You're far too love-struck to use that WereWives command right now. Your brain is currently occupied with butterflies. 🦋💕",
@@ -14263,7 +14224,7 @@ async function restoreStinkIfExpired(env, player, userId, now) {
 
 async function applySweetBomb(env, target, bomb, now) {
   target.sweetBombUntil = now + bomb.type.durationMs;
-  target.sweetBombNextAt = now + randomInt(12, 25) * 60 * 1000;
+  target.sweetBombNextAt = now + 60 * 60 * 1000;
   target.sweetBombChannelId = bomb.channelId;
   await savePlayer(env, target, bomb.targetId);
   return { until: target.sweetBombUntil };
