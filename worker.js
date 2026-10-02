@@ -11614,7 +11614,8 @@ function birthdayMenuComponents(active) {
     row(button("🛍️ Midnight Shop", "birthday:shop:0", 1), button("🎃 Fright Hunt", "birthday:hunt", 1), button("🎂 Bingo", "birthday:bingo", 1)),
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
-    row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1), button("🎭 Talent Show", "birthday:talent", 1))
+    row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1), button("🎭 Talent Show", "birthday:talent", 1)),
+    row(button("🧠 Memory Thief", "birthday:memory", 1))
   ];
 }
 
@@ -11681,6 +11682,7 @@ async function handleBirthdayGamesCommand(env, interaction) {
     if (text || voice) return birthdayTalentAddSubmission(env, interaction, text, voice);
     return startBirthdayTalent(env, interaction);
   }
+  if (sub === "memory") return startBirthdayMemoryThief(env, interaction);
   return sendText(env, interaction, "🎮 Choose a Birthday Game from the menu.");
 }
 
@@ -15331,6 +15333,12 @@ async function handleComponent(
     if(action==="talentvote") return birthdayTalentVote(env,interaction,parts[2]);
     if(action==="talentreveal") return birthdayTalentReveal(env,interaction);
     if(action==="talentnext") return birthdayTalentNext(env,interaction);
+    if(action==="memory") return startBirthdayMemoryThief(env,interaction);
+    if(action==="memoryanswer") return birthdayMemoryAnswer(env,interaction);
+    if(action==="memoryselect") return birthdayMemorySelect(env,interaction);
+    if(action==="memoryguess") return birthdayMemoryGuess(env,interaction,parts[2]);
+    if(action==="memoryreveal") return birthdayMemoryReveal(env,interaction);
+    if(action==="memorynext") return birthdayMemoryNext(env,interaction);
     return;
   }
 
@@ -31074,7 +31082,8 @@ const COMMANDS = [
       { type: 1, name: "talent", description: "Birthday Talent Show — submit text or a voice performance", options: [
         { type: 3, name: "text", description: "Your text performance", required: false, max_length: 1000 },
         { type: 11, name: "voice", description: "Attach a voice/audio performance", required: false }
-      ] }
+      ] },
+      { type: 1, name: "memory", description: "Birthday Memory Thief — guess the birthday person's secret answers" }
     ]
   },
   {
@@ -33020,4 +33029,465 @@ export default {
       ])
     );
   }
-};
+}
+/* =========================================================
+   BIRTHDAY MEMORY THIEF
+   The birthday person secretly answers ridiculous questions.
+   Everyone else tries to steal their memories by guessing.
+========================================================= */
+
+const BIRTHDAY_MEMORY_QUESTIONS = [
+  { question: "What would the birthday person do if a raccoon stole their cake?", options: ["Call the police", "Chase it personally", "Offer it another cake", "Blame someone else"] },
+  { question: "If the birthday person became famous tomorrow, what would it probably be for?", options: ["Something impressive", "Something accidental", "A ridiculous scandal", "Stealing a raccoon's job"] },
+  { question: "What is most likely to make the birthday person say \u201cabsolutely not\u201d?", options: ["A bad smell", "A weird food", "An unnecessary phone call", "A raccoon asking for money"] },
+  { question: "If the birthday person lived inside one birthday cake, which room would they claim?", options: ["Frosting room", "Sprinkle attic", "Secret filling basement", "Emergency cake closet"] },
+  { question: "What would the birthday person name a pet raccoon?", options: ["Something adorable", "Something stupid", "A human name", "Sir Raccoon"] },
+  { question: "If the birthday person opened a restaurant, what would be on the menu?", options: ["Fancy food", "Comfort food", "One suspicious specialty", "Mostly cake"] },
+  { question: "What would the birthday person do if someone ate the last slice of cake?", options: ["Forgive them", "Investigate", "Become dramatically offended", "Start a full trial"] },
+  { question: "Which superpower would the birthday person abuse immediately?", options: ["Teleportation", "Mind reading", "Time travel", "Summoning snacks"] },
+  { question: "If the birthday person were arrested, what would the charge most likely be?", options: ["Being too chaotic", "Stealing cake", "Disturbing the peace", "Something nobody understands"] },
+  { question: "What would the birthday person bring to a deserted island?", options: ["Practical supplies", "Snacks", "Their phone", "Something completely useless"] },
+  { question: "If the birthday person had a warning label, what would it say?", options: ["Handle with care", "May cause chaos", "Do not feed after midnight", "Probably shouldn't be trusted"] },
+  { question: "What would the birthday person do if their cake started talking?", options: ["Talk back", "Run", "Ask questions", "Eat it anyway"] },
+  { question: "Which birthday party role would the birthday person secretly be best at?", options: ["DJ", "Cake inspector", "Chaos coordinator", "Raccoon security"] },
+  { question: "If the birthday person could ban one thing for 24 hours, what would disappear?", options: ["Annoying people", "Alarm clocks", "Bad food", "Responsibility"] },
+  { question: "What would the birthday person buy with unlimited Sparkles?", options: ["Something useful", "Something pretty", "Something ridiculous", "Everything in the shop"] },
+  { question: "If the birthday person became a villain, what would their evil plan be?", options: ["Take over the world", "Steal all the cake", "Control the raccoons", "Make everyone attend their birthday"] },
+  { question: "What would the birthday person most likely say after causing a disaster?", options: ["\u201cMy bad.\u201d", "\u201cThat wasn't me.\u201d", "\u201cOkay but hear me out.\u201d", "\u201cWorth it.\u201d"] },
+  { question: "If the birthday person had a reality show, what would it be called?", options: ["Keeping Up With the Birthday", "Chaos: The Series", "Cake & Consequences", "Why Is There A Raccoon?"] },
+  { question: "What would the birthday person choose for a ridiculous tattoo?", options: ["A tiny cake", "A raccoon", "A mysterious symbol", "Something instantly regrettable"] },
+  { question: "If the birthday person found $1 million, what happens first?", options: ["Responsible planning", "Shopping", "Celebration", "Complete financial chaos"] },
+  { question: "What would the birthday person do during a zombie apocalypse?", options: ["Make a plan", "Hide", "Find snacks", "Become friends with a zombie"] },
+  { question: "Which animal would be the birthday person's worst roommate?", options: ["Goose", "Monkey", "Raccoon", "Judgmental cat"] },
+  { question: "What would the birthday person name a spaceship?", options: ["Birthday Express", "The Chaos Machine", "Cake Cruiser", "Something unhinged"] },
+  { question: "What would the birthday person do if a ghost complimented them?", options: ["Thank it", "Ask questions", "Become friends", "Ask why it is still hanging around"] },
+  { question: "What would the birthday person accidentally become CEO of?", options: ["A cake company", "A raccoon empire", "A weird startup", "Something they never applied for"] },
+  { question: "If the birthday person could delete one chore forever, which goes first?", options: ["Laundry", "Dishes", "Cleaning", "All of them"] },
+  { question: "What would the birthday person do if their birthday lasted 30 days?", options: ["Celebrate daily", "Get exhausted", "Demand more presents", "Create a birthday economy"] },
+  { question: "Which fake job would the birthday person somehow be qualified for?", options: ["Professional napper", "Cake inspector", "Raccoon negotiator", "Professional troublemaker"] },
+  { question: "What would the birthday person do if they found a secret door at home?", options: ["Open it", "Ignore it", "Tell everyone", "Regret opening it"] },
+  { question: "What would the birthday person most likely order at 2 AM?", options: ["Dessert", "Fast food", "Something random", "Nothing, then steal someone else's"] },
+  { question: "If the birthday person were a video game boss, what would their attack be?", options: ["Cake Cannon", "Raccoon Swarm", "Passive-Aggressive Comment", "Sparkle Explosion"] },
+  { question: "What would the birthday person do if someone challenged them to a dance battle?", options: ["Win", "Try anyway", "Laugh", "Turn it into a production"] },
+  { question: "If the birthday person could summon one thing with a button, what would it be?", options: ["Money", "Food", "A vacation", "A raccoon"] },
+  { question: "What would the birthday person do if their phone started giving life advice?", options: ["Listen", "Argue with it", "Turn it off", "Ask for lottery numbers"] },
+  { question: "Which ridiculous business would the birthday person accidentally create?", options: ["Cake Delivery", "Raccoon Insurance", "Mystery Boxes", "A useless-things store"] },
+  { question: "What would the birthday person hide in an emergency bunker?", options: ["Food", "Money", "Important documents", "Cake"] },
+  { question: "How would the birthday person survive a haunted house?", options: ["Bravery", "Logic", "Run", "Make friends with the ghost"] },
+  { question: "What would the birthday person most likely win a trophy for?", options: ["Being chaotic", "Being funny", "Being stubborn", "Attempting something nobody else would"] },
+  { question: "If the birthday person became mayor for one day, what law appears first?", options: ["Mandatory Cake", "Raccoon Rights", "No Annoying People", "Every Day Is Birthday"] },
+  { question: "What would the birthday person do if a giant cake appeared outside?", options: ["Eat it", "Investigate", "Take pictures", "Claim ownership"] },
+  { question: "Which ridiculous luxury would the birthday person want?", options: ["Personal chef", "Giant bedroom", "Private arcade", "A raccoon butler"] },
+  { question: "What would the birthday person say after receiving a terrible present?", options: ["\u201cThank you!\u201d", "\u201cInteresting...\u201d", "\u201cWhat is this?\u201d", "\u201cI have questions.\u201d"] },
+  { question: "If trapped in a mall overnight, what would the birthday person do first?", options: ["Find food", "Explore", "Go shopping", "Start a new life there"] },
+  { question: "What would the birthday person most likely be caught doing at 3 AM?", options: ["Eating", "Scrolling", "Starting a project", "Making a terrible decision"] },
+  { question: "If the birthday person had a secret underground lair, what would be inside?", options: ["Treasure", "Games", "Cake", "Something nobody may ask about"] },
+  { question: "What would the birthday person do if a talking cake offered them $10,000?", options: ["Take the money", "Ask questions", "Eat the cake", "Wonder why it has money"] },
+  { question: "Which ridiculous title suits the birthday person best?", options: ["Supreme Cake Commander", "Raccoon Overlord", "Minister of Chaos", "CEO of Bad Decisions"] },
+  { question: "What would the birthday person do if they accidentally became internet famous?", options: ["Enjoy it", "Hide", "Monetize it", "Pretend it was intentional"] },
+  { question: "If the birthday person had to fight one food, which is worst?", options: ["Watermelon", "Spaghetti", "Jello", "A giant cupcake"] },
+  { question: "What would the birthday person bring to a royal banquet?", options: ["Proper gift", "Cake", "Snacks", "A raccoon"] },
+  { question: "What would the birthday person do if their birthday cake disappeared overnight?", options: ["Panic", "Investigate", "Accuse everyone", "Blame raccoons"] },
+  { question: "Which birthday disaster would the birthday person somehow cause?", options: ["Cake explosion", "Confetti flood", "Balloon escape", "Raccoon invasion"] },
+  { question: "If the birthday person could rename Tuesday, what would it become?", options: ["Second Monday", "Cake Day", "Not-Quite-Friday", "Why Is It Tuesday"] },
+  { question: "What would the birthday person do with a button labeled DO NOT PRESS?", options: ["Leave it", "Stare at it", "Ask someone else", "Press it immediately"] },
+  { question: "If the birthday person opened a haunted hotel, what is the slogan?", options: ["Sleep if you dare", "Free breakfast!", "Absolutely normal hotel", "Please ignore the ghosts"] },
+  { question: "What would the birthday person most likely collect?", options: ["Cute things", "Random junk", "Rare items", "Things they forgot they bought"] },
+  { question: "Which ridiculous assistant would the birthday person choose?", options: ["Tiny wizard", "Raccoon", "Talking cupcake", "Judgmental fairy"] },
+  { question: "What would the birthday person do with a mysterious key?", options: ["Return it", "Try it somewhere", "Keep it", "Search for its door"] },
+  { question: "If the birthday person gave a TED Talk, what would it be about?", options: ["Life advice", "Cake", "Why raccoons are misunderstood", "Something invented five minutes ago"] },
+  { question: "What would the birthday person do if someone stole their favorite snack?", options: ["Ask for it back", "Get annoyed", "Replace it", "Launch an investigation"] },
+  { question: "Which ridiculous sport would the birthday person dominate?", options: ["Competitive cake eating", "Raccoon racing", "Balloon dodge", "Extreme napping"] },
+  { question: "Where would the birthday person teleport for lunch?", options: ["Somewhere fancy", "Somewhere tropical", "Somewhere with amazing food", "Somewhere nobody can find them"] },
+  { question: "What would the birthday person do if a tiny dragon moved in?", options: ["Keep it", "Feed it", "Name it", "Charge people to see it"] },
+  { question: "What would the birthday person's theme song sound like?", options: ["Epic", "Cute", "Chaotic", "Like a circus caught fire"] },
+  { question: "What would the birthday person do with a useless superpower?", options: ["Use it anyway", "Improve it", "Sell it somehow", "Become famous for it"] },
+  { question: "Which cake flavor would cause the most arguments?", options: ["Pickle", "Chocolate spaghetti", "Garlic", "Mystery flavor"] },
+  { question: "What would the birthday person do if their tree gossiped about them?", options: ["Confront it", "Laugh", "Ask for details", "Pretend not to hear"] },
+  { question: "What would the birthday person's mascot be?", options: ["Raccoon", "Cat", "Cake", "Angry goose"] },
+  { question: "What would the birthday person wish for if a genie demanded a stupid wish?", options: ["Endless cake", "A million raccoons", "Something useless", "Another genie"] },
+  { question: "Which case would the birthday person solve as a detective?", options: ["Missing cake", "Stolen Sparkles", "Who ate the snacks", "Why the raccoon has a key"] },
+  { question: "What would the birthday person do if they woke up in a castle?", options: ["Explore", "Look for food", "Claim the throne", "Go back to sleep"] },
+  { question: "Which fake holiday would the birthday person invent?", options: ["National Cake Day 2", "Raccoon Appreciation Week", "Napsgiving", "International Do Whatever Day"] },
+  { question: "What would the birthday person do if everyone suddenly sang to them?", options: ["Join in", "Hide", "Laugh", "Demand a second song"] },
+  { question: "What would a magical vending machine owned by the birthday person dispense?", options: ["Candy", "Money", "Mystery prizes", "Raccoons"] },
+  { question: "What would the birthday person forget while leaving for vacation?", options: ["Clothes", "Phone charger", "Something important", "Why they packed 14 snacks"] },
+  { question: "Which cartoon role would the birthday person choose?", options: ["Hero", "Villain", "Comic relief", "Mysterious character nobody understands"] },
+  { question: "What would the birthday person do if a cupcake challenged them to a duel?", options: ["Accept", "Laugh", "Run", "Ask about its weapon"] },
+  { question: "Which fake crime would the birthday person be accused of?", options: ["Excessive cake consumption", "Raccoon trafficking", "Stealing the moon", "Being suspiciously fabulous"] },
+  { question: "What would the birthday person do if the moon sent them a birthday card?", options: ["Keep it", "Frame it", "Ask how it got their address", "Send one back"] },
+  { question: "What would the weirdest room in the birthday person's castle be?", options: ["Cake vault", "Raccoon courtroom", "Mystery room", "A room full of unusable chairs"] },
+  { question: "What would the birthday person do if their shadow moved on its own?", options: ["Panic", "Investigate", "Talk to it", "Tell it to behave"] },
+  { question: "What random object would the birthday person turn into a collectible?", options: ["A spoon", "A rock", "A bottle cap", "A receipt"] },
+  { question: "What would the birthday person do if they found a treasure chest full of glitter?", options: ["Take it", "Share it", "Hide it", "Ask why there is so much"] },
+  { question: "What would the birthday person steal as a professional thief?", options: ["Cake", "Sparkles", "Rare collectibles", "Someone else's fries"] },
+  { question: "What would the birthday person do if a raccoon became their boss?", options: ["Quit", "Obey", "Negotiate", "Ask for a raise"] },
+  { question: "What would the birthday person make illegal?", options: ["Bad cake", "Loud chewing", "Monday", "People touching their food"] },
+  { question: "What would the birthday person do if they discovered their birthday was secretly being filmed?", options: ["Wave", "Hide", "Take over production", "Demand better lighting"] },
+  { question: "What bizarre contest would the birthday person enter?", options: ["Best costume", "Largest cake", "Most chaotic story", "Fastest raccoon chase"] },
+  { question: "What would the birthday person do if their presents started arguing?", options: ["Separate them", "Listen", "Join the argument", "Return them all"] },
+  { question: "Where would the birthday person choose for an absurd birthday?", options: ["Moon base", "Haunted castle", "Raccoon nightclub", "Inside a giant cake"] },
+  { question: "What would the birthday person do with a crown that whispered advice?", options: ["Listen", "Ignore it", "Argue with it", "Ask how to get richer"] },
+  { question: "What object would the birthday person make sentient?", options: ["Phone", "Car", "Tree", "Cake"] },
+  { question: "What would the birthday person do if their tree demanded a birthday present?", options: ["Give it one", "Laugh", "Ask what it wants", "Tell it to grow up"] },
+  { question: "Which unnecessary invention would the birthday person buy?", options: ["Automatic cake feeder", "Raccoon translator", "Self-folding laundry", "A fridge alarm that screams"] },
+  { question: "What would the birthday person do with a secret button under the cake?", options: ["Press it", "Investigate", "Call someone", "Press it twice"] },
+  { question: "What would the birthday person name a new planet?", options: ["Cake", "Werewives", "Sparkle World", "Something impossible to pronounce"] },
+  { question: "What would the birthday person do if a chef insulted their cake?", options: ["Argue", "Laugh", "Challenge them", "Make a bigger cake"] },
+  { question: "Which birthday emergency would the birthday person handle best?", options: ["No cake", "No presents", "No Wi-Fi", "Raccoon invasion"] },
+  { question: "What would the birthday person do if they could clone themselves for one day?", options: ["Send clone to work", "Party with it", "Make it do chores", "Create a clone army"] },
+  { question: "If secretly royalty, what would the birthday person's first decree be?", options: ["More cake", "More money", "Raccoons get citizenship", "Everyone gets a birthday"] },
+  { question: "What would the birthday person do with a box labeled ABSOLUTELY DO NOT OPEN?", options: ["Leave it", "Shake it", "Ask what's inside", "Open it immediately"] },
+  { question: "What would the birthday person get emotionally attached to?", options: ["Random mug", "A raccoon", "Broken decoration", "A cake they should eat"] },
+  { question: "What would the birthday person do if they found a second birthday hidden inside their birthday?", options: ["Celebrate", "Investigate", "Demand presents", "Declare a birthday loophole"] }
+];
+
+function birthdayMemoryQuestion(guildGame) {
+  const used = new Set(Array.isArray(guildGame?.usedQuestions) ? guildGame.usedQuestions : []);
+  const available = BIRTHDAY_MEMORY_QUESTIONS
+    .map((_, i) => i)
+    .filter(i => !used.has(i));
+  const index = available.length
+    ? available[randomInt(0, available.length - 1)]
+    : randomInt(0, BIRTHDAY_MEMORY_QUESTIONS.length - 1);
+  const q = BIRTHDAY_MEMORY_QUESTIONS[index];
+  return { index, question: q.question, options: q.options };
+}
+
+function birthdayMemoryButtons(g) {
+  if (g.status === "birthday_answering") {
+    return [row(button("🔐 Birthday Person — Answer Secretly", "birthday:memoryanswer", 1))];
+  }
+  if (g.status === "guessing") {
+    const rows = [];
+    rows.push(row(...g.question.options.map((x, i) =>
+      button(`${String.fromCharCode(65 + i)}. ${x}`.slice(0, 80), `birthday:memoryguess:${i}`, 1)
+    )));
+    rows.push(row(button("🧠 Reveal The Memory", "birthday:memoryreveal", 3)));
+    return rows;
+  }
+  if (g.status === "results") {
+    return g.active
+      ? [row(button("🧠 Steal Another Memory", "birthday:memorynext", 1))]
+      : [];
+  }
+  return [];
+}
+
+function birthdayMemoryText(g) {
+  const target = g.targetName || "the birthday person";
+  const round = Number(g.round || 1);
+  const total = Number(g.maxRounds || 5);
+
+  if (g.status === "birthday_answering") {
+    return `🧠🎂 **BIRTHDAY MEMORY THIEF** 🎂🧠\n\n` +
+      `**Round ${round}/${total}**\n\n` +
+      `🎂 **${target}** is the birthday person being interrogated.\n\n` +
+      `🔐 **${target} has a secret question!**\n` +
+      `They must answer privately before everyone else can guess.\n\n` +
+      `🦝 Everyone else: **DO NOT ASK THEM WHAT THEY PICKED.**\n` +
+      `The raccoons are watching. 👀🦝`;
+  }
+
+  if (g.status === "guessing") {
+    const guesses = Object.keys(g.guesses || {}).length;
+    return `🧠🎂 **BIRTHDAY MEMORY THIEF** 🎂🧠\n\n` +
+      `**Round ${round}/${total} — STEAL THE MEMORY!**\n\n` +
+      `🎂 Birthday person: **${target}**\n\n` +
+      `> ❓ **${g.question.question}**\n\n` +
+      `🕵️ Everyone except the birthday person gets **ONE guess**.\n` +
+      `👥 Guesses so far: **${guesses}**\n\n` +
+      `Pick what you think ${target} secretly chose. 😈\n\n` +
+      `🦝 **Get it right and you stole a memory!**`;
+  }
+
+  const correct = Number(g.answer);
+  const correctText = g.question.options[correct] || "Unknown";
+  const entries = Object.values(g.guesses || {});
+  const winners = entries.filter(x => Number(x.answer) === correct).map(x => x.name);
+  const wrong = entries.length - winners.length;
+  const resultLines = winners.length
+    ? `🧠 **Memory thieves:** ${winners.join(", ")}`
+    : `😂 **Nobody stole the memory!** The raccoons are disappointed.`;
+  return `🧠🎂 **BIRTHDAY MEMORY THIEF** 🎂🧠\n\n` +
+    `**Round ${round}/${total} RESULTS**\n\n` +
+    `🎂 Birthday person: **${target}**\n\n` +
+    `❓ **${g.question.question}**\n\n` +
+    `🧠 **The stolen memory was:**\n> ${String.fromCharCode(65 + correct)}. ${correctText}\n\n` +
+    `${resultLines}\n` +
+    `❌ Wrong guesses: **${wrong}**\n\n` +
+    (g.active
+      ? `🎁 Ready for another ridiculous question?`
+      : `🏆 **MEMORY THIEF COMPLETE!**\nThe birthday person's brain has officially been robbed. 😂🧠`);
+}
+
+function birthdayMemoryAnswerMenu(g) {
+  return [row({
+    type: 3,
+    custom_id: "birthday:memoryselect",
+    placeholder: "🔐 Pick your secret answer...",
+    min_values: 1,
+    max_values: 1,
+    options: g.question.options.map((x, i) => ({
+      label: `${String.fromCharCode(65 + i)}. ${x}`.slice(0, 100),
+      value: String(i),
+      description: "Keep this secret from the birthday thieves! 🤫"
+    }))
+  })];
+}
+
+async function editBirthdayMemoryMessage(env, g) {
+  if (!g?.channelId || !g?.messageId) return;
+  await discordRequest(
+    env,
+    `/channels/${g.channelId}/messages/${g.messageId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        content: birthdayMemoryText(g),
+        components: birthdayMemoryButtons(g)
+      })
+    }
+  );
+}
+
+async function startBirthdayMemoryThief(env, interaction) {
+  const guildId = interaction.guild_id;
+  if (!guildId) return birthdayTalentReply(env, interaction, "❌ Birthday Memory Thief can only be used inside a server.");
+
+  const { state, people } = await ensureBirthdayEvent(env, guildId);
+  if (!people.length) return birthdayTalentReply(env, interaction, birthdayMainText(state, people), birthdayMenuComponents(false));
+
+  state.birthday.games = state.birthday.games || {};
+  const existing = state.birthday.games.memoryThief;
+  if (existing?.active) {
+    return birthdayTalentReply(
+      env,
+      interaction,
+      `🧠 **Birthday Memory Thief is already running!**\n\n` +
+      `🎂 Birthday person: **${existing.targetName || "the birthday person"}**\n` +
+      `🧠 Round **${existing.round || 1}/${existing.maxRounds || 5}**`,
+      []
+    );
+  }
+
+  const birthdayIds = Array.isArray(state.birthday.birthdayIds) ? state.birthday.birthdayIds.filter(Boolean) : [];
+  if (!birthdayIds.length) return birthdayTalentReply(env, interaction, "❌ I couldn't find today's birthday person.");
+
+  const targetId = String(birthdayIds[randomInt(0, birthdayIds.length - 1)]);
+  const targetPlayer = await getPlayer(env, targetId);
+  const targetName = targetPlayer.displayName || targetPlayer.username || `Birthday Person`;
+  const pick = birthdayMemoryQuestion({ usedQuestions: [] });
+
+  const g = {
+    active: true,
+    status: "birthday_answering",
+    round: 1,
+    maxRounds: 5,
+    targetId,
+    targetName,
+    question: pick,
+    usedQuestions: [pick.index],
+    answer: null,
+    guesses: {},
+    scores: {},
+    channelId: interaction.channel_id || state.announcementChannelId || "",
+    messageId: "",
+    startedAt: Date.now()
+  };
+
+  state.birthday.games.memoryThief = g;
+  await saveGuildState(env, guildId, state);
+
+  const msg = await sendChannelMessage(env, g.channelId, birthdayMemoryText(g), birthdayMemoryButtons(g));
+  if (msg?.id) {
+    g.messageId = msg.id;
+    await saveGuildState(env, guildId, state);
+  }
+
+  return birthdayTalentReply(
+    env,
+    interaction,
+    `🧠🎂 **BIRTHDAY MEMORY THIEF STARTED!**\n\n` +
+    `🎂 Today's birthday person: **${targetName}**\n` +
+    `🔐 **${targetName}** must secretly answer the question in the public game.\n\n` +
+    `Everyone else: start preparing your detective skills. 😂`
+  );
+}
+
+async function birthdayMemoryAnswer(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const g = state.birthday?.games?.memoryThief;
+  const user = getUserFromInteraction(interaction);
+  if (!g?.active || g.status !== "birthday_answering") {
+    return birthdayTalentReply(env, interaction, "🧠 The Birthday Memory Thief is not waiting for an answer right now.");
+  }
+  if (!user || String(user.id) !== String(g.targetId)) {
+    return birthdayTalentReply(env, interaction, `🔒 Only **${g.targetName}** can answer the secret birthday question!`);
+  }
+  return birthdayTalentReply(
+    env,
+    interaction,
+    `🔐 **SECRET BIRTHDAY ANSWER**\n\nNobody else can see this.\nPick what you think is the funniest/most accurate answer for yourself, **${g.targetName}**. 🤫`,
+    birthdayMemoryAnswerMenu(g)
+  );
+}
+
+async function birthdayMemorySelect(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const g = state.birthday?.games?.memoryThief;
+  const user = getUserFromInteraction(interaction);
+  const value = interaction.data?.values?.[0];
+  if (!g?.active || g.status !== "birthday_answering") {
+    return birthdayTalentReply(env, interaction, "🧠 This memory question is no longer waiting for an answer.");
+  }
+  if (!user || String(user.id) !== String(g.targetId)) {
+    return birthdayTalentReply(env, interaction, "🔒 Only the birthday person can choose the secret answer.");
+  }
+  const answer = Number(value);
+  if (!Number.isInteger(answer) || answer < 0 || answer >= g.question.options.length) {
+    return birthdayTalentReply(env, interaction, "❌ That secret answer is invalid.");
+  }
+
+  g.answer = answer;
+  g.status = "guessing";
+  g.guesses = {};
+  await saveGuildState(env, interaction.guild_id, state);
+  await editBirthdayMemoryMessage(env, g);
+
+  return birthdayTalentReply(
+    env,
+    interaction,
+    `🤫 **Memory locked!**\n\n` +
+    `Your answer is hidden from everyone else.\n\n` +
+    `🕵️ Now watch them try to guess what you picked. 😂`
+  );
+}
+
+async function birthdayMemoryGuess(env, interaction, optionIndex) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const g = state.birthday?.games?.memoryThief;
+  const user = getUserFromInteraction(interaction);
+  if (!g?.active || g.status !== "guessing") {
+    return birthdayTalentReply(env, interaction, "🧠 Guessing is not open right now.");
+  }
+  if (!user) return birthdayTalentReply(env, interaction, "❌ I couldn't identify you.");
+  if (String(user.id) === String(g.targetId)) {
+    return birthdayTalentReply(env, interaction, "😂 Birthday person, you already know the answer! Let everyone else embarrass themselves.");
+  }
+  if (g.guesses?.[user.id]) {
+    return birthdayTalentReply(env, interaction, "🧠 You already made your guess for this memory!");
+  }
+
+  const answer = Number(optionIndex);
+  if (!Number.isInteger(answer) || answer < 0 || answer >= g.question.options.length) {
+    return birthdayTalentReply(env, interaction, "❌ That guess is invalid.");
+  }
+
+  g.guesses = g.guesses || {};
+  g.scores = g.scores || {};
+  const name = String(user.global_name || user.username || "Birthday Thief").slice(0, 30);
+  g.guesses[user.id] = { answer, name };
+  await saveGuildState(env, interaction.guild_id, state);
+  await editBirthdayMemoryMessage(env, g);
+
+  return birthdayTalentReply(
+    env,
+    interaction,
+    `🧠 **GUESS LOCKED!**\n\nYou picked **${String.fromCharCode(65 + answer)}**.\n\nNow wait and see if you actually stole the birthday memory. 😈`
+  );
+}
+
+async function birthdayMemoryReveal(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const g = state.birthday?.games?.memoryThief;
+  const user = getUserFromInteraction(interaction);
+  if (!g?.active || g.status !== "guessing") {
+    return birthdayTalentReply(env, interaction, "🧠 There is no memory waiting to be revealed.");
+  }
+  if (!user) return birthdayTalentReply(env, interaction, "❌ I couldn't identify you.");
+  if (String(user.id) === String(g.targetId)) {
+    return birthdayTalentReply(env, interaction, "😂 You know the answer already! Let someone else reveal the memory.");
+  }
+
+  const guesses = Object.values(g.guesses || {});
+  if (guesses.length < 2) {
+    return birthdayTalentReply(env, interaction, "🕵️ We need at least **2 thieves** to make this interesting! Get another guess first. 😂");
+  }
+
+  const correct = Number(g.answer);
+  const winners = guesses.filter(x => Number(x.answer) === correct);
+  g.scores = g.scores || {};
+  for (const winner of winners) {
+    const ids = Object.entries(g.guesses).find(([, x]) => x === winner);
+    const uid = ids?.[0];
+    if (!uid) continue;
+    g.scores[uid] = Number(g.scores[uid] || 0) + 1;
+    const p = await getPlayer(env, uid);
+    p.birthdayCandies = Number(p.birthdayCandies || 0) + 50;
+    await savePlayer(env, p, uid);
+  }
+
+  const birthdayPlayer = await getPlayer(env, g.targetId);
+  birthdayPlayer.birthdayCandies = Number(birthdayPlayer.birthdayCandies || 0) + 75;
+  await savePlayer(env, birthdayPlayer, g.targetId);
+
+  g.status = "results";
+  const finalRound = Number(g.round || 1) >= Number(g.maxRounds || 5);
+  g.active = !finalRound;
+
+  if (finalRound) {
+    const scoreEntries = Object.entries(g.scores || {})
+      .map(([id, score]) => ({ id, score: Number(score || 0), name: g.guesses?.[id]?.name || `Player ${id}` }))
+      .sort((a, b) => b.score - a.score);
+    const top = scoreEntries[0];
+    if (top) {
+      const p = await getPlayer(env, top.id);
+      p.birthdayCandies = Number(p.birthdayCandies || 0) + 150;
+      await savePlayer(env, p, top.id);
+      g.finalWinner = top.name;
+      g.finalWinnerScore = top.score;
+    }
+  }
+
+  await saveGuildState(env, interaction.guild_id, state);
+  await editBirthdayMemoryMessage(env, g);
+
+  let rewardText = winners.length
+    ? `🎁 ${winners.map(x => x.name).join(", ")} stole the memory and got **+50 Birthday Candies** each!`
+    : `😂 Nobody stole the memory!`;
+  if (finalRound && g.finalWinner) {
+    rewardText += `\n🏆 **${g.finalWinner}** wins the Memory Thief crown with **${g.finalWinnerScore} stolen memories** and gets **+150 Birthday Candies!**`;
+  }
+
+  return birthdayTalentReply(env, interaction, rewardText);
+}
+
+async function birthdayMemoryNext(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const g = state.birthday?.games?.memoryThief;
+  const user = getUserFromInteraction(interaction);
+  if (!g?.active || g.status !== "results") {
+    return birthdayTalentReply(env, interaction, "🧠 There isn't a finished memory waiting for another round.");
+  }
+  if (!user) return birthdayTalentReply(env, interaction, "❌ I couldn't identify you.");
+
+  const pick = birthdayMemoryQuestion(g);
+  g.round = Number(g.round || 1) + 1;
+  g.status = "birthday_answering";
+  g.question = pick;
+  g.usedQuestions = Array.from(new Set([...(g.usedQuestions || []), pick.index]));
+  g.answer = null;
+  g.guesses = {};
+  await saveGuildState(env, interaction.guild_id, state);
+  await editBirthdayMemoryMessage(env, g);
+
+  return birthdayTalentReply(
+    env,
+    interaction,
+    `🧠 **NEXT MEMORY!**\n\n🔐 **${g.targetName}** has another secret question to answer!`
+  );
+}
+
+
+;
