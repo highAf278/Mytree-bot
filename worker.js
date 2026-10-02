@@ -13665,7 +13665,7 @@ const BOMB_SWEET_MESSAGES = [
   "🍓✨ **SWEET BOMB UPDATE:** <@{target}>, the raccoon council has no complaints today. That's basically a standing ovation. 🦝💗",
   "🧁💕 <@{target}>, you've survived every bad day you've had so far. That's a pretty impressive streak. Keep going. 🌸",
   "🍰💗 <@{target}>, tiny reminder: progress counts even when it feels small. You're allowed to be proud of yourself. ✨",
-  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗"
+  "🍦🌷 <@{target}>, this is your completely unsolicited reminder that you matter. Now go forth and cause slightly less chaos. 😭💗",
 
   '🧁💗 **SWEET BOMB:** <@{target}>, you are allowed to have a day that is just okay. You do not have to be perfect. 🌷',
   '🌸✨ **SWEET BOMB:** <@{target}>, somebody in this server thinks you are pretty awesome. The Sweet Bomb has receipts. 💕',
