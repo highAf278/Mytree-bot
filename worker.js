@@ -11472,6 +11472,424 @@ g.status="results";await saveGuildState(env,interaction.guild_id,state);const ra
 async function birthdayTalentNext(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const old=state.birthday?.games?.talent;if(!old?.active||old.status!=="results")return birthdayTalentReply(env,interaction,"🎭 Finish the current Talent Show round first.");const pick=birthdayTalentPrompt();const g={active:true,status:"submitting",round:Number(old.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:old.channelId,messageId:old.messageId,startedAt:Date.now()};state.birthday.games.talent=g;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**`);}
 
+/* =========================================================
+   BIRTHDAY TRUTH OR DRINK
+   Large non-NSFW truth/dare bank. The drink button is a fictional
+   non-alcoholic skip choice; it never instructs anyone to consume alcohol.
+========================================================= */
+const BIRTHDAY_TRUTH_PROMPTS = [
+  "What is the most ridiculous thing you have ever confidently said while being completely wrong?",
+  "What is a totally useless skill you are weirdly proud of?",
+  "What is the strangest thing you have ever searched online?",
+  "What is the dumbest argument you have ever taken way too seriously?",
+  "What is the most embarrassing autocorrect you have ever sent?",
+  "What is something you pretend to understand but absolutely do not?",
+  "What is the weirdest food combination you secretly think is good?",
+  "What is the most chaotic thing you have done because you were bored?",
+  "What is a tiny inconvenience that makes you dramatically furious?",
+  "What is the weirdest nickname you have ever had?",
+  "What is the most ridiculous excuse you have ever used?",
+  "What is the last thing you laughed at way harder than you should have?",
+  "What is something you have blamed on a pet, raccoon, or imaginary creature?",
+  "What is the strangest thing you have ever done to avoid answering a message?",
+  "What is a completely harmless secret talent you have never shown the group?",
+  "What is the most embarrassing thing you have done in front of a camera?",
+  "What is the weirdest thing you believed as a kid?",
+  "What is the funniest misunderstanding you have ever had?",
+  "What is the most chaotic purchase you have ever made?",
+  "What is something you would absolutely never survive on a reality show doing?",
+  "If your life had a warning label, what would it say?",
+  "What would your personal emergency broadcast message say?",
+  "What is the most suspicious-looking thing you have ever accidentally done?",
+  "What is the weirdest compliment you have ever received?",
+  "What is something you would be embarrassed to admit you are terrible at?",
+  "What is the most dramatic reaction you have ever had to something extremely minor?",
+  "What is the strangest object you have ever kept for sentimental reasons?",
+  "What is the funniest lie you have told to avoid doing something boring?",
+  "What is a trend you never understood?",
+  "What is the most ridiculous thing you have ever named?",
+  "What is the worst haircut or outfit decision you have ever made?",
+  "What is the funniest thing you have ever overheard?",
+  "What is something you would absolutely buy if money did not matter?",
+  "What is your most irrational fear that makes no sense?",
+  "What is the most chaotic thing you have done in a group chat?",
+  "What is a completely fake fact you could probably convince someone is real?",
+  "What is the funniest reason you have ever been late?",
+  "What is something you would never admit to your younger self?",
+  "What is the most embarrassing song you know all the words to?",
+  "What is the weirdest thing you have ever done at midnight?",
+  "What is your most questionable fashion phase?",
+  "What is the most useless thing you have ever learned?",
+  "What is something you would absolutely get banned from a fancy restaurant for doing?",
+  "What is the strangest thing you have ever done because someone dared you?",
+  "What is the funniest thing you have ever done while trying to look cool?",
+  "What is something everyone else seems to love that you just do not get?",
+  "What is the most ridiculous conspiracy you could invent right now?",
+  "If a raccoon could expose one fact about you, what would it reveal?",
+  "What is the most embarrassing notification that could appear on your phone right now?",
+  "What is a completely unnecessary thing you are weirdly competitive about?",
+  "What is the funniest thing you have ever said by accident?",
+  "What is the strangest dream you remember?",
+  "What is something you have pretended to like because everyone else did?",
+  "What is the most ridiculous thing you have ever done to win an argument?",
+  "What is the worst advice you have ever confidently given?",
+  "What is a tiny hill you would absolutely die on?",
+  "What is the most chaotic thing you would do if you had one day with no consequences?",
+  "What is something you would make illegal if you were ruler for one day?",
+  "What would your villain origin story be over something incredibly petty?",
+  "What is the most ridiculous thing you would put in a museum about yourself?",
+  "What is the funniest thing your friends could put on a wanted poster about you?",
+  "What is the most suspicious thing in your room right now?",
+  "What is the weirdest thing you would put in a birthday cake if nobody could stop you?",
+  "What is something you are convinced you could win a championship for?",
+  "What is the dumbest thing you have ever done while half-asleep?",
+  "What is the funniest excuse you could give for disappearing for three days?",
+  "What is one completely useless superpower you wish you had?",
+  "What is the most ridiculous job you think you would somehow be excellent at?",
+  "What is something you would absolutely name a raccoon?",
+  "What is the funniest thing you would put on your own tombstone if it were just a joke?",
+  "What is the most chaotic thing you have ever done with a birthday cake?",
+  "What is one object you would be devastated to lose even though it is basically worthless?",
+  "What is the weirdest thing you have ever apologized to?",
+  "What is the most dramatic thing you have done over food?",
+  "What is something you would absolutely brag about if nobody could fact-check you?",
+  "What is the strangest compliment you could give someone with a completely straight face?",
+  "What is your most ridiculous irrational grudge against an object?",
+  "What is the funniest thing you would do if you became famous tomorrow?",
+  "What is one rule you would add to this server if you were allowed to make exactly one?",
+  "What is the most chaotic nickname you would give the birthday person?",
+  "What is something you would never want to explain to a police officer because it sounds much worse than it is?",
+  "What is the weirdest thing you would pack for an apocalypse?",
+  "What is the most ridiculous reason you could imagine getting kicked out of a library?",
+  "What is something you would absolutely challenge a raccoon to a competition over?",
+  "What is the funniest fake business you could start tomorrow?",
+  "What is the most embarrassing thing you have ever done while trying to be helpful?",
+  "What is one thing you would immediately buy if a magical vending machine gave you unlimited money?",
+  "What is the weirdest thing you would do if your pet could speak for one hour?",
+  "What is the funniest fake name you could use for yourself for a day?",
+  "What is the most chaotic thing you could put on a birthday invitation?",
+  "What is one harmless secret you have kept purely because it makes the story funnier?",
+  "What is the funniest thing you have ever blamed on the internet?",
+  "What is the most ridiculous thing you would do for a free pizza?",
+  "What is something you would absolutely fail at if there were an audience watching?",
+  "What is the weirdest thing you would ask a genie for?",
+  "What is your most unnecessary daily ritual?",
+  "What is the funniest reason you could give for owning 100 raccoons?",
+  "What is one thing you would make the birthday person do if you were running the party?",
+  "What is the most absurd rumor someone could start about you that people might actually believe?",
+  "What is the funniest thing you could put on a fake résumé?",
+  "What is the most ridiculous thing you would do if you woke up with a crown on your head?",
+  "What is one harmless thing you have done that still makes you cringe when you remember it?",
+  "What is the weirdest challenge you think you could actually win?",
+  "What is the funniest message you could accidentally send to the wrong group chat?",
+  "If a raccoon became your lawyer, what would your first case be?",
+  "What is the most ridiculous thing you would do if your house suddenly became haunted?",
+  "What is the weirdest thing you would teach an alien about humans?",
+  "What is the funniest rule you would put in a haunted hotel?"
+];
+const BIRTHDAY_DARE_PROMPTS = [
+  "Message a random friend in this server: **\"I have a foot-odor emergency and need advice immediately.\"**",
+  "Send a voice message impersonating a raccoon who has just discovered birthday cake.",
+  "Send a voice message impersonating someone in this group — keep it obviously playful and do not be mean.",
+  "Send a voice message as a dramatic news reporter announcing that the birthday cake has escaped.",
+  "Type a completely serious apology to a chair for sitting on it without permission.",
+  "Send three raccoon emojis and nothing else to the last person you messaged.",
+  "Change your Discord status for five minutes to **CEO OF RACCOON AFFAIRS**.",
+  "Send a voice message pretending you are a GPS that is extremely offended by every wrong turn.",
+  "Write a one-sentence love letter to pizza — keep it about food and make it absurdly dramatic.",
+  "Send a voice message as a royal announcer declaring the birthday person the Supreme Cake Commander.",
+  "Message a friend: **\"Important question: would a raccoon beat me in a debate?\"** and show the group their reply.",
+  "Do a 20-second dramatic reading of the last harmless message you sent.",
+  "Send a voice message pretending to be a microwave that has had enough of everyone's nonsense.",
+  "Type a five-word motivational speech for a very tired raccoon.",
+  "Send a voice message making three completely different fake animal sounds.",
+  "Rename yourself temporarily in the chat to a ridiculous title like **Count Snackula**.",
+  "Send the group a fake breaking-news headline about yourself.",
+  "Write a formal complaint against a spoon and read it dramatically in voice.",
+  "Send a voice message pretending you are accepting an award for **Most Questionable Decisions**.",
+  "Message a friend: **\"Be honest. Do I look like someone a raccoon would trust?\"**",
+  "Send five random emojis and let the group invent your new backstory.",
+  "Do your best impression of a cartoon villain explaining why they stole the cake.",
+  "Send a voice message as a confused tour guide giving a tour of an imaginary haunted birthday house.",
+  "Type a completely serious recipe for making invisible cake.",
+  "Send a voice message pretending your Wi-Fi is your mortal enemy.",
+  "Message a friend asking which animal would make the worst roommate and show the answer.",
+  "Give yourself a ridiculous royal title and announce it in chat.",
+  "Send a voice message pretending you are a raccoon trying to order a 12-tier birthday cake.",
+  "Write a three-line poem about a missing cupcake.",
+  "Send a voice message like a sports commentator narrating someone opening a snack.",
+  "Message a friend: **\"I need an emergency opinion: is cereal a soup?\"**",
+  "Pretend your phone is a witness in court and cross-examine it for 20 seconds.",
+  "Send a voice message as a detective interrogating a suspicious cupcake.",
+  "Write a fake warning label for yourself.",
+  "Send a voice message pretending to be a customer service agent for raccoons.",
+  "Type the most dramatic possible announcement that you are going to get water.",
+  "Message a friend with exactly: **\"The council has reviewed your snack choices.\"** and nothing else.",
+  "Send a voice message as a weather reporter predicting a 100% chance of confetti.",
+  "Write a fake headline about the birthday person taking over the world.",
+  "Do a voice impression of a robot trying to understand birthday cake.",
+  "Send the group a completely invented fun fact and then reveal that you made it up.",
+  "Message a friend asking them to rate your imaginary raccoon-management skills from 1–10.",
+  "Send a voice message pretending you are trapped inside a vending machine.",
+  "Write a formal resignation letter from your current role as a normal human.",
+  "Send a voice message as a pirate who has stolen a birthday cupcake.",
+  "Describe your current surroundings like a dramatic nature documentary narrator.",
+  "Message a friend: **\"Quick. Pick a number from 1–10. It determines the fate of a raccoon.\"**",
+  "Send a voice message pretending to be a very offended goose.",
+  "Write a five-star review of an object near you.",
+  "Send a voice message giving a motivational speech to a potato.",
+  "Message a friend asking whether they would trust you to babysit a raccoon.",
+  "Pretend to host a cooking show where the only ingredient is imagination.",
+  "Send a voice message announcing the opening ceremony of the International Raccoon Olympics.",
+  "Write a fake police report about a stolen cupcake.",
+  "Message a friend: **\"I have been selected for raccoon jury duty.\"**",
+  "Send a voice message as a medieval knight discovering Wi-Fi for the first time.",
+  "Give a 15-second speech defending an obviously useless household object.",
+  "Write a fake product advertisement for a spoon that does absolutely nothing.",
+  "Send a voice message pretending to be a very confused birthday clown.",
+  "Message a friend asking them to name a raccoon after you.",
+  "Send a voice message explaining how to survive a surprise attack from an angry birthday balloon.",
+  "Write a fake motivational quote that sounds profound but means nothing.",
+  "Pretend to be a news anchor reporting live from inside a birthday cake.",
+  "Message a friend: **\"Would you rather fight one giant cupcake or 100 tiny cupcakes?\"**",
+  "Send a voice message pretending your refrigerator just betrayed you.",
+  "Give the birthday person a ridiculous new job title.",
+  "Write a fake museum plaque for the nearest object to you.",
+  "Send a voice message as an alien trying to understand why humans celebrate birthdays.",
+  "Message a friend asking what your raccoon name should be.",
+  "Send a voice message pretending to be a teacher explaining the science of cake crumbs.",
+  "Write a fake emergency alert for an incoming snack shortage.",
+  "Send a voice message doing your best impression of a squeaky shopping cart.",
+  "Message a friend: **\"Important: I need to know your official opinion on pickles.\"**",
+  "Give a dramatic acceptance speech for winning a completely imaginary award.",
+  "Send a voice message pretending you are a tiny dragon demanding a larger birthday cake.",
+  "Write a fake five-star review of the floor.",
+  "Message a friend asking which animal would make the funniest mayor.",
+  "Send a voice message as a dramatic courtroom lawyer defending a missing cupcake.",
+  "Pretend the nearest object is famous and interview it for 20 seconds.",
+  "Write a fake recipe for a cake that nobody should ever actually make.",
+  "Send a voice message as a raccoon giving financial advice to other raccoons.",
+  "Message a friend: **\"I have an urgent raccoon-related question.\"**",
+  "Send a voice message pretending to be a celebrity chef whose only ingredient is cheese.",
+  "Write a fake horoscope for the birthday person.",
+  "Pretend you are a museum tour guide explaining the historical importance of a random object near you.",
+  "Send a voice message as a dramatic ghost asking why nobody invited you to the birthday party.",
+  "Message a friend asking them to invent your superhero name.",
+  "Write a fake instruction manual for using a banana.",
+  "Send a voice message pretending your shoes have opinions about your life choices.",
+  "Give a 20-second campaign speech for why raccoons deserve more respect.",
+  "Message a friend: **\"Rate this emergency: 1 = mild, 10 = raccoon stole my cake.\"**",
+  "Send a voice message as a sports announcer narrating yourself walking across the room.",
+  "Write a fake legal contract between you and a cupcake.",
+  "Pretend to be an overly dramatic waiter describing a glass of water.",
+  "Send a voice message as a raccoon trying to convince the group it is innocent.",
+  "Message a friend asking what snack best represents your personality.",
+  "Write a fake breaking-news story about someone losing a sock.",
+  "Send a voice message pretending to be a haunted toaster.",
+  "Give the group a completely serious tutorial on how to look suspicious while doing nothing.",
+  "Message a friend: **\"Choose wisely: cake, fries, or raccoon.\"**",
+  "Send a voice message pretending to be a detective solving the mystery of the missing birthday candle.",
+  "Write a fake award citation for the person to your left in the member list.",
+  "Pretend the birthday person is royalty and announce three ridiculous laws they just passed.",
+  "Send a voice message as a very dramatic GPS giving directions to the nearest snack.",
+  "Message a friend asking them to name a fictional country you should rule.",
+  "Write a fake social-media apology for stealing an imaginary raccoon's lunch.",
+  "Send a voice message pretending you are an elevator that refuses to go to the requested floor.",
+  "Describe your next five minutes like a movie trailer.",
+  "Message a friend: **\"Do you think I could survive being raised by raccoons?\"**",
+  "Send a voice message giving a pep talk to an imaginary birthday candle.",
+  "Write a fake classified ad for a haunted chair.",
+  "Pretend to be a celebrity being interviewed about the great cupcake scandal.",
+  "Send a voice message as a pirate who just discovered a vending machine.",
+  "Message a friend asking what your villain name should be if your villain power was stealing snacks.",
+  "Write a fake news headline about the birthday party going completely out of control.",
+  "Send a voice message pretending to be a raccoon running for mayor.",
+  "Give a dramatic weather forecast for the room you are currently in.",
+  "Message a friend asking which fruit would make the worst pet.",
+  "Send a voice message as a very polite monster asking for directions to the birthday party.",
+  "Write a fake restaurant menu where every item is made of cake.",
+  "Pretend your nearest object is your manager and ask it for a raise.",
+  "Send a voice message as a game-show host announcing that someone has won one imaginary raccoon.",
+  "Message a friend: **\"Emergency vote: who would survive longest in a haunted bakery?\"**",
+  "Write a fake autobiography title for yourself.",
+  "Send a voice message impersonating the birthday person's imaginary raccoon sidekick.",
+  "Give a dramatic speech about why naps are a human right.",
+  "Message a friend asking them to invent a ridiculous holiday named after you.",
+  "Send a voice message pretending your spoon is giving you terrible life advice.",
+  "Write a fake public service announcement about dangerous levels of birthday frosting.",
+  "Pretend you are a detective investigating who ate the last snack.",
+  "Message a friend: **\"I need your professional opinion on a very suspicious cupcake.\"**",
+  "Send a voice message as a royal raccoon announcing a new kingdom.",
+  "Write a fake prophecy about what will happen at the next birthday party.",
+  "Give a 20-second speech convincing everyone that a random object is secretly magical.",
+  "Message a friend asking which cartoon character would make the worst roommate.",
+  "Send a voice message pretending to be a dramatic auctioneer selling an imaginary potato.",
+  "Write a fake job posting for a professional birthday-cake detective.",
+  "Pretend you are a customer leaving a one-star review for an imaginary haunted hotel.",
+  "Send a voice message as a raccoon explaining why the missing cake was absolutely not its fault.",
+  "Message a friend asking them to choose your official superhero catchphrase.",
+  "Write a fake courtroom verdict against a fictional cupcake.",
+  "Send a voice message pretending to be a very confused robot ordering a birthday cake.",
+  "Give the group a dramatic 15-second speech about the importance of snacks.",
+  "Message a friend: **\"Quick: would you trust a raccoon with your house keys?\"**",
+  "Send a voice message pretending to be a haunted birthday candle telling its life story.",
+  "Write a fake encyclopedia entry about yourself.",
+  "Pretend to interview the birthday cake about the events of tonight.",
+  "Send a voice message as a raccoon trying to explain a suspicious bank transaction.",
+  "Message a friend asking them to name your imaginary island.",
+  "Write a fake apology from the moon for being late to the birthday party.",
+  "Send a voice message pretending to be an extremely dramatic librarian.",
+  "Give a ridiculous acceptance speech for being named the group's Official Snack Inspector.",
+  "Message a friend asking which animal would be the funniest personal assistant.",
+  "Send a voice message as a medieval bard singing about a missing cupcake.",
+  "Write a fake rulebook for the birthday person's imaginary kingdom.",
+  "Pretend you are a raccoon explaining the human world to another raccoon.",
+  "Message a friend: **\"Choose a number 1–10. I will now assign it a completely meaningless consequence.\"**",
+  "Send a voice message pretending to be a weather reporter covering a confetti storm.",
+  "Write a fake product description for invisible socks.",
+  "Give a dramatic monologue about losing a single sock.",
+  "Message a friend asking them what your official raccoon job should be.",
+  "Send a voice message pretending to be a customer-support agent for haunted appliances.",
+  "Write a fake headline about yourself becoming mayor of Cake City.",
+  "Pretend to give a motivational speech to a banana.",
+  "Send a voice message as a raccoon who just got promoted.",
+  "Message a friend asking them to rate your imaginary detective skills.",
+  "Write a fake warning label for the birthday cake.",
+  "Send a voice message pretending to be a dramatic sports commentator during a pillow fight.",
+  "Give a completely serious interview about your imaginary career as a professional cake inspector.",
+  "Message a friend: **\"Would you let a raccoon plan your birthday?\"**",
+  "Send a voice message as a ghost complaining about the party music.",
+  "Write a fake recipe for a cake designed specifically for raccoons.",
+  "Pretend the nearest object is your co-host and conduct a two-person interview.",
+  "Send a voice message impersonating a cartoon-style villain whose only crime is stealing snacks.",
+  "Message a friend asking them to invent a ridiculous law for your imaginary kingdom.",
+  "Write a fake press release announcing your retirement from being normal.",
+  "Send a voice message pretending to be a raccoon giving a birthday toast.",
+  "Describe a completely ordinary object like it is the most dangerous artifact on Earth.",
+  "Message a friend: **\"I have been chosen by the cake.\"** and refuse to explain for one message.",
+  "Send a voice message as an alien trying to order pizza.",
+  "Write a fake award for the birthday person called **Most Likely to Cause a Raccoon Incident**.",
+  "Pretend to be a dramatic detective revealing that the missing cupcake was under the table the whole time.",
+  "Send a voice message giving a royal announcement that snacks are now mandatory.",
+  "Message a friend asking what your imaginary circus act should be.",
+  "Write a fake newspaper article about the raccoons taking over the birthday party."
+];
+
+function birthdayTruthDrinkButtons(g) {
+  const active = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
+  if (g?.status === "lobby") return [row(button("🎉 Join", "birthday:truthdrink:join", 1), button("🚪 Leave", "birthday:truthdrink:leave", 2), button("▶️ Start", "birthday:truthdrink:start", 3))];
+  if (g?.status === "choosing") return [row(button("💬 Truth", "birthday:truthdrink:truth", 1), button("🎭 Dare", "birthday:truthdrink:dare", 4), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
+  if (g?.status === "truth") return [row(button("✍️ Answer Truth", "birthday:truthdrink:answer", 1), button("🥤 Drink / Skip", "birthday:truthdrink:drink", 2), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
+  if (g?.status === "dare") return [row(button("✅ I Did It!", "birthday:truthdrink:done", 3), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
+  if (g?.status === "confirming") {
+    const confirmed = active.filter(p => String(p.id) !== String(g.currentId) && g.confirmations?.[p.id]).length;
+    return [row(button(`✅ Confirm (${confirmed}/${Math.max(0, active.length - 1)})`, "birthday:truthdrink:confirm", 3), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
+  }
+  return [];
+}
+
+function birthdayTruthDrinkPick(list, used) {
+  const usedSet = new Set(Array.isArray(used) ? used : []);
+  const available = list.map((_, i) => i).filter(i => !usedSet.has(i));
+  const index = available.length ? available[randomInt(0, available.length - 1)] : randomInt(0, list.length - 1);
+  return { index, text: list[index] };
+}
+
+function birthdayTruthDrinkText(g) {
+  const players = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
+  const names = players.map(p => `<@${p.id}>`).join(", ");
+  if (g?.status === "lobby") return `🍷🎂 **BIRTHDAY TRUTH OR DRINK** 🎂🍷\n\n👥 **Players:** ${players.length}/10\n${names || "Nobody has joined yet!"}\n\nJoin the chaos, then the host can start.\n\n⚠️ **Drink = a fictional/non-alcoholic skip choice.** No real drinking is required.`;
+  if (g?.status === "finished") return `🍷🎂 **TRUTH OR DRINK — GAME OVER!** 🎂🍷\n\nThat was enough chaos for one birthday. 😂`;
+  const current = g.currentName || "the current player";
+  const round = Number(g.turn || 1);
+  const max = Number(g.maxTurns || 10);
+  if (g?.status === "choosing") return `🍷🎂 **TRUTH OR DRINK — TURN ${round}/${max}** 🎂🍷\n\n🎯 **${current}**, you are up!\n\nPick your fate: **Truth** or **Dare**.\n\n👥 Players: ${players.map(p => p.name).join(", ")}`;
+  if (g?.status === "truth") return `💬🍷 **TRUTH — ${current}**\n\n❓ **${g.prompt}**\n\n${current}, answer honestly with the button below, or use the fictional drink/skip choice.\n\nAfter you answer or skip, **every other active player must confirm** before the next turn.`;
+  if (g?.status === "dare") return `🎭🍷 **DARE — ${current}**\n\n🔥 **${g.prompt}**\n\nDo it, then press **I Did It!**.\n\nAfterward, **every other active player must confirm** before the next turn.`;
+  if (g?.status === "confirming") {
+    const others = players.filter(p => String(p.id) !== String(g.currentId));
+    const count = others.filter(p => g.confirmations?.[p.id]).length;
+    return `👀 **CONFIRM ${current}’S TURN**\n\n${g.actionLabel || "The turn is complete!"}\n\nEveryone except **${current}** must confirm that they saw the answer/dare completed.\n\n✅ **${count}/${others.length} confirmed**\n\nNobody advances until every other active player confirms. If someone quits, they are removed from the required confirmations.`;
+  }
+  return `🍷🎂 **TRUTH OR DRINK** 🎂🍷`;
+}
+
+async function editBirthdayTruthDrinkMessage(env, g) {
+  if (!g?.channelId || !g?.messageId) return;
+  await discordRequest(env, `/channels/${g.channelId}/messages/${g.messageId}`, {method:"PATCH",body:JSON.stringify({content:birthdayTruthDrinkText(g),components:birthdayTruthDrinkButtons(g)})});
+}
+async function birthdayTruthDrinkReply(env,interaction,content,components=[]) { return interaction.__deferred ? sendEphemeralFollowup(env,interaction,content,components) : sendText(env,interaction,content,components); }
+
+async function startBirthdayTruthDrink(env,interaction) {
+  const guildId=interaction.guild_id;
+  if(!guildId)return birthdayTruthDrinkReply(env,interaction,"❌ Birthday Truth or Drink can only be used inside a server.");
+  const {state,people}=await ensureBirthdayEvent(env,guildId);
+  if(!people.length)return birthdayTruthDrinkReply(env,interaction,birthdayMainText(state,people),birthdayMenuComponents(false));
+  state.birthday.games=state.birthday.games||{};
+  const existing=state.birthday.games.truthDrink;
+  if(existing?.status&&existing.status!=="finished")return birthdayTruthDrinkReply(env,interaction,`🍷 **Birthday Truth or Drink is already running!**\n\n👥 **${(existing.players||[]).filter(p=>p.active!==false).length}** players are in the game.`,[]);
+  const user=getUserFromInteraction(interaction); if(!user)return birthdayTruthDrinkReply(env,interaction,"❌ I couldn't identify your Discord account.");
+  const name=String(user.global_name||user.username||"Player").slice(0,32);
+  const g={active:true,status:"lobby",hostId:String(user.id),players:[{id:String(user.id),name,active:true}],turn:1,maxTurns:10,currentId:"",currentName:"",currentKind:"",prompt:"",actionLabel:"",confirmations:{},usedTruths:[],usedDares:[],channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
+  state.birthday.games.truthDrink=g; await saveGuildState(env,guildId,state);
+  const msg=await sendChannelMessage(env,g.channelId,birthdayTruthDrinkText(g),birthdayTruthDrinkButtons(g));
+  if(msg?.id){g.messageId=msg.id;await saveGuildState(env,guildId,state);}
+  return birthdayTruthDrinkReply(env,interaction,"🍷🎂 **Birthday Truth or Drink lobby created!** Join below!",[]);
+}
+async function birthdayTruthDrinkJoin(env,interaction){
+  const guildId=interaction.guild_id,user=getUserFromInteraction(interaction);const state=await getGuildState(env,guildId);const g=state.birthday?.games?.truthDrink;
+  if(!g?.active||g.status!=="lobby")return birthdayTruthDrinkReply(env,interaction,"🍷 The Truth or Drink lobby is not open."); if(!user)return birthdayTruthDrinkReply(env,interaction,"❌ I couldn't identify you.");
+  if((g.players||[]).some(p=>String(p.id)===String(user.id)&&p.active!==false))return birthdayTruthDrinkReply(env,interaction,"😂 You are already in the lobby!");
+  const active=(g.players||[]).filter(p=>p.active!==false);if(active.length>=10)return birthdayTruthDrinkReply(env,interaction,"🍷 The lobby is full at 10 players!");
+  g.players.push({id:String(user.id),name:String(user.global_name||user.username||"Player").slice(0,32),active:true});await saveGuildState(env,guildId,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🎉 **You joined Truth or Drink!**");
+}
+async function birthdayTruthDrinkLeave(env,interaction){
+  const guildId=interaction.guild_id,user=getUserFromInteraction(interaction);const state=await getGuildState(env,guildId);const g=state.birthday?.games?.truthDrink;
+  if(!g?.active||g.status!=="lobby")return birthdayTruthDrinkReply(env,interaction,"🍷 The lobby is not open.");if(!user)return birthdayTruthDrinkReply(env,interaction,"❌ I couldn't identify you.");
+  const before=(g.players||[]).length;g.players=(g.players||[]).filter(p=>String(p.id)!==String(user.id));if(g.hostId===String(user.id)&&g.players.length)g.hostId=String(g.players[0].id);if(g.players.length===0){g.status="finished";g.active=false;}
+  await saveGuildState(env,guildId,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,before===g.players.length?"😂 You were not in the lobby.":"🚪 You left the Truth or Drink lobby.");
+}
+async function birthdayTruthDrinkStart(env,interaction){
+  const guildId=interaction.guild_id,user=getUserFromInteraction(interaction);const state=await getGuildState(env,guildId);const g=state.birthday?.games?.truthDrink;
+  if(!g?.active||g.status!=="lobby")return birthdayTruthDrinkReply(env,interaction,"🍷 The lobby is not waiting to start.");if(!user||String(user.id)!==String(g.hostId))return birthdayTruthDrinkReply(env,interaction,"👑 Only the Truth or Drink host can start the game.");
+  g.players=(g.players||[]).filter(p=>p.active!==false);if(g.players.length<2)return birthdayTruthDrinkReply(env,interaction,"😂 We need at least **2 players** before the chaos can begin!");
+  const first=g.players[randomInt(0,g.players.length-1)];g.status="choosing";g.currentId=String(first.id);g.currentName=first.name;g.turn=1;g.confirmations={};await saveGuildState(env,guildId,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,`🍷 **Truth or Drink has started!**\n\n🎯 First up: **${g.currentName}**`);
+}
+function birthdayTruthDrinkIsActivePlayer(g,userId){return !!userId&&(g.players||[]).some(p=>p.active!==false&&String(p.id)===String(userId));}
+async function birthdayTruthDrinkChoose(env,interaction,kind){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="choosing")return birthdayTruthDrinkReply(env,interaction,"🍷 This turn is not waiting for a Truth or Dare choice.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");
+  const pick=kind==="truth"?birthdayTruthDrinkPick(BIRTHDAY_TRUTH_PROMPTS,g.usedTruths):birthdayTruthDrinkPick(BIRTHDAY_DARE_PROMPTS,g.usedDares);if(kind==="truth")g.usedTruths=[...(g.usedTruths||[]),pick.index];else g.usedDares=[...(g.usedDares||[]),pick.index];g.currentKind=kind;g.prompt=pick.text;g.status=kind;g.actionLabel=kind==="truth"?"The truth was answered or the fictional drink/skip was chosen.":"The dare was marked complete.";await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,kind==="truth"?"💬 Your truth is waiting above. Answer it or use the fictional drink/skip button.":"🎭 Your dare is waiting above. Complete it, then press **I Did It!**");
+}
+async function showBirthdayTruthDrinkModal(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"💬 This Truth turn is no longer waiting for an answer.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");
+  return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:9,data:{custom_id:"birthday:truthdrinkmodal",title:"💬 Answer Your Truth",components:[{type:1,components:[{type:4,custom_id:"truth_answer",label:"Your honest answer",style:2,placeholder:"Type your answer...",required:true,max_length:1000}]}]}})});
+}
+async function birthdayTruthDrinkAnswer(env,interaction,answer){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"💬 This Truth turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");
+  const clean=String(answer||"").trim();if(!clean)return birthdayTruthDrinkReply(env,interaction,"❌ You need to answer the truth.");g.status="confirming";g.actionLabel=`💬 **${g.currentName}** answered: “${clean.slice(0,900)}”`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"💬 **Answer recorded!** Now everyone else must confirm the turn.");
+}
+async function birthdayTruthDrinkDrink(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"🥤 This Truth turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");g.status="confirming";g.actionLabel=`🥤 **${g.currentName}** chose the fictional drink/skip option.`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🥤 **Drink/skip recorded!** Now everyone else must confirm the turn.");
+}
+async function birthdayTruthDrinkDone(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="dare")return birthdayTruthDrinkReply(env,interaction,"🎭 This Dare turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");g.status="confirming";g.actionLabel=`🎭 **${g.currentName}** says the dare is complete.`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🎭 **Dare marked complete!** Now everyone else must confirm the turn.");
+}
+async function birthdayTruthDrinkAdvance(env,interaction,state,g){
+  const active=(g.players||[]).filter(p=>p.active!==false);if(active.length<2){g.status="finished";g.active=false;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🍷 The game ended because fewer than 2 players remain.");}
+  if(Number(g.turn||1)>=Number(g.maxTurns||10)){g.status="finished";g.active=false;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🎂🍷 **Truth or Drink is over!** Everyone survived. Somehow.");}
+  const idx=active.findIndex(p=>String(p.id)===String(g.currentId));const next=active[(idx+1)%active.length]||active[0];g.turn=Number(g.turn||1)+1;g.currentId=String(next.id);g.currentName=next.name;g.currentKind="";g.prompt="";g.actionLabel="";g.confirmations={};g.status="choosing";await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,`🎉 **Next turn!**\n\n🎯 **${g.currentName}** is up!`);
+}
+async function birthdayTruthDrinkConfirm(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="confirming")return birthdayTruthDrinkReply(env,interaction,"🍷 This turn is not waiting for confirmations.");if(!user||!birthdayTruthDrinkIsActivePlayer(g,user.id))return birthdayTruthDrinkReply(env,interaction,"❌ You are not an active player in this game.");if(String(user.id)===String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"😂 You cannot confirm your own turn. Everyone else has to do it!");
+  g.confirmations=g.confirmations||{};if(g.confirmations[user.id])return birthdayTruthDrinkReply(env,interaction,"✅ You already confirmed this turn!");g.confirmations[user.id]=true;await saveGuildState(env,interaction.guild_id,state);const active=(g.players||[]).filter(p=>p.active!==false);const others=active.filter(p=>String(p.id)!==String(g.currentId));const count=others.filter(p=>g.confirmations[p.id]).length;if(count>=others.length)return birthdayTruthDrinkAdvance(env,interaction,state,g);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,`✅ **Confirmed!** ${count}/${others.length} other players have confirmed.`);
+}
+async function birthdayTruthDrinkQuit(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active)return birthdayTruthDrinkReply(env,interaction,"🍷 There is no active Truth or Drink game.");if(!user||!birthdayTruthDrinkIsActivePlayer(g,user.id))return birthdayTruthDrinkReply(env,interaction,"❌ You are not an active player in this game.");
+  const wasCurrent=String(user.id)===String(g.currentId);g.players=(g.players||[]).map(p=>String(p.id)===String(user.id)?{...p,active:false}:p);delete g.confirmations?.[user.id];const active=(g.players||[]).filter(p=>p.active!==false);if(active.length<2){g.status="finished";g.active=false;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🚪 You left. There are not enough players left, so the game ended.");}
+  if(wasCurrent){g.confirmations={};const next=active[0];g.currentId=String(next.id);g.currentName=next.name;g.currentKind="";g.prompt="";g.actionLabel="";g.status="choosing";}
+  else if(g.status==="confirming"){const others=active.filter(p=>String(p.id)!==String(g.currentId));const confirmed=others.filter(p=>g.confirmations?.[p.id]).length;if(confirmed>=others.length)return birthdayTruthDrinkAdvance(env,interaction,state,g);}
+  await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🚪 **You left Truth or Drink.**");
+}
 function birthdayTodayKey(date = new Date()) { return easternDateKey(date); }
 function birthdayEventActive(state, date = new Date()) { return Boolean(state?.birthday?.active && state.birthday.activeDate === birthdayTodayKey(date)); }
 function birthdayMentionList(ids) { return ids.map(id => `<@${id}>`).join(", "); }
@@ -11615,7 +12033,7 @@ function birthdayMenuComponents(active) {
     row(button("🎃 Roulette", "birthday:roulette", 1), button("🧁 Cupcake Tower", "birthday:cupcake", 1), button("📖 Birthday Curse", "birthday:curse", 1)),
     row(button("🦇 Cake Bakery", "birthday:bakery", 1), button("⚔️ Boss Battle", "birthday:boss", 1), button("🕯️ Wish Ritual", "birthday:wish", 1)),
     row(button("💥 Boo Cannon", "birthday:cannon", 1), button("🦝 Trickster", "birthday:trickster", 1), button("🎁 Gifts", "birthday:gifts", 1), button("✨ Collection", "birthday:collection", 1), button("🎭 Talent Show", "birthday:talent", 1)),
-    row(button("🧠 Memory Thief", "birthday:memory", 1))
+    row(button("🧠 Memory Thief", "birthday:memory", 1), button("🍷 Truth or Drink", "birthday:truthdrink", 1))
   ];
 }
 
@@ -11683,6 +12101,7 @@ async function handleBirthdayGamesCommand(env, interaction) {
     return startBirthdayTalent(env, interaction);
   }
   if (sub === "memory") return startBirthdayMemoryThief(env, interaction);
+  if (sub === "truthdrink") return startBirthdayTruthDrink(env, interaction);
   return sendText(env, interaction, "🎮 Choose a Birthday Game from the menu.");
 }
 
@@ -15345,6 +15764,20 @@ async function handleComponent(
     if(action==="memoryguess") return birthdayMemoryGuess(env,interaction,parts[2]);
     if(action==="memoryreveal") return birthdayMemoryReveal(env,interaction);
     if(action==="memorynext") return birthdayMemoryNext(env,interaction);
+    if(action==="truthdrink") {
+      const sub=parts[2];
+      if(sub==="join") return birthdayTruthDrinkJoin(env,interaction);
+      if(sub==="leave") return birthdayTruthDrinkLeave(env,interaction);
+      if(sub==="start") return birthdayTruthDrinkStart(env,interaction);
+      if(sub==="truth") return birthdayTruthDrinkChoose(env,interaction,"truth");
+      if(sub==="dare") return birthdayTruthDrinkChoose(env,interaction,"dare");
+      if(sub==="answer") return showBirthdayTruthDrinkModal(env,interaction);
+      if(sub==="drink") return birthdayTruthDrinkDrink(env,interaction);
+      if(sub==="done") return birthdayTruthDrinkDone(env,interaction);
+      if(sub==="confirm") return birthdayTruthDrinkConfirm(env,interaction);
+      if(sub==="quit") return birthdayTruthDrinkQuit(env,interaction);
+      return startBirthdayTruthDrink(env,interaction);
+    }
     return;
   }
 
@@ -31089,7 +31522,8 @@ const COMMANDS = [
         { type: 3, name: "text", description: "Your text performance", required: false, max_length: 1000 },
         { type: 11, name: "voice", description: "Attach a voice/audio performance", required: false }
       ] },
-      { type: 1, name: "memory", description: "Birthday Memory Thief — guess the birthday person's secret answers" }
+      { type: 1, name: "memory", description: "Birthday Memory Thief — guess the birthday person's secret answers" },
+      { type: 1, name: "truthdrink", description: "Birthday Truth or Drink — truths, dares, and group confirmations" }
     ]
   },
   {
@@ -32648,6 +33082,14 @@ export default {
     if (interaction.type === 5 && customId === "birthday:talentmodal") {
       const performance = getModalTextInput(interaction, "performance");
       return birthdayTalentAddSubmission(env, interaction, performance, null);
+    }
+
+    if (interaction.type === 3 && customId === "birthday:truthdrink:answer") {
+      return showBirthdayTruthDrinkModal(env, interaction);
+    }
+    if (interaction.type === 5 && customId === "birthday:truthdrinkmodal") {
+      const answer = getModalTextInput(interaction, "truth_answer");
+      return birthdayTruthDrinkAnswer(env, interaction, answer);
     }
 
     // Sparkle Crime SOLO start: use a complete type-4 response as the
