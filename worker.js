@@ -9971,148 +9971,80 @@ All customization is locked for **${punishmentTimeText(Math.max(Number(p.raccoon
 
 async function showCustomBackgrounds(
   env,
-  interaction
+  interaction,
+  page = 0
 ) {
-  const user =
-    getUserFromInteraction(
-      interaction
-    );
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
 
-  const player =
-    await getPlayer(
-      env,
-      user.id
-    );
-
-  const buttons = [];
-
-  buttons.push(
-    button(
-      "💖 Pink Sky",
-      "equip_theme_cherry",
-      player.equipped.theme ===
-        "cherry"
-        ? 3
-        : 2
-    )
-  );
-
-  if (
-    player.inventory.includes(
-      "halloween_background"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🎃 Halloween",
-        "equip_theme_halloween",
-        player.equipped.theme ===
-          "halloween"
-          ? 3
-          : 2
-      )
-    );
-  }
-
-  if (
-    player.inventory.includes(
-      "candyland_background"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🍬 Candy Land",
-        "equip_theme_candyland",
-        player.equipped.theme ===
-          "candyland"
-          ? 3
-          : 2
-      )
-    );
-  }
-
-  if (
-    player.inventory.includes(
-      "stoned_birthday_background"
-    )
-  ) {
-    buttons.push(
-      button(
-        "🎂 Birthday",
-        "equip_theme_stoned_birthday",
-        player.equipped.theme ===
-          "stoned_birthday"
-          ? 3
-          : 2
-      )
-    );
-  }
-
-  const extraBackgrounds = [
-    ["magic_mushroom_background", "🍄 Magic Mushroom", "magic_mushroom"],
-    ["field_day_background", "🌾 Field Day", "field_day"],
-    ["red_forest_background", "🌲 Red Forest", "red_forest"],
-    ["cozy_cat_background", "🐱 Cozy Cat", "cozy_cat"],
-    ["green_glow_background", "💚 Green Glow", "green_glow"],
-    ["prism_flutter_background", "🌈🦋 Prism Flutter", "prism_flutter"],
-    ["lavender_twilight_background", "💜🌙 Lavender Twilight", "lavender_twilight"],
-    ["world_of_flags_background", "🌎🏳️ World of Flags", "world_of_flags"],
-    ["ocean_opal_background", "🩵🌊 Ocean Opal", "ocean_opal"],
-    ["fairy_hollow_background", "🧚 Fairy Hollow", "fairy_hollow"],
-    ["glam_background", "💎 Glam", "glam"],
-    ["black_cat_magic_background", "🐈‍⬛ Black Cat Magic", "black_cat_magic"],
-    ["dragon_realm_background", "🐉 Dragon Realm", "dragon_realm"],
-    ["inferno_king_background", "🔥 Inferno King", "inferno_king"],
-    ["thunder_god_background", "⚡ Thunder God", "thunder_god"],
-    ["black_ice_background", "🧊 Black Ice", "black_ice"],
-    ["werewives_background", "🐺🌙 Werewives", "werewives"],
-    ["golden_pickle_background", "🥒💛 Golden Pickle", "golden_pickle"],
-    ["midnight_rider_background", "🏍️🌙 Midnight Rider", "midnight_rider"]
+  const items = [
+    ["cherry", "💖 Pink Sky", null],
+    ["halloween", "🎃 Halloween", "halloween_background"],
+    ["candyland", "🍬 Candy Land", "candyland_background"],
+    ["stoned_birthday", "🎂 Birthday", "stoned_birthday_background"],
+    ["magic_mushroom", "🍄 Magic Mushroom", "magic_mushroom_background"],
+    ["field_day", "🌾 Field Day", "field_day_background"],
+    ["red_forest", "🌲 Red Forest", "red_forest_background"],
+    ["cozy_cat", "🐱 Cozy Cat", "cozy_cat_background"],
+    ["green_glow", "💚 Green Glow", "green_glow_background"],
+    ["prism_flutter", "🌈🦋 Prism Flutter", "prism_flutter_background"],
+    ["lavender_twilight", "💜🌙 Lavender Twilight", "lavender_twilight_background"],
+    ["world_of_flags", "🌎🏳️ World of Flags", "world_of_flags_background"],
+    ["ocean_opal", "🩵🌊 Ocean Opal", "ocean_opal_background"],
+    ["fairy_hollow", "🧚 Fairy Hollow", "fairy_hollow_background"],
+    ["glam", "💎 Glam", "glam_background"],
+    ["black_cat_magic", "🐈‍⬛ Black Cat Magic", "black_cat_magic_background"],
+    ["dragon_realm", "🐉 Dragon Realm", "dragon_realm_background"],
+    ["inferno_king", "🔥 Inferno King", "inferno_king_background"],
+    ["thunder_god", "⚡ Thunder God", "thunder_god_background"],
+    ["black_ice", "🧊 Black Ice", "black_ice_background"],
+    ["werewives", "🐺🌙 Werewives", "werewives_background"],
+    ["golden_pickle", "🥒💛 Golden Pickle", "golden_pickle_background"],
+    ["midnight_rider", "🏍️🌙 Midnight Rider", "midnight_rider_background"]
   ];
 
-  for (const [itemId, label, value] of extraBackgrounds) {
-    if (player.inventory.includes(itemId)) {
-      buttons.push(
-        button(
-          label,
-          `equip_theme_${value}`,
-          player.equipped.theme === value ? 3 : 2
-        )
-      );
-    }
-  }
+  const ownedItems = items.filter(([value, label, inventoryId]) =>
+    !inventoryId || player.inventory.includes(inventoryId)
+  );
+
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(ownedItems.length / pageSize));
+  page = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+
+  const pageItems = ownedItems.slice(
+    page * pageSize,
+    page * pageSize + pageSize
+  );
+
+  const buttons = pageItems.map(([value, label]) =>
+    button(
+      label,
+      `equip_theme_${value}`,
+      player.equipped.theme === value ? 3 : 2
+    )
+  );
 
   const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(row(...buttons.slice(i, i + 5)));
+  }
 
-  for (
-    let i = 0;
-    i < buttons.length;
-    i += 5
-  ) {
+  if (pageCount > 1) {
     rows.push(
       row(
-        ...buttons.slice(
-          i,
-          i + 5
-        )
+        button("⬅️ Previous", `custom_backgrounds_page_${page - 1}`, 2, page === 0),
+        button(`Page ${page + 1}/${pageCount}`, "custom_backgrounds_page_current", 2, true),
+        button("Next ➡️", `custom_backgrounds_page_${page + 1}`, 2, page === pageCount - 1)
       )
     );
   }
 
-  rows.push(
-    row(
-      button(
-        "⬅️ Back",
-        "customize",
-        2
-      )
-    )
-  );
+  rows.push(row(button("⬅️ Back", "customize", 2)));
 
   await sendText(
     env,
     interaction,
-    "🌌 **Background Customization**",
+    `🌌 **Background Customization**\n\nChoose your background. ${pageCount > 1 ? `Page **${page + 1}/${pageCount}**` : ""}`,
     rows
   );
 }
@@ -16661,12 +16593,21 @@ async function handleComponent(
     return;
   }
 
+  if (id.startsWith("custom_backgrounds_page_")) {
+    const pageText = id.replace("custom_backgrounds_page_", "");
+    if (pageText !== "current") {
+      await showCustomBackgrounds(env, interaction, Number(pageText));
+    }
+    return;
+  }
+
   if (
     id === "custom_backgrounds"
   ) {
     await showCustomBackgrounds(
       env,
-      interaction
+      interaction,
+      0
     );
 
     return;
@@ -27807,7 +27748,7 @@ async function handleDeleteItem(env,interaction,rawItem){
   await sendText(env,interaction,`⚠️ **Delete ${SHOP_ITEMS[itemId].name}?**\n\nThis removes it from your inventory. If you later want it again, you may need to earn or buy it again.\n\nAre you sure?`,[row(button("🗑️ Yes, Delete","delete:confirm",4),button("❌ Cancel","delete:cancel",2))]);
 }
 
-async function handleDeleteConfirm(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const itemId=player.pendingDeleteItem;delete player.pendingDeleteItem;if(!itemId||!player.inventory.includes(itemId))return sendText(env,interaction,"❌ That item is no longer in your inventory.");player.inventory=player.inventory.filter(id=>id!==itemId);const item=SHOP_ITEMS[itemId];if(item?.type==="tree"&&item.value===player.equipped?.tree)player.equipped.tree="cherry";if(item?.type==="background"&&item.value===player.equipped?.theme)player.equipped.theme="cherry";if(item?.type==="effect"&&item.value===player.equipped?.effect)player.equipped.effect=null;if(item?.type==="decoration"&&item.value===player.equipped?.decoration)player.equipped.decoration=null;await savePlayer(env,player);await sendText(env,interaction,`🗑️ Deleted **${item?.name||itemId}** from your inventory.`);}
+async function handleDeleteConfirm(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);const itemId=player.pendingDeleteItem;delete player.pendingDeleteItem;if(!itemId||!player.inventory.includes(itemId))return sendText(env,interaction,"❌ That item is no longer in your inventory.");player.inventory=player.inventory.filter(id=>id!==itemId);const item=SHOP_ITEMS[itemId];if(item?.type==="tree"&&item.value===player.equipped?.tree)player.equipped.tree="cherry";if(item?.type==="background"&&item.value===player.equipped?.theme)player.equipped.theme="cherry";if(item?.type==="effect"&&item.value===player.equipped?.effect)player.equipped.effect=null;if(item?.type==="decoration"&&item.value===player.equipped?.decoration)player.equipped.decoration=null;if(player.equipped?.theme&&player.equipped.theme!=="cherry"){const backgroundInventoryIds=["halloween_background","candyland_background","stoned_birthday_background","magic_mushroom_background","field_day_background","red_forest_background","cozy_cat_background","green_glow_background","prism_flutter_background","lavender_twilight_background","world_of_flags_background","ocean_opal_background","fairy_hollow_background","glam_background","black_cat_magic_background","dragon_realm_background","inferno_king_background","thunder_god_background","black_ice_background","werewives_background","golden_pickle_background","midnight_rider_background"];const stillOwned=backgroundInventoryIds.some(id=>player.inventory.includes(id)&&SHOP_ITEMS[id]?.value===player.equipped.theme);if(!stillOwned)player.equipped.theme="cherry";}await savePlayer(env,player);await sendText(env,interaction,`🗑️ Deleted **${item?.name||itemId}** from your inventory.`);}
 async function handleDeleteCancel(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return;const player=await getPlayer(env,user.id);delete player.pendingDeleteItem;await savePlayer(env,player);await sendText(env,interaction,"💗 Delete cancelled. Your item is safe.");}
 
 async function sendOwnerSuggestion(env,interaction,message){
