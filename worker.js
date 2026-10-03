@@ -11584,8 +11584,7 @@ const BIRTHDAY_TRUTH_PROMPTS = [
   "If a raccoon became your lawyer, what would your first case be?",
   "What is the most ridiculous thing you would do if your house suddenly became haunted?",
   "What is the weirdest thing you would teach an alien about humans?",
-  "What is the funniest rule you would put in a haunted hotel?"
-
+  "What is the funniest rule you would put in a haunted hotel?",
   "Who in this group would you trust the least with a secret, and why? 😂",
   "Who in this group would you absolutely NOT let choose the restaurant? 😂",
   "Who in this group would be the first person to get arrested in a completely harmless misunderstanding?",
