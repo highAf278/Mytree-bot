@@ -11584,7 +11584,8 @@ const BIRTHDAY_TRUTH_PROMPTS = [
   "If a raccoon became your lawyer, what would your first case be?",
   "What is the most ridiculous thing you would do if your house suddenly became haunted?",
   "What is the weirdest thing you would teach an alien about humans?",
-  "What is the funniest rule you would put in a haunted hotel?",
+  "What is the funniest rule you would put in a haunted hotel?"
+
   "Who in this group would you trust the least with a secret, and why? 😂",
   "Who in this group would you absolutely NOT let choose the restaurant? 😂",
   "Who in this group would be the first person to get arrested in a completely harmless misunderstanding?",
@@ -11819,7 +11820,7 @@ const BIRTHDAY_DARE_PROMPTS = [
   "Pretend to be a dramatic detective revealing that the missing cupcake was under the table the whole time.",
   "Send a voice message giving a royal announcement that snacks are now mandatory.",
   "Message a friend asking what your imaginary circus act should be.",
-  "Write a fake newspaper article about the raccoons taking over the birthday party."
+  "Write a fake newspaper article about the raccoons taking over the birthday party.",
 
   "Send a voice message pretending you are a raccoon leaving a very angry voicemail about a stolen snack.",
   "Message a friend: **"I need an unbiased ruling: am I legally allowed to name a raccoon after you?"**",
