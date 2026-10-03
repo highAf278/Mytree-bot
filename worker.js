@@ -11439,7 +11439,7 @@ async function startBirthdayTalent(env,interaction){
   const guildId=interaction.guild_id; if(!guildId)return birthdayTalentReply(env,interaction,"❌ Birthday Talent Show can only be used in a server.");
   const {state,people}=await ensureBirthdayEvent(env,guildId); if(!people.length)return birthdayTalentReply(env,interaction,birthdayMainText(state,people),birthdayMenuComponents(false));
   state.birthday.games=state.birthday.games||{}; const existing=state.birthday.games.talent;
-  if(existing?.status&&existing.status!=="results")return birthdayTalentReply(env,interaction,`🎭 **The Birthday Talent Show is already running!**\n\n${existing.category} **PROMPT:**\n> ${existing.prompt}\n\n👥 **${Object.keys(existing.submissions||{}).length}/10** performances submitted.`,[]);
+  if(existing?.active!==false&&existing?.status&&existing.status!=="results")return birthdayTalentReply(env,interaction,`🎭 **The Birthday Talent Show is already running!**\n\n${existing.category} **PROMPT:**\n> ${existing.prompt}\n\n👥 **${Object.keys(existing.submissions||{}).length}/10** performances submitted.`,[]);
   const pick=birthdayTalentPrompt();
   const g={active:true,status:"submitting",hostId:String(getUserFromInteraction(interaction)?.id||""),round:Number(existing?.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
   state.birthday.games.talent=g; await saveGuildState(env,guildId,state);
