@@ -11419,7 +11419,7 @@ function birthdayTalentSubmissionRows(g){
   return rows;
 }
 function birthdayTalentButtons(g){
-  if(g.status==="voting") return [...birthdayTalentSubmissionRows(g),row(button("🏆 Reveal Results","birthday:talentreveal",3))];
+  if(g.status==="voting") return [...birthdayTalentSubmissionRows(g),row(button("🏆 View Results","birthday:talentreveal",3),button("⏭️ Host Skip","birthday:talentskip",2))];
   if(g.status==="results") return [row(button("🎭 Next Talent Round","birthday:talentnext",3))];
   return [row(button("✍️ Submit Text","birthday:talenttext",1),button("🏁 Start Voting","birthday:talentstartvote",3))];
 }
@@ -11475,8 +11475,17 @@ async function birthdayTalentReveal(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.talent;if(!g?.active||g.status!=="voting")return birthdayTalentReply(env,interaction,"🏆 There is no Talent Show vote to reveal.");const entries=Object.values(g.submissions||{});if(!entries.length)return birthdayTalentReply(env,interaction,"❌ There are no performances to judge.");const reactions=["🦝💗 THE RACCOONS LOVED IT!","🦝🔥 THE RACCOONS ARE LOSING THEIR MINDS!","🦝😭 A RACCOON IS CRYING. NOBODY KNOWS WHY.","🦝👑 THE RACCOON KING HAS APPROVED!","🦝😂 THE RACCOONS ARE WHEEZING!","🦝😐 THE RACCOONS ARE CONFUSED BUT SUPPORTIVE.","🦝💀 THE RACCOONS HAVE STOPPED MOVING.","🦝🍰 THE RACCOONS THREW CAKE AT THE STAGE."];const rewards=[300,275,250,225,200,100,50,25];let best=null;for(const x of entries){const raccoon=randomInt(0,rewards.length-1);x.raccoonScore=raccoon;x.raccoonReward=rewards[raccoon];x.raccoonReaction=reactions[raccoon];const playerReward=Number(x.votes||0)*20;const total=Number(x.raccoonReward||0)+playerReward;x.totalReward=total;const p=await getPlayer(env,x.userId);p.birthdayCandies=Number(p.birthdayCandies||0)+total;await savePlayer(env,p,x.userId);if(!best||Number(x.votes||0)>Number(best.votes||0)||(Number(x.votes||0)===Number(best.votes||0)&&Number(x.raccoonReward)>Number(best.raccoonReward)))best=x;}
 g.status="results";await saveGuildState(env,interaction.guild_id,state);const ranking=[...entries].sort((a,b)=>Number(b.votes||0)-Number(a.votes||0)||Number(b.raccoonReward||0)-Number(a.raccoonReward||0));const lines=ranking.map((x,i)=>`**${i+1}. ${x.name}** — 🗳️ ${x.votes||0} player vote(s) • ${x.raccoonReaction} • 🍬 **+${x.totalReward} Candies**`);const winner=best?`\n\n🏆 **AUDIENCE FAVORITE:** ${best.name}`:"";await editBirthdayTalentMessage(env,g,`🎭🎂 **TALENT SHOW RESULTS!** 🎂🎭\n\n${g.category} **PROMPT:**\n> ${g.prompt}\n\n${lines.join("\n")}\n${winner}\n\n🦝 Raccoon rewards were based on how much the raccoons liked each performance!`,[row(button("🎭 Next Talent Round","birthday:talentnext",3))]);return birthdayTalentReply(env,interaction,"🏆 **The Talent Show results are in!** 🎂🦝");
 }
+async function birthdayTalentSkip(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.birthday?.games?.talent;
+  const user=getUserFromInteraction(interaction);
+  if(!g?.active||g.status!=="voting")return birthdayTalentReply(env,interaction,"⏭️ There is no Talent Show vote to skip.");
+  if(!user||String(user.id)!==String(g.hostId))return birthdayTalentReply(env,interaction,"👑 Only the Talent Show host can skip the vote.");
+  return birthdayTalentReveal(env,interaction);
+}
+
 async function birthdayTalentNext(env,interaction){
-  const state=await getGuildState(env,interaction.guild_id);const old=state.birthday?.games?.talent;if(!old?.active||old.status!=="results")return birthdayTalentReply(env,interaction,"🎭 Finish the current Talent Show round first.");const pick=birthdayTalentPrompt();const g={active:true,status:"submitting",round:Number(old.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:old.channelId,messageId:old.messageId,startedAt:Date.now()};state.birthday.games.talent=g;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**`);}
+  const state=await getGuildState(env,interaction.guild_id);const old=state.birthday?.games?.talent;if(!old?.active||old.status!=="results")return birthdayTalentReply(env,interaction,"🎭 Finish the current Talent Show round first.");const pick=birthdayTalentPrompt();const g={active:true,status:"submitting",hostId:String(old.hostId||""),round:Number(old.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:old.channelId,messageId:old.messageId,startedAt:Date.now()};state.birthday.games.talent=g;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**`);}
 
 /* =========================================================
    BIRTHDAY TRUTH OR DRINK
@@ -12001,7 +12010,7 @@ async function startBirthdayTruthDrink(env,interaction) {
   if(existing?.status&&existing.status!=="finished")return birthdayTruthDrinkReply(env,interaction,`🍷 **Birthday Truth or Drink is already running!**\n\n👥 **${(existing.players||[]).filter(p=>p.active!==false).length}** players are in the game.`,[]);
   const user=getUserFromInteraction(interaction); if(!user)return birthdayTruthDrinkReply(env,interaction,"❌ I couldn't identify your Discord account.");
   const name=String(user.global_name||user.username||"Player").slice(0,32);
-  const g={active:true,status:"lobby",hostId:String(user.id),players:[{id:String(user.id),name,active:true}],turn:1,maxTurns:10,currentId:"",currentName:"",currentKind:"",prompt:"",actionLabel:"",confirmations:{},usedTruths:[],usedDares:[],channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
+  const g={active:true,status:"lobby",hostId:String(user.id),players:[{id:String(user.id),name,active:true}],turn:1,currentId:"",currentName:"",currentKind:"",prompt:"",actionLabel:"",confirmations:{},usedTruths:[],usedDares:[],channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
   state.birthday.games.truthDrink=g; await saveGuildState(env,guildId,state);
   const msg=await sendChannelMessage(env,g.channelId,birthdayTruthDrinkText(g),birthdayTruthDrinkButtons(g));
   if(msg?.id){g.messageId=msg.id;await saveGuildState(env,guildId,state);}
@@ -12047,7 +12056,6 @@ async function birthdayTruthDrinkDone(env,interaction){
 }
 async function birthdayTruthDrinkAdvance(env,interaction,state,g){
   const active=(g.players||[]).filter(p=>p.active!==false);if(active.length<2){g.status="finished";g.active=false;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🍷 The game ended because fewer than 2 players remain.");}
-  if(Number(g.turn||1)>=Number(g.maxTurns||10)){g.status="finished";g.active=false;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🎂🍷 **Truth or Drink is over!** Everyone survived. Somehow.");}
   const idx=active.findIndex(p=>String(p.id)===String(g.currentId));const next=active[(idx+1)%active.length]||active[0];g.turn=Number(g.turn||1)+1;g.currentId=String(next.id);g.currentName=next.name;g.currentKind="";g.prompt="";g.actionLabel="";g.confirmations={};g.status="choosing";await newBirthdayTruthDrinkTurnMessage(env,g);await saveGuildState(env,interaction.guild_id,state);return birthdayTruthDrinkReply(env,interaction,`🎉 **Next turn!**\n\n🎯 **${g.currentName}** is up!`);
 }
 async function birthdayTruthDrinkConfirm(env,interaction){
@@ -15928,6 +15936,7 @@ async function handleComponent(
     if(action==="talentstartvote") return birthdayTalentStartVoting(env,interaction);
     if(action==="talentvote") return birthdayTalentVote(env,interaction,parts[2]);
     if(action==="talentreveal") return birthdayTalentReveal(env,interaction);
+    if(action==="talentskip") return birthdayTalentSkip(env,interaction);
     if(action==="talentnext") return birthdayTalentNext(env,interaction);
     if(action==="memory") return startBirthdayMemoryThief(env,interaction);
     if(action==="memoryanswer") return birthdayMemoryAnswer(env,interaction);
