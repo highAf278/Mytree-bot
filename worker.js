@@ -11474,8 +11474,7 @@ async function birthdayTalentNext(env,interaction){
 
 /* =========================================================
    BIRTHDAY TRUTH OR DRINK
-   Large non-NSFW truth/dare bank. The drink button is a fictional
-   non-alcoholic skip choice; it never instructs anyone to consume alcohol.
+   Large non-NSFW truth/dare bank.
 ========================================================= */
 const BIRTHDAY_TRUTH_PROMPTS = [
   "What is the most ridiculous thing you have ever confidently said while being completely wrong?",
@@ -11779,7 +11778,7 @@ function birthdayTruthDrinkButtons(g) {
   const active = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
   if (g?.status === "lobby") return [row(button("🎉 Join", "birthday:truthdrink:join", 1), button("🚪 Leave", "birthday:truthdrink:leave", 2), button("▶️ Start", "birthday:truthdrink:start", 3))];
   if (g?.status === "choosing") return [row(button("💬 Truth", "birthday:truthdrink:truth", 1), button("🎭 Dare", "birthday:truthdrink:dare", 4), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
-  if (g?.status === "truth") return [row(button("✍️ Answer Truth", "birthday:truthdrink:answer", 1), button("🥤 Drink / Skip", "birthday:truthdrink:drink", 2), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
+  if (g?.status === "truth") return [row(button("✍️ Answer Truth", "birthday:truthdrink:answer", 1), button("🍷 Drink", "birthday:truthdrink:drink", 2), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
   if (g?.status === "dare") return [row(button("✅ I Did It!", "birthday:truthdrink:done", 3), button("🚪 Quit", "birthday:truthdrink:quit", 2))];
   if (g?.status === "confirming") {
     const confirmed = active.filter(p => String(p.id) !== String(g.currentId) && g.confirmations?.[p.id]).length;
@@ -11798,13 +11797,13 @@ function birthdayTruthDrinkPick(list, used) {
 function birthdayTruthDrinkText(g) {
   const players = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
   const names = players.map(p => `<@${p.id}>`).join(", ");
-  if (g?.status === "lobby") return `🍷🎂 **BIRTHDAY TRUTH OR DRINK** 🎂🍷\n\n👥 **Players:** ${players.length}/10\n${names || "Nobody has joined yet!"}\n\nJoin the chaos, then the host can start.\n\n⚠️ **Drink = a fictional/non-alcoholic skip choice.** No real drinking is required.`;
+  if (g?.status === "lobby") return `🍷🎂 **BIRTHDAY TRUTH OR DRINK** 🎂🍷\n\n👥 **Players:** ${players.length}/10\n${names || "Nobody has joined yet!"}\n\nJoin the chaos, then the host can start.`;
   if (g?.status === "finished") return `🍷🎂 **TRUTH OR DRINK — GAME OVER!** 🎂🍷\n\nThat was enough chaos for one birthday. 😂`;
   const current = g.currentName || "the current player";
   const round = Number(g.turn || 1);
   const max = Number(g.maxTurns || 10);
   if (g?.status === "choosing") return `🍷🎂 **TRUTH OR DRINK — TURN ${round}/${max}** 🎂🍷\n\n🎯 **${current}**, you are up!\n\nPick your fate: **Truth** or **Dare**.\n\n👥 Players: ${players.map(p => p.name).join(", ")}`;
-  if (g?.status === "truth") return `💬🍷 **TRUTH — ${current}**\n\n❓ **${g.prompt}**\n\n${current}, answer honestly with the button below, or use the fictional drink/skip choice.\n\nAfter you answer or skip, **every other active player must confirm** before the next turn.`;
+  if (g?.status === "truth") return `💬🍷 **TRUTH — ${current}**\n\n❓ **${g.prompt}**\n\n${current}, answer honestly with the button below, or choose Drink.\n\nAfter you answer or choose Drink, **every other active player must confirm** before the next turn.`;
   if (g?.status === "dare") return `🎭🍷 **DARE — ${current}**\n\n🔥 **${g.prompt}**\n\nDo it, then press **I Did It!**.\n\nAfterward, **every other active player must confirm** before the next turn.`;
   if (g?.status === "confirming") {
     const others = players.filter(p => String(p.id) !== String(g.currentId));
@@ -11858,7 +11857,7 @@ async function birthdayTruthDrinkStart(env,interaction){
 function birthdayTruthDrinkIsActivePlayer(g,userId){return !!userId&&(g.players||[]).some(p=>p.active!==false&&String(p.id)===String(userId));}
 async function birthdayTruthDrinkChoose(env,interaction,kind){
   const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="choosing")return birthdayTruthDrinkReply(env,interaction,"🍷 This turn is not waiting for a Truth or Dare choice.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");
-  const pick=kind==="truth"?birthdayTruthDrinkPick(BIRTHDAY_TRUTH_PROMPTS,g.usedTruths):birthdayTruthDrinkPick(BIRTHDAY_DARE_PROMPTS,g.usedDares);if(kind==="truth")g.usedTruths=[...(g.usedTruths||[]),pick.index];else g.usedDares=[...(g.usedDares||[]),pick.index];g.currentKind=kind;g.prompt=pick.text;g.status=kind;g.actionLabel=kind==="truth"?"The truth was answered or the fictional drink/skip was chosen.":"The dare was marked complete.";await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,kind==="truth"?"💬 Your truth is waiting above. Answer it or use the fictional drink/skip button.":"🎭 Your dare is waiting above. Complete it, then press **I Did It!**");
+  const pick=kind==="truth"?birthdayTruthDrinkPick(BIRTHDAY_TRUTH_PROMPTS,g.usedTruths):birthdayTruthDrinkPick(BIRTHDAY_DARE_PROMPTS,g.usedDares);if(kind==="truth")g.usedTruths=[...(g.usedTruths||[]),pick.index];else g.usedDares=[...(g.usedDares||[]),pick.index];g.currentKind=kind;g.prompt=pick.text;g.status=kind;g.actionLabel=kind==="truth"?"The truth was answered or Drink was chosen.":"The dare was marked complete.";await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,kind==="truth"?"💬 Your truth is waiting above. Answer it or choose Drink.":"🎭 Your dare is waiting above. Complete it, then press **I Did It!**");
 }
 async function showBirthdayTruthDrinkModal(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"💬 This Truth turn is no longer waiting for an answer.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");
@@ -11869,7 +11868,7 @@ async function birthdayTruthDrinkAnswer(env,interaction,answer){
   const clean=String(answer||"").trim();if(!clean)return birthdayTruthDrinkReply(env,interaction,"❌ You need to answer the truth.");g.status="confirming";g.actionLabel=`💬 **${g.currentName}** answered: “${clean.slice(0,900)}”`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"💬 **Answer recorded!** Now everyone else must confirm the turn.");
 }
 async function birthdayTruthDrinkDrink(env,interaction){
-  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"🥤 This Truth turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");g.status="confirming";g.actionLabel=`🥤 **${g.currentName}** chose the fictional drink/skip option.`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🥤 **Drink/skip recorded!** Now everyone else must confirm the turn.");
+  const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="truth")return birthdayTruthDrinkReply(env,interaction,"🥤 This Truth turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");g.status="confirming";g.actionLabel=`🍷 **${g.currentName}** chose Drink.`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🍷 **Drink recorded!** Now everyone else must confirm the turn.");
 }
 async function birthdayTruthDrinkDone(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const g=state.birthday?.games?.truthDrink;const user=getUserFromInteraction(interaction);if(!g?.active||g.status!=="dare")return birthdayTruthDrinkReply(env,interaction,"🎭 This Dare turn is already complete.");if(!user||String(user.id)!==String(g.currentId))return birthdayTruthDrinkReply(env,interaction,"🎯 It is not your turn!");g.status="confirming";g.actionLabel=`🎭 **${g.currentName}** says the dare is complete.`;g.confirmations={};await saveGuildState(env,interaction.guild_id,state);await editBirthdayTruthDrinkMessage(env,g);return birthdayTruthDrinkReply(env,interaction,"🎭 **Dare marked complete!** Now everyone else must confirm the turn.");
