@@ -27694,7 +27694,7 @@ function helpText(){return [
   "",
   "🎂 **BIRTHDAY PARTY**",
   "`/birthday` • `/birthday-games` • `/birthday-shop`",
-  "`/birthday-gift` • `/birthday-gifts` • `/birthday-collection`",
+  "`/birthday-gift` • `/birthday-gifts`",
   "`/birthday-wish` • `/birthday-cannon` • `/birthday-trickster @player`",
   "`/birthday-name` • `/birthday-set`",
   "",
@@ -29239,13 +29239,14 @@ function halloweenHubComponents() {
     row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3))
   ];
 }
-function halloweenHubText() {
+function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
     "The gates are open. Three games are ready for the first Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
+    `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
     "Play games, collect Spookies, build your streak, and climb the leaderboard!",
     "",
     "Choose an option below."
@@ -29258,6 +29259,10 @@ function halloweenGameMenuComponents() {
     row(button("🍬 Trick or Treat", "halloween:start:trick", 3), button("📖 How Halloween Works", "halloween:howto", 2)),
     row(button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
+}
+
+function halloweenGamesText(player) {
+  return `🎮 **HALLOWEEN GAMES**\n\n👻 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}\n\nChoose your game.`;
 }
 
 function halloweenCollectionArchiveRows() {
@@ -29505,13 +29510,96 @@ async function zombieComponent(env,interaction,parts){const action=parts[2];cons
   if(action==="zaction"){if(g.infection[user.id]<4)return sendText(env,interaction,"❌ You are not a Zombie.");const targets=Object.keys(g.players).filter(id=>id!==user.id&&!g.players[id].eliminated&&g.infection[id]<4);if(!targets.length)return sendText(env,interaction,"❌ No valid Survivor targets.");const target=targets[randomInt(0,targets.length-1)];g.infection[target]=Math.min(4,g.infection[target]+1);g.threat=Math.min(100,g.threat+5);p.actionTaken=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
 }
 
-async function halloweenTrickOrTreat(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");const p=await getPlayer(env,user.id);const today=easternDateKey();if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\n\nCome back tomorrow for another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);p.halloweenTrickTreatDate=today;const roll=Math.random();let outcome,amount=0,rare=false;if(roll<.10){outcome="rare";rare=true;amount=250;}else if(roll<.65){outcome="treat";amount=[50,100,200,500][randomInt(0,3)];}else{outcome="trick";amount=-[25,50,100][randomInt(0,2)];}p.halloweenTrickTreatOutcomes=Array.isArray(p.halloweenTrickTreatOutcomes)?p.halloweenTrickTreatOutcomes:[];if(!p.halloweenTrickTreatOutcomes.includes(outcome))p.halloweenTrickTreatOutcomes.push(outcome);p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+amount);p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+1;let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
-  refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${rare?"🎃 **SOMETHING IS WRONG...** You found the rare cursed outcome!":""}\n${amount>=0?`🍭 Treat! **+${amount} Spookies**`:`😈 Trick! **${Math.abs(amount)} Spookies were taken!**`}\n\n👻 Balance: **${p.halloweenSpookies.toLocaleString()} Spookies**\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🎃 Back to Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);}
+async function halloweenTrickOrTreat(env,interaction,targetId=null){
+  const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
+  const p=await getPlayer(env,user.id);const today=easternDateKey();
+  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\\n\\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
 
+  if(!targetId){
+    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\\n\\nWhose door are you knocking on? 👀🎃\\n\\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
+      {type:1,components:[{type:5,custom_id:"halloween:trick:target_select",placeholder:"🏚️ Choose whose door to knock on...",min_values:1,max_values:1}],},
+      row(button("⬅️ Halloween Games","halloween:games",2))
+    ]);
+  }
+
+  const targetIdString=String(targetId);if(targetIdString===String(user.id))return sendText(env,interaction,"🎃 **NICE TRY.** You can't trick-or-treat at your own house. 😂",[row(button("🏚️ Pick Another Door","halloween:start:trick",3),button("⬅️ Games","halloween:games",2))]);
+  const resolvedUser=interaction.data?.resolved?.users?.[targetIdString]||{};
+  const targetName=resolvedUser.global_name||resolvedUser.username||`Werewife ${targetIdString.slice(-4)}`;
+
+  p.halloweenTrickTreatDate=today;
+  const roll=Math.random();let outcome,amount=0,rare=false;
+  if(roll<.10){outcome="rare";rare=true;amount=250;}else if(roll<.65){outcome="treat";amount=[50,100,200,500][randomInt(0,3)];}else{outcome="trick";amount=-[25,50,100][randomInt(0,2)];}
+
+  const treatLines=[
+    `🍭 **${targetName}** opened the door, took one look at you, and immediately paid the Halloween tax. **+${amount} Spookies!**`,
+    `🎃 You rang **${targetName}**'s doorbell. The door flew open and a candy bucket launched directly at your face. **+${amount} Spookies!**`,
+    `👻 **${targetName}** answered the door and whispered, "Take the candy and RUN." You didn't ask questions. **+${amount} Spookies!**`,
+    `🍬 **${targetName}** had a suspiciously enormous candy bowl. You were legally obligated to take some. **+${amount} Spookies!**`,
+    `🦇 You knocked on **${targetName}**'s door and a bat delivered your treat personally. Very professional. **+${amount} Spookies!**`,
+    `🧙 **${targetName}**'s porch witch approved your costume. She paid you **+${amount} Spookies** and immediately went back inside.`,
+    `🕷️ A tiny spider answered **${targetName}**'s door. It pushed a candy toward you and somehow knew your balance. **+${amount} Spookies!**`,
+    `💀 **${targetName}** opened the door, forgot what Halloween was, then panic-dumped candy into your bucket. **+${amount} Spookies!**`,
+    `🍭 **${targetName}** tried to give you ONE piece of candy. The bowl disagreed and emptied itself into your bag. **+${amount} Spookies!**`,
+    `🎃 The door at **${targetName}**'s house opened by itself. A candy bucket slid across the porch toward you. You accepted your fate. **+${amount} Spookies!**`,
+    `👹 **${targetName}** said, "I have a trick." You said, "I want a treat." They sighed and paid you anyway. **+${amount} Spookies!**`,
+    `🐈‍⬛ **${targetName}**'s cat inspected you, approved you, and shoved the candy bowl forward. The cat is apparently in charge. **+${amount} Spookies!**`,
+    `🕯️ You knocked on **${targetName}**'s door exactly once. The porch lights turned purple and a bag of candy appeared. Nobody knows why. **+${amount} Spookies!**`,
+    `🧛 **${targetName}** opened the door and said, "You look expensive." They handed you **+${amount} Spookies**.`,
+    `🍬 **${targetName}** tried to close the door. Your candy bucket got stuck in the doorway. They surrendered and paid the ransom: **+${amount} Spookies!**`,
+    `🎃 You shouted "TRICK OR TREAT!" at **${targetName}**'s house. Something inside shouted it back louder. Then candy appeared. **+${amount} Spookies!**`,
+    `👻 A ghost behind **${targetName}** silently pointed at a hidden candy stash. You found it. **+${amount} Spookies!**`,
+    `🦝 A raccoon living on **${targetName}**'s porch tried to charge you rent. **${targetName}** paid it for you. **+${amount} Spookies!**`,
+    `🍫 **${targetName}** opened the door holding a giant candy bar, saw your bucket, and said, "Honestly? You deserve this." **+${amount} Spookies!**`,
+    `🧟 **${targetName}** opened the door looking completely dead inside. They still remembered to give you candy. **+${amount} Spookies!**`
+  ];
+
+  const trickLines=[
+    `😈 **${targetName}** opened the door, yelled "TRICK!" and somehow stole **${Math.abs(amount)} Spookies** from your pocket. RUDE.`,
+    `🕷️ You chose **${targetName}**'s house. A spider accountant appeared and repossessed **${Math.abs(amount)} Spookies**. The paperwork was flawless.`,
+    `💀 **${targetName}** gave you one piece of candy. It was a rock. You also lost **${Math.abs(amount)} Spookies**. Happy Halloween.`,
+    `🎃 You knocked on **${targetName}**'s door. The door opened. A pumpkin screamed. You lost **${Math.abs(amount)} Spookies**. Nobody explains anything.`,
+    `🧙 **${targetName}** looked you directly in the eyes and said, "Absolutely not." A tiny curse removed **${Math.abs(amount)} Spookies** from your balance.`,
+    `👻 **${targetName}**'s door opened to complete darkness. You heard "BOO." You ran. Your Spookies did not. **-${Math.abs(amount)} Spookies.**`,
+    `🦇 A bat flew out of **${targetName}**'s house and stole your candy. Somehow it also stole **${Math.abs(amount)} Spookies**.`,
+    `😈 **${targetName}** answered the door wearing a fake mustache and said, "Wrong house." You lost **${Math.abs(amount)} Spookies** anyway.`,
+    `🕯️ The candles on **${targetName}**'s porch went out. When they came back on, **${Math.abs(amount)} Spookies** were gone.`,
+    `🧛 **${targetName}** opened the door and said, "I only accept blood." You offered candy. They charged you **${Math.abs(amount)} Spookies** instead.`,
+    `🕷️ You stepped onto **${targetName}**'s porch and immediately got caught in a completely unnecessary spiderweb. Your wallet was caught too. **-${Math.abs(amount)} Spookies.**`,
+    `💀 **${targetName}** handed you a candy wrapper. You opened it. Nothing. You checked your balance. Also nothing. **-${Math.abs(amount)} Spookies.**`,
+    `🎃 **${targetName}**'s pumpkin decoration blinked at you. You blinked back. The pumpkin won. **-${Math.abs(amount)} Spookies.**`,
+    `👹 **${targetName}** said, "Pick trick or treat." You said treat. They said, "Wrong answer." **-${Math.abs(amount)} Spookies.**`,
+    `🐈‍⬛ **${targetName}**'s cat stole your candy and then sat on your wallet until **${Math.abs(amount)} Spookies** disappeared.`,
+    `🧟 **${targetName}** answered the door, stared at you for ten seconds, and slowly shut it again. Your Spookies took psychic damage. **-${Math.abs(amount)}.**`,
+    `🍬 **${targetName}** offered you the biggest candy bar you've ever seen. It was attached to a fishing line. You got tricked. **-${Math.abs(amount)} Spookies.**`,
+    `🦝 A raccoon on **${targetName}**'s porch demanded a toll. You refused. The raccoon took **${Math.abs(amount)} Spookies** anyway.`,
+    `😵 You knocked on **${targetName}**'s door and immediately forgot why. When you remembered, **${Math.abs(amount)} Spookies** were missing.`,
+    `🚪 **${targetName}** opened the door, saw your costume, and said, "Bold choice." Somehow that cost you **${Math.abs(amount)} Spookies**.`
+  ];
+
+  const rareLines=[
+    `🩸 **${targetName}** opened the door... and every porch light on the street went out. Something placed the **Cursed Candy** in your bucket. **+${amount} Spookies!**`,
+    `👹 The door to **${targetName}**'s house opened by itself. Nobody was there. Your candy bucket suddenly became much heavier. **+${amount} Spookies!**`,
+    `🕯️ **${targetName}** whispered, "You shouldn't have knocked." Too late. The **Cursed Candy** chose you. **+${amount} Spookies!**`,
+    `🎃 You knocked on **${targetName}**'s door. Three knocks came back from INSIDE your own candy bucket. You found the **Cursed Candy**. **+${amount} Spookies!**`,
+    `👻 **${targetName}** opened the door and froze. A ghost behind them pointed directly at your candy bag. Inside was the **Cursed Candy**. **+${amount} Spookies!**`,
+    `🦇 The moon went completely dark when **${targetName}** opened the door. When the light returned, the **Cursed Candy** was sitting in your bucket. **+${amount} Spookies!**`,
+    `💀 **${targetName}**'s porch was empty except for one ancient candy bucket. You touched it. Bad idea. Excellent reward. **+${amount} Spookies!**`,
+    `🧙 **${targetName}** opened the door and immediately said, "Oh. YOU." A strange candy appeared in your hand. **+${amount} Spookies!**`,
+    `🍬 You reached into **${targetName}**'s candy bowl and pulled out something that definitely was NOT candy. It was the **Cursed Candy**. **+${amount} Spookies!**`,
+    `🕷️ Every spider on **${targetName}**'s porch suddenly faced you at the same time. Then a cursed candy dropped into your bucket. **+${amount} Spookies!**`
+  ];
+
+  p.halloweenTrickTreatOutcomes=Array.isArray(p.halloweenTrickTreatOutcomes)?p.halloweenTrickTreatOutcomes:[];if(!p.halloweenTrickTreatOutcomes.includes(outcome))p.halloweenTrickTreatOutcomes.push(outcome);
+  p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+amount);p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+1;
+  p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[];let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
+  refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
+  const story=rare?rareLines[randomInt(0,rareLines.length-1)]:outcome==="treat"?treatLines[randomInt(0,treatLines.length-1)]:trickLines[randomInt(0,trickLines.length-1)];
+  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\\n\\n${story}\\n\\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\\n\\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
+}
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ You are not stuck in an active Halloween game.");if(g.players?.[user.id]){if(g.type==="hide"){delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}else{delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **YOU'VE BEEN RELEASED!**\n\nYou left the active Halloween game without receiving a win or completion reward. 🎃");}return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");}
 
-async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub")return sendText(env,interaction,halloweenHubText(),halloweenHubComponents());if(id==="halloween:games")return sendText(env,interaction,"🎮 **HALLOWEEN GAMES**\n\nChoose your game.",halloweenGameMenuComponents());if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
@@ -29520,7 +29608,7 @@ async function handleCommand(
   const name =
     interaction.data?.name;
 
-  if (name === "halloweens") { await sendText(env, interaction, halloweenHubText(), halloweenHubComponents()); return; }
+  if (name === "halloweens") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); await sendText(env, interaction, halloweenHubText(p), halloweenHubComponents()); return; }
   if (name === "collections") { await halloweenArchive(env, interaction); return; }
   if (name === "halloween") { await handleHalloweenCommand(env, interaction); return; }
 
@@ -29537,7 +29625,6 @@ async function handleCommand(
   if (name === "birthday-shop") { await ensureBirthdayEvent(env, interaction.guild_id); await showBirthdayShop(env, interaction); return; }
   if (name === "birthday-gift") { await ensureBirthdayEvent(env, interaction.guild_id); await handleBirthdayGift(env, interaction); return; }
   if (name === "birthday-gifts") { await ensureBirthdayEvent(env, interaction.guild_id); await showBirthdayGifts(env, interaction); return; }
-  if (name === "birthday-collection") { await ensureBirthdayEvent(env, interaction.guild_id); await showBirthdayCollection(env, interaction); return; }
   if (name === "birthday-wish") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayWish(env, interaction); return; }
   if (name === "birthday-cannon") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayCannon(env, interaction); return; }
   if (name === "birthday-trickster") { await ensureBirthdayEvent(env, interaction.guild_id); await birthdayTrickster(env, interaction); return; }
@@ -31888,7 +31975,6 @@ const COMMANDS = [
     ]
   },
   { name: "birthday-gifts", description: "Open your unopened birthday gifts" },
-  { name: "birthday-collection", description: "View your permanent Birthday Collection" },
   { name: "birthday-wish", description: "Perform the Birthday Wish Ritual" },
   { name: "birthday-cannon", description: "Fire the Birthday Boo Cannon" },
   {
@@ -33669,6 +33755,12 @@ export default {
         update = true;
       } else if (isBirthdayComponent) {
         update = true;
+      } else if (isHalloweenComponent && (customId === "collection:halloween:open" || customId.startsWith("collection:halloween:page:"))) {
+        // The visual book is rendered with Puppeteer and can take longer than
+        // Discord's component acknowledgement window. Defer privately first,
+        // then sendHalloweenBook() edits the deferred @original with the image.
+        update = false;
+        ephemeral = true;
       } else if (isHalloweenComponent) {
         update = true;
       } else if (isPermanentGameComponent || isPermanentGameModal) {
