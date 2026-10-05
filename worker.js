@@ -29318,48 +29318,99 @@ function halloweenCoverData(player) {
 async function renderHalloweenBook(env, player, spread) {
   let browser;
   try {
+    // IMPORTANT: Puppeteer should not have to reach out to R2 itself.
+    // Fetch the book artwork in the Worker first, then give Puppeteer
+    // self-contained data URLs. This avoids Browser Rendering getting stuck
+    // on remote R2 image requests.
+    const assetDataUrl = async (filename) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      try {
+        const response = await fetch(imageUrl(filename), { signal: controller.signal });
+        if (!response.ok) throw new Error(`Book asset ${filename} returned HTTP ${response.status}`);
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        let binary = "";
+        const chunk = 0x8000;
+        for (let i = 0; i < buffer.length; i += chunk) {
+          binary += String.fromCharCode(...buffer.subarray(i, Math.min(i + chunk, buffer.length)));
+        }
+        const contentType = response.headers.get("content-type") || "image/png";
+        return `data:${contentType};base64,${btoa(binary)}`;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    const owned = new Set(player.halloweenCollection || []);
+    const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
+    const keyFilename = key =>
+      key === "hunters_lantern" ? IMAGES.halloweenHuntersLantern :
+      key === "last_antidote" ? IMAGES.halloweenLastAntidote :
+      key === "cursed_candy_bucket" ? IMAGES.halloweenCursedCandyBucket : null;
+
+    const bookPagesData = await assetDataUrl(IMAGES.halloweenBookPages);
+    const usedKeys = [0, 1]
+      .map(i => actualKeys[spread * 2 + i])
+      .filter(key => key && owned.has(key));
+
+    const collectibleData = {};
+    for (const key of usedKeys) {
+      collectibleData[key] = await assetDataUrl(keyFilename(key));
+    }
+
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
     await page.setViewport({width: 1200, height: 760, deviceScaleFactor: 1});
-    const owned = new Set(player.halloweenCollection || []);
-    const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
-    const slots = [0,1].map(i => ({ idx: spread * 2 + i, label: `COLLECTIBLE #${spread * 2 + i + 1}` }));
-    const collectibleImage = key => key === "hunters_lantern" ? imageUrl(IMAGES.halloweenHuntersLantern) : key === "last_antidote" ? imageUrl(IMAGES.halloweenLastAntidote) : key === "cursed_candy_bucket" ? imageUrl(IMAGES.halloweenCursedCandyBucket) : "";
-    const titleFor = key => key === "hunters_lantern" ? "🏮 The Hunter's Lantern" : key === "last_antidote" ? "🧪 The Last Antidote" : key === "cursed_candy_bucket" ? "🍬 The Cursed Candy Bucket" : "🔒 Coming Soon";
+
+    const slots = [0,1].map(i => ({
+      idx: spread * 2 + i,
+      label: `COLLECTIBLE #${spread * 2 + i + 1}`
+    }));
+
+    const titleFor = key =>
+      key === "hunters_lantern" ? "🏮 The Hunter's Lantern" :
+      key === "last_antidote" ? "🧪 The Last Antidote" :
+      key === "cursed_candy_bucket" ? "🍬 The Cursed Candy Bucket" :
+      "🔒 Coming Soon";
+
     const content = slots.map((slot, i) => {
       const idx = slot.idx;
       const key = actualKeys[idx] || null;
       const has = key && owned.has(key);
-      const img = has ? `<img src="${collectibleImage(key)}"/>` : `<div class="locked">🔒<span>???</span></div>`;
-      return `<div class="slot s${i}">${img}<div class="caption">${has ? titleFor(key) : `🔒 COLLECTIBLE #${idx}`}</div></div>`;
+      const img = has
+        ? `<img src="${collectibleData[key]}"/>`
+        : `<div class="locked">🔒<span>???</span></div>`;
+      return `<div class="slot s${i}">${img}<div class="caption">${has ? titleFor(key) : `🔒 COLLECTIBLE #${idx + 1}`}</div></div>`;
     }).join("");
+
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       *{box-sizing:border-box}body{margin:0;background:#24100a;font-family:Arial,"Segoe UI Emoji",sans-serif;overflow:hidden}
-      .book{width:1200px;height:760px;position:relative;background:url('${imageUrl(IMAGES.halloweenBookPages)}') center/cover no-repeat}
+      .book{width:1200px;height:760px;position:relative;background:url('${bookPagesData}') center/cover no-repeat}
       .slot{position:absolute;top:125px;width:390px;height:490px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}
       .s0{left:105px}.s1{right:105px}.slot img{width:330px;height:365px;object-fit:contain;filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
       .locked{width:300px;height:365px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:80px;color:#2d130b;text-shadow:0 3px 0 #f0a044}.locked span{font-size:34px;font-weight:900;letter-spacing:8px;margin-top:15px}
       .caption{margin-top:10px;font-size:25px;font-weight:900;color:#2a1009;text-shadow:0 1px 0 #ffcf78;max-width:350px}
       .pageNo{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;color:#3a170d}
     </style></head><body><div class="book">${content}<div class="pageNo">HALLOWEEN 2026 • SPREAD ${spread+1} OF 5</div></div></body></html>`;
-    // Do not wait for remote R2 images to finish the page load.
-    // The old waitUntil:"load" + unbounded image Promise could leave the
-    // deferred Discord interaction stuck forever when an asset was slow/unreachable.
-    await page.setContent(html,{waitUntil:"domcontentloaded",timeout:8000});
+
+    await page.setContent(html, {waitUntil:"domcontentloaded", timeout:8000});
     await page.evaluate(async()=> {
       const imgs = Array.from(document.images);
       if (!imgs.length) return;
       await Promise.race([
-        Promise.all(imgs.map(img=>new Promise(resolve=>{
-          if(img.complete) return resolve();
-          img.onload=resolve;
-          img.onerror=resolve;
+        Promise.all(imgs.map(img => new Promise(resolve => {
+          if (img.complete) return resolve();
+          img.onload = resolve;
+          img.onerror = resolve;
         }))),
-        new Promise(resolve=>setTimeout(resolve,2500))
+        new Promise(resolve => setTimeout(resolve, 1500))
       ]);
     });
-    return await page.screenshot({type:"png",timeout:8000});
-  } finally { if(browser) try{await browser.close();}catch{} }
+
+    return await page.screenshot({type:"png", timeout:8000});
+  } finally {
+    if (browser) try { await browser.close(); } catch {}
+  }
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
