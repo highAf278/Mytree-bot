@@ -11403,7 +11403,7 @@ async function birthdayTalentNext(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const old=state.games?.talent;if(!old?.active||old.status!=="results")return birthdayTalentReply(env,interaction,"🎭 Finish the current Talent Show round first.");const pick=birthdayTalentPrompt();const g={active:true,status:"submitting",hostId:String(old.hostId||""),round:Number(old.round||0)+1,category:pick.category,prompt:pick.prompt,submissions:{},votes:{},channelId:old.channelId,messageId:old.messageId,startedAt:Date.now()};state.games.talent=g;await saveGuildState(env,interaction.guild_id,state);await editBirthdayTalentMessage(env,g);return birthdayTalentReply(env,interaction,`🎭 **Talent Show Round ${g.round} is OPEN!**`);}
 
 /* =========================================================
-   WEREWIVES TRUTH OR PASS
+   WEREWIVES TRUTH OR DRINK
    Large non-NSFW truth/dare bank.
 ========================================================= */
 const TRUTH_PASS_PROMPTS = [
@@ -11739,6 +11739,7 @@ const TRUTH_PASS_DARE_PROMPTS = [
   "Pretend you are a detective solving the mystery of who ate the last snack.",
   "Send a voice message as a raccoon giving financial advice to other raccoons.",
   "Message a friend asking them to name your imaginary island.",
+];
 
 function birthdayTruthPassButtons(g) {
   const active = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
@@ -11765,11 +11766,11 @@ function birthdayTruthPassPick(list, used) {
 function birthdayTruthPassText(g) {
   const players = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
   const names = players.map(p => `<@${p.id}>`).join(", ");
-  if (g?.status === "lobby") return `⏭️🔥 **WEREWIVES TRUTH OR PASS** 🔥⏭️\n\n👥 **Players:** ${players.length}/10\n${names || "Nobody has joined yet!"}\n\nJoin the chaos, then the host can start.`;
-  if (g?.status === "finished") return `⏭️🔥 **TRUTH OR PASS — GAME OVER!** 🔥⏭️\n\nThat was enough chaos for one game. 😂`;
+  if (g?.status === "lobby") return `⏭️🔥 **WEREWIVES TRUTH OR DRINK** 🔥⏭️\n\n👥 **Players:** ${players.length}/10\n${names || "Nobody has joined yet!"}\n\nJoin the chaos, then the host can start.`;
+  if (g?.status === "finished") return `⏭️🔥 **TRUTH OR DRINK — GAME OVER!** 🔥⏭️\n\nThat was enough chaos for one game. 😂`;
   const current = g.currentName || "the current player";
   const round = Number(g.turn || 1);
-  if (g?.status === "choosing") return `⏭️🔥 **TRUTH OR PASS — TURN ${round}/${max}** 🔥⏭️\n\n🎯 **${current}**, you are up!\n\nPick your fate: **Truth** or **Dare**.\n\n👥 Players: ${players.map(p => p.name).join(", ")}`;
+  if (g?.status === "choosing") return `⏭️🔥 **TRUTH OR DRINK — TURN ${round}/${max}** 🔥⏭️\n\n🎯 **${current}**, you are up!\n\nPick your fate: **Truth** or **Dare**.\n\n👥 Players: ${players.map(p => p.name).join(", ")}`;
   if (g?.status === "truth") return `💬⏭️ **TRUTH — ${current}**\n\n❓ **${g.prompt}**\n\n${current}, answer honestly with the button below, or choose Pass.\n\nAfter you answer or choose Pass, **every other active player must confirm** before the next turn.`;
   if (g?.status === "dare") return `🎭⏭️ **DARE — ${current}**\n\n🔥 **${g.prompt}**\n\nDo it, then press **I Did It!**.\n\nAfterward, **every other active player must confirm** before the next turn.`;
   if (g?.status === "confirming") {
@@ -11777,7 +11778,7 @@ function birthdayTruthPassText(g) {
     const count = others.filter(p => g.confirmations?.[p.id]).length;
     return `👀 **CONFIRM ${current}’S TURN**\n\n${g.actionLabel || "The turn is complete!"}\n\nEveryone except **${current}** must confirm that they saw the answer/dare completed.\n\n✅ **${count}/${others.length} confirmed**\n\nNobody advances until every other active player confirms. If someone quits, they are removed from the required confirmations.`;
   }
-  return `⏭️🔥 **TRUTH OR PASS** 🔥⏭️`;
+  return `⏭️🔥 **TRUTH OR DRINK** 🔥⏭️`;
 }
 
 async function editBirthdayTruthPassMessage(env, g) {
