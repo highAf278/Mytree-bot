@@ -374,7 +374,12 @@ const IMAGES = {
   blackIceBackground: "IMG_7898.png",
   blackIceDecoration: "IMG_7899.png",
   eggwardDecoration: "IMG_7663.png",
-  hedgyDecoration: "IMG_7666.png"
+  hedgyDecoration: "IMG_7666.png",
+  halloweenBookCover: "IMG_8141.png",
+  halloweenBookPages: "IMG_8140.png",
+  halloweenHuntersLantern: "IMG_8142.png",
+  halloweenLastAntidote: "IMG_8143.png",
+  halloweenCursedCandyBucket: "IMG_8145.png"
 };
 
 const SHOP_ITEMS = {
@@ -1147,7 +1152,14 @@ function defaultPlayer() {
     coupAssassinations: 0,
     coupCoups: 0,
     seenNewsIds: [],
-    sparklePendingPurchaseId: ""
+    sparklePendingPurchaseId: "",
+    halloweenSpookies: 0,
+    halloweenDailyDate: "",
+    halloweenDailyStreak: 0,
+    halloweenGamesPlayed: 0,
+    halloweenCollection: [],
+    halloweenTrickTreatOutcomes: [],
+    halloweenAchievements: []
   };
 }
 
@@ -1285,6 +1297,7 @@ const PROFILE_BADGES = {
   raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon_boss" },
   diamond_darling: { name: "💎 Diamond Darling", label: "DIAMOND DARLING", icon: "DD", style: "black_ice" },
   millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" },
+  halloween_haunter: { name: "🎃 Halloween Haunter", label: "HALLOWEEN HAUNTER", icon: "HH", style: "haunted" },
   bot_owner: { name: "💗 Bot Owner", label: "BOT OWNER", icon: "♥", style: "owner_heart" }
 };
 
@@ -1367,7 +1380,8 @@ function unlockNameEffects(player) {
     golden: Number(player.sparkles || 0) >= 100000,
     spooky: halloweenComplete,
     black_ice: ["black_ice_tree", "black_ice_background", "black_ice_decoration", "black_ice_snow_animated_effect"].every(id => owned.includes(id)),
-    millionaire: Number(player.sparkles || 0) >= 1000000
+    millionaire: Number(player.sparkles || 0) >= 1000000,
+    halloween_haunter: Number(player.halloweenGamesPlayed || 0) >= 10
   };
   for (const [id, ok] of Object.entries(checks)) if (ok && !player.unlockedNameEffects.includes(id)) player.unlockedNameEffects.push(id);
   if (checks.firework) unlockOwnedTitle(player, "firework_fiend");
@@ -2607,7 +2621,8 @@ async function getGuildState(env, guildId) {
       island: null,
       rumble: null,
       nextChaosAt: 0,
-      birthday: null
+      birthday: null,
+      halloween: null
     };
   }
 
@@ -2623,7 +2638,8 @@ async function getGuildState(env, guildId) {
       island: null,
       rumble: null,
       nextChaosAt: 0,
-      birthday: null
+      birthday: null,
+      halloween: null
     };
   }
 
@@ -2644,7 +2660,8 @@ async function getGuildState(env, guildId) {
       announcementChannelName: "",
       hunt: null,
       island: null,
-      nextChaosAt: 0
+      nextChaosAt: 0,
+      halloween: null
     };
   }
 }
@@ -9741,6 +9758,7 @@ const PROFILE_BADGE_GUIDE = {
   raccoon_boss: "Steal from 25 unique players.",
   diamond_darling: "Own at least one Black Ice collection item.",
   millionaire: "Have 1,000,000 sparkles.",
+  halloween_haunter: "Play 10 completed Halloween games.",
   bot_owner: "The person who owns and runs the WereWives bot."
 };
 
@@ -15645,6 +15663,19 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id.startsWith("collection:")) {
+    const parts=id.split(":");
+    if(id==="collection:archive") return halloweenArchive(env,interaction);
+    if(id==="collection:halloween") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); return editOriginalResponse(env,interaction,halloweenCoverData(p)); }
+    if(id==="collection:halloween:open") return sendHalloweenBook(env,interaction,0);
+    if(id.startsWith("collection:halloween:page:")) return sendHalloweenBook(env,interaction,Number(parts[3]||0));
+    if(id==="collection:halloween:unlock") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); return sendText(env,interaction,halloweenUnlockText(p),[row(button("⬅️ Back to Book","collection:halloween",2))]); }
+    if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
+    if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**
+
+More permanent event books are coming soon! 🕷️");
+  }
+  if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
   if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
   if (id.startsWith("sparklepurchase:")) return handleSparklePurchaseComponent(env, interaction);
@@ -23176,6 +23207,7 @@ const SOLO_TITLES = {
   haunted: { name: "the Haunted", description: "Own the complete Halloween set." },
   frostborn: { name: "Frostborn", description: "Own the complete Black Ice limited set." },
   millionaire: { name: "the Millionaire", description: "Reach 1,000,000 sparkles." },
+  keeper_of_halloween: { name: "Keeper of Halloween", description: "Complete the entire 10-sticker Halloween collection." },
   criminal: { name: "the Criminal", description: "Currently serving a Pickle Jail sentence. 🥒" },
   stinky: { name: "STINKY", description: "Currently serving a Stink Bomb sentence. 🦨" },
   court_raccoon: { name: "the Court-Appointed Raccoon", description: "Temporarily assigned by Judge Raccoon. 🦝⚖️" },
@@ -29175,12 +29207,324 @@ async function handleRumbleCommand(env, interaction) {
   return sendText(env, interaction, "❌ Unknown Rumble action.");
 }
 
+
+/* =========================================================
+   HALLOWEEN 2026 — BUTTON-FIRST EVENT
+   Commands: /halloweens, /collections, /halloween end only.
+========================================================= */
+const HALLOWEEN_BOOK_ASSETS = {
+  cover: "halloweenBookCover",
+  pages: "halloweenBookPages",
+  lantern: "halloweenHuntersLantern",
+  antidote: "halloweenLastAntidote",
+  candy: "halloweenCursedCandyBucket"
+};
+
+const HALLOWEEN_ROOMS = {
+  Foyer: ["Dining Hall", "Library", "Graveyard"],
+  "Dining Hall": ["Foyer", "Kitchen", "Basement"],
+  Library: ["Foyer", "Attic", "Study"],
+  Kitchen: ["Dining Hall", "Basement", "Courtyard"],
+  Basement: ["Dining Hall", "Kitchen", "Crypt"],
+  Attic: ["Library", "Study", "Tower"],
+  Study: ["Library", "Attic", "Tower"],
+  Graveyard: ["Foyer", "Crypt", "Courtyard"],
+  Crypt: ["Basement", "Graveyard", "Tower"],
+  Courtyard: ["Kitchen", "Graveyard", "Tower"],
+  Tower: ["Attic", "Study", "Crypt", "Courtyard"]
+};
+const HALLOWEEN_HIDDEN_ROLES = ["Mimic", "Gravekeeper", "Web Weaver", "Haunted Doll", "Witch", "Shadow", "Mirror Wraith"];
+const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Abandoned Store", "Safehouse", "Gas Station", "Radio Tower", "Garage", "Woods"];
+
+function halloweenHubComponents() {
+  return [
+    row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3))
+  ];
+}
+function halloweenHubText() {
+  return [
+    "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
+    "",
+    "The gates are open. Three games are ready for the first Halloween release. 👻",
+    "",
+    "👻 **Spookies** are the Halloween event currency.",
+    "Play games, collect Spookies, build your streak, and climb the leaderboard!",
+    "",
+    "Choose an option below."
+  ].join("\n");
+}
+
+function halloweenGameMenuComponents() {
+  return [
+    row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
+    row(button("🍬 Trick or Treat", "halloween:start:trick", 3), button("📖 How Halloween Works", "halloween:howto", 2)),
+    row(button("⬅️ Halloween Hub", "halloween:hub", 2))
+  ];
+}
+
+function halloweenCollectionArchiveRows() {
+  return [
+    row(button("🎃 Halloween 2026", "collection:halloween", 1)),
+    row(button("🎂 Birthday 2026", "collection:birthday", 2), button("✨ Special Events", "collection:special", 2))
+  ];
+}
+
+function halloweenUnlockText(player) {
+  const owned = new Set(Array.isArray(player.halloweenCollection) ? player.halloweenCollection : []);
+  const line = (icon, name, req, id) => `${owned.has(id) ? "✅" : "🔒"} ${icon} **${name}**\n${req}`;
+  return [
+    "🔓 **HOW TO UNLOCK — HALLOWEEN 2026**",
+    "",
+    line("🏮", "The Hunter's Lantern", "Survive all 10 rounds of Haunted Hide & Seek without the Hunter ever correctly locating your room.", "hunters_lantern"),
+    "",
+    line("🧪", "The Last Antidote", "Cure a Full Zombie with an Antidote **and successfully escape** in Zombie Panic.", "last_antidote"),
+    "",
+    line("🍬", "The Cursed Candy Bucket", "Experience all three Trick-or-Treat outcome types, including the rare outcome.", "cursed_candy_bucket"),
+    "",
+    "🔒 **Collectibles 4–10** — COMING SOON",
+    "Their games and unlock requirements haven't been revealed yet. 👀"
+  ].join("\n");
+}
+
+async function halloweenArchive(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  const p = user ? await getPlayer(env, user.id) : null;
+  const owned = p ? new Set(p.halloweenCollection || []) : new Set();
+  return sendText(env, interaction, [
+    "📚 **THE WEREWIVES ARCHIVE**",
+    "",
+    "Choose an event archive to open.",
+    "",
+    `🎃 Halloween 2026 — **${owned.size}/10** collected`
+  ].join("\n"), halloweenCollectionArchiveRows());
+}
+
+function halloweenCoverData(player) {
+  const owned = new Set(player.halloweenCollection || []);
+  return {
+    content: `🎃📖 **HALLOWEEN 2026**\n\n**${owned.size}/10 collectibles discovered**\n\nA permanent archive of your Halloween 2026 adventures.`,
+    embeds: [{ image: { url: imageUrl(IMAGES[HALLOWEEN_BOOK_ASSETS.cover]) } }],
+    components: [
+      row(button("📖 OPEN BOOK", "collection:halloween:open", 1), button("🔓 HOW TO UNLOCK", "collection:halloween:unlock", 3)),
+      row(button("🔙 BACK TO ARCHIVE", "collection:archive", 2))
+    ],
+    flags: 64
+  };
+}
+
+async function renderHalloweenBook(env, player, spread) {
+  let browser;
+  try {
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width: 1200, height: 760, deviceScaleFactor: 1});
+    const owned = new Set(player.halloweenCollection || []);
+    const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
+    const slots = [0,1].map(i => ({ idx: spread * 2 + i, label: `COLLECTIBLE #${spread * 2 + i + 1}` }));
+    const collectibleImage = key => key === "hunters_lantern" ? imageUrl(IMAGES.halloweenHuntersLantern) : key === "last_antidote" ? imageUrl(IMAGES.halloweenLastAntidote) : key === "cursed_candy_bucket" ? imageUrl(IMAGES.halloweenCursedCandyBucket) : "";
+    const titleFor = key => key === "hunters_lantern" ? "🏮 The Hunter's Lantern" : key === "last_antidote" ? "🧪 The Last Antidote" : key === "cursed_candy_bucket" ? "🍬 The Cursed Candy Bucket" : "🔒 Coming Soon";
+    const content = slots.map((slot, i) => {
+      const idx = slot.idx;
+      const key = actualKeys[idx] || null;
+      const has = key && owned.has(key);
+      const img = has ? `<img src="${collectibleImage(key)}"/>` : `<div class="locked">🔒<span>???</span></div>`;
+      return `<div class="slot s${i}">${img}<div class="caption">${has ? titleFor(key) : `🔒 COLLECTIBLE #${idx}`}</div></div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box}body{margin:0;background:#24100a;font-family:Arial,"Segoe UI Emoji",sans-serif;overflow:hidden}
+      .book{width:1200px;height:760px;position:relative;background:url('${imageUrl(IMAGES.halloweenBookPages)}') center/cover no-repeat}
+      .slot{position:absolute;top:125px;width:390px;height:490px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}
+      .s0{left:105px}.s1{right:105px}.slot img{width:330px;height:365px;object-fit:contain;filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
+      .locked{width:300px;height:365px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:80px;color:#2d130b;text-shadow:0 3px 0 #f0a044}.locked span{font-size:34px;font-weight:900;letter-spacing:8px;margin-top:15px}
+      .caption{margin-top:10px;font-size:25px;font-weight:900;color:#2a1009;text-shadow:0 1px 0 #ffcf78;max-width:350px}
+      .pageNo{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;color:#3a170d}
+    </style></head><body><div class="book">${content}<div class="pageNo">HALLOWEEN 2026 • SPREAD ${spread+1} OF 5</div></div></body></html>`;
+    await page.setContent(html,{waitUntil:"load"});
+    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
+    return await page.screenshot({type:"png"});
+  } finally { if(browser) try{await browser.close();}catch{} }
+}
+
+async function sendHalloweenBook(env, interaction, spread=0) {
+  const user=getUserFromInteraction(interaction); if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
+  const player=await getPlayer(env,user.id);
+  const image=await renderHalloweenBook(env,player,Math.max(0,Math.min(4,Number(spread)||0)));
+  const s=Math.max(0,Math.min(4,Number(spread)||0));
+  const form=new FormData();
+  form.append("payload_json",JSON.stringify({content:`📖 **HALLOWEEN 2026 — SPREAD ${s+1}/5**\n\n${Number(player.halloweenCollection?.length||0)}/10 collectibles discovered.`,attachments:[{id:0,filename:"halloween-book.png"}],components:[row(button("◀️",`collection:halloween:page:${Math.max(0,s-1)}`,2,s===0),button("▶️",`collection:halloween:page:${Math.min(4,s+1)}`,2,s===4))],flags:64}));
+  form.append("files[0]",new Blob([image],{type:"image/png"}),"halloween-book.png");
+  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
+}
+
+function halloweenHowToText() {
+  return [
+    "📖 **HOW HALLOWEEN WORKS**",
+    "",
+    "👻 **Spookies** are the Halloween currency.",
+    "🎮 Play the Halloween games to earn them.",
+    "🎁 Claim one Daily Reward every day and build your streak.",
+    "🏆 The Leaderboard ranks players by Spookies.",
+    "📚 Your collectibles are permanent and live in `/collections`.",
+    "",
+    "🔒 Each game has its own collectible with a specific unlock requirement.",
+    "",
+    "🆘 If you ever get trapped in a Halloween game, use **/halloween end**."
+  ].join("\n");
+}
+
+async function addHalloweenSpookies(env,userId,amount) {
+  const p=await getPlayer(env,userId); p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+Number(amount||0)); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
+}
+async function halloweenMarkPlayed(env,userId,amount=1) {
+  const p=await getPlayer(env,userId); p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+amount; refreshProfileBadges(p); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
+}
+async function halloweenUnlock(env,userId,id) {
+  const p=await getPlayer(env,userId); p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[]; if(!p.halloweenCollection.includes(id)) p.halloweenCollection.push(id);
+  if(p.halloweenCollection.length>=10) unlockOwnedTitle(p,"keeper_of_halloween"); refreshProfileBadges(p); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
+}
+
+async function halloweenDaily(env,interaction) {
+  const user=getUserFromInteraction(interaction); if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
+  const p=await getPlayer(env,user.id); const today=easternDateKey();
+  if(p.halloweenDailyDate===today) return sendText(env,interaction,`🎁 **DAILY REWARD ALREADY CLAIMED!**\n\n🔥 Streak: **${Number(p.halloweenDailyStreak||1)} day(s)**\n👻 Spookies: **${Number(p.halloweenSpookies||0).toLocaleString()}**\n\nCome back tomorrow! 🎃` , [row(button("⬅️ Halloween Hub","halloween:hub",2))]);
+  const yesterday=easternDateKey(new Date(Date.now()-24*60*60*1000));
+  p.halloweenDailyStreak=p.halloweenDailyDate===yesterday?Number(p.halloweenDailyStreak||0)+1:1;
+  const rewards=[100,125,150,175,200,250,300]; const reward=rewards[Math.min(p.halloweenDailyStreak-1,rewards.length-1)];
+  p.halloweenDailyDate=today; p.halloweenSpookies=Number(p.halloweenSpookies||0)+reward; refreshProfileBadges(p); await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
+  return sendText(env,interaction,`🎁 **HALLOWEEN DAILY REWARD!**\n\n👻 You received **+${reward} Spookies**!\n🔥 Streak: **${p.halloweenDailyStreak} day(s)**\n👻 Balance: **${p.halloweenSpookies.toLocaleString()} Spookies**\n\nKeep the streak alive tomorrow! 🕷️`,[row(button("⬅️ Halloween Hub","halloween:hub",2))]);
+}
+
+async function halloweenLeaderboard(env,interaction) {
+  const keys=await listAllPlayerKeys(env); const players=[];
+  for(const key of keys){const p=await getPlayer(env,key); if(Number(p.halloweenSpookies||0)>0||Number(p.halloweenGamesPlayed||0)>0)players.push(p);}
+  players.sort((a,b)=>Number(b.halloweenSpookies||0)-Number(a.halloweenSpookies||0));
+  const top=players.slice(0,10); if(!top.length)return sendText(env,interaction,"🏆 **HALLOWEEN LEADERBOARD**\n\nNobody has earned Spookies yet! Be the first! 👻");
+  const lines=top.map((p,i)=>`**${i+1}.** ${getDisplayName(p)} — 👻 **${Number(p.halloweenSpookies||0).toLocaleString()} Spookies**`);
+  return sendText(env,interaction,`🏆🎃 **HALLOWEEN 2026 LEADERBOARD**\n\n${lines.join("\n")}`,[row(button("⬅️ Halloween Hub","halloween:hub",2))]);
+}
+
+function halloweenNewGameBlocked(state){return state.halloween?.activeGame?.status && state.halloween.activeGame.status!=="ended";}
+function halloweenHideLobbyText(g){return `👻 **HAUNTED HIDE & SEEK**\n\n👥 Players: **${Object.keys(g.players||{}).length}/8**\n\nOne player will become the 👹 Lantern Keeper. Everyone else hides.\n\nMinimum **2** players. The host can start when ready.`;}
+function halloweenHideLobbyRows(g){const ids=Object.keys(g.players||{});const host=g.hostId;return [row(button("➕ JOIN",`halloween:hide:join:${g.id}`,1),button("🚪 LEAVE",`halloween:hide:leave:${g.id}`,2),button("▶️ START",`halloween:hide:start:${g.id}`,3,Object.keys(g.players||{}).length<2||host!==g.hostId)),row(button("📖 HOW TO PLAY","halloween:hide:howto",2),button("⬅️ Games","halloween:games",2))];}
+
+function halloweenHideCreate(guildId,user){return {id:`hh-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"hide",status:"lobby",guildId,hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}},round:0,hunterId:"",hiddenRoles:{},ghosts:{},rooms:{},submitted:{},hunterActions:0,evidence:[],traps:[],captured:[],interactionToken:""};}
+
+async function halloweenHideStart(env,interaction,g){
+  const ids=Object.keys(g.players||{}); if(ids.length<2)return sendText(env,interaction,"❌ You need at least 2 players.");
+  const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={};
+  const roles=[...HALLOWEEN_HIDDEN_ROLES].sort(()=>Math.random()-.5); const rooms=Object.fromEntries(ids.map(id=>[id,"Foyer"]));
+  const counts={};
+  for(const id of ids){ if(id===hunterId)continue; let room; let tries=0; do{room=HALLOWEEN_ROOMS.Foyer[randomInt(0,HALLOWEEN_ROOMS.Foyer.length-1)]; tries++;}while((counts[room]||0)>=2&&tries<30); rooms[id]=room; counts[room]=(counts[room]||0)+1; }
+  g.rooms=rooms; let ri=0; for(const id of ids){if(id===hunterId)continue;g.hiddenRoles[id]=roles[ri%roles.length];ri++;}
+  await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
+  for(const id of ids){const role=id===hunterId?"👹 **Lantern Keeper**":`👻 **Hidden — ${g.hiddenRoles[id]}**`; await sendUserDM(env,id,`🎃 **HAUNTED HIDE & SEEK**\n\nYour secret role: ${role}\n\n${id===hunterId?"You are the Hunter. Find the Hidden before they survive all 10 rounds.":"Stay hidden. The Hunter does not know your location."}`);}
+  return sendText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));
+}
+function halloweenHidePublicText(g){const active=Object.keys(g.players||{}).length;return [`👻 **HAUNTED HIDE & SEEK — ROUND ${g.round}/10**`,``,`👹 Lantern Keeper: <@${g.hunterId}>`,`👥 Players: **${active}**`,``,`The Hidden are somewhere inside the manor...`,``,`${g.captured?.length||0} Hidden captured.`,``,`Choose your private action with the button below.`].join("\n");}
+function halloweenHidePublicRows(g){return [row(button("🎮 MY ACTION","halloween:hide:action",1),button("📖 HOW TO PLAY","halloween:hide:howto",2)),row(button("🆘 EXIT","halloween:exit",4))];}
+
+async function halloweenHidePrivateMenu(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ There is no active Haunted Hide & Seek game.");if(!g.players?.[user.id])return sendText(env,interaction,"❌ You are not in this game.");
+  if(user.id===g.hunterId){const actions=[button("🔎 Investigate","halloween:hide:hunter:investigate",1),button("👂 Listen","halloween:hide:hunter:listen",1),button("🧭 Track","halloween:hide:hunter:track",1),button("🪤 Trap","halloween:hide:hunter:trap",1),button("🎯 Capture","halloween:hide:hunter:capture",4)];return sendText(env,interaction,`👹 **LANTERN KEEPER**\n\nActions used: **${g.hunterActions}/2**\nChoose an action.`,[row(...actions),row(button("⏭️ End Round","halloween:hide:hunter:end",3),button("📖 How to Play","halloween:hide:howto",2))]);}
+  if(g.ghosts?.[user.id])return sendText(env,interaction,"👻 **GHOST MODE**\n\nYou can haunt a room to create false activity.",[row(button("👻 HAUNT A ROOM","halloween:hide:ghost",1)),row(button("📖 How to Play","halloween:hide:howto",2))]);
+  const current=g.rooms[user.id]||"Foyer"; const movement=[button("🛑 STAY",`halloween:hide:stay:${current}`,2)]; if(g.round%2===1){for(const room of (HALLOWEEN_ROOMS[current]||[]))movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));}
+  const role=g.hiddenRoles[user.id]; const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?"🕷️ WEB TRAP":role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
+  return sendText(env,interaction,`👻 **HIDDEN — ${role}**\n\nCurrent room: **${current}**\nRound ${g.round}/10 — ${g.round%2===1?"movement is available":"stay round"}.`,[row(...movement.slice(0,4)),row(...movement.slice(4,5)),row(button(abilityLabel,"halloween:hide:ability",3),button("📖 How to Play","halloween:hide:howto",2))]);
+}
+
+async function halloweenHideAdvance(env,interaction,g){
+  const ids=Object.keys(g.players||{}); const hidden=ids.filter(id=>id!==g.hunterId&&!g.ghosts?.[id]);
+  const allHiddenSubmitted=hidden.every(id=>g.submitted?.[id]);
+  if(g.hunterActions<2 || !allHiddenSubmitted)return;
+  if((g.captured||[]).length >= Math.ceil(hidden.length/2)){g.status="ended";await halloweenHideFinish(env,interaction,g,true);return;}
+  if(g.round>=10){g.status="ended";await halloweenHideFinish(env,interaction,g,false);return;}
+  g.round++;g.hunterActions=0;g.submitted={};g.evidence=[];await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});await sendPublicText(env,interaction,`👻 **ROUND ${g.round} BEGINS!**\n\nThe manor shifts in the darkness...`,halloweenHidePublicRows(g));}
+async function halloweenHideFinish(env,interaction,g,hunterWin){const state=await getGuildState(env,interaction.guild_id);const ids=Object.keys(g.players||{});const survivors=ids.filter(id=>id!==g.hunterId&&!g.captured.includes(id));for(const id of ids){await halloweenMarkPlayed(env,id,1);await addHalloweenSpookies(env,id,hunterWin?(id===g.hunterId?250:100):(id===g.hunterId?100:250));}
+  let unlocks=[]; if(!hunterWin){for(const id of survivors){if(!g.everLocated?.[id]){await halloweenUnlock(env,id,"hunters_lantern");unlocks.push(id);await addHalloweenSpookies(env,id,500);}}}
+  state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,`🎃 **HAUNTED HIDE & SEEK COMPLETE**\n\n${hunterWin?`👹 **Hunter Victory!** <@${g.hunterId}> reached the capture target.` : "👻 **Hidden Victory!** The Hidden survived all 10 rounds."}\n\n🏮 The Hunter's Lantern ${unlocks.length?"was earned by surviving Hidden players.":"was not unlocked this game."}`,[]);
+}
+
+async function halloweenHideComponent(env,interaction,parts){const action=parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
+  if(action==="join"){if(!g||g.type!=="hide"||g.status!=="lobby")return sendText(env,interaction,"❌ No Haunted Hide & Seek lobby is waiting.");if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ The lobby is full.");g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}
+  if(action==="leave"){if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in the lobby.");delete g.players[user.id];if(!Object.keys(g.players).length)state.halloween.activeGame=null;else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,state.halloween.activeGame?halloweenHideLobbyText(g):"👻 Lobby closed.",state.halloween.activeGame?halloweenHideLobbyRows(g):[]);}
+  if(action==="start"){if(!g||g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start.");return halloweenHideStart(env,interaction,g);}
+  if(action==="action")return halloweenHidePrivateMenu(env,interaction);
+  if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ That game is no longer active.");
+  if(user.id!==g.hunterId && g.ghosts?.[user.id] && action==="ghost"){
+    const room=HALLOWEEN_ZOMBIE_LOCATIONS[randomInt(0,HALLOWEEN_ZOMBIE_LOCATIONS.length-1)];g.evidence.push({type:"ghost",room,message:"A cold presence moves through the room."});await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`👻 You haunted **${room}**. The Hunter may hear something there.`);
+  }
+  if(user.id!==g.hunterId && action==="move"){const room=parts.slice(3).join(":");const current=g.rooms[user.id];if(g.round%2!==1||!(HALLOWEEN_ROOMS[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there this round.");g.rooms[user.id]=room;g.submitted[user.id]=true;g.evidence.push({type:"movement",room,player:user.id});g.everLocated=g.everLocated||{};await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`👻 You slipped into **${room}**. Your movement left a faint trail.`);}
+  if(user.id!==g.hunterId && action==="stay"){g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"🤫 You stayed perfectly still.");}
+  if(user.id!==g.hunterId && action==="ability"){const role=g.hiddenRoles[user.id];g.usedAbilities=g.usedAbilities||{};if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");g.usedAbilities[user.id]=true;g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role});g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`✨ **${role} ability used.** Your move is locked for this round.`);}
+  if(user.id===g.hunterId && action==="hunter")return halloweenHidePrivateMenu(env,interaction);
+  if(user.id===g.hunterId && action==="hunter" )return;
+  if(user.id===g.hunterId && ["investigate","listen","track","trap"].includes(action)){
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");g.hunterActions++;
+    if(action==="investigate"){const room=HALLOWEEN_ROOMS["Foyer"][randomInt(0,2)];const occupants=Object.entries(g.rooms).filter(([id,r])=>r===room&&id!==g.hunterId&&!g.captured.includes(id));g.evidence.push({type:"investigate",room});return sendText(env,interaction,`🔎 **Investigation:** **${room}**\n${occupants.length?"You find fresh signs of someone nearby.":"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="listen"){const rooms=Object.entries(g.rooms).filter(([id])=>id!==g.hunterId&&!g.captured.includes(id));const clue=rooms.length?rooms[randomInt(0,rooms.length-1)][1]:"quiet";return sendText(env,interaction,`👂 **Listen:** You hear faint activity around **${clue}**.\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="track"){const ev=(g.evidence||[]).filter(e=>e.type==="movement").slice(-1)[0];return sendText(env,interaction,`🧭 **Track:** ${ev?`A fresh trail points toward **${ev.room}**.`:"There is no fresh trail to follow."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="trap"){const room=Object.keys(HALLOWEEN_ROOMS)[randomInt(0,Object.keys(HALLOWEEN_ROOMS).length-1)];g.traps.push(room);return sendText(env,interaction,`🪤 **Trap placed** in **${room}**.\n\nHunter actions: ${g.hunterActions}/2`);}
+  }
+  if(user.id===g.hunterId && action==="capture"){
+    const hidden=Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
+    const rows=[];for(let i=0;i<hidden.length;i+=3)rows.push(row(...hidden.slice(i,i+3).map(id=>button(g.players[id].name,`halloween:hide:capturetarget:${id}`,4))));return sendText(env,interaction,"🎯 **Choose who you think you're capturing:**",rows);
+  }
+  if(user.id===g.hunterId && action==="capturetarget"){
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3];const rows=[];for(const room of Object.keys(HALLOWEEN_ROOMS))rows.push(button(room,`halloween:hide:captureroom:${target}:${room}`,2));return sendText(env,interaction,"🎯 **Choose the room:**",[...Array.from({length:Math.ceil(rows.length/3)},(_,i)=>row(...rows.slice(i*3,i*3+3)))]);
+  }
+  if(user.id===g.hunterId && action==="captureroom"){
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3],room=parts.slice(4).join(":");g.hunterActions++;g.everLocated=g.everLocated||{};if(g.rooms[target]===room){g.everLocated[target]=true;g.captured.push(target);g.ghosts[target]=true;return sendText(env,interaction,`🎯 **CAPTURE SUCCESS!** <@${target}> was found in **${room}**!\nThey are now a Ghost.`,await halloweenHideAdvance(env,interaction,g)||halloweenHidePublicRows(g));}g.everLocated[target]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"❌ **Capture missed.** Your guess was wrong.");
+  }
+  if(user.id===g.hunterId && action==="end"){g.hunterActions=2;await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"⏭️ Hunter ended the round.");}
+}
+
+async function halloweenZombieLobby(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const user=getUserFromInteraction(interaction);const g={id:`zp-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"zombie",status:"lobby",hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}}};state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧟 **ZOMBIE PANIC**\n\n👥 Players: **1/8**\n\nNeed **3–8 players**.`,[row(button("➕ JOIN","halloween:zombie:join",1),button("🚪 LEAVE","halloween:zombie:leave",2),button("▶️ START","halloween:zombie:start",3)),row(button("📖 HOW TO PLAY","halloween:zombie:howto",2),button("⬅️ Games","halloween:games",2))]);}
+function zombiePublicText(g){const p=Object.values(g.players||{});return [`🧟 **ZOMBIE PANIC — ROUND ${g.round}/12**`,``,`☣️ Threat: **${g.threat}/100** — **${g.threatBand}**`,`👥 Survivors/Players: **${p.filter(x=>!x.eliminated).length}**`,`🚨 Objectives: Vehicle **${g.objectives.vehicle}/5** • Fuel **${g.objectives.fuel}/3** • Radio **${g.objectives.radio}/4**`,``,`The infection is spreading. Nobody knows who Patient Zero is.`].join("\n");}
+function zombieRows(g,userId){const p=g.players[userId];const rows=[];if(g.status==="lobby")return [row(button("➕ JOIN","halloween:zombie:join",1),button("🚪 LEAVE","halloween:zombie:leave",2),button("▶️ START","halloween:zombie:start",3,Object.keys(g.players).length<3||g.hostId!==userId)),row(button("📖 HOW TO PLAY","halloween:zombie:howto",2),button("⬅️ Games","halloween:games",2))];if(!p)return [];rows.push(row(button("🚶 MOVE","halloween:zombie:move",1),button("🔎 SEARCH","halloween:zombie:search",1),button("🩺 MEDICINE","halloween:zombie:medicine",2),button("🧪 ANTIDOTE","halloween:zombie:antidote",3)));rows.push(row(button("🩸 BLOOD TEST","halloween:zombie:test",2),button("🤝 TEAM UP","halloween:zombie:team",1),button("📻 OBJECTIVE","halloween:zombie:objective",1),button("🧟 SECRET ZOMBIE ACTION","halloween:zombie:zaction",4,p.role!=="Zombie")));rows.push(row(button("📖 HOW TO PLAY","halloween:zombie:howto",2),button("🆘 EXIT","halloween:exit",4)));return rows;}
+async function zombieStart(env,interaction,g){const ids=Object.keys(g.players);if(ids.length<3)return sendText(env,interaction,"❌ Zombie Panic needs at least 3 players.");g.status="playing";g.round=1;g.threat=0;g.threatBand="STABLE";g.patientZero=ids[randomInt(0,ids.length-1)];g.objectives={vehicle:0,fuel:0,radio:0};g.currentActions={};g.locations={};g.infection={};g.items={};g.zombies={};g.evacuated=[];g.eliminated=[];for(const id of ids){g.locations[id]=HALLOWEEN_ZOMBIE_LOCATIONS[randomInt(0,HALLOWEEN_ZOMBIE_LOCATIONS.length-1)];g.infection[id]=id===g.patientZero?4:0;g.items[id]=[];g.players[id].role=id===g.patientZero?"Patient Zero":"Survivor";g.players[id].eliminated=false;g.players[id].actionTaken=false;g.players[id].charges=id===g.patientZero?2:0;}
+  await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});for(const id of ids){await sendUserDM(env,id,id===g.patientZero?"☣️ **You are PATIENT ZERO.** You begin Fully Infected. Use the secret Zombie action button and blend in.":"🧍 **You are a Survivor.** There is an infected player among you. Keep the evacuation objectives moving.");}return sendText(env,interaction,zombiePublicText(g),zombieRows(g,getUserFromInteraction(interaction).id));}
+function zombieThreatBand(n){return n>=100?"APOCALYPSE":n>=76?"CRITICAL":n>=51?"OUTBREAK":n>=26?"UNSTABLE":"STABLE";}
+async function zombieEndRound(env,interaction,g){const ids=Object.keys(g.players);if(!ids.every(id=>g.players[id].eliminated||g.players[id].actionTaken))return;for(const id of ids){if(g.players[id].eliminated)continue;g.players[id].actionTaken=false;}
+  g.round++;g.threat=Math.min(100,Number(g.threat||0)+(g.round<=5?1:g.round<=9?2:3));g.threatBand=zombieThreatBand(g.threat);for(const id of ids){if(g.infection[id]>=4)g.players[id].role="Zombie";if(g.infection[id]>=4)g.zombies[id]=true;}
+  if(g.objectives.vehicle>=5&&g.objectives.fuel>=3&&g.objectives.radio>=4&&g.round>=10){g.status="ended";return zombieFinish(env,interaction,g,true);}
+  if(g.round>12){g.status="ended";return zombieFinish(env,interaction,g,false);}await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});return sendPublicText(env,interaction,zombiePublicText(g),zombieRows(g,getUserFromInteraction(interaction).id));}
+async function zombieFinish(env,interaction,g,survivorsWin){const state=await getGuildState(env,interaction.guild_id);const ids=Object.keys(g.players);for(const id of ids){await halloweenMarkPlayed(env,id,1);const win=survivorsWin?g.infection[id]<4&&!g.eliminated.includes(id):g.infection[id]>=4;await addHalloweenSpookies(env,id,win?400:100);}
+  if(survivorsWin){for(const id of ids){if(g.infection[id]>=4)continue;if(g.usedAntidoteBy?.[id]){await halloweenUnlock(env,id,"last_antidote");await addHalloweenSpookies(env,id,500);}}}
+  state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendPublicText(env,interaction,`🧟 **ZOMBIE PANIC COMPLETE**\n\n${survivorsWin?"🏆 **SURVIVOR VICTORY!** The evacuation succeeded.":"☣️ **ZOMBIE VICTORY!** The outbreak won."}`,[]);}
+async function zombieComponent(env,interaction,parts){const action=parts[2];const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **ZOMBIE PANIC — HOW TO PLAY**","","👥 3–8 players. One random player is Patient Zero.","☣️ Infection rises from Clean → Exposed → Infected → Critical → Full Infection.","🧟 Full Zombies secretly act against the Survivors.","🛠️ Complete Vehicle, Fuel, and Radio objectives to unlock evacuation.","🧪 Antidotes can completely cure a Full Zombie.","🏆 Survivors win by completing evacuation; Zombies win if the outbreak takes over."].join("\n"),[row(button("⬅️ Back","halloween:zombie:menu",2))]);if(!g||g.type!=="zombie")return sendText(env,interaction,"❌ No Zombie Panic game is active.");if(action==="join"){if(g.status!=="lobby")return sendText(env,interaction,"❌ The game already started.");if(g.players[user.id])return sendText(env,interaction,"❌ You're already in.");if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ Lobby full.");g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧟 **ZOMBIE PANIC**\n\nPlayers: **${Object.keys(g.players).length}/8**`,zombieRows(g,user.id));}
+  if(action==="leave"){if(g.players[user.id])delete g.players[user.id];if(!Object.keys(g.players).length)state.halloween.activeGame=null;else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🚪 You left Zombie Panic.",state.halloween.activeGame?zombieRows(g,user.id):[]);}
+  if(action==="start"){if(user.id!==g.hostId)return sendText(env,interaction,"❌ Host only.");return zombieStart(env,interaction,g);}
+  if(action==="menu")return sendText(env,interaction,zombiePublicText(g),zombieRows(g,user.id));
+  if(g.status!=="playing"||!g.players[user.id])return sendText(env,interaction,"❌ You aren't in an active Zombie Panic game.");
+  const p=g.players[user.id];if(p.actionTaken)return sendText(env,interaction,"🔒 You already acted this round. Wait for the others.");
+  if(action==="move"){const choices=HALLOWEEN_ZOMBIE_LOCATIONS.filter(x=>x!==g.locations[user.id]);return sendText(env,interaction,"🚶 **Choose a connected destination:**",[row(...choices.slice(0,4).map(x=>button(x,`halloween:zombie:moveto:${x}`,1))),row(...choices.slice(4,8).map(x=>button(x,`halloween:zombie:moveto:${x}`,1))) ]);}
+  if(action==="moveto"){const dest=parts.slice(3).join(":");g.locations[user.id]=dest;p.actionTaken=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+  if(action==="search"){p.actionTaken=true;const roll=Math.random();if(roll<.18)g.items[user.id].push("Antidote");else if(roll<.4)g.items[user.id].push("Medicine");else if(roll<.7)g.items[user.id].push("Repair Part");else if(roll<.9)g.items[user.id].push("Food");await saveGuildState(env,interaction.guild_id,state); return zombieEndRound(env,interaction,g);}
+  if(action==="medicine"){const i=g.items[user.id].indexOf("Medicine");if(i<0)return sendText(env,interaction,"❌ You don't have Medicine.");g.items[user.id].splice(i,1);g.infection[user.id]=Math.max(0,g.infection[user.id]-1);p.actionTaken=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+  if(action==="antidote"){const i=g.items[user.id].indexOf("Antidote");if(i<0)return sendText(env,interaction,"❌ You don't have an Antidote.");g.items[user.id].splice(i,1);const target=user.id;g.infection[target]=0;p.actionTaken=true;g.usedAntidoteBy=g.usedAntidoteBy||{};g.usedAntidoteBy[user.id]=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+  if(action==="test"){return sendEphemeralFollowup(env,interaction,`🩸 **BLOOD TEST:** Your infection stage is **${g.infection[user.id]}/4**.`);}
+  if(action==="team"){p.actionTaken=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+  if(action==="objective"){if(g.locations[user.id]==="Garage")g.objectives.vehicle=Math.min(5,g.objectives.vehicle+1);else if(g.locations[user.id]==="Gas Station")g.objectives.fuel=Math.min(3,g.objectives.fuel+1);else if(g.locations[user.id]==="Radio Tower")g.objectives.radio=Math.min(4,g.objectives.radio+1);else return sendText(env,interaction,"❌ You need to be at Garage, Gas Station, or Radio Tower.");p.actionTaken=true;g.threat=Math.max(0,g.threat-3);await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+  if(action==="zaction"){if(g.infection[user.id]<4)return sendText(env,interaction,"❌ You are not a Zombie.");const targets=Object.keys(g.players).filter(id=>id!==user.id&&!g.players[id].eliminated&&g.infection[id]<4);if(!targets.length)return sendText(env,interaction,"❌ No valid Survivor targets.");const target=targets[randomInt(0,targets.length-1)];g.infection[target]=Math.min(4,g.infection[target]+1);g.threat=Math.min(100,g.threat+5);p.actionTaken=true;await saveGuildState(env,interaction.guild_id,state);return zombieEndRound(env,interaction,g);}
+}
+
+async function halloweenTrickOrTreat(env,interaction){const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");const p=await getPlayer(env,user.id);const today=easternDateKey();if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\n\nCome back tomorrow for another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);p.halloweenTrickTreatDate=today;const roll=Math.random();let outcome,amount=0,rare=false;if(roll<.10){outcome="rare";rare=true;amount=250;}else if(roll<.65){outcome="treat";amount=[50,100,200,500][randomInt(0,3)];}else{outcome="trick";amount=-[25,50,100][randomInt(0,2)];}p.halloweenTrickTreatOutcomes=Array.isArray(p.halloweenTrickTreatOutcomes)?p.halloweenTrickTreatOutcomes:[];if(!p.halloweenTrickTreatOutcomes.includes(outcome))p.halloweenTrickTreatOutcomes.push(outcome);p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+amount);p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+1;let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
+  refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${rare?"🎃 **SOMETHING IS WRONG...** You found the rare cursed outcome!":""}\n${amount>=0?`🍭 Treat! **+${amount} Spookies**`:`😈 Trick! **${Math.abs(amount)} Spookies were taken!**`}\n\n👻 Balance: **${p.halloweenSpookies.toLocaleString()} Spookies**\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🎃 Back to Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);}
+
+async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
+async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ You are not stuck in an active Halloween game.");if(g.players?.[user.id]){if(g.type==="hide"){delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}else{delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **YOU'VE BEEN RELEASED!**\n\nYou left the active Halloween game without receiving a win or completion reward. 🎃");}return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");}
+
+async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub")return sendText(env,interaction,halloweenHubText(),halloweenHubComponents());if(id==="halloween:games")return sendText(env,interaction,"🎮 **HALLOWEEN GAMES**\n\nChoose your game.",halloweenGameMenuComponents());if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+
 async function handleCommand(
   env,
   interaction
 ) {
   const name =
     interaction.data?.name;
+
+  if (name === "halloweens") { await sendText(env, interaction, halloweenHubText(), halloweenHubComponents()); return; }
+  if (name === "collections") { await halloweenArchive(env, interaction); return; }
+  if (name === "halloween") { await handleHalloweenCommand(env, interaction); return; }
 
   if (name === "news") { await handleNewsCommand(env, interaction); return; }
   if (name === "blacklist") { await handleBlacklistCommand(env, interaction); return; }
@@ -31491,6 +31835,13 @@ async function handlePastelRules(env,interaction){await sendEphemeralFollowup(en
 ========================================================= */
 
 const COMMANDS = [
+  { name: "halloweens", description: "Open the Halloween 2026 hub" },
+  { name: "collections", description: "Open the permanent event collection archive" },
+  {
+    name: "halloween",
+    description: "Halloween emergency controls",
+    options: [{ type: 1, name: "end", description: "Leave your active Halloween game without rewards" }]
+  },
   {
     name: "birthday",
     description: "Open the Birthday Party hub"
@@ -32907,6 +33258,7 @@ export default {
     const isSurpriseAlertComponent = interaction.type === 3 && customId.startsWith("surprise_alert:");
     const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     const isBirthdayComponent = interaction.type === 3 && customId.startsWith("birthday:");
+    const isHalloweenComponent = interaction.type === 3 && (customId.startsWith("halloween:") || customId.startsWith("collection:"));
     const isPermanentGameComponent = interaction.type === 3 && (customId.startsWith("talent:") || customId.startsWith("truthpass:"));
     const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
     const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal");
@@ -33318,6 +33670,8 @@ export default {
       } else if (isPastelComponent) {
         update = true;
       } else if (isBirthdayComponent) {
+        update = true;
+      } else if (isHalloweenComponent) {
         update = true;
       } else if (isPermanentGameComponent || isPermanentGameModal) {
         update = true;
