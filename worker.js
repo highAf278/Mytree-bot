@@ -15671,9 +15671,7 @@ async function handleComponent(
     if(id.startsWith("collection:halloween:page:")) return sendHalloweenBook(env,interaction,Number(parts[3]||0));
     if(id==="collection:halloween:unlock") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); return sendText(env,interaction,halloweenUnlockText(p),[row(button("⬅️ Back to Book","collection:halloween",2))]); }
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
-    if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**
-
-More permanent event books are coming soon! 🕷️");
+    if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
   }
   if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
