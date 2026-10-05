@@ -29321,6 +29321,8 @@ async function renderHalloweenBook(env, player, spread) {
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
     await page.setViewport({width: 1200, height: 760, deviceScaleFactor: 1});
+    page.setDefaultNavigationTimeout(15000);
+    page.setDefaultTimeout(15000);
     const owned = new Set(player.halloweenCollection || []);
     const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
     const slots = [0,1].map(i => ({ idx: spread * 2 + i, label: `COLLECTIBLE #${spread * 2 + i + 1}` }));
@@ -29342,9 +29344,12 @@ async function renderHalloweenBook(env, player, spread) {
       .caption{margin-top:10px;font-size:25px;font-weight:900;color:#2a1009;text-shadow:0 1px 0 #ffcf78;max-width:350px}
       .pageNo{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;color:#3a170d}
     </style></head><body><div class="book">${content}<div class="pageNo">HALLOWEEN 2026 • SPREAD ${spread+1} OF 5</div></div></body></html>`;
-    await page.setContent(html,{waitUntil:"load"});
-    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
-    return await page.screenshot({type:"png"});
+    await page.setContent(html,{waitUntil:"domcontentloaded",timeout:15000});
+    await Promise.race([
+      page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}})))),
+      new Promise(r=>setTimeout(r,10000))
+    ]);
+    return await page.screenshot({type:"png",timeout:15000});
   } finally { if(browser) try{await browser.close();}catch{} }
 }
 
