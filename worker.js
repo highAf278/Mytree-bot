@@ -15670,6 +15670,7 @@ async function handleComponent(
   interaction,
   ctx = null
 ) {
+  interaction.__requestUrl = interaction.__requestUrl || env.BASE_URL || "";
   const id =
     interaction.data?.custom_id ||
     "";
@@ -29710,7 +29711,7 @@ async function processSpookSmashTick(env,request,ctx,guildId,userId,session){
   ctx.waitUntil(scheduleSpookSmashTick(request.url,guildId,userId,session,Math.min(delay,Math.max(100,Number(current.endAt||0)-Date.now()))));
 }
 
-async function startSpookSmash(env, interaction) {
+async function startSpookSmash(env, interaction, ctx = null) {
   const user = getUserFromInteraction(interaction);
   const guildId = interaction.guild_id;
   if (!user || !guildId) return sendText(env, interaction, "❌ Spook N Smash can only be played inside a server.");
@@ -29742,8 +29743,14 @@ async function startSpookSmash(env, interaction) {
   await spookSmashSave(env, guildId, user.id, g);
   await spookSmashSaveBoard(env, guildId, user.id, spookSmashMakeBoard(1));
   const board = await spookSmashLoadBoard(env, guildId, user.id);
-  await editSpookSmashBoard(env,interaction,{...g,board},Date.now());
-  const tickUrl=new URL(interaction.__requestUrl); tickUrl.pathname="/__werewives_spook_smash_tick"; tickUrl.search=new URLSearchParams({guild:g.guildId,user:g.userId,session:g.session}).toString();
+  // A Puppeteer render can take longer than Discord's 3-second interaction window.
+  // Acknowledge the button immediately, then render/edit the game message.
+  const deferred = await deferInteraction(env, interaction);
+  if (!deferred) return;
+  await editSpookSmashBoard(env, interaction, {...g,board}, Date.now());
+  if (ctx && interaction.__requestUrl) {
+    ctx.waitUntil(scheduleSpookSmashTick(interaction.__requestUrl, guildId, user.id, session, 1200));
+  } tickUrl.search=new URLSearchParams({guild:g.guildId,user:g.userId,session:g.session}).toString();
   await fetch(tickUrl.toString(),{method:"GET"});
 }
 
@@ -30282,7 +30289,7 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");if(!g.players?.[user.id] && user.id!==env.OWNER_ID)return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
 
-async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
