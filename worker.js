@@ -29342,56 +29342,85 @@ function halloweenBookComponents(spread) {
   ];
 }
 
-function halloweenBookData(player, spread=0, renderedBookUrl=null) {
+function halloweenBookCollectionConfig() {
+  /*
+    The book has 10 slots total: two collectible frames per spread.
+    The first four already have artwork in R2.  Slots 5-10 are deliberately
+    configured without artwork until those collectibles are released.
+
+    When a future collectible is added, put its R2 image name in IMAGES and
+    add the matching image key here.  The book renderer will automatically
+    place it in that collectible's frame only for players who own it.
+  */
+  return [
+    {
+      id: "hunters_lantern",
+      title: "🏮 The Hunter's Lantern",
+      requirement: "Survive all 10 rounds of Haunted Hide & Seek without the Hunter correctly locating your room.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.lantern
+    },
+    {
+      id: "last_antidote",
+      title: "🧪 The Last Antidote",
+      requirement: "Cure a Full Zombie with an Antidote and successfully escape in Zombie Panic.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.antidote
+    },
+    {
+      id: "cursed_candy_bucket",
+      title: "🍬 The Cursed Candy Bucket",
+      requirement: "Experience all three Trick-or-Treat outcome types, including the rare outcome.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.candy
+    },
+    {
+      id: "smasher_relic",
+      title: "🔨 The Smasher's Relic",
+      requirement: "Reach Wave 6: JACKPOT and smash a Golden Pumpkin without ever hitting a Skull during that run.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.smasherRelic
+    },
+    { id: "collectible_5", title: "🎃 Halloween Collectible #5", requirement: "Coming soon...", imageKey: null },
+    { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
+    { id: "collectible_7", title: "🎃 Halloween Collectible #7", requirement: "Coming soon...", imageKey: null },
+    { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
+    { id: "collectible_9", title: "🎃 Halloween Collectible #9", requirement: "Coming soon...", imageKey: null },
+    { id: "collectible_10", title: "🎃 Halloween Collectible #10", requirement: "Coming soon...", imageKey: null }
+  ];
+}
+
+function halloweenBookComponents(spread) {
+  const s = Math.max(0, Math.min(4, Number(spread) || 0));
+  return [
+    row(
+      button("◀️", `collection:halloween:page:${Math.max(0, s - 1)}`, 2, s === 0),
+      button("▶️", `collection:halloween:page:${Math.min(4, s + 1)}`, 2, s === 4)
+    ),
+    row(button("🔓 HOW TO UNLOCK", "collection:halloween:unlock", 3), button("🔙 BACK", "collection:halloween", 2))
+  ];
+}
+
+function halloweenBookData(player, spread=0, imageUrlOverride=null) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
   const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
-  const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket", "smasher_relic"];
-  const titles = {
-    hunters_lantern: "🏮 The Hunter's Lantern",
-    last_antidote: "🧪 The Last Antidote",
-    cursed_candy_bucket: "🍬 The Cursed Candy Bucket",
-    smasher_relic: "🔨 The Smasher's Relic"
-  };
-  const requirements = {
-    hunters_lantern: "Survive all 10 rounds of Haunted Hide & Seek without the Hunter correctly locating your room.",
-    last_antidote: "Cure a Full Zombie with an Antidote and successfully escape in Zombie Panic.",
-    cursed_candy_bucket: "Experience all three Trick-or-Treat outcome types, including the rare outcome.",
-    smasher_relic: "Reach Wave 6: JACKPOT and smash a Golden Pumpkin without ever hitting a Skull during that run."
-  };
-
+  const collection = halloweenBookCollectionConfig();
   const firstIndex = s * 2;
+
   const fields = [0, 1].map(offset => {
     const index = firstIndex + offset;
-    const key = actualKeys[index];
-    if (!key) {
-      return {
-        name: `🔒 COLLECTIBLE #${index + 1}`,
-        value: "*Coming soon...*",
-        inline: true
-      };
+    const item = collection[index];
+    if (!item) return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Coming soon...*", inline: true };
+    if (owned.has(item.id)) {
+      return { name: `✅ ${item.title}`, value: item.requirement, inline: true };
     }
-    if (owned.has(key)) {
-      return {
-        name: `✅ ${titles[key]}`,
-        value: requirements[key],
-        inline: true
-      };
-    }
-    return {
-      name: `🔒 COLLECTIBLE #${index + 1}`,
-      value: "*Undiscovered — check HOW TO UNLOCK to see the clue.*",
-      inline: true
-    };
+    return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Undiscovered — check HOW TO UNLOCK to see the clue.*", inline: true };
   });
 
   return {
     content: `📖 **HALLOWEEN 2026 — SPREAD ${s + 1}/5**\n\n**${owned.size}/10 collectibles discovered.**`,
     embeds: [{
       title: `🎃 HALLOWEEN ARCHIVE • SPREAD ${s + 1}/5`,
-      description: "*The pages of the Halloween archive turn without leaving Discord. Your discoveries are shown on each spread.*",
+      description: "*Your unlocked relics are physically placed inside their book frames.*",
       color: 0x8b3a12,
       fields,
-      image: { url: renderedBookUrl || imageUrl(IMAGES.halloweenBookPages) },
+      image: { url: imageUrlOverride || imageUrl(IMAGES.halloweenBookPages) },
       footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
     }],
     components: halloweenBookComponents(s),
@@ -29400,111 +29429,68 @@ function halloweenBookData(player, spread=0, renderedBookUrl=null) {
 }
 
 /* =========================================================
-   HALLOWEEN BOOK — RENDER DISCOVERIES INTO THE PAGE ART
-   The static book page remains the background. Owned collectibles
-   are placed into the two blank display frames for the current spread.
-   This is separate from Spook N Smash, so the game remains buttons-only.
+   HALLOWEEN BOOK — DIRECT PNG COMPOSITE
+
+   This intentionally does NOT use Puppeteer/Browser Rendering.
+   The Worker already has a pure-JS PNG decoder/compositor used elsewhere
+   in WereWives.  We use that same pipeline here:
+
+   1. Fetch the book-page PNG from the public R2 asset URL.
+   2. Fetch only the collectible images the player actually owns.
+   3. Resize each owned relic to fit its matching frame.
+   4. Composite the relic directly onto the page PNG.
+   5. Send the finished PNG to Discord as the book image.
+
+   This means Discord receives ONE image: the actual book page with the
+   unlocked collectible artwork physically inside it. Locked slots remain
+   untouched. Opening the book never launches a browser.
 ========================================================= */
-async function renderHalloweenBookImage(env, player, spread) {
-  let browser;
-  try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 1 });
+const HALLOWEEN_BOOK_SLOT_LAYOUT = [
+  // These are percentages of the actual book-page image.  The page artwork
+  // is reused for every spread, with two display frames per spread.
+  { left: 0.26, top: 0.22, width: 0.28, height: 0.30 },
+  { left: 0.64, top: 0.22, width: 0.28, height: 0.30 }
+];
 
-    const s = Math.max(0, Math.min(4, Number(spread) || 0));
-    const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
-    const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket", "smasher_relic"];
-    const assetKeys = {
-      hunters_lantern: HALLOWEEN_BOOK_ASSETS.lantern,
-      last_antidote: HALLOWEEN_BOOK_ASSETS.antidote,
-      cursed_candy_bucket: HALLOWEEN_BOOK_ASSETS.candy,
-      smasher_relic: HALLOWEEN_BOOK_ASSETS.smasherRelic
-    };
+async function renderHalloweenBookDirect(env, player, spread) {
+  const s = Math.max(0, Math.min(4, Number(spread) || 0));
+  const collection = halloweenBookCollectionConfig();
+  const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
+  const base = await getPngAsset(env, IMAGES.halloweenBookPages);
+  if (!base) throw new Error("Halloween book page asset is missing.");
 
-    const firstIndex = s * 2;
-    const slots = [0, 1].map(offset => {
-      const key = actualKeys[firstIndex + offset];
-      return key && owned.has(key) ? {
-        key,
-        url: imageUrl(assetKeys[key])
-      } : null;
-    });
+  const scene = {
+    width: base.width,
+    height: base.height,
+    data: new Uint8Array(base.data)
+  };
+  scene.data.set(base.data);
 
-    const overlay = (slot, side) => {
-      if (!slot) return "";
-      const left = side === "left" ? "26%" : "64%";
-      return `<img class="collectible ${side}" src="${slot.url}" alt="">`;
-    };
+  const firstIndex = s * 2;
 
-    const html = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  *{box-sizing:border-box}
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
-  body{font-family:Arial,sans-serif}
-  #book{
-    width:1200px;
-    height:800px;
-    position:relative;
-    overflow:hidden;
-    background:transparent;
-  }
-  .pages{
-    position:absolute;
-    inset:0;
-    width:100%;
-    height:100%;
-    object-fit:contain;
-  }
-  .collectible{
-    position:absolute;
-    top:22%;
-    width:28%;
-    height:30%;
-    object-fit:contain;
-    object-position:center;
-    z-index:5;
-    filter:drop-shadow(0 4px 5px rgba(0,0,0,.28));
-  }
-  .collectible.left{left:26%}
-  .collectible.right{left:64%}
-</style>
-</head>
-<body>
-  <div id="book">
-    <img class="pages" src="${imageUrl(IMAGES.halloweenBookPages)}">
-    ${overlay(slots[0], "left")}
-    ${overlay(slots[1], "right")}
-  </div>
-</body>
-</html>`;
+  for (let slot = 0; slot < 2; slot++) {
+    const item = collection[firstIndex + slot];
+    if (!item || !owned.has(item.id) || !item.imageKey) continue;
 
-    await page.setContent(html, { waitUntil: "load" });
-    await page.evaluate(async () => {
-      await Promise.all(
-        Array.from(document.images).map(img =>
-          img.complete
-            ? Promise.resolve()
-            : new Promise(resolve => {
-                img.onload = resolve;
-                img.onerror = resolve;
-              })
-        )
-      );
-    });
+    try {
+      const asset = await getPngAsset(env, IMAGES[item.imageKey]);
+      if (!asset) continue;
 
-    return await page.screenshot({ type: "png" });
-  } catch (error) {
-    console.error("Halloween book render failed:", error);
-    return null;
-  } finally {
-    if (browser) {
-      try { await browser.close(); } catch {}
+      const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
+      const boxWidth = Math.max(1, Math.round(scene.width * box.width));
+      const boxHeight = Math.max(1, Math.round(scene.height * box.height));
+      const layer = containRGBA(asset, boxWidth, boxHeight);
+      const x = Math.round(scene.width * box.left + (boxWidth - layer.width) / 2);
+      const y = Math.round(scene.height * box.top + (boxHeight - layer.height) / 2);
+
+      alphaComposite(scene, layer, x, y, 1);
+    } catch (error) {
+      // One broken collectible must never make the entire book unusable.
+      console.warn(`Halloween collectible render skipped for ${item.id}:`, error?.message || error);
     }
   }
+
+  return rgbaToRgbPng(scene);
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
@@ -29513,39 +29499,37 @@ async function sendHalloweenBook(env, interaction, spread=0) {
 
   const player = await getPlayer(env, user.id);
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
-  const rendered = await renderHalloweenBookImage(env, player, s);
 
-  // If Browser Rendering is unavailable, fall back to the original static
-  // book page instead of breaking the collection menu.
-  if (!rendered) {
-    return editOriginalResponse(env, interaction, halloweenBookData(player, s));
-  }
+  try {
+    const rendered = await renderHalloweenBookDirect(env, player, s);
+    const payload = halloweenBookData(player, s, "attachment://halloween-book.png");
 
-  const payload = halloweenBookData(player, s, "attachment://halloween-book.png");
-  const form = new FormData();
-  form.append(
-    "payload_json",
-    JSON.stringify({
+    const form = new FormData();
+    form.append("payload_json", JSON.stringify({
       content: payload.content,
       embeds: payload.embeds,
       components: payload.components,
       attachments: [{ id: 0, filename: "halloween-book.png" }],
       flags: 64
-    })
-  );
-  form.append("files[0]", new Blob([rendered], { type: "image/png" }), "halloween-book.png");
+    }));
+    form.append("files[0]", new Blob([rendered], { type: "image/png" }), "halloween-book.png");
 
-  const response = await fetch(
-    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
-    { method: "PATCH", body: form }
-  );
+    const response = await fetch(
+      `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
+      { method: "PATCH", body: form }
+    );
 
-  if (!response.ok) {
-    console.error("Halloween book image update failed:", response.status, await response.text());
+    if (!response.ok) {
+      console.error("Halloween book image update failed:", response.status, await response.text());
+      return editOriginalResponse(env, interaction, halloweenBookData(player, s));
+    }
+    return response;
+  } catch (error) {
+    console.error("Halloween direct book render failed:", error);
+    // Never strand the user on a loading response.  If the direct image
+    // pipeline fails, show the normal page immediately as a safe fallback.
     return editOriginalResponse(env, interaction, halloweenBookData(player, s));
   }
-
-  return response;
 }
 
 
