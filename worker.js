@@ -7804,7 +7804,7 @@ async function handleWater(
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\\n\\n${message}`,
+          `❌ Water couldn't be completed.\n\n${message}`,
         components:
           treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
@@ -29587,10 +29587,10 @@ async function zombieComponent(env,interaction,parts){const action=parts[2];cons
 async function halloweenTrickOrTreat(env,interaction,targetId=null){
   const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
   const p=await getPlayer(env,user.id);const today=easternDateKey();
-  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\\n\\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
+  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\n\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
 
   if(!targetId){
-    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\\n\\nWhose door are you knocking on? 👀🎃\\n\\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
+    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\n\nWhose door are you knocking on? 👀🎃\n\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
       {type:1,components:[{type:5,custom_id:"halloween:trick:target_select",placeholder:"🏚️ Choose whose door to knock on...",min_values:1,max_values:1}],},
       row(button("⬅️ Halloween Games","halloween:games",2))
     ]);
@@ -29668,10 +29668,10 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
   p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[];let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
   refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
   const story=rare?rareLines[randomInt(0,rareLines.length-1)]:outcome==="treat"?treatLines[randomInt(0,treatLines.length-1)]:trickLines[randomInt(0,trickLines.length-1)];
-  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\\n\\n${story}\\n\\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\\n\\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
+  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${story}\n\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
 }
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
-async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ You are not stuck in an active Halloween game.");if(g.players?.[user.id]){if(g.type==="hide"){delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}else{delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **YOU'VE BEEN RELEASED!**\n\nYou left the active Halloween game without receiving a win or completion reward. 🎃");}return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");}
+async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;if(!g||g.status==="ended"){return sendText(env,interaction,"🕷️ There is no active Halloween game in this server.");}state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
 
 async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
@@ -31448,7 +31448,7 @@ async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
-  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\\n\\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
+  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
   const makeForm=()=>{const form=new FormData();form.append("payload_json",JSON.stringify(payload));form.append("files[0]",new Blob([image],{type:"image/png"}),"color-chaos.png");return form;};
 
   /*
