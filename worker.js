@@ -29477,6 +29477,97 @@ function halloweenHideLobbyRows(g){const ids=Object.keys(g.players||{});const ho
 
 function halloweenHideCreate(guildId,user){return {id:`hh-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"hide",status:"lobby",guildId,hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}},round:0,hunterId:"",hiddenRoles:{},ghosts:{},rooms:{},submitted:{},hunterActions:0,evidence:[],traps:[],captured:[],interactionToken:""};}
 
+function halloweenHideRoleDM(role,isHunter=false){
+  if(isHunter){
+    return [
+      "🎃 **HAUNTED HIDE & SEEK — YOUR SECRET IDENTITY**",
+      "",
+      "👹 **ROLE: LANTERN KEEPER**",
+      "",
+      "🤫 **KEEP THIS PRIVATE**",
+      "You are the Hunter. The Hidden players do not know what you know.",
+      "",
+      "🧠 **HUNTER'S LANTERN — PASSIVE**",
+      "Once per round, the Lantern can give you a vague clue about activity.",
+      "",
+      "🎯 **2 ACTIONS EACH ROUND**",
+      "• 🔎 Investigate — inspect a room for signs of Hidden players.",
+      "• 👂 Listen — listen for activity and get a room clue.",
+      "• 🧭 Track — follow the freshest movement trail.",
+      "• 🪤 Trap — place a trap in a room.",
+      "• 🎯 Capture — choose a Hidden player, then guess their room.",
+      "",
+      "🏮 **TRUE LIGHT — SPECIAL**",
+      "Use your special Hunter reveal to help determine whether suspicious evidence is genuine or manipulated.",
+      "",
+      "🏆 **YOUR GOAL**",
+      "Capture enough Hidden players before they survive all 10 rounds.",
+      "",
+      "⚠️ Every Capture requires BOTH the correct player and the correct room."
+    ].join("\\n");
+  }
+
+  const guides={
+    Mimic:{
+      passive:"🎭 FALSE TRAIL — Your movement can create misleading evidence.",
+      active:"🎭 DISGUISE — Use once to make your trail harder for the Hunter to interpret.",
+      objective:"🎯 Cause the Hunter to capture another player because of your deception."
+    },
+    Gravekeeper:{
+      passive:"🪦 GRAVEWALKER — You can move through the manor without leaving an ordinary trail.",
+      active:"🪦 BURY THE TRAIL — Use once to hide your current trail.",
+      objective:"🎯 Survive while making the Hunter's information unreliable."
+    },
+    "Web Weaver":{
+      passive:"🕷️ STICKY GROUND — Your trail can interfere with the Hunter's movement clues.",
+      active:"🕷️ WEB TRAP — You have 2 uses to create a nasty surprise for the Hunter.",
+      objective:"🎯 Stay hidden while using the manor's trails against the Hunter."
+    },
+    "Haunted Doll":{
+      passive:"🧸 DON'T TOUCH ME — Your presence can create misleading signs when the Hunter gets too close.",
+      active:"🧸 PLAY DEAD — Use once to make yourself appear inactive.",
+      objective:"🎯 Make the Hunter investigate an empty room."
+    },
+    Witch:{
+      passive:"🧙 HEXED EVIDENCE — Evidence connected to you can be misleading.",
+      active:"🧙 HEX — Use once to manipulate the Hunter's information.",
+      objective:"🎯 Keep the Hunter guessing while protecting your location."
+    },
+    Shadow:{
+      passive:"🌑 UNSEEN — You are especially difficult to pin down from ordinary clues.",
+      active:"🌑 VANISH — Use once to disappear from a dangerous situation.",
+      objective:"🎯 Reach the final round without the Hunter correctly identifying your current room."
+    },
+    "Mirror Wraith":{
+      passive:"🪞 REFLECTION — Your presence can create confusing duplicate clues.",
+      active:"🪞 MIRROR IMAGE — Use once to lure the Hunter toward a decoy.",
+      objective:"🎯 Lure the Hunter toward a false trail while staying undetected."
+    }
+  };
+  const x=guides[role]||guides.Mimic;
+  return [
+    "🎃 **HAUNTED HIDE & SEEK — YOUR SECRET IDENTITY**",
+    "",
+    `👻 **ROLE: ${role}**`,
+    "",
+    "🤫 **KEEP THIS PRIVATE**",
+    "The Lantern Keeper does not know your identity.",
+    "",
+    `🧠 **PASSIVE — ${x.passive.split(" — ")[0].replace(/^[^ ]+ /,"")}**`,
+    x.passive,
+    "",
+    `✨ **ACTIVE — ${x.active.split(" — ")[0].replace(/^[^ ]+ /,"")}**`,
+    x.active,
+    "",
+    x.objective,
+    "",
+    "🎮 **ROUND REMINDER**",
+    "Movement is available on alternating rounds. Use MY ACTION to move, stay, or use your signature ability.",
+    "",
+    "👻 If you are captured, you become a Ghost and get a separate Ghost action."
+  ].join("\\n");
+}
+
 async function halloweenHideStart(env,interaction,g){
   const ids=Object.keys(g.players||{}); if(ids.length<2)return sendText(env,interaction,"❌ You need at least 2 players.");
   const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={};
@@ -29485,8 +29576,7 @@ async function halloweenHideStart(env,interaction,g){
   for(const id of ids){ if(id===hunterId)continue; let room; let tries=0; do{room=HALLOWEEN_ROOMS.Foyer[randomInt(0,HALLOWEEN_ROOMS.Foyer.length-1)]; tries++;}while((counts[room]||0)>=2&&tries<30); rooms[id]=room; counts[room]=(counts[room]||0)+1; }
   g.rooms=rooms; let ri=0; for(const id of ids){if(id===hunterId)continue;g.hiddenRoles[id]=roles[ri%roles.length];ri++;}
   await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-  for(const id of ids){const role=id===hunterId?"👹 **Lantern Keeper**":`👻 **Hidden — ${g.hiddenRoles[id]}**`; await sendUserDM(env,id,`🎃 **HAUNTED HIDE & SEEK**\n\nYour secret role: ${role}\n\n${id===hunterId?"You are the Hunter. Find the Hidden before they survive all 10 rounds.":"Stay hidden. The Hunter does not know your location."}`);}
-  return sendText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));
+  for(const id of ids){await sendUserDM(env,id,halloweenHideRoleDM(id===hunterId?"Lantern Keeper":g.hiddenRoles[id],id===hunterId));}return sendText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));
 }
 function halloweenHidePublicText(g){const active=Object.keys(g.players||{}).length;return [`👻 **HAUNTED HIDE & SEEK — ROUND ${g.round}/10**`,``,`👹 Lantern Keeper: <@${g.hunterId}>`,`👥 Players: **${active}**`,``,`The Hidden are somewhere inside the manor...`,``,`${g.captured?.length||0} Hidden captured.`,``,`Choose your private action with the button below.`].join("\n");}
 function halloweenHidePublicRows(g){return [row(button("🎮 MY ACTION","halloween:hide:action",1),button("📖 HOW TO PLAY","halloween:hide:howto",2)),row(button("🆘 EXIT","halloween:exit",4))];}
@@ -29511,7 +29601,7 @@ async function halloweenHideFinish(env,interaction,g,hunterWin){const state=awai
   state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,`🎃 **HAUNTED HIDE & SEEK COMPLETE**\n\n${hunterWin?`👹 **Hunter Victory!** <@${g.hunterId}> reached the capture target.` : "👻 **Hidden Victory!** The Hidden survived all 10 rounds."}\n\n🏮 The Hunter's Lantern ${unlocks.length?"was earned by surviving Hidden players.":"was not unlocked this game."}`,[]);
 }
 
-async function halloweenHideComponent(env,interaction,parts){const action=parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
+async function halloweenHideComponent(env,interaction,parts){const action=parts[2]==="hunter"?(parts[3]||"hunter"):parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
   if(action==="join"){if(!g||g.type!=="hide"||g.status!=="lobby")return sendText(env,interaction,"❌ No Haunted Hide & Seek lobby is waiting.");if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ The lobby is full.");g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}
   if(action==="leave"){if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in the lobby.");delete g.players[user.id];if(!Object.keys(g.players).length)state.halloween.activeGame=null;else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,state.halloween.activeGame?halloweenHideLobbyText(g):"👻 Lobby closed.",state.halloween.activeGame?halloweenHideLobbyRows(g):[]);}
   if(action==="start"){if(!g||g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start.");return halloweenHideStart(env,interaction,g);}
@@ -33477,6 +33567,7 @@ export default {
         customId.startsWith("collection:halloween:page:") ||
         customId === "collection:halloween:unlock" ||
         customId === "halloween:hide:action" ||
+        customId === "halloween:hide:howto" ||
         customId.startsWith("halloween:hide:hunter:") ||
         customId.startsWith("halloween:hide:move:") ||
         customId.startsWith("halloween:hide:stay:") ||
@@ -33490,9 +33581,8 @@ export default {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            type: 4,
+            type: 5,
             data: {
-              content: "🎃 Loading Halloween...",
               ...(privateHalloween ? { flags: 64 } : {})
             }
           })
