@@ -381,6 +381,7 @@ const IMAGES = {
   halloweenHuntersLantern: "IMG_8142.png",
   halloweenLastAntidote: "IMG_8143.png",
   halloweenCursedCandyBucket: "IMG_8145.png",
+  halloweenSmasherRelic: "IMG_8160.png",
 };
 
 const SHOP_ITEMS = {
@@ -29226,7 +29227,8 @@ const HALLOWEEN_BOOK_ASSETS = {
   pages: "halloweenBookPages",
   lantern: "halloweenHuntersLantern",
   antidote: "halloweenLastAntidote",
-  candy: "halloweenCursedCandyBucket"
+  candy: "halloweenCursedCandyBucket",
+  smasherRelic: "halloweenSmasherRelic"
 };
 
 const HALLOWEEN_ROOMS = {
@@ -29296,7 +29298,9 @@ function halloweenUnlockText(player) {
     "",
     line("🍬", "The Cursed Candy Bucket", "Experience all three Trick-or-Treat outcome types, including the rare outcome.", "cursed_candy_bucket"),
     "",
-    "🔒 **Collectibles 4–10** — COMING SOON",
+    line("🔨", "The Smasher's Relic", "Reach **Wave 6: JACKPOT** and smash a **Golden Pumpkin** without ever hitting a Skull during that run.", "smasher_relic"),
+    "",
+    "🔒 **Collectibles 5–10** — COMING SOON",
     "Their games and unlock requirements haven't been revealed yet. 👀"
   ].join("\n");
 }
@@ -29341,16 +29345,18 @@ function halloweenBookComponents(spread) {
 function halloweenBookData(player, spread=0) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
   const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
-  const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket"];
+  const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket", "smasher_relic"];
   const titles = {
     hunters_lantern: "🏮 The Hunter's Lantern",
     last_antidote: "🧪 The Last Antidote",
-    cursed_candy_bucket: "🍬 The Cursed Candy Bucket"
+    cursed_candy_bucket: "🍬 The Cursed Candy Bucket",
+    smasher_relic: "🔨 The Smasher's Relic"
   };
   const requirements = {
     hunters_lantern: "Survive all 10 rounds of Haunted Hide & Seek without the Hunter correctly locating your room.",
     last_antidote: "Cure a Full Zombie with an Antidote and successfully escape in Zombie Panic.",
-    cursed_candy_bucket: "Experience all three Trick-or-Treat outcome types, including the rare outcome."
+    cursed_candy_bucket: "Experience all three Trick-or-Treat outcome types, including the rare outcome.",
+    smasher_relic: "Reach Wave 6: JACKPOT and smash a Golden Pumpkin without ever hitting a Skull during that run."
   };
 
   const firstIndex = s * 2;
@@ -29786,6 +29792,23 @@ async function spookSmashClick(env, interaction, session, index) {
   if (target.type === "ghost") g.stats.ghosts++;
   if (target.type === "pumpkin") g.stats.pumpkins++;
   if (target.type === "golden") g.stats.goldens++;
+
+  // COLLECTIBLE #4 — THE SMASHER'S RELIC
+  // The player must reach Wave 6: JACKPOT, successfully smash a Golden
+  // Pumpkin, and have never hit a Skull during that run.
+  let smasherRelicUnlocked = false;
+  const currentWave = spookSmashWave(Date.now() - Number(g.startedAt || Date.now()));
+  if (target.type === "golden" && currentWave >= 6 && Number(g.stats.skulls || 0) === 0) {
+    const playerForCollection = await getPlayer(env, user.id);
+    playerForCollection.halloweenCollection = Array.isArray(playerForCollection.halloweenCollection) ? playerForCollection.halloweenCollection : [];
+    if (!playerForCollection.halloweenCollection.includes("smasher_relic")) {
+      playerForCollection.halloweenCollection.push("smasher_relic");
+      smasherRelicUnlocked = true;
+      refreshProfileBadges(playerForCollection);
+      await savePlayer(env, playerForCollection, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+    }
+  }
+
   board[slot] = null;
 
   await spookSmashSaveBoard(env, guildId, user.id, board);
@@ -29794,7 +29817,29 @@ async function spookSmashClick(env, interaction, session, index) {
   await editSpookSmashBoard(env, interaction, {...g, board: nextBoard}, Date.now());
 
   const hit = target.type === "golden" ? "✨🎃 **JACKPOT!**" : `${creature.emoji} **SMASHED!**`;
-  return sendEphemeralFollowup(env, interaction, `${hit} **+${(creature.points * mult).toLocaleString()}** • Combo **${g.combo}** x${mult}`);
+
+  if (smasherRelicUnlocked) {
+    const unlockResponse = await fetch(
+      `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: "🔨✨ **THE GOLDEN SMASH!** ✨🔨\n\nThe Golden Pumpkin shattered... but something else was hiding inside.",
+          embeds: [{
+            title: "📖✨ COLLECTIBLE #4 UNLOCKED! ✨📖",
+            description: "🔨 **The Smasher's Relic**\n\n*They say the first Spook N Smash champion wielded this very hammer.*\n\n🎃 **Wave 6: JACKPOT**\n💀 **No Skulls hit**\n✨ **Golden Pumpkin smashed**",
+            color: 0x8b3a12,
+            image: { url: imageUrl(IMAGES[HALLOWEEN_BOOK_ASSETS.smasherRelic]) },
+            footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
+          }]
+        })
+      }
+    );
+    if (!unlockResponse.ok) console.error("Smasher's Relic unlock announcement failed:", unlockResponse.status, await unlockResponse.text());
+  }
+
+  return sendEphemeralFollowup(env, interaction, `${hit} **+${(creature.points * mult).toLocaleString()}** • Combo **${g.combo}** x${mult}${smasherRelicUnlocked ? "\n\n🔨✨ **THE SMASHER'S RELIC UNLOCKED!** Check your Halloween Collection!" : ""}`);
 }
 
 async function spookSmashEndRun(env, interaction, session) {
