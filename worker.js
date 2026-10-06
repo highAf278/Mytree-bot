@@ -29237,21 +29237,6 @@ const HALLOWEEN_ROOMS = {
   Courtyard: ["Kitchen", "Graveyard", "Tower"],
   Tower: ["Attic", "Study", "Crypt", "Courtyard"]
 };
-
-function halloweenHideRoomPool(g){
-  const playerCount=Object.keys(g.players||{}).length;
-
-  // Small games still need enough room to make deduction difficult.
-  // 2 players: 6 rooms | 3-4 players: 8 rooms | 5-8 players: all 11 rooms.
-  if(playerCount<=2){
-    return ["Foyer","Dining Hall","Kitchen","Basement","Library","Attic"];
-  }
-  if(playerCount<=4){
-    return ["Foyer","Dining Hall","Kitchen","Basement","Library","Attic","Study","Graveyard"];
-  }
-  return Object.keys(HALLOWEEN_ROOMS);
-}
-
 const HALLOWEEN_HIDDEN_ROLES = ["Mimic", "Gravekeeper", "Web Weaver", "Haunted Doll", "Witch", "Shadow", "Mirror Wraith"];
 const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Abandoned Store", "Safehouse", "Gas Station", "Radio Tower", "Garage", "Woods"];
 
@@ -29336,113 +29321,84 @@ function halloweenCoverData(player) {
   };
 }
 
-async function renderHalloweenBook(env, player, spread) {
-  let browser;
-  try {
-    // IMPORTANT: Puppeteer should not have to reach out to R2 itself.
-    // Fetch the book artwork in the Worker first, then give Puppeteer
-    // self-contained data URLs. This avoids Browser Rendering getting stuck
-    // on remote R2 image requests.
-    const assetDataUrl = async (filename) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 7000);
-      try {
-        const response = await fetch(imageUrl(filename), { signal: controller.signal });
-        if (!response.ok) throw new Error(`Book asset ${filename} returned HTTP ${response.status}`);
-        const buffer = new Uint8Array(await response.arrayBuffer());
-        let binary = "";
-        const chunk = 0x8000;
-        for (let i = 0; i < buffer.length; i += chunk) {
-          binary += String.fromCharCode(...buffer.subarray(i, Math.min(i + chunk, buffer.length)));
-        }
-        const contentType = response.headers.get("content-type") || "image/png";
-        return `data:${contentType};base64,${btoa(binary)}`;
-      } finally {
-        clearTimeout(timer);
-      }
-    };
+function halloweenBookComponents(spread) {
+  const s = Math.max(0, Math.min(4, Number(spread) || 0));
+  return [
+    row(
+      button("◀️", `collection:halloween:page:${Math.max(0, s - 1)}`, 2, s === 0),
+      button("▶️", `collection:halloween:page:${Math.min(4, s + 1)}`, 2, s === 4)
+    ),
+    row(button("🔓 HOW TO UNLOCK", "collection:halloween:unlock", 3), button("🔙 BACK", "collection:halloween", 2))
+  ];
+}
 
-    const owned = new Set(player.halloweenCollection || []);
-    const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
-    const keyFilename = key =>
-      key === "hunters_lantern" ? IMAGES.halloweenHuntersLantern :
-      key === "last_antidote" ? IMAGES.halloweenLastAntidote :
-      key === "cursed_candy_bucket" ? IMAGES.halloweenCursedCandyBucket : null;
+function halloweenBookData(player, spread=0) {
+  const s = Math.max(0, Math.min(4, Number(spread) || 0));
+  const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
+  const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket"];
+  const titles = {
+    hunters_lantern: "🏮 The Hunter's Lantern",
+    last_antidote: "🧪 The Last Antidote",
+    cursed_candy_bucket: "🍬 The Cursed Candy Bucket"
+  };
+  const requirements = {
+    hunters_lantern: "Survive all 10 rounds of Haunted Hide & Seek without the Hunter correctly locating your room.",
+    last_antidote: "Cure a Full Zombie with an Antidote and successfully escape in Zombie Panic.",
+    cursed_candy_bucket: "Experience all three Trick-or-Treat outcome types, including the rare outcome."
+  };
 
-    const bookPagesData = await assetDataUrl(IMAGES.halloweenBookPages);
-    const usedKeys = [0, 1]
-      .map(i => actualKeys[spread * 2 + i])
-      .filter(key => key && owned.has(key));
-
-    const collectibleData = {};
-    for (const key of usedKeys) {
-      collectibleData[key] = await assetDataUrl(keyFilename(key));
+  const firstIndex = s * 2;
+  const fields = [0, 1].map(offset => {
+    const index = firstIndex + offset;
+    const key = actualKeys[index];
+    if (!key) {
+      return {
+        name: `🔒 COLLECTIBLE #${index + 1}`,
+        value: "*Coming soon...*",
+        inline: true
+      };
     }
+    if (owned.has(key)) {
+      return {
+        name: `✅ ${titles[key]}`,
+        value: requirements[key],
+        inline: true
+      };
+    }
+    return {
+      name: `🔒 COLLECTIBLE #${index + 1}`,
+      value: "*Undiscovered — check HOW TO UNLOCK to see the clue.*",
+      inline: true
+    };
+  });
 
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport({width: 1200, height: 760, deviceScaleFactor: 1});
-
-    const slots = [0,1].map(i => ({
-      idx: spread * 2 + i,
-      label: `COLLECTIBLE #${spread * 2 + i + 1}`
-    }));
-
-    const titleFor = key =>
-      key === "hunters_lantern" ? "🏮 The Hunter's Lantern" :
-      key === "last_antidote" ? "🧪 The Last Antidote" :
-      key === "cursed_candy_bucket" ? "🍬 The Cursed Candy Bucket" :
-      "🔒 Coming Soon";
-
-    const content = slots.map((slot, i) => {
-      const idx = slot.idx;
-      const key = actualKeys[idx] || null;
-      const has = key && owned.has(key);
-      const img = has
-        ? `<img src="${collectibleData[key]}"/>`
-        : `<div class="locked">🔒<span>???</span></div>`;
-      return `<div class="slot s${i}">${img}<div class="caption">${has ? titleFor(key) : `🔒 COLLECTIBLE #${idx + 1}`}</div></div>`;
-    }).join("");
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-      *{box-sizing:border-box}body{margin:0;background:#24100a;font-family:Arial,"Segoe UI Emoji",sans-serif;overflow:hidden}
-      .book{width:1200px;height:760px;position:relative;background:url('${bookPagesData}') center/cover no-repeat}
-      .slot{position:absolute;top:125px;width:390px;height:490px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}
-      .s0{left:105px}.s1{right:105px}.slot img{width:330px;height:365px;object-fit:contain;filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
-      .locked{width:300px;height:365px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:80px;color:#2d130b;text-shadow:0 3px 0 #f0a044}.locked span{font-size:34px;font-weight:900;letter-spacing:8px;margin-top:15px}
-      .caption{margin-top:10px;font-size:25px;font-weight:900;color:#2a1009;text-shadow:0 1px 0 #ffcf78;max-width:350px}
-      .pageNo{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;color:#3a170d}
-    </style></head><body><div class="book">${content}<div class="pageNo">HALLOWEEN 2026 • SPREAD ${spread+1} OF 5</div></div></body></html>`;
-
-    await page.setContent(html, {waitUntil:"domcontentloaded", timeout:8000});
-    await page.evaluate(async()=> {
-      const imgs = Array.from(document.images);
-      if (!imgs.length) return;
-      await Promise.race([
-        Promise.all(imgs.map(img => new Promise(resolve => {
-          if (img.complete) return resolve();
-          img.onload = resolve;
-          img.onerror = resolve;
-        }))),
-        new Promise(resolve => setTimeout(resolve, 1500))
-      ]);
-    });
-
-    return await page.screenshot({type:"png", timeout:8000});
-  } finally {
-    if (browser) try { await browser.close(); } catch {}
-  }
+  return {
+    content: `📖 **HALLOWEEN 2026 — SPREAD ${s + 1}/5**\n\n**${owned.size}/10 collectibles discovered.**`,
+    embeds: [{
+      title: `🎃 HALLOWEEN ARCHIVE • SPREAD ${s + 1}/5`,
+      description: "*The pages of the Halloween archive turn without leaving Discord. Your discoveries are shown on each spread.*",
+      color: 0x8b3a12,
+      fields,
+      image: { url: imageUrl(IMAGES.halloweenBookPages) },
+      footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
+    }],
+    components: halloweenBookComponents(s),
+    flags: 64
+  };
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
-  const user=getUserFromInteraction(interaction); if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
-  const player=await getPlayer(env,user.id);
-  const image=await renderHalloweenBook(env,player,Math.max(0,Math.min(4,Number(spread)||0)));
-  const s=Math.max(0,Math.min(4,Number(spread)||0));
-  const form=new FormData();
-  form.append("payload_json",JSON.stringify({content:`📖 **HALLOWEEN 2026 — SPREAD ${s+1}/5**\n\n${Number(player.halloweenCollection?.length||0)}/10 collectibles discovered.`,attachments:[{id:0,filename:"halloween-book.png"}],components:[row(button("◀️",`collection:halloween:page:${Math.max(0,s-1)}`,2,s===0),button("▶️",`collection:halloween:page:${Math.min(4,s+1)}`,2,s===4))],flags:64}));
-  form.append("files[0]",new Blob([image],{type:"image/png"}),"halloween-book.png");
-  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
+  const user = getUserFromInteraction(interaction);
+  if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
+
+  const player = await getPlayer(env, user.id);
+  const s = Math.max(0, Math.min(4, Number(spread) || 0));
+
+  // IMPORTANT: Do NOT use Puppeteer/Browser Rendering for the collection book.
+  // The previous renderer could leave the Discord button spinning while it
+  // waited on Browser Rendering or asset/image work. The book is now a normal
+  // Discord embed using the same R2 artwork that the cover already displays.
+  return editOriginalResponse(env, interaction, halloweenBookData(player, s));
 }
 
 function halloweenHowToText() {
@@ -29525,7 +29481,7 @@ function halloweenHideRoleDM(role,isHunter=false){
       "Capture enough Hidden players before they survive all 10 rounds.",
       "",
       "⚠️ Every Capture requires BOTH the correct player and the correct room."
-    ].join("\n");
+    ].join("\\n");
   }
 
   const guides={
@@ -29556,7 +29512,7 @@ function halloweenHideRoleDM(role,isHunter=false){
     },
     Shadow:{
       passive:"🌑 UNSEEN — You are especially difficult to pin down from ordinary clues.",
-      active:"🌑 VANISH — Use once during the Hidden phase BEFORE the Hunter attempts Capture. If the Hunter later picks you and your exact room, Vanish saves you from that capture.",
+      active:"🌑 VANISH — Use once to disappear from a dangerous situation.",
       objective:"🎯 Reach the final round without the Hunter correctly identifying your current room."
     },
     "Mirror Wraith":{
@@ -29586,7 +29542,7 @@ function halloweenHideRoleDM(role,isHunter=false){
     "Movement is available on alternating rounds. Use MY ACTION to move, stay, or use your signature ability.",
     "",
     "👻 If you are captured, you become a Ghost and get a separate Ghost action."
-  ].join("\n");
+  ].join("\\n");
 }
 
 async function halloweenHidePostPublic(env,interaction,g){
@@ -29610,22 +29566,10 @@ async function halloweenHidePostPublic(env,interaction,g){
 
 async function halloweenHideStart(env,interaction,g){
   const ids=Object.keys(g.players||{}); if(ids.length<2)return sendText(env,interaction,"❌ You need at least 2 players.");
-  const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.phase="hidden"; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={}; g.traps=[]; g.trapBlocked={}; g.usedAbilities={}; g.abilityUses={}; g.abilityFlags={}; g.webTraps=[]; g.everLocated={}; g.pendingCaptureTarget=null;
-  const roles=[...HALLOWEEN_HIDDEN_ROLES].sort(()=>Math.random()-.5);
-  const roomPool=halloweenHideRoomPool(g);
-  const rooms=Object.fromEntries(ids.map(id=>[id,"Foyer"]));
+  const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.phase="hidden"; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={}; g.traps=[]; g.usedAbilities={}; g.everLocated={}; g.pendingCaptureTarget=null;
+  const roles=[...HALLOWEEN_HIDDEN_ROLES].sort(()=>Math.random()-.5); const rooms=Object.fromEntries(ids.map(id=>[id,"Foyer"]));
   const counts={};
-  for(const id of ids){
-    if(id===hunterId)continue;
-    let room;
-    let tries=0;
-    do{
-      room=roomPool[randomInt(0,roomPool.length-1)];
-      tries++;
-    }while((counts[room]||0)>=2&&tries<30);
-    rooms[id]=room;
-    counts[room]=(counts[room]||0)+1;
-  }
+  for(const id of ids){ if(id===hunterId)continue; let room; let tries=0; do{room=HALLOWEEN_ROOMS.Foyer[randomInt(0,HALLOWEEN_ROOMS.Foyer.length-1)]; tries++;}while((counts[room]||0)>=2&&tries<30); rooms[id]=room; counts[room]=(counts[room]||0)+1; }
   g.rooms=rooms; g.captureTarget=Math.ceil((ids.length-1)/2); g.pendingCaptureTarget=null; let ri=0; for(const id of ids){if(id===hunterId)continue;g.hiddenRoles[id]=roles[ri%roles.length];ri++;}
   await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
   for(const id of ids){await sendUserDM(env,id,halloweenHideRoleDM(id===hunterId?"Lantern Keeper":g.hiddenRoles[id],id===hunterId));}
@@ -29641,11 +29585,9 @@ async function halloweenHideStart(env,interaction,g){
 function halloweenHidePublicText(g){const active=Object.keys(g.players||{}).length;const ids=Object.keys(g.players||{});const hidden=ids.filter(id=>id!==g.hunterId&&!g.ghosts?.[id]);const submitted=hidden.filter(id=>g.submitted?.[id]).length;const phase=g.phase||"hidden";const turn=phase==="hunter"?`👹 **CURRENT TURN: LANTERN KEEPER**\n\nHunter actions used: **${g.hunterActions||0}/2**`:`👻 **CURRENT TURN: HIDDEN PLAYERS**\n\nHidden actions locked in: **${submitted}/${hidden.length}**`;return [`👻 **HAUNTED HIDE & SEEK — ROUND ${g.round}/10**`,``,`👹 Lantern Keeper: <@${g.hunterId}>`,`👥 Players: **${active}**`,``,turn,``,`🎃 ${phase==="hunter"?"The Lantern Keeper is hunting. The Hidden must wait.":"The Hidden are choosing their actions. The Lantern Keeper must wait."}`,``,`${g.captured?.length||0} Hidden captured.`].join("\n");}
 function halloweenHidePublicRows(g){return [row(button("🎮 MY ACTION","halloween:hide:action",1),button("📖 HOW TO PLAY","halloween:hide:howto",2)),row(button("🆘 EXIT","halloween:exit",4))];}
 
-function halloweenHideRoomRows(customPrefix, rooms=[], style=2){
+function halloweenHideRoomRows(customPrefix, rooms=Object.keys(HALLOWEEN_ROOMS), style=2){
   const rows=[];
-  for(let i=0;i<rooms.length;i+=3){
-    rows.push(row(...rooms.slice(i,i+3).map(room=>button(room,`${customPrefix}:${room}`,style))));
-  }
+  for(let i=0;i<rooms.length;i+=3) rows.push(row(...rooms.slice(i,i+3).map(room=>button(room,`${customPrefix}:${room}`,style))));
   return rows;
 }
 function halloweenHideHunterActionText(g){
@@ -29658,7 +29600,7 @@ async function halloweenHidePrivateMenu(env,interaction){
   if(user.id===g.hunterId){
     if(g.phase!=="hunter")return sendText(env,interaction,`👻 **HIDDEN PHASE**\n\nThe Hidden players are choosing their actions first. Please wait until the Hunter phase begins.`);
     if(g.pendingCaptureTarget){
-      return sendText(env,interaction,halloweenHideHunterActionText(g),halloweenHideRoomRows(`halloween:hide:captureroom:${g.pendingCaptureTarget}`,halloweenHideRoomPool(g),2));
+      return sendText(env,interaction,halloweenHideHunterActionText(g),halloweenHideRoomRows(`halloween:hide:captureroom:${g.pendingCaptureTarget}`,Object.keys(HALLOWEEN_ROOMS),2));
     }
     const disabled=g.hunterActions>=2;
     const actions=[
@@ -29674,13 +29616,8 @@ async function halloweenHidePrivateMenu(env,interaction){
   if(g.ghosts?.[user.id])return sendText(env,interaction,"👻 **GHOST MODE**\n\nYou can haunt a room to create false activity.",[row(button("👻 HAUNT A ROOM","halloween:hide:ghost",1)),row(button("📖 How to Play","halloween:hide:howto",2))]);
   if(g.submitted?.[user.id])return sendText(env,interaction,`🔒 **YOUR ROUND ACTION IS LOCKED**\n\nYou already acted for **Round ${g.round}/10**.\nWait for the next round.`,[row(button("🔄 Refresh","halloween:hide:action",2)),row(button("📖 How to Play","halloween:hide:howto",2))]);
   const current=g.rooms[user.id]||"Foyer"; const movement=[button("🛑 STAY",`halloween:hide:stay:${current}`,2)];
-  if(g.round%2===1){
-    const roomPool=halloweenHideRoomPool(g);
-    for(const room of (HALLOWEEN_ROOMS[current]||[])){
-      if(roomPool.includes(room)) movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));
-    }
-  }
-  const role=g.hiddenRoles[user.id]; const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?`🕷️ WEB TRAP (${Math.max(0,2-Number(g.abilityUses?.[user.id]||0))}/2)`:role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
+  if(g.round%2===1) for(const room of (HALLOWEEN_ROOMS[current]||[])) movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));
+  const role=g.hiddenRoles[user.id]; const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?"🕷️ WEB TRAP":role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
   return sendText(env,interaction,`👻 **HIDDEN — ${role}**\n\nCurrent room: **${current}**\nRound ${g.round}/10 — ${g.round%2===1?"movement is available":"stay round"}.`,[row(...movement),row(button(abilityLabel,"halloween:hide:ability",3),button("📖 How to Play","halloween:hide:howto",2))]);
 }
 async function halloweenHideAdvance(env,interaction,g){
@@ -29719,155 +29656,9 @@ async function halloweenHideAdvance(env,interaction,g){
   g.hunterActions=0;
   g.submitted={};
   g.evidence=[];
-  g.trapBlocked={};
   g.pendingCaptureTarget=null;
   await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
   await halloweenHidePostPublic(env,interaction,g);
-}
-
-
-async function halloweenHideFinish(env,interaction,g,hunterWon){
-  const state=await getGuildState(env,interaction.guild_id);
-  const ids=Object.keys(g.players||{});
-  const hiddenIds=ids.filter(id=>id!==g.hunterId);
-  const capturedIds=new Set(g.captured||[]);
-  const lanternWinners=hiddenIds.filter(id=>!capturedIds.has(id)&&!g.everLocated?.[id]);
-
-  for(const id of ids){
-    await halloweenMarkPlayed(env,id,1);
-
-    let reward=100;
-
-    if(id===g.hunterId){
-      reward=hunterWon?750:250;
-    }else if(!hunterWon&&!capturedIds.has(id)){
-      reward=500;
-    }
-
-    await addHalloweenSpookies(env,id,reward);
-  }
-
-  for(const id of lanternWinners){
-    const p=await getPlayer(env,id);
-    const owned=Array.isArray(p.halloweenCollection)&&p.halloweenCollection.includes("hunters_lantern");
-    if(!owned) await halloweenUnlock(env,id,"hunters_lantern");
-  }
-
-  const hunterName=g.players?.[g.hunterId]?.name||"The Lantern Keeper";
-  const target=Number(g.captureTarget||Math.ceil(hiddenIds.length/2));
-
-  const lines=[
-    "🎃 **HAUNTED HIDE & SEEK — FINAL RESULTS** 🎃",
-    "",
-    hunterWon
-      ? `👹 **THE LANTERN KEEPER WINS!**\n\n${hunterName} captured enough Hidden players to claim the manor.`
-      : "👻 **THE HIDDEN WIN!**\n\nThe Hidden survived all **10 rounds** and escaped the Lantern Keeper.",
-    "",
-    `🏚️ **Rounds completed:** ${g.round}/10`,
-    `🎯 **Successful captures:** ${g.captured?.length||0}/${target}`,
-    ""
-  ];
-
-  if(hunterWon){
-    lines.push("👹 **LANTERN KEEPER**",`🏆 ${hunterName} — **+750 Spookies**`,"");
-
-    for(const id of hiddenIds){
-      const name=g.players?.[id]?.name||"Hidden Player";
-      lines.push(
-        capturedIds.has(id)
-          ? `👻 ${name} — captured — **+100 Spookies**`
-          : `🌙 ${name} — escaped — **+100 Spookies**`
-      );
-    }
-  }else{
-    lines.push("👻 **HIDDEN RESULTS**","");
-
-    for(const id of hiddenIds){
-      const name=g.players?.[id]?.name||"Hidden Player";
-
-      if(!capturedIds.has(id)){
-        lines.push(`🏆 ${name} — survived — **+500 Spookies**`);
-        if(lanternWinners.includes(id)) lines.push("   🏮 **THE HUNTER'S LANTERN UNLOCKED!**");
-      }else{
-        lines.push(`👻 ${name} — captured — **+100 Spookies**`);
-      }
-    }
-
-    lines.push("",`👹 ${hunterName} — **+250 Spookies**`);
-  }
-
-  lines.push(
-    "",
-    "💰 **Spookies have been awarded!**",
-    "",
-    "🎃 The haunted manor falls silent...",
-    "👻 Until the next game."
-  );
-
-  const finalContent=lines.join("\n");
-  const finalComponents=[
-    row(
-      button("👻 Play Again","halloween:start:hide",1),
-      button("🎃 Halloween Games","halloween:games",2),
-      button("🏆 Leaderboard","halloween:leaderboard",2)
-    )
-  ];
-
-  // FINAL RESULTS MUST BE A REAL CHANNEL MESSAGE, not an interaction response.
-  // This keeps the win/loss announcement visible to everyone in the game channel.
-  const channelId=g.channelId||interaction.channel_id;
-  const oldMessageId=g.publicMessageId||"";
-  let publicPosted=false;
-
-  if(channelId){
-    const posted=await discordRequest(
-      env,
-      `/channels/${channelId}/messages`,
-      {
-        method:"POST",
-        body:JSON.stringify({
-          content:finalContent,
-          components:finalComponents
-        })
-      }
-    );
-
-    if(posted.ok){
-      publicPosted=true;
-      let finalMessageId="";
-      try{
-        const data=await posted.json();
-        finalMessageId=data?.id||"";
-      }catch(error){
-        console.error("Haunted Hide & Seek final public message JSON failed:",error);
-      }
-
-      // Remove the previous live game board after the final result is posted.
-      if(oldMessageId&&finalMessageId&&oldMessageId!==finalMessageId){
-        const removed=await discordRequest(
-          env,
-          `/channels/${channelId}/messages/${oldMessageId}`,
-          {method:"DELETE"}
-        );
-        if(!removed.ok&&removed.status!==404){
-          console.error("Old Haunted Hide & Seek message could not be removed:",removed.status,await removed.text());
-        }
-      }
-    }else{
-      console.error("Haunted Hide & Seek final public message failed:",posted.status,await posted.text());
-    }
-  }
-
-  state.halloween.activeGame=null;
-  await saveGuildState(env,interaction.guild_id,state);
-
-  // If the channel post failed, still give the current interaction a visible
-  // fallback instead of losing the results completely.
-  if(!publicPosted){
-    return sendPublicText(env,interaction,finalContent,finalComponents);
-  }
-
-  return sendText(env,interaction,"🎃 **The final Haunted Hide & Seek results have been posted publicly!**");
 }
 
 async function halloweenHideComponent(env,interaction,parts){const action=parts[2]==="hunter"?(parts[3]||"hunter"):parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
@@ -29888,28 +29679,8 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
   }
   if(user.id!==g.hunterId && action==="move"){
     const room=parts.slice(3).join(":"); const current=g.rooms[user.id];
-    const roomPool=halloweenHideRoomPool(g);
-    if(g.round%2!==1||!roomPool.includes(room)||!(HALLOWEEN_ROOMS[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there this round.");
-
-    // 🪤 A Hunter trap does NOT reveal the Hidden player's identity or location.
-    // If the Hidden player is trying to LEAVE a trapped room, the trap catches
-    // them for one movement opportunity. The trap is then consumed.
-    g.traps=g.traps||[];
-    g.trapBlocked=g.trapBlocked||{};
-    if(g.traps.includes(current)){
-      g.traps=g.traps.filter(r=>r!==current);
-      g.trapBlocked[user.id]=true;
-      g.submitted[user.id]=true;
-      g.evidence.push({type:"trapTriggered",room:current,player:user.id});
-      await saveGuildState(env,interaction.guild_id,state);
-      await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🪤 **TRAP!** The room was trapped!\n\nThe trap stopped you from leaving **${current}** this turn. You will be able to move normally on your next movement round.\n\n🔒 Your action for this round is locked.`);
-    }
-
-    g.rooms[user.id]=room; g.submitted[user.id]=true;
-    const disguised=!!g.abilityFlags?.[user.id]?.disguise;
-    g.evidence.push({type:"movement",room,player:user.id,masked:disguised});
-    if(disguised)g.abilityFlags[user.id].disguise=false;
+    if(g.round%2!==1||!(HALLOWEEN_ROOMS[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there this round.");
+    g.rooms[user.id]=room; g.submitted[user.id]=true; g.evidence.push({type:"movement",room,player:user.id});
     await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
     return sendText(env,interaction,`👻 You slipped into **${room}**. Your movement left a faint trail.\n\n🔒 Your action for this round is locked.`);
   }
@@ -29918,47 +29689,11 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
     return sendText(env,interaction,"🤫 You stayed perfectly still.\n\n🔒 Your action for this round is locked.");
   }
   if(user.id!==g.hunterId && action==="ability"){
-    const role=g.hiddenRoles[user.id];
-    g.usedAbilities=g.usedAbilities||{}; g.abilityUses=g.abilityUses||{}; g.abilityFlags=g.abilityFlags||{}; g.webTraps=g.webTraps||[];
-    const uses=Number(g.abilityUses[user.id]||0);
-    const maxUses=role==="Web Weaver"?2:1;
-    if(uses>=maxUses)return sendText(env,interaction,`❌ Your **${role}** ability has already been used ${maxUses===1?"":"the maximum number of times"}.`);
-
-    const current=g.rooms[user.id]||"Foyer";
-    let result="";
-
-    if(role==="Mimic"){
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),disguise:true};
-      result="🎭 **DISGUISE ACTIVATED!**\n\nYour movement trail will be hidden from the Hunter until your next movement.";
-    }else if(role==="Gravekeeper"){
-      g.evidence=(g.evidence||[]).filter(e=>!(e.type==="movement"&&e.player===user.id));
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),buried:true};
-      result="🪦 **TRAIL BURIED!**\n\nYour existing movement trail has been erased.";
-    }else if(role==="Web Weaver"){
-      g.webTraps.push({room:current,owner:user.id});
-      result=`🕷️ **WEB TRAP SET!**\n\nA web now covers **${current}**. The next Hunter **Capture** attempted against a Hidden player in that room will be blocked.`;
-    }else if(role==="Haunted Doll"){
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),playDead:true};
-      result="🧸 **PLAY DEAD!**\n\nYour next Hunter investigation or listen in your current room will look completely empty.";
-    }else if(role==="Witch"){
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),hex:true};
-      result="🧙 **HEX CAST!**\n\nThe Hunter's next Investigation, Listen, or Track clue will be corrupted.";
-    }else if(role==="Shadow"){
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),vanish:true};
-      result="🌑 **VANISH READY!**\n\nIf the Hunter correctly chooses YOU and your exact room for Capture this Hunter phase, the capture will fail and you escape.";
-    }else{
-      const pool=halloweenHideRoomPool(g).filter(r=>r!==current);
-      const decoy=pool.length?pool[randomInt(0,pool.length-1)]:current;
-      g.abilityFlags[user.id]={...(g.abilityFlags[user.id]||{}),mirrorDecoy:decoy};
-      g.evidence.push({type:"mirrorDecoy",room:decoy,owner:user.id});
-      result=`🪞 **MIRROR IMAGE!**\n\nA false trail has appeared in **${decoy}**.`;
-    }
-
-    g.abilityUses[user.id]=uses+1;
-    g.usedAbilities[user.id]=g.abilityUses[user.id]>=maxUses;
-    g.submitted[user.id]=true;
+    const role=g.hiddenRoles[user.id]; g.usedAbilities=g.usedAbilities||{};
+    if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");
+    g.usedAbilities[user.id]=true; g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role}); g.submitted[user.id]=true;
     await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,`${result}\n\n🔒 Your move is locked for this round.`);
+    return sendText(env,interaction,`✨ **${role} ability used.** Your move is locked for this round.`);
   }
   if(user.id===g.hunterId && action==="hunter")return halloweenHidePrivateMenu(env,interaction);
   if(user.id===g.hunterId && ["investigate","listen","track","trap"].includes(action)){
@@ -29966,46 +29701,31 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
     const room=parts.slice(3).join(":");
     if(!HALLOWEEN_ROOMS[room]){
       const labels={investigate:"🔎 **INVESTIGATE**",listen:"👂 **LISTEN**",track:"🧭 **TRACK**",trap:"🪤 **TRAP**"};
-      return sendText(env,interaction,`${labels[action]}\n\nChoose a room:`,halloweenHideRoomRows(`halloween:hide:${action}`,halloweenHideRoomPool(g),2));
+      return sendText(env,interaction,`${labels[action]}\n\nChoose a room:`,halloweenHideRoomRows(`halloween:hide:${action}`,Object.keys(HALLOWEEN_ROOMS),2));
     }
     g.hunterActions++;
     if(action==="investigate"){
-      let occupants=Object.entries(g.rooms).filter(([id,r])=>id!==g.hunterId&&r===room&&!g.captured.includes(id));
-      let corrupted=false;
-      for(const id of occupants.map(x=>x[0])){if(g.abilityFlags?.[id]?.playDead){occupants=[];g.abilityFlags[id].playDead=false;corrupted=true;break;}}
-      if(g.abilityFlags&&Object.values(g.abilityFlags).some(f=>f?.hex)){corrupted=true;for(const [id,f] of Object.entries(g.abilityFlags)){if(f?.hex){f.hex=false;break;}}}
-      const decoy=(g.evidence||[]).some(e=>e.type==="mirrorDecoy"&&e.room===room);
-      g.evidence.push({type:"investigate",room,corrupted});
+      const occupants=Object.entries(g.rooms).filter(([id,r])=>id!==g.hunterId&&r===room&&!g.captured.includes(id));
+      g.evidence.push({type:"investigate",room});
       await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🔎 **Investigation — ${room}**\n\n${corrupted?"🌫️ The evidence is strangely distorted.":decoy?"👀 You find fresh signs that someone is nearby.":occupants.length?"👀 You find fresh signs that someone is nearby.":"🕯️ Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
+      return sendText(env,interaction,`🔎 **Investigation — ${room}**\n\n${occupants.length?"👀 You find fresh signs that someone is nearby.":"🕯️ Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
     }
     if(action==="listen"){
       const occupants=Object.entries(g.rooms).filter(([id,r])=>id!==g.hunterId&&r===room&&!g.captured.includes(id));
-      let corrupted=false;
-      if(occupants.some(([id])=>g.abilityFlags?.[id]?.playDead)){for(const [id] of occupants){if(g.abilityFlags?.[id]?.playDead){g.abilityFlags[id].playDead=false;break;}}corrupted=true;}
-      if(g.abilityFlags&&Object.values(g.abilityFlags).some(f=>f?.hex)){corrupted=true;for(const [id,f] of Object.entries(g.abilityFlags)){if(f?.hex){f.hex=false;break;}}}
-      const decoy=(g.evidence||[]).some(e=>e.type==="mirrorDecoy"&&e.room===room);
-      g.evidence.push({type:"listen",room,occupied:occupants.length>0&&!corrupted,corrupted});
+      g.evidence.push({type:"listen",room,occupied:occupants.length>0});
       await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`👂 **Listen — ${room}**\n\n${corrupted?"🌫️ The sounds are strangely distorted.":decoy?"👣 You hear faint footsteps nearby.":occupants.length?"👣 You hear faint footsteps nearby.":"🤫 The room is completely silent."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
+      return sendText(env,interaction,`👂 **Listen — ${room}**\n\n${occupants.length?"👣 You hear faint footsteps nearby.":"🤫 The room is completely silent."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
     }
     if(action==="track"){
-      const ev=(g.evidence||[]).filter(e=>e.type==="movement"&&e.room===room&&!e.masked).slice(-1)[0];
-      let corrupted=false;
-      if(g.abilityFlags&&Object.values(g.abilityFlags).some(f=>f?.hex)){corrupted=true;for(const [id,f] of Object.entries(g.abilityFlags)){if(f?.hex){f.hex=false;break;}}}
-      const decoy=(g.evidence||[]).some(e=>e.type==="mirrorDecoy"&&e.room===room);
-      g.evidence.push({type:"track",room,found:!!ev||decoy,corrupted});
+      const ev=(g.evidence||[]).filter(e=>e.type==="movement"&&e.room===room).slice(-1)[0];
+      g.evidence.push({type:"track",room,found:!!ev});
       await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🧭 **Track — ${room}**\n\n${corrupted?"🌫️ The trail is warped and unreliable.":decoy?"🪞 You find a suspicious trail leading through this room.":ev?"🕯️ You find a fresh trail leading through this room.":"🌫️ No fresh trail here."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
+      return sendText(env,interaction,`🧭 **Track — ${room}**\n\n${ev?"🕯️ You find a fresh trail leading through this room.":"🌫️ No fresh trail here."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
     }
     if(action==="trap"){
-      // Only one Hunter trap may be active at a time.
-      g.traps=g.traps||[];
-      if(g.traps.length) return sendText(env,interaction,"🪤 **You already have a trap active.** It will disappear when it catches someone trying to leave.");
-      g.traps=[room];
-      g.evidence.push({type:"trap",room});
+      g.traps=g.traps||[]; if(!g.traps.includes(room))g.traps.push(room); g.evidence.push({type:"trap",room});
       await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🪤 **Trap placed in ${room}.**\n\nIf a Hidden player tries to leave that room during their next movement opportunity, the trap will stop them for that turn.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
+      return sendText(env,interaction,`🪤 **Trap placed in ${room}.**\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
     }
   }
   if(user.id===g.hunterId && action==="capture"){
@@ -30021,48 +29741,20 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
     if(!target||!g.players?.[target]||target===g.hunterId||g.captured.includes(target))return sendText(env,interaction,"❌ That target is no longer available.");
     g.pendingCaptureTarget=target;
     await saveGuildState(env,interaction.guild_id,state);
-    return sendText(env,interaction,`🎯 **STEP 2 — Where do you think <@${target}> is?**\n\nChoose one room.`,halloweenHideRoomRows(`halloween:hide:captureroom:${target}`,halloweenHideRoomPool(g),2));
+    return sendText(env,interaction,`🎯 **STEP 2 — Where do you think <@${target}> is?**\n\nChoose one room.`,halloweenHideRoomRows(`halloween:hide:captureroom:${target}`,Object.keys(HALLOWEEN_ROOMS),2));
   }
   if(user.id===g.hunterId && action==="captureroom"){
     if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
     const target=parts[3],room=parts.slice(4).join(":");
     if(!g.pendingCaptureTarget||g.pendingCaptureTarget!==target)return sendText(env,interaction,"❌ That capture attempt expired. Press Capture again.");
     if(!g.players?.[target]||g.captured.includes(target)){g.pendingCaptureTarget=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"❌ That player is no longer available.");}
-    if(!halloweenHideRoomPool(g).includes(room)){g.pendingCaptureTarget=null;return sendText(env,interaction,"❌ That room is not part of this game.");}
     g.pendingCaptureTarget=null; g.hunterActions++; g.everLocated=g.everLocated||{};
     if(g.rooms[target]===room){
-      const webIndex=(g.webTraps||[]).findIndex(t=>t.room===room);
-      if(webIndex>=0){
-        g.webTraps.splice(webIndex,1);
-        await saveGuildState(env,interaction.guild_id,state);
-        await halloweenHideAdvance(env,interaction,g);
-        return sendText(env,interaction,`🕷️ **WEB TRAP TRIGGERED!**\n\nThe capture attempt in **${room}** was blocked. The Hidden player escapes this attempt.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-      }
-      if(g.abilityFlags?.[target]?.vanish){
-        g.abilityFlags[target].vanish=false;
-        await saveGuildState(env,interaction.guild_id,state);
-        await halloweenHideAdvance(env,interaction,g);
-        return sendText(env,interaction,`🌑 **VANISH!**\n\nThe capture should have succeeded — but the Shadow disappeared just in time. The Hunter's action is spent.`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-      }
-      g.everLocated[target]=true;
-      if(!g.captured.includes(target)) g.captured.push(target);
-      g.ghosts[target]=true;
-
-      const captureTarget=Number(g.captureTarget||Math.ceil((Object.keys(g.players||{}).length-1)/2));
-
-      if(g.captured.length>=captureTarget){
-        g.status="ended";
-        await halloweenHideFinish(env,interaction,g,true);
-        return sendText(env,interaction,`🎯 **CAPTURE SUCCESS!** <@${target}> was found in **${room}**!\n\n🏆 **The Hunter has captured enough Hidden players to win!**`);
-      }
-
-      await saveGuildState(env,interaction.guild_id,state);
-      await halloweenHideAdvance(env,interaction,g);
+      g.everLocated[target]=true; g.captured.push(target); g.ghosts[target]=true;
+      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
       return sendText(env,interaction,`🎯 **CAPTURE SUCCESS!** <@${target}> was found in **${room}**!\nThey are now a Ghost.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
     }
-
-    await saveGuildState(env,interaction.guild_id,state);
-    await halloweenHideAdvance(env,interaction,g);
+    g.everLocated[target]=true; await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
     return sendText(env,interaction,`❌ **Capture missed.** <@${target}> was not in **${room}**.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
   }
   if(user.id===g.hunterId && action==="end"){g.hunterActions=2;g.pendingCaptureTarget=null;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"⏭️ Hunter ended the round.");}
