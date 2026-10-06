@@ -29386,16 +29386,6 @@ function halloweenBookCollectionConfig() {
   ];
 }
 
-function halloweenBookComponents(spread) {
-  const s = Math.max(0, Math.min(4, Number(spread) || 0));
-  return [
-    row(
-      button("◀️", `collection:halloween:page:${Math.max(0, s - 1)}`, 2, s === 0),
-      button("▶️", `collection:halloween:page:${Math.min(4, s + 1)}`, 2, s === 4)
-    ),
-    row(button("🔓 HOW TO UNLOCK", "collection:halloween:unlock", 3), button("🔙 BACK", "collection:halloween", 2))
-  ];
-}
 
 function halloweenBookData(player, spread=0, imageUrlOverride=null) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
