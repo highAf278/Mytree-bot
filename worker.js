@@ -29578,43 +29578,52 @@ function spookSmashText(g, now = Date.now()) {
   ].join("\n");
 }
 
-function spookSmashData(g, now = Date.now(), imageAttachment = false) {
+function spookSmashLiveBoard(g) {
+  const board = Array.isArray(g?.board) ? g.board : Array(12).fill(null);
+  const cells = board.map(target => {
+    if (!target) return "🕳️";
+    const creature = SPOOK_SMASH_CREATURES[target.type] || SPOOK_SMASH_CREATURES.ghost;
+    return target.type === "witch" && target.glowing ? "✨🧙" : creature.emoji;
+  });
+  const lines = [];
+  for (let r = 0; r < 3; r++) {
+    lines.push(`│ ${cells[r*4]} │ ${cells[r*4+1]} │ ${cells[r*4+2]} │ ${cells[r*4+3]} │`);
+  }
+  return [
+    "╭──────┬──────┬──────┬──────╮",
+    ...lines,
+    "╰──────┴──────┴──────┴──────╯"
+  ].join("\n");
+}
+
+function spookSmashData(g, now = Date.now()) {
   return {
-    content: spookSmashText(g, now),
-    embeds: [{image:{url:imageAttachment ? "attachment://spook-n-smash-board.png" : imageUrl(IMAGES.spookNSmashBoard)},footer:{text:"WereWives Halloween 2026 • Spook N Smash"}}],
+    content: [
+      spookSmashText(g, now),
+      "",
+      "🖼️ **YOUR LIVE HOLES**",
+      "```text",
+      spookSmashLiveBoard(g),
+      "```",
+      "👆 The 4×3 buttons below are the 12 holes. Smash the creature currently shown in that position!",
+      "",
+      "⚡ The Halloween artwork above stays static; only this live board and the buttons change."
+    ].join("\n"),
+    embeds: [{image:{url:imageUrl(IMAGES.spookNSmashBoard)},footer:{text:"WereWives Halloween 2026 • Spook N Smash"}}],
     components: spookSmashComponents(g)
   };
 }
 
-async function renderSpookSmashBoardImage(env, g) {
-  let browser;
-  try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport({width:1200,height:900,deviceScaleFactor:1});
-    const background = imageUrl(IMAGES.spookNSmashBoard);
-    const cells=(Array.isArray(g?.board)?g.board:Array(12).fill(null)).map(target=>{
-      if(!target)return "<div class=cell></div>";
-      const c=SPOOK_SMASH_CREATURES[target.type]||SPOOK_SMASH_CREATURES.ghost;
-      const label=target.type==="witch"&&target.glowing?"✨🧙":c.emoji;
-      const extra=target.type==="spider"?`<span class=hits>${Math.max(0,Number(target.hits||0))}/2</span>`:"";
-      return `<div class=cell><span class=creature>${label}</span>${extra}</div>`;
-    }).join("");
-    const html=`<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:transparent;overflow:hidden}#board{width:1200px;height:900px;position:relative;overflow:hidden}#bg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}#grid{position:absolute;left:9%;top:38%;width:82%;height:51%;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr)}.cell{display:flex;align-items:center;justify-content:center;position:relative}.creature{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:82px;line-height:1;filter:drop-shadow(0 5px 5px rgba(0,0,0,.75));transform:translateY(-4px)}.hits{position:absolute;right:10%;bottom:8%;font:700 22px Arial,sans-serif;color:white;text-shadow:0 2px 4px black}</style></head><body><div id=board><img id=bg src="${background}"><div id=grid>${cells}</div></div></body></html>`;
-    await page.setContent(html,{waitUntil:"load"});
-    await page.evaluate(async()=>Promise.all(Array.from(document.images).map(img=>new Promise(r=>{if(img.complete)r();else{img.onload=r;img.onerror=r}}))));
-    return await page.screenshot({type:"png"});
-  } finally {if(browser)try{await browser.close();}catch{}}
+async function editSpookSmashBoard(env, interaction, g, now = Date.now()) {
+  // IMPORTANT: Do not render or upload a new PNG during gameplay.
+  // Discord interaction responses must stay lightweight. The static board
+  // image is the backdrop; the live creatures are represented in the message
+  // and on the 12 buttons, which update instantly with a normal JSON PATCH.
+  return editOriginalResponse(env, interaction, spookSmashData(g, now));
 }
 
-async function editSpookSmashBoard(env,interaction,g,now=Date.now()){
-  const image=await renderSpookSmashBoardImage(env,g);
-  const data=spookSmashData(g,now,true);
-  const form=new FormData();
-  form.append("payload_json",JSON.stringify({content:data.content,embeds:data.embeds,components:data.components,attachments:[{id:0,filename:"spook-n-smash-board.png"}]}));
-  form.append("files[0]",new Blob([image],{type:"image/png"}),"spook-n-smash-board.png");
-  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
-}
+/* Spook N Smash deliberately uses Discord JSON updates during gameplay.
+   No per-tick image rendering or image upload is performed. */
 
 function spookSmashFinalData(g) {
   const score = Number(g.score || 0);
@@ -29743,19 +29752,9 @@ async function startSpookSmash(env, interaction, ctx = null) {
   await spookSmashSave(env, guildId, user.id, g);
   await spookSmashSaveBoard(env, guildId, user.id, spookSmashMakeBoard(1));
   const board = await spookSmashLoadBoard(env, guildId, user.id);
-  // A Puppeteer render can take longer than Discord's 3-second interaction window.
-  // Acknowledge the button immediately, then render/edit the game message.
-  // The fetch handler already sent a type-6 ACK for Spook N Smash. If this
-  // function is ever called directly, deferInteraction safely ACKs it too.
-  const deferred = await deferInteraction(env, interaction, { update: true });
-  if (!deferred) return;
-
-  try {
-    await editSpookSmashBoard(env, interaction, {...g,board}, Date.now());
-  } catch (error) {
-    console.error("Spook N Smash initial board render failed:", error);
-    await editOriginalResponse(env, interaction, spookSmashData({...g,board}, Date.now()));
-  }
+  // The Halloween fast path already ACKs this public button with Discord
+  // interaction type 6. Keep the first update lightweight: JSON only.
+  await editSpookSmashBoard(env, interaction, {...g, board}, Date.now());
 
   if (ctx && interaction.__requestUrl) {
     ctx.waitUntil(scheduleSpookSmashTick(interaction.__requestUrl, guildId, user.id, session, 1200));
@@ -34051,7 +34050,7 @@ export default {
     const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     const isBirthdayComponent = interaction.type === 3 && customId.startsWith("birthday:");
     const isHalloweenComponent = interaction.type === 3 && (customId.startsWith("halloween:") || customId.startsWith("collection:"));
-    const isSpookSmashComponent = interaction.type === 3 && customId.startsWith("halloween:spook:");
+    const isSpookSmashComponent = interaction.type === 3 && (customId === "halloween:start:spook" || customId.startsWith("halloween:spook:"));
     const isPermanentGameComponent = interaction.type === 3 && (customId.startsWith("talent:") || customId.startsWith("truthpass:"));
     const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
     const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal");
@@ -34153,6 +34152,9 @@ export default {
     // KV reads before the Halloween handler runs, which can make Discord
     // buttons appear stuck. The handler edits this initial response afterward.
     if (interaction.type === 3 && isHalloweenComponent) {
+      const spookNsmashPublic =
+        customId === "halloween:start:spook" ||
+        customId.startsWith("halloween:spook:");
       const privateHalloween =
         customId === "collection:halloween:open" ||
         customId.startsWith("collection:halloween:page:") ||
@@ -34176,12 +34178,16 @@ export default {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: 5,
-            data: {
-              ...(privateHalloween ? { flags: 64 } : {})
-            }
-          })
+          body: JSON.stringify(
+            spookNsmashPublic
+              ? { type: 6 }
+              : {
+                  type: 5,
+                  data: {
+                    ...(privateHalloween ? { flags: 64 } : {})
+                  }
+                }
+          )
         }
       );
       if (!ack.ok) {
@@ -34190,7 +34196,7 @@ export default {
       }
 
       interaction.__deferred = true;
-      interaction.__deferredUpdate = false;
+      interaction.__deferredUpdate = spookNsmashPublic;
       interaction.__deferredEphemeral = privateHalloween;
       interaction.__requestUrl = request.url;
 
