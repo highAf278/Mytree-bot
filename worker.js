@@ -29437,14 +29437,15 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
 ========================================================= */
 const HALLOWEEN_BOOK_SLOT_LAYOUT = [
   // Calibrated to the actual decorative frames in IMG_8140.png.
-  // Each slot has an artwork box plus the little name plaque underneath.
+  // Artwork is kept slightly smaller and centered inside each ornate frame.
+  // The name is rendered larger/bold in the plaque directly underneath.
   {
-    left: 0.17, top: 0.28, width: 0.30, height: 0.34,
-    labelLeft: 0.20, labelTop: 0.64, labelWidth: 0.24, labelHeight: 0.075
+    left: 0.17, top: 0.29, width: 0.285, height: 0.32,
+    labelLeft: 0.19, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08
   },
   {
-    left: 0.57, top: 0.28, width: 0.30, height: 0.34,
-    labelLeft: 0.60, labelTop: 0.64, labelWidth: 0.24, labelHeight: 0.075
+    left: 0.558, top: 0.29, width: 0.285, height: 0.32,
+    labelLeft: 0.58, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08
   }
 ];
 
@@ -29462,15 +29463,38 @@ function halloweenBookLabelText(item, owned) {
 function drawHalloweenBookLabel(frame, item, owned, box) {
   const text = halloweenBookLabelText(item, owned);
   const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
-  const labelScale = 2;
-  const glyphW = 5 * labelScale, gap = labelScale;
-  const rawWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * labelScale : glyphW + gap), 0);
-  const scale = rawWidth > maxWidth ? 1 : labelScale;
+
+  // Larger bitmap lettering so the names are actually readable in Discord.
+  // Scale 3 is preferred; if a long name cannot fit, fall back to scale 2.
+  const preferredScale = 3;
+  const fitsAtScale = (scale) => {
+    const glyphW = 5 * scale, gap = scale;
+    const rawWidth = [...text].reduce(
+      (n, ch) => n + (ch === " " ? 3 * scale : glyphW + gap),
+      0
+    );
+    return rawWidth <= maxWidth;
+  };
+  const scale = fitsAtScale(preferredScale) ? preferredScale : 2;
+
   const glyphWidth = 5 * scale, glyphGap = scale;
-  const textWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap), 0) - scale;
-  const x = Math.round(frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2));
-  const y = Math.round(frame.height * box.labelTop + Math.max(0, (frame.height * box.labelHeight - 7 * scale) / 2));
+  const textWidth = [...text].reduce(
+    (n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap),
+    0
+  ) - scale;
+
+  const x = Math.round(
+    frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2)
+  );
+  const y = Math.round(
+    frame.height * box.labelTop +
+    Math.max(0, (frame.height * box.labelHeight - 7 * scale) / 2)
+  );
+
+  // Bitmap font has no native weight, so draw it twice with a 1px offset
+  // to create a clean bold effect without changing the book artwork.
   drawBitmapText(frame, text, x, y, scale, [55, 34, 22], maxWidth);
+  drawBitmapText(frame, text, x + 1, y, scale, [55, 34, 22], maxWidth);
 }
 
 async function renderHalloweenBookDirect(env, player, spread) {
