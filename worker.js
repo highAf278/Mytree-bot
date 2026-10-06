@@ -29241,14 +29241,14 @@ const HALLOWEEN_ROOMS = {
 function halloweenHideRoomPool(g){
   const playerCount=Object.keys(g.players||{}).length;
 
+  // Small games still need enough room to make deduction difficult.
+  // 2 players: 6 rooms | 3-4 players: 8 rooms | 5-8 players: all 11 rooms.
   if(playerCount<=2){
-    return ["Foyer","Dining Hall","Kitchen","Basement"];
-  }
-
-  if(playerCount<=4){
     return ["Foyer","Dining Hall","Kitchen","Basement","Library","Attic"];
   }
-
+  if(playerCount<=4){
+    return ["Foyer","Dining Hall","Kitchen","Basement","Library","Attic","Study","Graveyard"];
+  }
   return Object.keys(HALLOWEEN_ROOMS);
 }
 
@@ -30028,6 +30028,7 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
     const target=parts[3],room=parts.slice(4).join(":");
     if(!g.pendingCaptureTarget||g.pendingCaptureTarget!==target)return sendText(env,interaction,"❌ That capture attempt expired. Press Capture again.");
     if(!g.players?.[target]||g.captured.includes(target)){g.pendingCaptureTarget=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"❌ That player is no longer available.");}
+    if(!halloweenHideRoomPool(g).includes(room)){g.pendingCaptureTarget=null;return sendText(env,interaction,"❌ That room is not part of this game.");}
     g.pendingCaptureTarget=null; g.hunterActions++; g.everLocated=g.everLocated||{};
     if(g.rooms[target]===room){
       const webIndex=(g.webTraps||[]).findIndex(t=>t.room===room);
