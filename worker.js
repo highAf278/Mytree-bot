@@ -379,7 +379,8 @@ const IMAGES = {
   halloweenBookPages: "IMG_8140.png",
   halloweenHuntersLantern: "IMG_8142.png",
   halloweenLastAntidote: "IMG_8143.png",
-  halloweenCursedCandyBucket: "IMG_8145.png"
+  halloweenCursedCandyBucket: "IMG_8145.png",
+  spookNSmashBoard: "IMG_8152.png"
 };
 
 const SHOP_ITEMS = {
@@ -1159,7 +1160,9 @@ function defaultPlayer() {
     halloweenGamesPlayed: 0,
     halloweenCollection: [],
     halloweenTrickTreatOutcomes: [],
-    halloweenAchievements: []
+    halloweenAchievements: [],
+    halloweenSpookSmashBest: 0,
+    halloweenSpookSmashRuns: 0
   };
 }
 
@@ -15663,7 +15666,8 @@ async function checkBombRestriction(env, interaction) {
 
 async function handleComponent(
   env,
-  interaction
+  interaction,
+  ctx = null
 ) {
   const id =
     interaction.data?.custom_id ||
@@ -15679,7 +15683,7 @@ async function handleComponent(
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
     if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
   }
-  if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction);
+  if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction,ctx);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
   if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
   if (id.startsWith("sparklepurchase:")) return handleSparklePurchaseComponent(env, interaction);
@@ -29249,7 +29253,7 @@ function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
-    "The gates are open. Three games are ready for the first Halloween release. 👻",
+    "The gates are open. Four games are ready for the first Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
     `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
@@ -29262,7 +29266,8 @@ function halloweenHubText(player) {
 function halloweenGameMenuComponents() {
   return [
     row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
-    row(button("🍬 Trick or Treat", "halloween:start:trick", 3), button("📖 How Halloween Works", "halloween:howto", 2)),
+    row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
+    row(button("📖 How Halloween Works", "halloween:howto", 2)),
     row(button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
 }
@@ -29399,6 +29404,387 @@ async function sendHalloweenBook(env, interaction, spread=0) {
   // waited on Browser Rendering or asset/image work. The book is now a normal
   // Discord embed using the same R2 artwork that the cover already displays.
   return editOriginalResponse(env, interaction, halloweenBookData(player, s));
+}
+
+
+/* =========================================================
+   SPOOK N SMASH — SOLO HALLOWEEN ARCADE GAME
+   60-second reaction game. The board updates automatically;
+   button presses only resolve the creature currently in that hole.
+========================================================= */
+const SPOOK_SMASH_DURATION = 60 * 1000;
+const SPOOK_SMASH_GAME_PREFIX = "halloween:spook:game:";
+
+const SPOOK_SMASH_CREATURES = {
+  ghost:   { emoji: "👻", name: "Ghost", points: 100, hits: 1, style: 1 },
+  pumpkin:{ emoji: "🎃", name: "Pumpkin", points: 75, hits: 1, style: 1 },
+  spider: { emoji: "🕷️", name: "Spider", points: 250, hits: 2, style: 3 },
+  bat:    { emoji: "🦇", name: "Bat", points: 175, hits: 1, style: 3 },
+  witch:  { emoji: "🧙", name: "Witch", points: 300, hits: 1, style: 3 },
+  golden: { emoji: "✨🎃", name: "Golden Pumpkin", points: 500, hits: 1, style: 3 },
+  skull:  { emoji: "💀", name: "Skull", points: -200, hits: 1, style: 4 }
+};
+
+function spookSmashKey(guildId, userId) {
+  return `halloween:spooksmash:${guildId}:${userId}`;
+}
+function spookSmashBoardKey(guildId, userId) {
+  return `halloween:spooksmash:board:${guildId}:${userId}`;
+}
+
+function spookSmashWave(elapsed) {
+  const second = Math.floor(Math.max(0, elapsed) / 1000);
+  if (second < 8) return 1;
+  if (second < 16) return 2;
+  if (second < 25) return 3;
+  if (second < 35) return 4;
+  if (second < 46) return 5;
+  if (second < 54) return 6;
+  return 7;
+}
+
+function spookSmashWindowMs(wave) {
+  if (wave <= 1) return 1900;
+  if (wave <= 3) return 1600;
+  if (wave <= 5) return 1400;
+  if (wave === 6) return 1200;
+  return 1000;
+}
+
+function spookSmashAllowed(wave) {
+  if (wave === 1) return ["ghost", "pumpkin"];
+  if (wave === 2) return ["ghost", "pumpkin", "spider"];
+  if (wave === 3) return ["ghost", "pumpkin", "spider", "bat"];
+  if (wave === 4) return ["ghost", "pumpkin", "spider", "bat", "skull"];
+  if (wave === 5) return ["ghost", "pumpkin", "spider", "bat", "skull", "witch"];
+  if (wave === 6) return ["ghost", "pumpkin", "spider", "bat", "skull", "witch", "golden"];
+  return ["ghost", "pumpkin", "spider", "bat", "skull", "witch", "golden"];
+}
+
+function spookSmashPickCreature(wave) {
+  const pool = spookSmashAllowed(wave);
+  const weights = {
+    ghost: 32, pumpkin: 28, spider: 13, bat: 10,
+    skull: wave >= 4 ? 8 : 0,
+    witch: wave >= 5 ? 6 : 0,
+    golden: wave >= 6 ? 3 : 0
+  };
+  const weighted = [];
+  for (const id of pool) {
+    for (let i = 0; i < (weights[id] || 1); i++) weighted.push(id);
+  }
+  return weighted[randomInt(0, weighted.length - 1)] || "ghost";
+}
+
+function spookSmashMakeBoard(wave) {
+  const board = Array.from({ length: 12 }, () => null);
+  const count = wave <= 2 ? randomInt(1, 3) : wave <= 4 ? randomInt(2, 4) : randomInt(2, 5);
+  const positions = [];
+  while (positions.length < count) {
+    const p = randomInt(0, 11);
+    if (!positions.includes(p)) positions.push(p);
+  }
+  for (const position of positions) {
+    const type = spookSmashPickCreature(wave);
+    board[position] = {
+      type,
+      glowing: type === "witch" ? Math.random() < 0.55 : false,
+      hits: 0,
+      spawnedAt: Date.now(),
+      expiresAt: Date.now() + spookSmashWindowMs(wave)
+    };
+  }
+  return board;
+}
+
+function spookSmashComboMultiplier(combo) {
+  if (combo >= 30) return 5;
+  if (combo >= 20) return 4;
+  if (combo >= 10) return 3;
+  if (combo >= 5) return 2;
+  return 1;
+}
+
+function spookSmashWaveName(wave) {
+  return ({
+    1: "TRICK OR TREAT",
+    2: "SOMETHING CRAWLING",
+    3: "BATS!",
+    4: "DON'T TOUCH THAT",
+    5: "WITCHING HOUR",
+    6: "JACKPOT",
+    7: "TOTAL CHAOS"
+  })[wave] || "TOTAL CHAOS";
+}
+
+function spookSmashHowToText() {
+  return [
+    "📖🎃 **SPOOK N SMASH — HOW TO PLAY** 🎃📖",
+    "",
+    "⏱️ **You have 60 seconds.** Smash the right creatures as they appear.",
+    "The board changes **automatically**, so keep watching the holes! 👀",
+    "",
+    "👻 **Ghost** — +100",
+    "🎃 **Pumpkin** — +75",
+    "🕷️ **Spider** — +250 (smash twice quickly)",
+    "🦇 **Bat** — +175 (catch it before it moves)",
+    "🧙 **Glowing Witch** — +300",
+    "✨🎃 **Golden Pumpkin** — +500",
+    "💀 **SKULL — DO NOT SMASH** — −200 + combo reset",
+    "",
+    "🔥 **COMBO:** 5 = x2 • 10 = x3 • 20 = x4 • 30 = x5",
+    "❌ Missing a normal creature is safe — it just escapes.",
+    "💀 Hitting a Skull or missing a special target breaks your combo.",
+    "",
+    "🧠 **Watch. Decide. SMASH.** Good luck. 😈"
+  ].join("\n");
+}
+
+function spookSmashComponents(g) {
+  const board = Array.isArray(g?.board) ? g.board : Array(12).fill(null);
+  const rows = [];
+  for (let i = 0; i < 12; i += 3) {
+    rows.push(row(...[i, i + 1, i + 2].map(index => {
+      const target = board[index];
+      if (!target) return button("·", `halloween:spook:${g.session}:${index}`, 2);
+      const c = SPOOK_SMASH_CREATURES[target.type] || SPOOK_SMASH_CREATURES.ghost;
+      const label = target.type === "witch" && target.glowing ? "✨🧙" : c.emoji;
+      return button(label, `halloween:spook:${g.session}:${index}`, c.style);
+    })));
+  }
+  rows.push(row(
+    button("📖 HOW TO PLAY", `halloween:spook:howto:${g.session}`, 2),
+    button("🏠 HALLOWEEN GAMES", "halloween:games", 2)
+  ));
+  return rows;
+}
+
+function spookSmashText(g, now = Date.now()) {
+  const remaining = Math.max(0, Number(g.endAt || 0) - now);
+  const seconds = Math.ceil(remaining / 1000);
+  const mult = spookSmashComboMultiplier(Number(g.combo || 0));
+  return [
+    "🎃💥 **SPOOK N SMASH** 💥🎃",
+    "",
+    `⏱️ **${seconds}s**   •   🌊 **Wave ${g.wave || 1}: ${spookSmashWaveName(g.wave || 1)}**`,
+    `🏆 **Score:** ${Number(g.score || 0).toLocaleString()}   •   🔥 **Combo:** ${Number(g.combo || 0)}   **x${mult}**`,
+    "",
+    "👀 **WATCH THE HOLES — THE BOARD MOVES ON ITS OWN!**",
+    "",
+    `👻 ${g.stats?.ghosts || 0}  🎃 ${g.stats?.pumpkins || 0}  ✨🎃 ${g.stats?.goldens || 0}  💀 ${g.stats?.skulls || 0}`
+  ].join("\n");
+}
+
+function spookSmashData(g, now = Date.now()) {
+  return {
+    content: spookSmashText(g, now),
+    embeds: [{
+      image: { url: imageUrl(IMAGES.spookNSmashBoard) },
+      footer: { text: "WereWives Halloween 2026 • Spook N Smash" }
+    }],
+    components: spookSmashComponents(g)
+  };
+}
+
+function spookSmashFinalData(g) {
+  const score = Number(g.score || 0);
+  const bestCombo = Number(g.bestCombo || 0);
+  return {
+    content: [
+      "🎃💥 **SPOOK N SMASH — GAME OVER!** 💥🎃",
+      "",
+      `🏆 **Score:** ${score.toLocaleString()}`,
+      `🔥 **Best Combo:** ${bestCombo}`,
+      `👻 **Ghosts:** ${g.stats?.ghosts || 0}`,
+      `🎃 **Pumpkins:** ${g.stats?.pumpkins || 0}`,
+      `✨🎃 **Golden Pumpkins:** ${g.stats?.goldens || 0}`,
+      `💀 **Skulls Hit:** ${g.stats?.skulls || 0}`,
+      `💰 **Spookies Earned:** ${Number(g.reward || 0).toLocaleString()}`,
+      g.newBest ? "\n🏅 **NEW PERSONAL BEST!**" : "",
+      "",
+      "Ready to smash some more? 😈"
+    ].join("\n"),
+    components: [
+      row(button("🔄 PLAY AGAIN", "halloween:start:spook", 1), button("🏠 HALLOWEEN GAMES", "halloween:games", 2))
+    ]
+  };
+}
+
+function spookSmashReward(score, g = {}) {
+  let reward = score >= 15000 ? 100 : score >= 10000 ? 80 : score >= 7500 ? 60 : score >= 5000 ? 45 : score >= 2500 ? 30 : score >= 1000 ? 20 : 10;
+  const best = Number(g.bestCombo || 0);
+  if (best >= 20) reward += 10;
+  if (best >= 30) reward += 15;
+  if (best >= 40) reward += 20;
+  reward += Number(g.stats?.goldens || 0) * 5;
+  if (Number(g.stats?.skulls || 0) === 0) reward += 10;
+  return Math.min(150, reward);
+}
+
+async function spookSmashLoad(env, guildId, userId) {
+  const raw = await env.TREE_DATA.get(spookSmashKey(guildId, userId));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+async function spookSmashSave(env, guildId, userId, game) {
+  await env.TREE_DATA.put(spookSmashKey(guildId, userId), JSON.stringify(game));
+}
+async function spookSmashLoadBoard(env, guildId, userId) {
+  const raw = await env.TREE_DATA.get(spookSmashBoardKey(guildId, userId));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+async function spookSmashSaveBoard(env, guildId, userId, board) {
+  await env.TREE_DATA.put(spookSmashBoardKey(guildId, userId), JSON.stringify(board));
+}
+
+async function spookSmashHowTo(env, interaction, session) {
+  const rows = [
+    row(button("🔙 BACK TO GAME", `halloween:spook:back:${session}`, 2))
+  ];
+  return editOriginalResponse(env, interaction, { content: spookSmashHowToText(), embeds: [], components: rows });
+}
+
+async function spookSmashFinish(env, interaction, g) {
+  if (!g || !g.active) return;
+  g.active = false;
+  g.finishedAt = Date.now();
+  g.reward = spookSmashReward(Number(g.score || 0), g);
+  const p = await getPlayer(env, g.userId);
+  const oldBest = Number(p.halloweenSpookSmashBest || 0);
+  g.newBest = Number(g.score || 0) > oldBest;
+  p.halloweenSpookSmashBest = Math.max(oldBest, Number(g.score || 0));
+  p.halloweenSpookSmashRuns = Number(p.halloweenSpookSmashRuns || 0) + 1;
+  p.halloweenSpookies = Math.max(0, Number(p.halloweenSpookies || 0) + g.reward);
+  p.halloweenGamesPlayed = Number(p.halloweenGamesPlayed || 0) + 1;
+  refreshProfileBadges(p);
+  await savePlayer(env, p, g.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+  await spookSmashSave(env, g.guildId, g.userId, g);
+  await env.TREE_DATA.delete(spookSmashBoardKey(g.guildId, g.userId));
+  await editOriginalResponse(env, interaction, spookSmashFinalData(g));
+}
+
+async function runSpookSmash(env, interaction, g) {
+  while (true) {
+    const current = await spookSmashLoad(env, g.guildId, g.userId);
+    if (!current || current.session !== g.session || !current.active) return;
+    const now = Date.now();
+    if (now >= Number(current.endAt || 0)) {
+      await spookSmashFinish(env, interaction, current);
+      return;
+    }
+
+    const elapsed = now - Number(current.startedAt || now);
+    current.wave = spookSmashWave(elapsed);
+    const oldBoard = await spookSmashLoadBoard(env, current.guildId, current.userId);
+    if (Array.isArray(oldBoard)) {
+      const specialMissed = oldBoard.some(t => t && Number(t.expiresAt || 0) <= now && ["spider", "bat", "witch", "golden"].includes(t.type));
+      if (specialMissed) current.combo = 0;
+    }
+    current.board = undefined;
+    const board = spookSmashMakeBoard(current.wave);
+    await spookSmashSaveBoard(env, current.guildId, current.userId, board);
+
+    const render = { ...current, board };
+    try { await editOriginalResponse(env, interaction, spookSmashData(render, now)); }
+    catch (error) { console.error("Spook N Smash board update failed:", error); }
+
+    const delay = Math.min(1500, Math.max(900, spookSmashWindowMs(current.wave)));
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+}
+
+async function startSpookSmash(env, interaction) {
+  const user = getUserFromInteraction(interaction);
+  const guildId = interaction.guild_id;
+  if (!user || !guildId) return sendText(env, interaction, "❌ Spook N Smash can only be played inside a server.");
+  const existing = await spookSmashLoad(env, guildId, user.id);
+  if (existing?.active && Number(existing.endAt || 0) > Date.now()) {
+    return editOriginalResponse(env, interaction, {
+      content: "🎃 **YOUR SPOOK N SMASH RUN IS ALREADY ACTIVE!**\n\nGo smash the board! 😈",
+      embeds: [],
+      components: [row(button("📖 HOW TO PLAY", `halloween:spook:howto:${existing.session}`, 2))]
+    });
+  }
+  const session = `${Date.now().toString(36)}${randomInt(1000,9999)}`;
+  const g = {
+    active: true,
+    session,
+    guildId,
+    userId: user.id,
+    startedAt: Date.now(),
+    endAt: Date.now() + SPOOK_SMASH_DURATION,
+    wave: 1,
+    score: 0,
+    combo: 0,
+    bestCombo: 0,
+    reward: 0,
+    stats: { ghosts: 0, pumpkins: 0, goldens: 0, skulls: 0 },
+    lastHitAt: 0
+  };
+  await spookSmashSave(env, guildId, user.id, g);
+  await spookSmashSaveBoard(env, guildId, user.id, spookSmashMakeBoard(1));
+  const board = await spookSmashLoadBoard(env, guildId, user.id);
+  await editOriginalResponse(env, interaction, {
+    ...spookSmashData({ ...g, board }),
+    content: "🎃💥 **SPOOK N SMASH** 💥🎃\n\nGet ready... GO! 😈\n\n" + spookSmashText({ ...g, board })
+  });
+  // The Halloween fast path already lives inside ctx.waitUntil(), so this
+  // loop remains alive for the duration of the 60-second run.
+  await runSpookSmash(env, interaction, g);
+}
+
+async function spookSmashClick(env, interaction, session, index) {
+  const user = getUserFromInteraction(interaction);
+  const guildId = interaction.guild_id;
+  const g = await spookSmashLoad(env, guildId, user.id);
+  if (!g || !g.active || g.session !== session) return sendText(env, interaction, "🎃 That Spook N Smash run is no longer active.");
+  if (Date.now() >= Number(g.endAt || 0)) return sendText(env, interaction, "⏰ **TIME'S UP!** Your final score is being calculated...");
+
+  const board = await spookSmashLoadBoard(env, guildId, user.id);
+  const target = board?.[Number(index)];
+  if (!target || Number(target.expiresAt || 0) < Date.now()) return sendEphemeralFollowup(env, interaction, "👻 Too slow! It escaped! No penalty.");
+
+  const creature = SPOOK_SMASH_CREATURES[target.type] || SPOOK_SMASH_CREATURES.ghost;
+  target.hits = Number(target.hits || 0) + 1;
+
+  if (target.type === "skull") {
+    g.score = Math.max(0, Number(g.score || 0) - 200);
+    g.combo = 0;
+    g.stats.skulls = Number(g.stats.skulls || 0) + 1;
+    board[Number(index)] = null;
+    await spookSmashSaveBoard(env, guildId, user.id, board);
+    await spookSmashSave(env, guildId, user.id, g);
+    return sendEphemeralFollowup(env, interaction, "💀 **CURSED!** −200 points and your combo is gone! DO NOT SMASH THE SKULL 😭");
+  }
+
+  const required = Number(creature.hits || 1);
+  if (target.hits < required) {
+    await spookSmashSaveBoard(env, guildId, user.id, board);
+    return sendEphemeralFollowup(env, interaction, "🕷️ **HIT!** One more! QUICK! ⚡");
+  }
+
+  if (target.type === "witch" && !target.glowing) {
+    g.combo = 0;
+    board[Number(index)] = null;
+    await spookSmashSaveBoard(env, guildId, user.id, board);
+    await spookSmashSave(env, guildId, user.id, g);
+    return sendEphemeralFollowup(env, interaction, "🧙‍♀️ **NOT GLOWING!** The witch cursed your combo. 😭");
+  }
+
+  const now = Date.now();
+  g.combo = Number(g.combo || 0) + 1;
+  g.bestCombo = Math.max(Number(g.bestCombo || 0), g.combo);
+  const mult = spookSmashComboMultiplier(g.combo);
+  g.score = Math.max(0, Number(g.score || 0) + creature.points * mult);
+  if (target.type === "ghost") g.stats.ghosts++;
+  if (target.type === "pumpkin") g.stats.pumpkins++;
+  if (target.type === "golden") g.stats.goldens++;
+  board[Number(index)] = null;
+  await spookSmashSaveBoard(env, guildId, user.id, board);
+  await spookSmashSave(env, guildId, user.id, g);
+  const hit = target.type === "golden" ? "✨🎃 **JACKPOT!**" : `${creature.emoji} **SMASHED!**`;
+  return sendEphemeralFollowup(env, interaction, `${hit} **+${(creature.points * mult).toLocaleString()}** • Combo **${g.combo}** x${mult}`);
 }
 
 function halloweenHowToText() {
@@ -29879,7 +30265,7 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");if(!g.players?.[user.id] && user.id!==env.OWNER_ID)return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
 
-async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
@@ -33729,7 +34115,7 @@ export default {
 
       ctx.waitUntil((async () => {
         try {
-          await handleComponent(env, interaction);
+          await handleComponent(env, interaction, ctx);
         } catch (error) {
           console.error("Halloween component error:", error);
           try {
