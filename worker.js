@@ -29342,7 +29342,7 @@ function halloweenBookComponents(spread) {
   ];
 }
 
-function halloweenBookData(player, spread=0) {
+function halloweenBookData(player, spread=0, renderedBookUrl=null) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
   const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
   const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket", "smasher_relic"];
@@ -29391,12 +29391,120 @@ function halloweenBookData(player, spread=0) {
       description: "*The pages of the Halloween archive turn without leaving Discord. Your discoveries are shown on each spread.*",
       color: 0x8b3a12,
       fields,
-      image: { url: imageUrl(IMAGES.halloweenBookPages) },
+      image: { url: renderedBookUrl || imageUrl(IMAGES.halloweenBookPages) },
       footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
     }],
     components: halloweenBookComponents(s),
     flags: 64
   };
+}
+
+/* =========================================================
+   HALLOWEEN BOOK — RENDER DISCOVERIES INTO THE PAGE ART
+   The static book page remains the background. Owned collectibles
+   are placed into the two blank display frames for the current spread.
+   This is separate from Spook N Smash, so the game remains buttons-only.
+========================================================= */
+async function renderHalloweenBookImage(env, player, spread) {
+  let browser;
+  try {
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 1 });
+
+    const s = Math.max(0, Math.min(4, Number(spread) || 0));
+    const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
+    const actualKeys = ["hunters_lantern", "last_antidote", "cursed_candy_bucket", "smasher_relic"];
+    const assetKeys = {
+      hunters_lantern: HALLOWEEN_BOOK_ASSETS.lantern,
+      last_antidote: HALLOWEEN_BOOK_ASSETS.antidote,
+      cursed_candy_bucket: HALLOWEEN_BOOK_ASSETS.candy,
+      smasher_relic: HALLOWEEN_BOOK_ASSETS.smasherRelic
+    };
+
+    const firstIndex = s * 2;
+    const slots = [0, 1].map(offset => {
+      const key = actualKeys[firstIndex + offset];
+      return key && owned.has(key) ? {
+        key,
+        url: imageUrl(assetKeys[key])
+      } : null;
+    });
+
+    const overlay = (slot, side) => {
+      if (!slot) return "";
+      const left = side === "left" ? "26%" : "64%";
+      return `<img class="collectible ${side}" src="${slot.url}" alt="">`;
+    };
+
+    const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+  body{font-family:Arial,sans-serif}
+  #book{
+    width:1200px;
+    height:800px;
+    position:relative;
+    overflow:hidden;
+    background:transparent;
+  }
+  .pages{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+  }
+  .collectible{
+    position:absolute;
+    top:22%;
+    width:28%;
+    height:30%;
+    object-fit:contain;
+    object-position:center;
+    z-index:5;
+    filter:drop-shadow(0 4px 5px rgba(0,0,0,.28));
+  }
+  .collectible.left{left:26%}
+  .collectible.right{left:64%}
+</style>
+</head>
+<body>
+  <div id="book">
+    <img class="pages" src="${imageUrl(IMAGES.halloweenBookPages)}">
+    ${overlay(slots[0], "left")}
+    ${overlay(slots[1], "right")}
+  </div>
+</body>
+</html>`;
+
+    await page.setContent(html, { waitUntil: "load" });
+    await page.evaluate(async () => {
+      await Promise.all(
+        Array.from(document.images).map(img =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+              })
+        )
+      );
+    });
+
+    return await page.screenshot({ type: "png" });
+  } catch (error) {
+    console.error("Halloween book render failed:", error);
+    return null;
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch {}
+    }
+  }
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
@@ -29405,12 +29513,39 @@ async function sendHalloweenBook(env, interaction, spread=0) {
 
   const player = await getPlayer(env, user.id);
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
+  const rendered = await renderHalloweenBookImage(env, player, s);
 
-  // IMPORTANT: Do NOT use Puppeteer/Browser Rendering for the collection book.
-  // The previous renderer could leave the Discord button spinning while it
-  // waited on Browser Rendering or asset/image work. The book is now a normal
-  // Discord embed using the same R2 artwork that the cover already displays.
-  return editOriginalResponse(env, interaction, halloweenBookData(player, s));
+  // If Browser Rendering is unavailable, fall back to the original static
+  // book page instead of breaking the collection menu.
+  if (!rendered) {
+    return editOriginalResponse(env, interaction, halloweenBookData(player, s));
+  }
+
+  const payload = halloweenBookData(player, s, "attachment://halloween-book.png");
+  const form = new FormData();
+  form.append(
+    "payload_json",
+    JSON.stringify({
+      content: payload.content,
+      embeds: payload.embeds,
+      components: payload.components,
+      attachments: [{ id: 0, filename: "halloween-book.png" }],
+      flags: 64
+    })
+  );
+  form.append("files[0]", new Blob([rendered], { type: "image/png" }), "halloween-book.png");
+
+  const response = await fetch(
+    `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
+    { method: "PATCH", body: form }
+  );
+
+  if (!response.ok) {
+    console.error("Halloween book image update failed:", response.status, await response.text());
+    return editOriginalResponse(env, interaction, halloweenBookData(player, s));
+  }
+
+  return response;
 }
 
 
