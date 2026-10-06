@@ -7808,7 +7808,7 @@ async function handleWater(
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\\n\\n${message}`,
+          `❌ Water couldn't be completed.\n\n${message}`,
         components:
           treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
@@ -29745,13 +29745,21 @@ async function startSpookSmash(env, interaction, ctx = null) {
   const board = await spookSmashLoadBoard(env, guildId, user.id);
   // A Puppeteer render can take longer than Discord's 3-second interaction window.
   // Acknowledge the button immediately, then render/edit the game message.
-  const deferred = await deferInteraction(env, interaction);
+  // The fetch handler already sent a type-6 ACK for Spook N Smash. If this
+  // function is ever called directly, deferInteraction safely ACKs it too.
+  const deferred = await deferInteraction(env, interaction, { update: true });
   if (!deferred) return;
-  await editSpookSmashBoard(env, interaction, {...g,board}, Date.now());
+
+  try {
+    await editSpookSmashBoard(env, interaction, {...g,board}, Date.now());
+  } catch (error) {
+    console.error("Spook N Smash initial board render failed:", error);
+    await editOriginalResponse(env, interaction, spookSmashData({...g,board}, Date.now()));
+  }
+
   if (ctx && interaction.__requestUrl) {
     ctx.waitUntil(scheduleSpookSmashTick(interaction.__requestUrl, guildId, user.id, session, 1200));
-  } tickUrl.search=new URLSearchParams({guild:g.guildId,user:g.userId,session:g.session}).toString();
-  await fetch(tickUrl.toString(),{method:"GET"});
+  }
 }
 
 async function spookSmashClick(env, interaction, session, index) {
@@ -29759,7 +29767,10 @@ async function spookSmashClick(env, interaction, session, index) {
   const guildId = interaction.guild_id;
   const g = await spookSmashLoad(env, guildId, user.id);
   if (!g || !g.active || g.session !== session) return sendText(env, interaction, "🎃 That Spook N Smash run is no longer active.");
-  if (Date.now() >= Number(g.endAt || 0)) return sendText(env, interaction, "⏰ **TIME'S UP!** Your final score is being calculated...");
+  if (Date.now() >= Number(g.endAt || 0)) {
+    await spookSmashFinish(env, interaction, g);
+    return;
+  }
 
   const board = await spookSmashLoadBoard(env, guildId, user.id);
   const target = board?.[Number(index)];
@@ -29891,7 +29902,7 @@ function halloweenHideRoleDM(role,isHunter=false){
       "Capture enough Hidden players before they survive all 10 rounds.",
       "",
       "⚠️ Every Capture requires BOTH the correct player and the correct room."
-    ].join("\\n");
+    ].join("\n");
   }
 
   const guides={
@@ -29952,7 +29963,7 @@ function halloweenHideRoleDM(role,isHunter=false){
     "Movement is available on alternating rounds. Use MY ACTION to move, stay, or use your signature ability.",
     "",
     "👻 If you are captured, you become a Ghost and get a separate Ghost action."
-  ].join("\\n");
+  ].join("\n");
 }
 
 async function halloweenHidePostPublic(env,interaction,g){
@@ -30203,10 +30214,10 @@ async function zombieComponent(env,interaction,parts){const action=parts[2];cons
 async function halloweenTrickOrTreat(env,interaction,targetId=null){
   const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
   const p=await getPlayer(env,user.id);const today=easternDateKey();
-  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\\n\\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
+  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\n\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
 
   if(!targetId){
-    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\\n\\nWhose door are you knocking on? 👀🎃\\n\\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
+    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\n\nWhose door are you knocking on? 👀🎃\n\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
       {type:1,components:[{type:5,custom_id:"halloween:trick:target_select",placeholder:"🏚️ Choose whose door to knock on...",min_values:1,max_values:1}],},
       row(button("⬅️ Halloween Games","halloween:games",2))
     ]);
@@ -30284,7 +30295,7 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
   p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[];let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
   refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
   const story=rare?rareLines[randomInt(0,rareLines.length-1)]:outcome==="treat"?treatLines[randomInt(0,treatLines.length-1)]:trickLines[randomInt(0,trickLines.length-1)];
-  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\\n\\n${story}\\n\\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\\n\\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
+  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${story}\n\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
 }
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");if(!g.players?.[user.id] && user.id!==env.OWNER_ID)return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
@@ -32064,7 +32075,7 @@ async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
-  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\\n\\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
+  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
   const makeForm=()=>{const form=new FormData();form.append("payload_json",JSON.stringify(payload));form.append("files[0]",new Blob([image],{type:"image/png"}),"color-chaos.png");return form;};
 
   /*
@@ -34040,6 +34051,7 @@ export default {
     const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     const isBirthdayComponent = interaction.type === 3 && customId.startsWith("birthday:");
     const isHalloweenComponent = interaction.type === 3 && (customId.startsWith("halloween:") || customId.startsWith("collection:"));
+    const isSpookSmashComponent = interaction.type === 3 && customId.startsWith("halloween:spook:");
     const isPermanentGameComponent = interaction.type === 3 && (customId.startsWith("talent:") || customId.startsWith("truthpass:"));
     const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
     const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal");
@@ -34098,6 +34110,43 @@ export default {
         customId.startsWith("custom_effects_page_") ||
         customId.startsWith("equip_")
       );
+
+    // SPOOK N SMASH FAST PATH: acknowledge with type 6 so the button never
+    // sits in Discord's loading/thinking state while Browser Rendering runs.
+    if (interaction.type === 3 && isSpookSmashComponent) {
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 6 })
+        }
+      );
+      if (!ack.ok) {
+        console.error("Spook N Smash initial response failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = true;
+      interaction.__deferredEphemeral = false;
+      interaction.__requestUrl = request.url;
+      ctx.waitUntil((async () => {
+        try {
+          await handleComponent(env, interaction, ctx);
+        } catch (error) {
+          console.error("Spook N Smash component error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Spook N Smash error: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Spook N Smash error:", editError);
+          }
+        }
+      })());
+      return new Response("OK", { status: 200 });
+    }
 
     // HALLOWEEN FAST PATH: acknowledge Halloween buttons immediately and
     // bypass the global pre-handler checks. Those checks can perform several
