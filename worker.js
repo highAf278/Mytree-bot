@@ -1,4 +1,3 @@
-/* SPOOK N SMASH TRUE FIX — 4x3 board controls + rendered creature image + chained tick timer */
 // WereWives bomb deployment refresh — no functional change
 import puppeteer from "@cloudflare/puppeteer";
 
@@ -380,8 +379,7 @@ const IMAGES = {
   halloweenBookPages: "IMG_8140.png",
   halloweenHuntersLantern: "IMG_8142.png",
   halloweenLastAntidote: "IMG_8143.png",
-  halloweenCursedCandyBucket: "IMG_8145.png",
-  halloweenSmasherRelic: "IMG_8160.png",
+  halloweenCursedCandyBucket: "IMG_8145.png"
 };
 
 const SHOP_ITEMS = {
@@ -1161,9 +1159,7 @@ function defaultPlayer() {
     halloweenGamesPlayed: 0,
     halloweenCollection: [],
     halloweenTrickTreatOutcomes: [],
-    halloweenAchievements: [],
-    halloweenSpookSmashBest: 0,
-    halloweenSpookSmashRuns: 0
+    halloweenAchievements: []
   };
 }
 
@@ -7808,7 +7804,7 @@ async function handleWater(
       interaction,
       {
         content:
-          `❌ Water couldn't be completed.\n\n${message}`,
+          `❌ Water couldn't be completed.\\n\\n${message}`,
         components:
           treeButtons(getUserFromInteraction(interaction)?.id || "", player)
       }
@@ -11834,12 +11830,6 @@ async function startBirthdayTruthPass(env,interaction) {
   state.games=state.games||{};
   const legacy=state.birthday?.games?.truthDrink;
   const existing=state.games.truthPass || legacy;
-  const existingStarted=Number(existing?.startedAt||0);
-  const staleTruthGame=existing?.status&&existing.status!=="finished"&&existingStarted>0&&(Date.now()-existingStarted>2*60*60*1000);
-  if(staleTruthGame){
-    state.games.truthPass=null;
-    if(state.birthday?.games?.truthDrink) state.birthday.games.truthDrink=null;
-  }
   if(legacy && !state.games.truthPass) state.games.truthPass=legacy;
   if(existing?.status&&existing.status!=="finished")return birthdayTruthPassReply(env,interaction,`⏭️ **Truth or Drink is already running!**\n\n👥 **${(existing.players||[]).filter(p=>p.active!==false).length}** players are in the game.`,[]);
   const user=getUserFromInteraction(interaction); if(!user)return birthdayTruthPassReply(env,interaction,"❌ I couldn't identify your Discord account.");
@@ -15667,10 +15657,8 @@ async function checkBombRestriction(env, interaction) {
 
 async function handleComponent(
   env,
-  interaction,
-  ctx = null
+  interaction
 ) {
-  interaction.__requestUrl = interaction.__requestUrl || env.BASE_URL || "";
   const id =
     interaction.data?.custom_id ||
     "";
@@ -15685,7 +15673,7 @@ async function handleComponent(
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
     if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
   }
-  if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction,ctx);
+  if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
   if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
   if (id.startsWith("sparklepurchase:")) return handleSparklePurchaseComponent(env, interaction);
@@ -29227,8 +29215,7 @@ const HALLOWEEN_BOOK_ASSETS = {
   pages: "halloweenBookPages",
   lantern: "halloweenHuntersLantern",
   antidote: "halloweenLastAntidote",
-  candy: "halloweenCursedCandyBucket",
-  smasherRelic: "halloweenSmasherRelic"
+  candy: "halloweenCursedCandyBucket"
 };
 
 const HALLOWEEN_ROOMS = {
@@ -29256,7 +29243,7 @@ function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
-    "The gates are open. Four games are ready for the first Halloween release. 👻",
+    "The gates are open. Three games are ready for the first Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
     `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
@@ -29269,8 +29256,7 @@ function halloweenHubText(player) {
 function halloweenGameMenuComponents() {
   return [
     row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
-    row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
-    row(button("📖 How Halloween Works", "halloween:howto", 2)),
+    row(button("🍬 Trick or Treat", "halloween:start:trick", 3), button("📖 How Halloween Works", "halloween:howto", 2)),
     row(button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
 }
@@ -29298,9 +29284,7 @@ function halloweenUnlockText(player) {
     "",
     line("🍬", "The Cursed Candy Bucket", "Experience all three Trick-or-Treat outcome types, including the rare outcome.", "cursed_candy_bucket"),
     "",
-    line("🔨", "The Smasher's Relic", "Reach **Wave 6: JACKPOT** and smash a **Golden Pumpkin** without ever hitting a Skull during that run.", "smasher_relic"),
-    "",
-    "🔒 **Collectibles 5–10** — COMING SOON",
+    "🔒 **Collectibles 4–10** — COMING SOON",
     "Their games and unlock requirements haven't been revealed yet. 👀"
   ].join("\n");
 }
@@ -29331,696 +29315,113 @@ function halloweenCoverData(player) {
   };
 }
 
-function halloweenBookComponents(spread) {
-  const s = Math.max(0, Math.min(4, Number(spread) || 0));
-  return [
-    row(
-      button("◀️", `collection:halloween:page:${Math.max(0, s - 1)}`, 2, s === 0),
-      button("▶️", `collection:halloween:page:${Math.min(4, s + 1)}`, 2, s === 4)
-    ),
-    row(button("🔓 HOW TO UNLOCK", "collection:halloween:unlock", 3), button("🔙 BACK", "collection:halloween", 2))
-  ];
-}
+async function renderHalloweenBook(env, player, spread) {
+  let browser;
+  try {
+    // IMPORTANT: Puppeteer should not have to reach out to R2 itself.
+    // Fetch the book artwork in the Worker first, then give Puppeteer
+    // self-contained data URLs. This avoids Browser Rendering getting stuck
+    // on remote R2 image requests.
+    const assetDataUrl = async (filename) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      try {
+        const response = await fetch(imageUrl(filename), { signal: controller.signal });
+        if (!response.ok) throw new Error(`Book asset ${filename} returned HTTP ${response.status}`);
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        let binary = "";
+        const chunk = 0x8000;
+        for (let i = 0; i < buffer.length; i += chunk) {
+          binary += String.fromCharCode(...buffer.subarray(i, Math.min(i + chunk, buffer.length)));
+        }
+        const contentType = response.headers.get("content-type") || "image/png";
+        return `data:${contentType};base64,${btoa(binary)}`;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
 
-function halloweenBookCollectionConfig() {
-  /*
-    The book has 10 slots total: two collectible frames per spread.
-    The first four already have artwork in R2.  Slots 5-10 are deliberately
-    configured without artwork until those collectibles are released.
+    const owned = new Set(player.halloweenCollection || []);
+    const actualKeys = ["hunters_lantern","last_antidote","cursed_candy_bucket"];
+    const keyFilename = key =>
+      key === "hunters_lantern" ? IMAGES.halloweenHuntersLantern :
+      key === "last_antidote" ? IMAGES.halloweenLastAntidote :
+      key === "cursed_candy_bucket" ? IMAGES.halloweenCursedCandyBucket : null;
 
-    When a future collectible is added, put its R2 image name in IMAGES and
-    add the matching image key here.  The book renderer will automatically
-    place it in that collectible's frame only for players who own it.
-  */
-  return [
-    {
-      id: "hunters_lantern",
-      title: "🏮 The Hunter's Lantern",
-      requirement: "Survive all 10 rounds of Haunted Hide & Seek without the Hunter correctly locating your room.",
-      imageKey: HALLOWEEN_BOOK_ASSETS.lantern
-    },
-    {
-      id: "last_antidote",
-      title: "🧪 The Last Antidote",
-      requirement: "Cure a Full Zombie with an Antidote and successfully escape in Zombie Panic.",
-      imageKey: HALLOWEEN_BOOK_ASSETS.antidote
-    },
-    {
-      id: "cursed_candy_bucket",
-      title: "🍬 The Cursed Candy Bucket",
-      requirement: "Experience all three Trick-or-Treat outcome types, including the rare outcome.",
-      imageKey: HALLOWEEN_BOOK_ASSETS.candy
-    },
-    {
-      id: "smasher_relic",
-      title: "🔨 The Smasher's Relic",
-      requirement: "Reach Wave 6: JACKPOT and smash a Golden Pumpkin without ever hitting a Skull during that run.",
-      imageKey: HALLOWEEN_BOOK_ASSETS.smasherRelic
-    },
-    { id: "collectible_5", title: "🎃 Halloween Collectible #5", requirement: "Coming soon...", imageKey: null },
-    { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
-    { id: "collectible_7", title: "🎃 Halloween Collectible #7", requirement: "Coming soon...", imageKey: null },
-    { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
-    { id: "collectible_9", title: "🎃 Halloween Collectible #9", requirement: "Coming soon...", imageKey: null },
-    { id: "collectible_10", title: "🎃 Halloween Collectible #10", requirement: "Coming soon...", imageKey: null }
-  ];
-}
+    const bookPagesData = await assetDataUrl(IMAGES.halloweenBookPages);
+    const usedKeys = [0, 1]
+      .map(i => actualKeys[spread * 2 + i])
+      .filter(key => key && owned.has(key));
 
-
-function halloweenBookData(player, spread=0, imageUrlOverride=null) {
-  const s = Math.max(0, Math.min(4, Number(spread) || 0));
-  const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
-  const collection = halloweenBookCollectionConfig();
-  const firstIndex = s * 2;
-
-  const fields = [0, 1].map(offset => {
-    const index = firstIndex + offset;
-    const item = collection[index];
-    if (!item) return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Coming soon...*", inline: true };
-    if (owned.has(item.id)) {
-      return { name: `✅ ${item.title}`, value: item.requirement, inline: true };
+    const collectibleData = {};
+    for (const key of usedKeys) {
+      collectibleData[key] = await assetDataUrl(keyFilename(key));
     }
-    return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Undiscovered — check HOW TO UNLOCK to see the clue.*", inline: true };
-  });
 
-  return {
-    content: `📖 **HALLOWEEN 2026 — SPREAD ${s + 1}/5**\n\n**${owned.size}/10 collectibles discovered.**`,
-    embeds: [{
-      title: `🎃 HALLOWEEN ARCHIVE • SPREAD ${s + 1}/5`,
-      description: "*Your unlocked relics are physically placed inside their book frames.*",
-      color: 0x8b3a12,
-      fields,
-      image: { url: imageUrlOverride || imageUrl(IMAGES.halloweenBookPages) },
-      footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
-    }],
-    components: halloweenBookComponents(s),
-    flags: 64
-  };
-}
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({width: 1200, height: 760, deviceScaleFactor: 1});
 
-/* =========================================================
-   HALLOWEEN BOOK — DIRECT PNG COMPOSITE
+    const slots = [0,1].map(i => ({
+      idx: spread * 2 + i,
+      label: `COLLECTIBLE #${spread * 2 + i + 1}`
+    }));
 
-   This intentionally does NOT use Puppeteer/Browser Rendering.
-   The Worker already has a pure-JS PNG decoder/compositor used elsewhere
-   in WereWives.  We use that same pipeline here:
+    const titleFor = key =>
+      key === "hunters_lantern" ? "🏮 The Hunter's Lantern" :
+      key === "last_antidote" ? "🧪 The Last Antidote" :
+      key === "cursed_candy_bucket" ? "🍬 The Cursed Candy Bucket" :
+      "🔒 Coming Soon";
 
-   1. Fetch the book-page PNG from the public R2 asset URL.
-   2. Fetch only the collectible images the player actually owns.
-   3. Resize each owned relic to fit its matching frame.
-   4. Composite the relic directly onto the page PNG.
-   5. Send the finished PNG to Discord as the book image.
+    const content = slots.map((slot, i) => {
+      const idx = slot.idx;
+      const key = actualKeys[idx] || null;
+      const has = key && owned.has(key);
+      const img = has
+        ? `<img src="${collectibleData[key]}"/>`
+        : `<div class="locked">🔒<span>???</span></div>`;
+      return `<div class="slot s${i}">${img}<div class="caption">${has ? titleFor(key) : `🔒 COLLECTIBLE #${idx + 1}`}</div></div>`;
+    }).join("");
 
-   This means Discord receives ONE image: the actual book page with the
-   unlocked collectible artwork physically inside it. Locked slots remain
-   untouched. Opening the book never launches a browser.
-========================================================= */
-const HALLOWEEN_BOOK_SLOT_LAYOUT = [
-  // Calibrated to the actual decorative frames in IMG_8140.png.
-  // Artwork is kept slightly smaller and centered inside each ornate frame.
-  // The name is rendered larger/bold in the plaque directly underneath.
-  {
-    left: 0.17, top: 0.29, width: 0.285, height: 0.32,
-    labelLeft: 0.19, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08
-  },
-  {
-    left: 0.558, top: 0.29, width: 0.285, height: 0.32,
-    labelLeft: 0.58, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box}body{margin:0;background:#24100a;font-family:Arial,"Segoe UI Emoji",sans-serif;overflow:hidden}
+      .book{width:1200px;height:760px;position:relative;background:url('${bookPagesData}') center/cover no-repeat}
+      .slot{position:absolute;top:125px;width:390px;height:490px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}
+      .s0{left:105px}.s1{right:105px}.slot img{width:330px;height:365px;object-fit:contain;filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
+      .locked{width:300px;height:365px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:80px;color:#2d130b;text-shadow:0 3px 0 #f0a044}.locked span{font-size:34px;font-weight:900;letter-spacing:8px;margin-top:15px}
+      .caption{margin-top:10px;font-size:25px;font-weight:900;color:#2a1009;text-shadow:0 1px 0 #ffcf78;max-width:350px}
+      .pageNo{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;color:#3a170d}
+    </style></head><body><div class="book">${content}<div class="pageNo">HALLOWEEN 2026 • SPREAD ${spread+1} OF 5</div></div></body></html>`;
+
+    await page.setContent(html, {waitUntil:"domcontentloaded", timeout:8000});
+    await page.evaluate(async()=> {
+      const imgs = Array.from(document.images);
+      if (!imgs.length) return;
+      await Promise.race([
+        Promise.all(imgs.map(img => new Promise(resolve => {
+          if (img.complete) return resolve();
+          img.onload = resolve;
+          img.onerror = resolve;
+        }))),
+        new Promise(resolve => setTimeout(resolve, 1500))
+      ]);
+    });
+
+    return await page.screenshot({type:"png", timeout:8000});
+  } finally {
+    if (browser) try { await browser.close(); } catch {}
   }
-];
-
-function halloweenBookLabelText(item, owned) {
-  if (!item || !owned) return "COMING SOON";
-  const labels = {
-    hunters_lantern: "HUNTERS LANTERN",
-    last_antidote: "LAST ANTIDOTE",
-    cursed_candy_bucket: "CURSED CANDY",
-    smasher_relic: "SMASHERS RELIC"
-  };
-  return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
-}
-
-function drawHalloweenBookLabel(frame, item, owned, box) {
-  const text = halloweenBookLabelText(item, owned);
-  const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
-
-  // Larger bitmap lettering so the names are actually readable in Discord.
-  // Scale 3 is preferred; if a long name cannot fit, fall back to scale 2.
-  const preferredScale = 3;
-  const fitsAtScale = (scale) => {
-    const glyphW = 5 * scale, gap = scale;
-    const rawWidth = [...text].reduce(
-      (n, ch) => n + (ch === " " ? 3 * scale : glyphW + gap),
-      0
-    );
-    return rawWidth <= maxWidth;
-  };
-  const scale = fitsAtScale(preferredScale) ? preferredScale : 2;
-
-  const glyphWidth = 5 * scale, glyphGap = scale;
-  const textWidth = [...text].reduce(
-    (n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap),
-    0
-  ) - scale;
-
-  const x = Math.round(
-    frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2)
-  );
-  const y = Math.round(
-    frame.height * box.labelTop +
-    Math.max(0, (frame.height * box.labelHeight - 7 * scale) / 2)
-  );
-
-  // Bitmap font has no native weight, so draw it twice with a 1px offset
-  // to create a clean bold effect without changing the book artwork.
-  drawBitmapText(frame, text, x, y, scale, [55, 34, 22], maxWidth);
-  drawBitmapText(frame, text, x + 1, y, scale, [55, 34, 22], maxWidth);
-}
-
-async function renderHalloweenBookDirect(env, player, spread) {
-  const s = Math.max(0, Math.min(4, Number(spread) || 0));
-  const collection = halloweenBookCollectionConfig();
-  const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
-  const base = await getPngAsset(env, IMAGES.halloweenBookPages);
-  if (!base) throw new Error("Halloween book page asset is missing.");
-
-  const scene = {
-    width: base.width,
-    height: base.height,
-    data: new Uint8Array(base.data)
-  };
-  scene.data.set(base.data);
-
-  const firstIndex = s * 2;
-
-  for (let slot = 0; slot < 2; slot++) {
-    const item = collection[firstIndex + slot];
-    const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
-    if (!item) {
-      drawHalloweenBookLabel(scene, null, false, box);
-      continue;
-    }
-    if (!owned.has(item.id) || !item.imageKey) {
-      drawHalloweenBookLabel(scene, item, false, box);
-      continue;
-    }
-
-    try {
-      const asset = await getPngAsset(env, IMAGES[item.imageKey]);
-      if (!asset) continue;
-
-      const boxWidth = Math.max(1, Math.round(scene.width * box.width));
-      const boxHeight = Math.max(1, Math.round(scene.height * box.height));
-      const layer = containRGBA(asset, boxWidth, boxHeight);
-      const x = Math.round(scene.width * box.left + (boxWidth - layer.width) / 2);
-      const y = Math.round(scene.height * box.top + (boxHeight - layer.height) / 2);
-
-      alphaComposite(scene, layer, x, y, 1);
-      drawHalloweenBookLabel(scene, item, true, box);
-    } catch (error) {
-      // One broken collectible must never make the entire book unusable.
-      console.warn(`Halloween collectible render skipped for ${item.id}:`, error?.message || error);
-    }
-  }
-
-  return rgbaToRgbPng(scene);
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
-  const user = getUserFromInteraction(interaction);
-  if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
-
-  const player = await getPlayer(env, user.id);
-  const s = Math.max(0, Math.min(4, Number(spread) || 0));
-
-  try {
-    const rendered = await renderHalloweenBookDirect(env, player, s);
-    const payload = halloweenBookData(player, s, "attachment://halloween-book.png");
-
-    const form = new FormData();
-    form.append("payload_json", JSON.stringify({
-      content: payload.content,
-      embeds: payload.embeds,
-      components: payload.components,
-      attachments: [{ id: 0, filename: "halloween-book.png" }],
-      flags: 64
-    }));
-    form.append("files[0]", new Blob([rendered], { type: "image/png" }), "halloween-book.png");
-
-    const response = await fetch(
-      `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
-      { method: "PATCH", body: form }
-    );
-
-    if (!response.ok) {
-      console.error("Halloween book image update failed:", response.status, await response.text());
-      return editOriginalResponse(env, interaction, halloweenBookData(player, s));
-    }
-    return response;
-  } catch (error) {
-    console.error("Halloween direct book render failed:", error);
-    // Never strand the user on a loading response.  If the direct image
-    // pipeline fails, show the normal page immediately as a safe fallback.
-    return editOriginalResponse(env, interaction, halloweenBookData(player, s));
-  }
-}
-
-
-/* =========================================================
-   SPOOK N SMASH — SOLO HALLOWEEN ARCADE GAME
-   60-second reaction game. The board updates automatically;
-   button presses only resolve the creature currently in that hole.
-========================================================= */
-const SPOOK_SMASH_DURATION = 60 * 1000;
-const SPOOK_SMASH_GAME_PREFIX = "halloween:spook:game:";
-
-const SPOOK_SMASH_CREATURES = {
-  ghost:   { emoji: "👻", name: "Ghost", points: 100, hits: 1, style: 1 },
-  pumpkin:{ emoji: "🎃", name: "Pumpkin", points: 75, hits: 1, style: 1 },
-  spider: { emoji: "🕷️", name: "Spider", points: 250, hits: 2, style: 3 },
-  bat:    { emoji: "🦇", name: "Bat", points: 175, hits: 1, style: 3 },
-  witch:  { emoji: "🧙", name: "Witch", points: 300, hits: 1, style: 3 },
-  golden: { emoji: "✨🎃", name: "Golden Pumpkin", points: 500, hits: 1, style: 3 },
-  skull:  { emoji: "💀", name: "Skull", points: -200, hits: 1, style: 4 }
-};
-
-function spookSmashKey(guildId, userId) {
-  return `halloween:spooksmash:${guildId}:${userId}`;
-}
-function spookSmashBoardKey(guildId, userId) {
-  return `halloween:spooksmash:board:${guildId}:${userId}`;
-}
-
-function spookSmashWave(elapsed) {
-  const second = Math.floor(Math.max(0, elapsed) / 1000);
-  if (second < 8) return 1;
-  if (second < 16) return 2;
-  if (second < 25) return 3;
-  if (second < 35) return 4;
-  if (second < 46) return 5;
-  if (second < 54) return 6;
-  return 7;
-}
-
-function spookSmashWindowMs(wave) {
-  if (wave <= 1) return 1900;
-  if (wave <= 3) return 1600;
-  if (wave <= 5) return 1400;
-  if (wave === 6) return 1200;
-  return 1000;
-}
-
-function spookSmashAllowed(wave) {
-  if (wave === 1) return ["ghost", "pumpkin"];
-  if (wave === 2) return ["ghost", "pumpkin", "spider"];
-  if (wave === 3) return ["ghost", "pumpkin", "spider", "bat"];
-  if (wave === 4) return ["ghost", "pumpkin", "spider", "bat", "skull"];
-  if (wave === 5) return ["ghost", "pumpkin", "spider", "bat", "skull", "witch"];
-  if (wave === 6) return ["ghost", "pumpkin", "spider", "bat", "skull", "witch", "golden"];
-  return ["ghost", "pumpkin", "spider", "bat", "skull", "witch", "golden"];
-}
-
-function spookSmashPickCreature(wave) {
-  const pool = spookSmashAllowed(wave);
-  const weights = {
-    ghost: 32, pumpkin: 28, spider: 13, bat: 10,
-    skull: wave >= 4 ? 8 : 0,
-    witch: wave >= 5 ? 6 : 0,
-    golden: wave >= 6 ? 3 : 0
-  };
-  const weighted = [];
-  for (const id of pool) {
-    for (let i = 0; i < (weights[id] || 1); i++) weighted.push(id);
-  }
-  return weighted[randomInt(0, weighted.length - 1)] || "ghost";
-}
-
-function spookSmashMakeBoard(wave) {
-  const board = Array.from({ length: 12 }, () => null);
-  const count = wave <= 2 ? randomInt(1, 3) : wave <= 4 ? randomInt(2, 4) : randomInt(2, 5);
-  const positions = [];
-  while (positions.length < count) {
-    const p = randomInt(0, 11);
-    if (!positions.includes(p)) positions.push(p);
-  }
-  for (const position of positions) {
-    const type = spookSmashPickCreature(wave);
-    board[position] = {
-      type,
-      glowing: type === "witch" ? Math.random() < 0.55 : false,
-      hits: 0,
-      spawnedAt: Date.now(),
-      expiresAt: Date.now() + spookSmashWindowMs(wave)
-    };
-  }
-  return board;
-}
-
-function spookSmashComboMultiplier(combo) {
-  if (combo >= 30) return 5;
-  if (combo >= 20) return 4;
-  if (combo >= 10) return 3;
-  if (combo >= 5) return 2;
-  return 1;
-}
-
-function spookSmashWaveName(wave) {
-  return ({
-    1: "TRICK OR TREAT",
-    2: "SOMETHING CRAWLING",
-    3: "BATS!",
-    4: "DON'T TOUCH THAT",
-    5: "WITCHING HOUR",
-    6: "JACKPOT",
-    7: "TOTAL CHAOS"
-  })[wave] || "TOTAL CHAOS";
-}
-
-function spookSmashHowToText() {
-  return [
-    "📖🎃 **SPOOK N SMASH — HOW TO PLAY** 🎃📖",
-    "",
-    "⏱️ **You have 60 seconds.** Smash the right creatures as they appear.",
-    "The board changes **automatically**, so keep watching the holes! 👀",
-    "",
-    "👻 **Ghost** — +100",
-    "🎃 **Pumpkin** — +75",
-    "🕷️ **Spider** — +250 (smash twice quickly)",
-    "🦇 **Bat** — +175 (catch it before it moves)",
-    "🧙 **Glowing Witch** — +300",
-    "✨🎃 **Golden Pumpkin** — +500",
-    "💀 **SKULL — DO NOT SMASH** — −200 + combo reset",
-    "",
-    "🔥 **COMBO:** 5 = x2 • 10 = x3 • 20 = x4 • 30 = x5",
-    "❌ Missing a normal creature is safe — it just escapes.",
-    "💀 Hitting a Skull or missing a special target breaks your combo.",
-    "",
-    "🧠 **Watch. Decide. SMASH.** Good luck. 😈"
-  ].join("\n");
-}
-
-function spookSmashComponents(g) {
-  const board = Array.isArray(g?.board) ? g.board : Array(12).fill(null);
-  const rows = [];
-  // The 12 Discord buttons ARE the game board. No generated images are used.
-  for (let i = 0; i < 12; i += 4) {
-    rows.push(row(...[i, i + 1, i + 2, i + 3].map(index => {
-      const target = board[index];
-      if (!target) return button("🕳️", `halloween:spook:${g.session}:${index}`, 2);
-      const c = SPOOK_SMASH_CREATURES[target.type] || SPOOK_SMASH_CREATURES.ghost;
-      const label = target.type === "witch" && target.glowing ? "✨🧙" : c.emoji;
-      return button(label, `halloween:spook:${g.session}:${index}`, c.style);
-    })));
-  }
-  rows.push(row(
-    button("📖 HOW TO PLAY", `halloween:spook:howto:${g.session}`, 2),
-    button("🏁 END RUN", `halloween:spook:end:${g.session}`, 4),
-    button("🏠 HALLOWEEN GAMES", "halloween:games", 2)
-  ));
-  return rows;
-}
-
-function spookSmashText(g, now = Date.now()) {
-  const remaining = Math.max(0, Number(g.endAt || 0) - now);
-  const seconds = Math.ceil(remaining / 1000);
-  const mult = spookSmashComboMultiplier(Number(g.combo || 0));
-  return [
-    "🎃💥 **SPOOK N SMASH** 💥🎃",
-    "",
-    `⏱️ **${seconds}s**   •   🌊 **Wave ${g.wave || 1}: ${spookSmashWaveName(g.wave || 1)}**`,
-    `🏆 **Score:** ${Number(g.score || 0).toLocaleString()}   •   🔥 **Combo:** ${Number(g.combo || 0)}   **x${mult}**`,
-    "",
-    "👆 **SMASH THE CREATURES!**",
-    "The 4×3 buttons below are the 12 holes. Click the creature currently in that hole.",
-    "",
-    `👻 ${g.stats?.ghosts || 0}  🎃 ${g.stats?.pumpkins || 0}  ✨🎃 ${g.stats?.goldens || 0}  💀 ${g.stats?.skulls || 0}`
-  ].join("\n");
-}
-
-function spookSmashData(g, now = Date.now()) {
-  return {
-    content: spookSmashText(g, now),
-    embeds: [],
-    components: spookSmashComponents(g)
-  };
-}
-
-async function editSpookSmashBoard(env, interaction, g, now = Date.now()) {
-  // Spook N Smash is intentionally image-free. The 12 Discord buttons are the board.
-  return editOriginalResponse(env, interaction, spookSmashData(g, now));
-}
-
-function spookSmashFinalData(g) {
-  const score = Number(g.score || 0);
-  const bestCombo = Number(g.bestCombo || 0);
-  return {
-    content: [
-      "🎃💥 **SPOOK N SMASH — GAME OVER!** 💥🎃",
-      "",
-      `🏆 **Score:** ${score.toLocaleString()}`,
-      `🔥 **Best Combo:** ${bestCombo}`,
-      `👻 **Ghosts:** ${g.stats?.ghosts || 0}`,
-      `🎃 **Pumpkins:** ${g.stats?.pumpkins || 0}`,
-      `✨🎃 **Golden Pumpkins:** ${g.stats?.goldens || 0}`,
-      `💀 **Skulls Hit:** ${g.stats?.skulls || 0}`,
-      `💰 **Spookies Earned:** ${Number(g.reward || 0).toLocaleString()}`,
-      g.newBest ? "\n🏅 **NEW PERSONAL BEST!**" : "",
-      "",
-      "Ready to smash some more? 😈"
-    ].join("\n"),
-    components: [
-      row(button("🔄 PLAY AGAIN", "halloween:start:spook", 1), button("🏠 HALLOWEEN GAMES", "halloween:games", 2))
-    ]
-  };
-}
-
-function spookSmashReward(score, g = {}) {
-  let reward = score >= 15000 ? 100 : score >= 10000 ? 80 : score >= 7500 ? 60 : score >= 5000 ? 45 : score >= 2500 ? 30 : score >= 1000 ? 20 : 10;
-  const best = Number(g.bestCombo || 0);
-  if (best >= 20) reward += 10;
-  if (best >= 30) reward += 15;
-  if (best >= 40) reward += 20;
-  reward += Number(g.stats?.goldens || 0) * 5;
-  if (Number(g.stats?.skulls || 0) === 0) reward += 10;
-  return Math.min(150, reward);
-}
-
-async function spookSmashLoad(env, guildId, userId) {
-  const raw = await env.TREE_DATA.get(spookSmashKey(guildId, userId));
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-async function spookSmashSave(env, guildId, userId, game) {
-  await env.TREE_DATA.put(spookSmashKey(guildId, userId), JSON.stringify(game));
-}
-async function spookSmashLoadBoard(env, guildId, userId) {
-  const raw = await env.TREE_DATA.get(spookSmashBoardKey(guildId, userId));
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-async function spookSmashSaveBoard(env, guildId, userId, board) {
-  await env.TREE_DATA.put(spookSmashBoardKey(guildId, userId), JSON.stringify(board));
-}
-
-async function spookSmashHowTo(env, interaction, session) {
-  const rows = [
-    row(button("🔙 BACK TO GAME", `halloween:spook:back:${session}`, 2))
-  ];
-  return editOriginalResponse(env, interaction, { content: spookSmashHowToText(), embeds: [], components: rows });
-}
-
-async function spookSmashFinish(env, interaction, g) {
-  if (!g || !g.active) return;
-  g.active = false;
-  g.finishedAt = Date.now();
-  g.reward = spookSmashReward(Number(g.score || 0), g);
-  const p = await getPlayer(env, g.userId);
-  const oldBest = Number(p.halloweenSpookSmashBest || 0);
-  g.newBest = Number(g.score || 0) > oldBest;
-  p.halloweenSpookSmashBest = Math.max(oldBest, Number(g.score || 0));
-  p.halloweenSpookSmashRuns = Number(p.halloweenSpookSmashRuns || 0) + 1;
-  p.halloweenSpookies = Math.max(0, Number(p.halloweenSpookies || 0) + g.reward);
-  p.halloweenGamesPlayed = Number(p.halloweenGamesPlayed || 0) + 1;
-  refreshProfileBadges(p);
-  await savePlayer(env, p, g.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
-  await spookSmashSave(env, g.guildId, g.userId, g);
-  await env.TREE_DATA.delete(spookSmashBoardKey(g.guildId, g.userId));
-  await editOriginalResponse(env, interaction, spookSmashFinalData(g));
-}
-
-async function startSpookSmash(env, interaction, ctx = null) {
-  const user = getUserFromInteraction(interaction);
-  const guildId = interaction.guild_id;
-  if (!user || !guildId) return sendText(env, interaction, "❌ Spook N Smash can only be played inside a server.");
-
-  const existing = await spookSmashLoad(env, guildId, user.id);
-  if (existing?.active && Number(existing.endAt || 0) > Date.now()) {
-    const board = await spookSmashLoadBoard(env, guildId, user.id);
-    return editOriginalResponse(env, interaction, spookSmashData({...existing, board}, Date.now()));
-  }
-
-  const session = `${Date.now().toString(36)}${randomInt(1000,9999)}`;
-  const startedAt = Date.now();
-  const g = {
-    active: true,
-    session,
-    guildId,
-    userId: user.id,
-    startedAt,
-    endAt: startedAt + SPOOK_SMASH_DURATION,
-    wave: 1,
-    score: 0,
-    combo: 0,
-    bestCombo: 0,
-    reward: 0,
-    stats: { ghosts: 0, pumpkins: 0, goldens: 0, skulls: 0 },
-    lastHitAt: 0,
-    interactionToken: interaction.token
-  };
-
-  const board = spookSmashMakeBoard(1);
-  await spookSmashSave(env, guildId, user.id, g);
-  await spookSmashSaveBoard(env, guildId, user.id, board);
-
-  // No timers, Puppeteer, image uploads, or background message loops.
-  // The game advances safely whenever the player presses a button.
-  return editSpookSmashBoard(env, interaction, {...g, board}, Date.now());
-}
-
-async function spookSmashAdvanceBoard(env, guildId, userId, g) {
-  const elapsed = Date.now() - Number(g.startedAt || Date.now());
-  g.wave = spookSmashWave(elapsed);
-  const board = spookSmashMakeBoard(g.wave);
-  await spookSmashSaveBoard(env, guildId, userId, board);
-  await spookSmashSave(env, guildId, userId, g);
-  return board;
-}
-
-async function spookSmashClick(env, interaction, session, index) {
-  const user = getUserFromInteraction(interaction);
-  const guildId = interaction.guild_id;
-  const g = await spookSmashLoad(env, guildId, user.id);
-  if (!g || !g.active || g.session !== session) {
-    return sendEphemeralFollowup(env, interaction, "🎃 That Spook N Smash run is no longer active.");
-  }
-
-  const now = Date.now();
-  if (now >= Number(g.endAt || 0)) {
-    await spookSmashFinish(env, interaction, g);
-    return;
-  }
-
-  const board = await spookSmashLoadBoard(env, guildId, user.id);
-  const slot = Number(index);
-  if (!Number.isInteger(slot) || slot < 0 || slot > 11) {
-    return sendEphemeralFollowup(env, interaction, "❌ Invalid hole.");
-  }
-
-  const target = Array.isArray(board) ? board[slot] : null;
-  if (!target) {
-    const nextBoard = await spookSmashAdvanceBoard(env, guildId, user.id, g);
-    await editSpookSmashBoard(env, interaction, {...g, board: nextBoard}, Date.now());
-    return sendEphemeralFollowup(env, interaction, "🕳️ **WHIFF!** Nothing was there! No penalty. 👻");
-  }
-
-  const creature = SPOOK_SMASH_CREATURES[target.type] || SPOOK_SMASH_CREATURES.ghost;
-  target.hits = Number(target.hits || 0) + 1;
-
-  if (target.type === "skull") {
-    g.score = Math.max(0, Number(g.score || 0) - 200);
-    g.combo = 0;
-    g.stats.skulls = Number(g.stats.skulls || 0) + 1;
-    board[slot] = null;
-    await spookSmashSaveBoard(env, guildId, user.id, board);
-    await spookSmashSave(env, guildId, user.id, g);
-    const nextBoard = await spookSmashAdvanceBoard(env, guildId, user.id, g);
-    await editSpookSmashBoard(env, interaction, {...g, board: nextBoard}, Date.now());
-    return sendEphemeralFollowup(env, interaction, "💀 **CURSED!** −200 points and your combo is gone! DO NOT SMASH THE SKULL 😭");
-  }
-
-  const required = Number(creature.hits || 1);
-  if (target.hits < required) {
-    board[slot] = target;
-    await spookSmashSaveBoard(env, guildId, user.id, board);
-    await spookSmashSave(env, guildId, user.id, g);
-    await editSpookSmashBoard(env, interaction, {...g, board}, Date.now());
-    return sendEphemeralFollowup(env, interaction, "🕷️ **HIT!** One more! QUICK! ⚡");
-  }
-
-  if (target.type === "witch" && !target.glowing) {
-    g.combo = 0;
-    board[slot] = null;
-    await spookSmashSaveBoard(env, guildId, user.id, board);
-    await spookSmashSave(env, guildId, user.id, g);
-    const nextBoard = await spookSmashAdvanceBoard(env, guildId, user.id, g);
-    await editSpookSmashBoard(env, interaction, {...g, board: nextBoard}, Date.now());
-    return sendEphemeralFollowup(env, interaction, "🧙 **NOT GLOWING!** The witch cursed your combo. 😭");
-  }
-
-  g.combo = Number(g.combo || 0) + 1;
-  g.bestCombo = Math.max(Number(g.bestCombo || 0), g.combo);
-  const mult = spookSmashComboMultiplier(g.combo);
-  g.score = Math.max(0, Number(g.score || 0) + creature.points * mult);
-  if (target.type === "ghost") g.stats.ghosts++;
-  if (target.type === "pumpkin") g.stats.pumpkins++;
-  if (target.type === "golden") g.stats.goldens++;
-
-  // COLLECTIBLE #4 — THE SMASHER'S RELIC
-  // The player must reach Wave 6: JACKPOT, successfully smash a Golden
-  // Pumpkin, and have never hit a Skull during that run.
-  let smasherRelicUnlocked = false;
-  const currentWave = spookSmashWave(Date.now() - Number(g.startedAt || Date.now()));
-  if (target.type === "golden" && currentWave >= 6 && Number(g.stats.skulls || 0) === 0) {
-    const playerForCollection = await getPlayer(env, user.id);
-    playerForCollection.halloweenCollection = Array.isArray(playerForCollection.halloweenCollection) ? playerForCollection.halloweenCollection : [];
-    if (!playerForCollection.halloweenCollection.includes("smasher_relic")) {
-      playerForCollection.halloweenCollection.push("smasher_relic");
-      smasherRelicUnlocked = true;
-      refreshProfileBadges(playerForCollection);
-      await savePlayer(env, playerForCollection, user.id, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
-    }
-  }
-
-  board[slot] = null;
-
-  await spookSmashSaveBoard(env, guildId, user.id, board);
-  await spookSmashSave(env, guildId, user.id, g);
-  const nextBoard = await spookSmashAdvanceBoard(env, guildId, user.id, g);
-  await editSpookSmashBoard(env, interaction, {...g, board: nextBoard}, Date.now());
-
-  const hit = target.type === "golden" ? "✨🎃 **JACKPOT!**" : `${creature.emoji} **SMASHED!**`;
-
-  if (smasherRelicUnlocked) {
-    const unlockResponse = await fetch(
-      `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: "🔨✨ **THE GOLDEN SMASH!** ✨🔨\n\nThe Golden Pumpkin shattered... but something else was hiding inside.",
-          embeds: [{
-            title: "📖✨ COLLECTIBLE #4 UNLOCKED! ✨📖",
-            description: "🔨 **The Smasher's Relic**\n\n*They say the first Spook N Smash champion wielded this very hammer.*\n\n🎃 **Wave 6: JACKPOT**\n💀 **No Skulls hit**\n✨ **Golden Pumpkin smashed**",
-            color: 0x8b3a12,
-            image: { url: imageUrl(IMAGES[HALLOWEEN_BOOK_ASSETS.smasherRelic]) },
-            footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
-          }]
-        })
-      }
-    );
-    if (!unlockResponse.ok) console.error("Smasher's Relic unlock announcement failed:", unlockResponse.status, await unlockResponse.text());
-  }
-
-  return sendEphemeralFollowup(env, interaction, `${hit} **+${(creature.points * mult).toLocaleString()}** • Combo **${g.combo}** x${mult}${smasherRelicUnlocked ? "\n\n🔨✨ **THE SMASHER'S RELIC UNLOCKED!** Check your Halloween Collection!" : ""}`);
-}
-
-async function spookSmashEndRun(env, interaction, session) {
-  const user = getUserFromInteraction(interaction);
-  const g = await spookSmashLoad(env, interaction.guild_id, user.id);
-  if (!g || !g.active || g.session !== session) {
-    return sendEphemeralFollowup(env, interaction, "🎃 That Spook N Smash run is no longer active.");
-  }
-  await spookSmashFinish(env, interaction, g);
+  const user=getUserFromInteraction(interaction); if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
+  const player=await getPlayer(env,user.id);
+  const image=await renderHalloweenBook(env,player,Math.max(0,Math.min(4,Number(spread)||0)));
+  const s=Math.max(0,Math.min(4,Number(spread)||0));
+  const form=new FormData();
+  form.append("payload_json",JSON.stringify({content:`📖 **HALLOWEEN 2026 — SPREAD ${s+1}/5**\n\n${Number(player.halloweenCollection?.length||0)}/10 collectibles discovered.`,attachments:[{id:0,filename:"halloween-book.png"}],components:[row(button("◀️",`collection:halloween:page:${Math.max(0,s-1)}`,2,s===0),button("▶️",`collection:halloween:page:${Math.min(4,s+1)}`,2,s===4))],flags:64}));
+  form.append("files[0]",new Blob([image],{type:"image/png"}),"halloween-book.png");
+  return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,{method:"PATCH",body:form});
 }
 
 function halloweenHowToText() {
@@ -30076,310 +29477,72 @@ function halloweenHideLobbyRows(g){const ids=Object.keys(g.players||{});const ho
 
 function halloweenHideCreate(guildId,user){return {id:`hh-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"hide",status:"lobby",guildId,hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}},round:0,hunterId:"",hiddenRoles:{},ghosts:{},rooms:{},submitted:{},hunterActions:0,evidence:[],traps:[],captured:[],interactionToken:""};}
 
-function halloweenHideRoleDM(role,isHunter=false){
-  if(isHunter){
-    return [
-      "🎃 **HAUNTED HIDE & SEEK — YOUR SECRET IDENTITY**",
-      "",
-      "👹 **ROLE: LANTERN KEEPER**",
-      "",
-      "🤫 **KEEP THIS PRIVATE**",
-      "You are the Hunter. The Hidden players do not know what you know.",
-      "",
-      "🧠 **HUNTER'S LANTERN — PASSIVE**",
-      "Once per round, the Lantern can give you a vague clue about activity.",
-      "",
-      "🎯 **2 ACTIONS EACH ROUND**",
-      "• 🔎 Investigate — inspect a room for signs of Hidden players.",
-      "• 👂 Listen — listen for activity and get a room clue.",
-      "• 🧭 Track — follow the freshest movement trail.",
-      "• 🪤 Trap — place a trap in a room.",
-      "• 🎯 Capture — choose a Hidden player, then guess their room.",
-      "",
-      "🏮 **TRUE LIGHT — SPECIAL**",
-      "Use your special Hunter reveal to help determine whether suspicious evidence is genuine or manipulated.",
-      "",
-      "🏆 **YOUR GOAL**",
-      "Capture enough Hidden players before they survive all 10 rounds.",
-      "",
-      "⚠️ Every Capture requires BOTH the correct player and the correct room."
-    ].join("\n");
-  }
-
-  const guides={
-    Mimic:{
-      passive:"🎭 FALSE TRAIL — Your movement can create misleading evidence.",
-      active:"🎭 DISGUISE — Use once to make your trail harder for the Hunter to interpret.",
-      objective:"🎯 Cause the Hunter to capture another player because of your deception."
-    },
-    Gravekeeper:{
-      passive:"🪦 GRAVEWALKER — You can move through the manor without leaving an ordinary trail.",
-      active:"🪦 BURY THE TRAIL — Use once to hide your current trail.",
-      objective:"🎯 Survive while making the Hunter's information unreliable."
-    },
-    "Web Weaver":{
-      passive:"🕷️ STICKY GROUND — Your trail can interfere with the Hunter's movement clues.",
-      active:"🕷️ WEB TRAP — You have 2 uses to create a nasty surprise for the Hunter.",
-      objective:"🎯 Stay hidden while using the manor's trails against the Hunter."
-    },
-    "Haunted Doll":{
-      passive:"🧸 DON'T TOUCH ME — Your presence can create misleading signs when the Hunter gets too close.",
-      active:"🧸 PLAY DEAD — Use once to make yourself appear inactive.",
-      objective:"🎯 Make the Hunter investigate an empty room."
-    },
-    Witch:{
-      passive:"🧙 HEXED EVIDENCE — Evidence connected to you can be misleading.",
-      active:"🧙 HEX — Use once to manipulate the Hunter's information.",
-      objective:"🎯 Keep the Hunter guessing while protecting your location."
-    },
-    Shadow:{
-      passive:"🌑 UNSEEN — You are especially difficult to pin down from ordinary clues.",
-      active:"🌑 VANISH — Use once to disappear from a dangerous situation.",
-      objective:"🎯 Reach the final round without the Hunter correctly identifying your current room."
-    },
-    "Mirror Wraith":{
-      passive:"🪞 REFLECTION — Your presence can create confusing duplicate clues.",
-      active:"🪞 MIRROR IMAGE — Use once to lure the Hunter toward a decoy.",
-      objective:"🎯 Lure the Hunter toward a false trail while staying undetected."
-    }
-  };
-  const x=guides[role]||guides.Mimic;
-  return [
-    "🎃 **HAUNTED HIDE & SEEK — YOUR SECRET IDENTITY**",
-    "",
-    `👻 **ROLE: ${role}**`,
-    "",
-    "🤫 **KEEP THIS PRIVATE**",
-    "The Lantern Keeper does not know your identity.",
-    "",
-    `🧠 **PASSIVE — ${x.passive.split(" — ")[0].replace(/^[^ ]+ /,"")}**`,
-    x.passive,
-    "",
-    `✨ **ACTIVE — ${x.active.split(" — ")[0].replace(/^[^ ]+ /,"")}**`,
-    x.active,
-    "",
-    x.objective,
-    "",
-    "🎮 **ROUND REMINDER**",
-    "Movement is available on alternating rounds. Use MY ACTION to move, stay, or use your signature ability.",
-    "",
-    "👻 If you are captured, you become a Ghost and get a separate Ghost action."
-  ].join("\n");
-}
-
-async function halloweenHidePostPublic(env,interaction,g){
-  const channelId=g.channelId||interaction.channel_id;
-  if(!channelId)return sendPublicText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));
-  const oldMessageId=g.publicMessageId||"";
-  const created=await discordRequest(env,`/channels/${channelId}/messages`,{method:"POST",body:JSON.stringify({content:halloweenHidePublicText(g),components:halloweenHidePublicRows(g)})});
-  if(!created.ok){console.error("Haunted Hide & Seek public message failed:",created.status,await created.text());return sendPublicText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));}
-  let newMessageId="";
-  try{const data=await created.json();newMessageId=data?.id||"";}catch(error){console.error("Haunted Hide & Seek public message JSON failed:",error);}
-  if(!newMessageId)return created;
-  g.channelId=channelId;
-  g.publicMessageId=newMessageId;
-  await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-  if(oldMessageId&&oldMessageId!==newMessageId){
-    const removed=await discordRequest(env,`/channels/${channelId}/messages/${oldMessageId}`,{method:"DELETE"});
-    if(!removed.ok&&removed.status!==404)console.error("Old Haunted Hide & Seek message could not be removed:",removed.status,await removed.text());
-  }
-  return created;
-}
-
 async function halloweenHideStart(env,interaction,g){
   const ids=Object.keys(g.players||{}); if(ids.length<2)return sendText(env,interaction,"❌ You need at least 2 players.");
-  const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.phase="hidden"; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={}; g.traps=[]; g.usedAbilities={}; g.everLocated={}; g.pendingCaptureTarget=null;
+  const hunterId=ids[randomInt(0,ids.length-1)]; g.hunterId=hunterId; g.status="playing"; g.round=1; g.hunterActions=0; g.submitted={}; g.evidence=[]; g.captured=[]; g.ghosts={};
   const roles=[...HALLOWEEN_HIDDEN_ROLES].sort(()=>Math.random()-.5); const rooms=Object.fromEntries(ids.map(id=>[id,"Foyer"]));
   const counts={};
   for(const id of ids){ if(id===hunterId)continue; let room; let tries=0; do{room=HALLOWEEN_ROOMS.Foyer[randomInt(0,HALLOWEEN_ROOMS.Foyer.length-1)]; tries++;}while((counts[room]||0)>=2&&tries<30); rooms[id]=room; counts[room]=(counts[room]||0)+1; }
-  g.rooms=rooms; g.captureTarget=Math.ceil((ids.length-1)/2); g.pendingCaptureTarget=null; let ri=0; for(const id of ids){if(id===hunterId)continue;g.hiddenRoles[id]=roles[ri%roles.length];ri++;}
+  g.rooms=rooms; let ri=0; for(const id of ids){if(id===hunterId)continue;g.hiddenRoles[id]=roles[ri%roles.length];ri++;}
   await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-  for(const id of ids){await sendUserDM(env,id,halloweenHideRoleDM(id===hunterId?"Lantern Keeper":g.hiddenRoles[id],id===hunterId));}
-  g.channelId=interaction.channel_id;
-  const oldMessageId=interaction.message?.id||"";
-  await halloweenHidePostPublic(env,interaction,g);
-  if(oldMessageId&&oldMessageId!==g.publicMessageId){
-    const removed=await discordRequest(env,`/channels/${g.channelId}/messages/${oldMessageId}`,{method:"DELETE"});
-    if(!removed.ok&&removed.status!==404)console.error("Old Haunted Hide & Seek lobby message could not be removed:",removed.status,await removed.text());
-  }
-  return sendText(env,interaction,"🎃 **HAUNTED HIDE & SEEK STARTED!**\n\nThe public game board has been posted.");
+  for(const id of ids){const role=id===hunterId?"👹 **Lantern Keeper**":`👻 **Hidden — ${g.hiddenRoles[id]}**`; await sendUserDM(env,id,`🎃 **HAUNTED HIDE & SEEK**\n\nYour secret role: ${role}\n\n${id===hunterId?"You are the Hunter. Find the Hidden before they survive all 10 rounds.":"Stay hidden. The Hunter does not know your location."}`);}
+  return sendText(env,interaction,halloweenHidePublicText(g),halloweenHidePublicRows(g));
 }
-function halloweenHidePublicText(g){const active=Object.keys(g.players||{}).length;const ids=Object.keys(g.players||{});const hidden=ids.filter(id=>id!==g.hunterId&&!g.ghosts?.[id]);const submitted=hidden.filter(id=>g.submitted?.[id]).length;const phase=g.phase||"hidden";const turn=phase==="hunter"?`👹 **CURRENT TURN: LANTERN KEEPER**\n\nHunter actions used: **${g.hunterActions||0}/2**`:`👻 **CURRENT TURN: HIDDEN PLAYERS**\n\nHidden actions locked in: **${submitted}/${hidden.length}**`;return [`👻 **HAUNTED HIDE & SEEK — ROUND ${g.round}/10**`,``,`👹 Lantern Keeper: <@${g.hunterId}>`,`👥 Players: **${active}**`,``,turn,``,`🎃 ${phase==="hunter"?"The Lantern Keeper is hunting. The Hidden must wait.":"The Hidden are choosing their actions. The Lantern Keeper must wait."}`,``,`${g.captured?.length||0} Hidden captured.`].join("\n");}
+function halloweenHidePublicText(g){const active=Object.keys(g.players||{}).length;return [`👻 **HAUNTED HIDE & SEEK — ROUND ${g.round}/10**`,``,`👹 Lantern Keeper: <@${g.hunterId}>`,`👥 Players: **${active}**`,``,`The Hidden are somewhere inside the manor...`,``,`${g.captured?.length||0} Hidden captured.`,``,`Choose your private action with the button below.`].join("\n");}
 function halloweenHidePublicRows(g){return [row(button("🎮 MY ACTION","halloween:hide:action",1),button("📖 HOW TO PLAY","halloween:hide:howto",2)),row(button("🆘 EXIT","halloween:exit",4))];}
 
-function halloweenHideRoomRows(customPrefix, rooms=Object.keys(HALLOWEEN_ROOMS), style=2){
-  const rows=[];
-  for(let i=0;i<rooms.length;i+=3) rows.push(row(...rooms.slice(i,i+3).map(room=>button(room,`${customPrefix}:${room}`,style))));
-  return rows;
-}
-function halloweenHideHunterActionText(g){
-  return `👹 **LANTERN KEEPER**\n\nActions used: **${g.hunterActions}/2**\n${g.pendingCaptureTarget?`🎯 Capture target selected: <@${g.pendingCaptureTarget}>\nChoose the room to test.`:"Choose an action."}`;
-}
-async function halloweenHidePrivateMenu(env,interaction){
-  const state=await getGuildState(env,interaction.guild_id); const g=state.halloween?.activeGame; const user=getUserFromInteraction(interaction);
-  if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ There is no active Haunted Hide & Seek game.");
-  if(!g.players?.[user.id])return sendText(env,interaction,"❌ You are not in this game.");
-  if(user.id===g.hunterId){
-    if(g.phase!=="hunter")return sendText(env,interaction,`👻 **HIDDEN PHASE**\n\nThe Hidden players are choosing their actions first. Please wait until the Hunter phase begins.`);
-    if(g.pendingCaptureTarget){
-      return sendText(env,interaction,halloweenHideHunterActionText(g),halloweenHideRoomRows(`halloween:hide:captureroom:${g.pendingCaptureTarget}`,Object.keys(HALLOWEEN_ROOMS),2));
-    }
-    const disabled=g.hunterActions>=2;
-    const actions=[
-      button("🔎 Investigate",disabled?"halloween:hide:noop":"halloween:hide:hunter:investigate",1,disabled),
-      button("👂 Listen",disabled?"halloween:hide:noop":"halloween:hide:hunter:listen",1,disabled),
-      button("🧭 Track",disabled?"halloween:hide:noop":"halloween:hide:hunter:track",1,disabled),
-      button("🪤 Trap",disabled?"halloween:hide:noop":"halloween:hide:hunter:trap",1,disabled),
-      button("🎯 Capture",disabled?"halloween:hide:noop":"halloween:hide:hunter:capture",4,disabled)
-    ];
-    return sendText(env,interaction,halloweenHideHunterActionText(g),[row(...actions),row(button("⏭️ End Round","halloween:hide:hunter:end",3),button("📖 How to Play","halloween:hide:howto",2))]);
-  }
-  if(g.phase!=="hidden")return sendText(env,interaction,`👹 **HUNTER PHASE**\n\nThe Hidden players have finished. Wait for the Lantern Keeper to complete the two Hunter actions.`);
+async function halloweenHidePrivateMenu(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ There is no active Haunted Hide & Seek game.");if(!g.players?.[user.id])return sendText(env,interaction,"❌ You are not in this game.");
+  if(user.id===g.hunterId){const actions=[button("🔎 Investigate","halloween:hide:hunter:investigate",1),button("👂 Listen","halloween:hide:hunter:listen",1),button("🧭 Track","halloween:hide:hunter:track",1),button("🪤 Trap","halloween:hide:hunter:trap",1),button("🎯 Capture","halloween:hide:hunter:capture",4)];return sendText(env,interaction,`👹 **LANTERN KEEPER**\n\nActions used: **${g.hunterActions}/2**\nChoose an action.`,[row(...actions),row(button("⏭️ End Round","halloween:hide:hunter:end",3),button("📖 How to Play","halloween:hide:howto",2))]);}
   if(g.ghosts?.[user.id])return sendText(env,interaction,"👻 **GHOST MODE**\n\nYou can haunt a room to create false activity.",[row(button("👻 HAUNT A ROOM","halloween:hide:ghost",1)),row(button("📖 How to Play","halloween:hide:howto",2))]);
-  if(g.submitted?.[user.id])return sendText(env,interaction,`🔒 **YOUR ROUND ACTION IS LOCKED**\n\nYou already acted for **Round ${g.round}/10**.\nWait for the next round.`,[row(button("🔄 Refresh","halloween:hide:action",2)),row(button("📖 How to Play","halloween:hide:howto",2))]);
-  const current=g.rooms[user.id]||"Foyer"; const movement=[button("🛑 STAY",`halloween:hide:stay:${current}`,2)];
-  if(g.round%2===1) for(const room of (HALLOWEEN_ROOMS[current]||[])) movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));
+  const current=g.rooms[user.id]||"Foyer"; const movement=[button("🛑 STAY",`halloween:hide:stay:${current}`,2)]; if(g.round%2===1){for(const room of (HALLOWEEN_ROOMS[current]||[]))movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));}
   const role=g.hiddenRoles[user.id]; const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?"🕷️ WEB TRAP":role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
-  return sendText(env,interaction,`👻 **HIDDEN — ${role}**\n\nCurrent room: **${current}**\nRound ${g.round}/10 — ${g.round%2===1?"movement is available":"stay round"}.`,[row(...movement),row(button(abilityLabel,"halloween:hide:ability",3),button("📖 How to Play","halloween:hide:howto",2))]);
+  return sendText(env,interaction,`👻 **HIDDEN — ${role}**\n\nCurrent room: **${current}**\nRound ${g.round}/10 — ${g.round%2===1?"movement is available":"stay round"}.`,[row(...movement.slice(0,4)),row(...movement.slice(4,5)),row(button(abilityLabel,"halloween:hide:ability",3),button("📖 How to Play","halloween:hide:howto",2))]);
 }
+
 async function halloweenHideAdvance(env,interaction,g){
-  const ids=Object.keys(g.players||{});
-  const hidden=ids.filter(id=>id!==g.hunterId&&!g.ghosts?.[id]);
-  const allHiddenSubmitted=hidden.length>0&&hidden.every(id=>g.submitted?.[id]);
-  g.phase=g.phase||"hidden";
-
-  // Hidden phase: update the shared message after every Hidden action.
-  if(g.phase==="hidden"){
-    if(!allHiddenSubmitted){
-      await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-      await halloweenHidePostPublic(env,interaction,g);
-      return;
-    }
-    g.phase="hunter";
-    g.hunterActions=0;
-    g.pendingCaptureTarget=null;
-    await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-    await halloweenHidePostPublic(env,interaction,g);
-    return;
-  }
-
-  // Hunter phase: update the shared message after each Hunter action.
-  if(g.phase==="hunter"&&g.hunterActions<2){
-    await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-    await halloweenHidePostPublic(env,interaction,g);
-    return;
-  }
-
-  if((g.captured||[]).length>=Number(g.captureTarget||Math.ceil((ids.length-1)/2))){g.status="ended";await halloweenHideFinish(env,interaction,g,true);return;}
+  const ids=Object.keys(g.players||{}); const hidden=ids.filter(id=>id!==g.hunterId&&!g.ghosts?.[id]);
+  const allHiddenSubmitted=hidden.every(id=>g.submitted?.[id]);
+  if(g.hunterActions<2 || !allHiddenSubmitted)return;
+  if((g.captured||[]).length >= Math.ceil(hidden.length/2)){g.status="ended";await halloweenHideFinish(env,interaction,g,true);return;}
   if(g.round>=10){g.status="ended";await halloweenHideFinish(env,interaction,g,false);return;}
-
-  g.round++;
-  g.phase="hidden";
-  g.hunterActions=0;
-  g.submitted={};
-  g.evidence=[];
-  g.pendingCaptureTarget=null;
-  await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});
-  await halloweenHidePostPublic(env,interaction,g);
+  g.round++;g.hunterActions=0;g.submitted={};g.evidence=[];await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});await sendPublicText(env,interaction,`👻 **ROUND ${g.round} BEGINS!**\n\nThe manor shifts in the darkness...`,halloweenHidePublicRows(g));}
+async function halloweenHideFinish(env,interaction,g,hunterWin){const state=await getGuildState(env,interaction.guild_id);const ids=Object.keys(g.players||{});const survivors=ids.filter(id=>id!==g.hunterId&&!g.captured.includes(id));for(const id of ids){await halloweenMarkPlayed(env,id,1);await addHalloweenSpookies(env,id,hunterWin?(id===g.hunterId?250:100):(id===g.hunterId?100:250));}
+  let unlocks=[]; if(!hunterWin){for(const id of survivors){if(!g.everLocated?.[id]){await halloweenUnlock(env,id,"hunters_lantern");unlocks.push(id);await addHalloweenSpookies(env,id,500);}}}
+  state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);await sendPublicText(env,interaction,`🎃 **HAUNTED HIDE & SEEK COMPLETE**\n\n${hunterWin?`👹 **Hunter Victory!** <@${g.hunterId}> reached the capture target.` : "👻 **Hidden Victory!** The Hidden survived all 10 rounds."}\n\n🏮 The Hunter's Lantern ${unlocks.length?"was earned by surviving Hidden players.":"was not unlocked this game."}`,[]);
 }
 
-async function halloweenHideComponent(env,interaction,parts){const action=parts[2]==="hunter"?(parts[3]||"hunter"):parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
+async function halloweenHideComponent(env,interaction,parts){const action=parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 Hidden players do not know each other's rooms.","🏠 Move on alternating rounds. The Hunter gets 2 actions each round.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win.","🏮 Survive without ever being correctly located to unlock the Hunter's Lantern."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
   if(action==="join"){if(!g||g.type!=="hide"||g.status!=="lobby")return sendText(env,interaction,"❌ No Haunted Hide & Seek lobby is waiting.");if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ The lobby is full.");g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}
   if(action==="leave"){if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in the lobby.");delete g.players[user.id];if(!Object.keys(g.players).length)state.halloween.activeGame=null;else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,state.halloween.activeGame?halloweenHideLobbyText(g):"👻 Lobby closed.",state.halloween.activeGame?halloweenHideLobbyRows(g):[]);}
   if(action==="start"){if(!g||g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start.");return halloweenHideStart(env,interaction,g);}
   if(action==="action")return halloweenHidePrivateMenu(env,interaction);
   if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ That game is no longer active.");
-  if(action==="noop")return sendText(env,interaction,"⏳ **Your Hunter actions are already used for this round.** Wait for the next round.");
   if(user.id!==g.hunterId && g.ghosts?.[user.id] && action==="ghost"){
-    const room=Object.keys(HALLOWEEN_ROOMS)[randomInt(0,Object.keys(HALLOWEEN_ROOMS).length-1)];
-    g.evidence.push({type:"ghost",room,message:"A cold presence moves through the room."});
-    await saveGuildState(env,interaction.guild_id,state);
-    return sendText(env,interaction,`👻 You haunted **${room}**. The Hunter may hear something there.`);
+    const room=HALLOWEEN_ZOMBIE_LOCATIONS[randomInt(0,HALLOWEEN_ZOMBIE_LOCATIONS.length-1)];g.evidence.push({type:"ghost",room,message:"A cold presence moves through the room."});await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`👻 You haunted **${room}**. The Hunter may hear something there.`);
   }
-  if(user.id!==g.hunterId && ["move","stay","ability"].includes(action) && g.submitted?.[user.id]){
-    return sendText(env,interaction,`🔒 **Your action is already locked for Round ${g.round}.**\n\nWait for the next round.`);
-  }
-  if(user.id!==g.hunterId && action==="move"){
-    const room=parts.slice(3).join(":"); const current=g.rooms[user.id];
-    if(g.round%2!==1||!(HALLOWEEN_ROOMS[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there this round.");
-    g.rooms[user.id]=room; g.submitted[user.id]=true; g.evidence.push({type:"movement",room,player:user.id});
-    await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,`👻 You slipped into **${room}**. Your movement left a faint trail.\n\n🔒 Your action for this round is locked.`);
-  }
-  if(user.id!==g.hunterId && action==="stay"){
-    g.submitted[user.id]=true; await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,"🤫 You stayed perfectly still.\n\n🔒 Your action for this round is locked.");
-  }
-  if(user.id!==g.hunterId && action==="ability"){
-    const role=g.hiddenRoles[user.id]; g.usedAbilities=g.usedAbilities||{};
-    if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");
-    g.usedAbilities[user.id]=true; g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role}); g.submitted[user.id]=true;
-    await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,`✨ **${role} ability used.** Your move is locked for this round.`);
-  }
+  if(user.id!==g.hunterId && action==="move"){const room=parts.slice(3).join(":");const current=g.rooms[user.id];if(g.round%2!==1||!(HALLOWEEN_ROOMS[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there this round.");g.rooms[user.id]=room;g.submitted[user.id]=true;g.evidence.push({type:"movement",room,player:user.id});g.everLocated=g.everLocated||{};await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`👻 You slipped into **${room}**. Your movement left a faint trail.`);}
+  if(user.id!==g.hunterId && action==="stay"){g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"🤫 You stayed perfectly still.");}
+  if(user.id!==g.hunterId && action==="ability"){const role=g.hiddenRoles[user.id];g.usedAbilities=g.usedAbilities||{};if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");g.usedAbilities[user.id]=true;g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role});g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`✨ **${role} ability used.** Your move is locked for this round.`);}
   if(user.id===g.hunterId && action==="hunter")return halloweenHidePrivateMenu(env,interaction);
+  if(user.id===g.hunterId && action==="hunter" )return;
   if(user.id===g.hunterId && ["investigate","listen","track","trap"].includes(action)){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
-    const room=parts.slice(3).join(":");
-    if(!HALLOWEEN_ROOMS[room]){
-      const labels={investigate:"🔎 **INVESTIGATE**",listen:"👂 **LISTEN**",track:"🧭 **TRACK**",trap:"🪤 **TRAP**"};
-      return sendText(env,interaction,`${labels[action]}\n\nChoose a room:`,halloweenHideRoomRows(`halloween:hide:${action}`,Object.keys(HALLOWEEN_ROOMS),2));
-    }
-    g.hunterActions++;
-    if(action==="investigate"){
-      const occupants=Object.entries(g.rooms).filter(([id,r])=>id!==g.hunterId&&r===room&&!g.captured.includes(id));
-      g.evidence.push({type:"investigate",room});
-      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🔎 **Investigation — ${room}**\n\n${occupants.length?"👀 You find fresh signs that someone is nearby.":"🕯️ Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-    }
-    if(action==="listen"){
-      const occupants=Object.entries(g.rooms).filter(([id,r])=>id!==g.hunterId&&r===room&&!g.captured.includes(id));
-      g.evidence.push({type:"listen",room,occupied:occupants.length>0});
-      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`👂 **Listen — ${room}**\n\n${occupants.length?"👣 You hear faint footsteps nearby.":"🤫 The room is completely silent."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-    }
-    if(action==="track"){
-      const ev=(g.evidence||[]).filter(e=>e.type==="movement"&&e.room===room).slice(-1)[0];
-      g.evidence.push({type:"track",room,found:!!ev});
-      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🧭 **Track — ${room}**\n\n${ev?"🕯️ You find a fresh trail leading through this room.":"🌫️ No fresh trail here."}\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-    }
-    if(action==="trap"){
-      g.traps=g.traps||[]; if(!g.traps.includes(room))g.traps.push(room); g.evidence.push({type:"trap",room});
-      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🪤 **Trap placed in ${room}.**\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-    }
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");g.hunterActions++;
+    if(action==="investigate"){const room=HALLOWEEN_ROOMS["Foyer"][randomInt(0,2)];const occupants=Object.entries(g.rooms).filter(([id,r])=>r===room&&id!==g.hunterId&&!g.captured.includes(id));g.evidence.push({type:"investigate",room});return sendText(env,interaction,`🔎 **Investigation:** **${room}**\n${occupants.length?"You find fresh signs of someone nearby.":"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="listen"){const rooms=Object.entries(g.rooms).filter(([id])=>id!==g.hunterId&&!g.captured.includes(id));const clue=rooms.length?rooms[randomInt(0,rooms.length-1)][1]:"quiet";return sendText(env,interaction,`👂 **Listen:** You hear faint activity around **${clue}**.\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="track"){const ev=(g.evidence||[]).filter(e=>e.type==="movement").slice(-1)[0];return sendText(env,interaction,`🧭 **Track:** ${ev?`A fresh trail points toward **${ev.room}**.`:"There is no fresh trail to follow."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(action==="trap"){const room=Object.keys(HALLOWEEN_ROOMS)[randomInt(0,Object.keys(HALLOWEEN_ROOMS).length-1)];g.traps.push(room);return sendText(env,interaction,`🪤 **Trap placed** in **${room}**.\n\nHunter actions: ${g.hunterActions}/2`);}
   }
   if(user.id===g.hunterId && action==="capture"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
     const hidden=Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
-    if(!hidden.length)return sendText(env,interaction,"❌ There are no Hidden players left to capture.");
-    const rows=[]; for(let i=0;i<hidden.length;i+=3)rows.push(row(...hidden.slice(i,i+3).map(id=>button(g.players[id].name,`halloween:hide:capturetarget:${id}`,4))));
-    return sendText(env,interaction,"🎯 **STEP 1 — Choose who you think you're capturing:**",rows);
+    const rows=[];for(let i=0;i<hidden.length;i+=3)rows.push(row(...hidden.slice(i,i+3).map(id=>button(g.players[id].name,`halloween:hide:capturetarget:${id}`,4))));return sendText(env,interaction,"🎯 **Choose who you think you're capturing:**",rows);
   }
   if(user.id===g.hunterId && action==="capturetarget"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
-    const target=parts[3];
-    if(!target||!g.players?.[target]||target===g.hunterId||g.captured.includes(target))return sendText(env,interaction,"❌ That target is no longer available.");
-    g.pendingCaptureTarget=target;
-    await saveGuildState(env,interaction.guild_id,state);
-    return sendText(env,interaction,`🎯 **STEP 2 — Where do you think <@${target}> is?**\n\nChoose one room.`,halloweenHideRoomRows(`halloween:hide:captureroom:${target}`,Object.keys(HALLOWEEN_ROOMS),2));
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3];const rows=[];for(const room of Object.keys(HALLOWEEN_ROOMS))rows.push(button(room,`halloween:hide:captureroom:${target}:${room}`,2));return sendText(env,interaction,"🎯 **Choose the room:**",[...Array.from({length:Math.ceil(rows.length/3)},(_,i)=>row(...rows.slice(i*3,i*3+3)))]);
   }
   if(user.id===g.hunterId && action==="captureroom"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
-    const target=parts[3],room=parts.slice(4).join(":");
-    if(!g.pendingCaptureTarget||g.pendingCaptureTarget!==target)return sendText(env,interaction,"❌ That capture attempt expired. Press Capture again.");
-    if(!g.players?.[target]||g.captured.includes(target)){g.pendingCaptureTarget=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"❌ That player is no longer available.");}
-    g.pendingCaptureTarget=null; g.hunterActions++; g.everLocated=g.everLocated||{};
-    if(g.rooms[target]===room){
-      g.everLocated[target]=true; g.captured.push(target); g.ghosts[target]=true;
-      await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-      return sendText(env,interaction,`🎯 **CAPTURE SUCCESS!** <@${target}> was found in **${room}**!\nThey are now a Ghost.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
-    }
-    g.everLocated[target]=true; await saveGuildState(env,interaction.guild_id,state); await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,`❌ **Capture missed.** <@${target}> was not in **${room}**.\n\nHunter actions: ${g.hunterActions}/2`,[row(button("🎮 Next Hunter Action","halloween:hide:action",1))]);
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3],room=parts.slice(4).join(":");g.hunterActions++;g.everLocated=g.everLocated||{};if(g.rooms[target]===room){g.everLocated[target]=true;g.captured.push(target);g.ghosts[target]=true;return sendText(env,interaction,`🎯 **CAPTURE SUCCESS!** <@${target}> was found in **${room}**!\nThey are now a Ghost.`,await halloweenHideAdvance(env,interaction,g)||halloweenHidePublicRows(g));}g.everLocated[target]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"❌ **Capture missed.** Your guess was wrong.");
   }
-  if(user.id===g.hunterId && action==="end"){g.hunterActions=2;g.pendingCaptureTarget=null;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"⏭️ Hunter ended the round.");}
+  if(user.id===g.hunterId && action==="end"){g.hunterActions=2;await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"⏭️ Hunter ended the round.");}
 }
 
 async function halloweenZombieLobby(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const user=getUserFromInteraction(interaction);const g={id:`zp-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"zombie",status:"lobby",hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}}};state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧟 **ZOMBIE PANIC**\n\n👥 Players: **1/8**\n\nNeed **3–8 players**.`,[row(button("➕ JOIN","halloween:zombie:join",1),button("🚪 LEAVE","halloween:zombie:leave",2),button("▶️ START","halloween:zombie:start",3)),row(button("📖 HOW TO PLAY","halloween:zombie:howto",2),button("⬅️ Games","halloween:games",2))]);}
@@ -30388,7 +29551,7 @@ function zombieRows(g,userId){const p=g.players[userId];const rows=[];if(g.statu
 async function zombieStart(env,interaction,g){const ids=Object.keys(g.players);if(ids.length<3)return sendText(env,interaction,"❌ Zombie Panic needs at least 3 players.");g.status="playing";g.round=1;g.threat=0;g.threatBand="STABLE";g.patientZero=ids[randomInt(0,ids.length-1)];g.objectives={vehicle:0,fuel:0,radio:0};g.currentActions={};g.locations={};g.infection={};g.items={};g.zombies={};g.evacuated=[];g.eliminated=[];for(const id of ids){g.locations[id]=HALLOWEEN_ZOMBIE_LOCATIONS[randomInt(0,HALLOWEEN_ZOMBIE_LOCATIONS.length-1)];g.infection[id]=id===g.patientZero?4:0;g.items[id]=[];g.players[id].role=id===g.patientZero?"Patient Zero":"Survivor";g.players[id].eliminated=false;g.players[id].actionTaken=false;g.players[id].charges=id===g.patientZero?2:0;}
   await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});for(const id of ids){await sendUserDM(env,id,id===g.patientZero?"☣️ **You are PATIENT ZERO.** You begin Fully Infected. Use the secret Zombie action button and blend in.":"🧍 **You are a Survivor.** There is an infected player among you. Keep the evacuation objectives moving.");}return sendText(env,interaction,zombiePublicText(g),zombieRows(g,getUserFromInteraction(interaction).id));}
 function zombieThreatBand(n){return n>=100?"APOCALYPSE":n>=76?"CRITICAL":n>=51?"OUTBREAK":n>=26?"UNSTABLE":"STABLE";}
-async function zombieEndRound(env,interaction,g){const ids=Object.keys(g.players);const ready=ids.filter(id=>g.players[id].eliminated||g.players[id].actionTaken).length;if(!ids.every(id=>g.players[id].eliminated||g.players[id].actionTaken)){await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});return sendText(env,interaction,`🔒 **ACTION LOCKED IN!**\n\nYour action for Round ${g.round} is saved.\nWaiting for the other players: **${ready}/${ids.length}** have acted.`);}for(const id of ids){if(g.players[id].eliminated)continue;g.players[id].actionTaken=false;}
+async function zombieEndRound(env,interaction,g){const ids=Object.keys(g.players);if(!ids.every(id=>g.players[id].eliminated||g.players[id].actionTaken))return;for(const id of ids){if(g.players[id].eliminated)continue;g.players[id].actionTaken=false;}
   g.round++;g.threat=Math.min(100,Number(g.threat||0)+(g.round<=5?1:g.round<=9?2:3));g.threatBand=zombieThreatBand(g.threat);for(const id of ids){if(g.infection[id]>=4)g.players[id].role="Zombie";if(g.infection[id]>=4)g.zombies[id]=true;}
   if(g.objectives.vehicle>=5&&g.objectives.fuel>=3&&g.objectives.radio>=4&&g.round>=10){g.status="ended";return zombieFinish(env,interaction,g,true);}
   if(g.round>12){g.status="ended";return zombieFinish(env,interaction,g,false);}await saveGuildState(env,interaction.guild_id,{...(await getGuildState(env,interaction.guild_id)),halloween:{activeGame:g}});return sendPublicText(env,interaction,zombiePublicText(g),zombieRows(g,getUserFromInteraction(interaction).id));}
@@ -30415,10 +29578,10 @@ async function zombieComponent(env,interaction,parts){const action=parts[2];cons
 async function halloweenTrickOrTreat(env,interaction,targetId=null){
   const user=getUserFromInteraction(interaction);if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
   const p=await getPlayer(env,user.id);const today=easternDateKey();
-  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\n\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
+  if(p.halloweenTrickTreatDate===today)return sendText(env,interaction,"🍬 **YOU ALREADY TRICK-OR-TREATED TODAY!**\\n\\nYour candy run is over for today. Come back tomorrow and terrorize another door. 👻",[row(button("⬅️ Games","halloween:games",2))]);
 
   if(!targetId){
-    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\n\nWhose door are you knocking on? 👀🎃\n\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
+    return sendText(env,interaction,"🍬 **TRICK OR TREAT!**\\n\\nWhose door are you knocking on? 👀🎃\\n\\nPick a WereWives server member below and I'll handle the chaos automatically. 😈",[
       {type:1,components:[{type:5,custom_id:"halloween:trick:target_select",placeholder:"🏚️ Choose whose door to knock on...",min_values:1,max_values:1}],},
       row(button("⬅️ Halloween Games","halloween:games",2))
     ]);
@@ -30496,12 +29659,12 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
   p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[];let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
   refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
   const story=rare?rareLines[randomInt(0,rareLines.length-1)]:outcome==="treat"?treatLines[randomInt(0,treatLines.length-1)]:trickLines[randomInt(0,trickLines.length-1)];
-  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${story}\n\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
+  return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\\n\\n${story}\\n\\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\\n\\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
 }
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
-async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");if(!g.players?.[user.id] && user.id!==env.OWNER_ID)return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
+async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ You are not stuck in an active Halloween game.");if(g.players?.[user.id]){if(g.type==="hide"){delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}else{delete g.players[user.id];if(user.id===g.hostId)g.hostId=Object.keys(g.players)[0]||"";if(!Object.keys(g.players).length)state.halloween.activeGame=null;}await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **YOU'VE BEEN RELEASED!**\n\nYou left the active Halloween game without receiving a win or completion reward. 🎃");}return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");}
 
-async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
@@ -32276,7 +31439,7 @@ async function sendPastelBoard(env,interaction,game){
   game.interactionToken=interaction?.token||game.interactionToken;
   const image=await renderPastelBoard(env,game);
   const components=pastelChoiceComponents(game);
-  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\n\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
+  const payload={content:`${pastelGameText(game)}${game.lastRefresh?`\\n\\n${game.lastRefresh}`:""}`,attachments:[{id:0,filename:"color-chaos.png"}],components};
   const makeForm=()=>{const form=new FormData();form.append("payload_json",JSON.stringify(payload));form.append("files[0]",new Blob([image],{type:"image/png"}),"color-chaos.png");return form;};
 
   /*
@@ -34245,7 +33408,6 @@ export default {
     const isTitlesComponent = interaction.type === 3 && (customId.startsWith("title:") || customId.startsWith("nameeffect:"));
     const isBirthdayComponent = interaction.type === 3 && customId.startsWith("birthday:");
     const isHalloweenComponent = interaction.type === 3 && (customId.startsWith("halloween:") || customId.startsWith("collection:"));
-    const isSpookSmashComponent = interaction.type === 3 && (customId === "halloween:start:spook" || customId.startsWith("halloween:spook:"));
     const isPermanentGameComponent = interaction.type === 3 && (customId.startsWith("talent:") || customId.startsWith("truthpass:"));
     const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
     const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal");
@@ -34304,115 +33466,6 @@ export default {
         customId.startsWith("custom_effects_page_") ||
         customId.startsWith("equip_")
       );
-
-    // SPOOK N SMASH FAST PATH: acknowledge with type 6 so the button never
-    // sits in Discord's loading/thinking state while Browser Rendering runs.
-    if (interaction.type === 3 && isSpookSmashComponent) {
-      const ack = await fetch(
-        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: 6 })
-        }
-      );
-      if (!ack.ok) {
-        console.error("Spook N Smash initial response failed:", ack.status, await ack.text());
-        return new Response("OK", { status: 200 });
-      }
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = true;
-      interaction.__deferredEphemeral = false;
-      interaction.__requestUrl = request.url;
-      ctx.waitUntil((async () => {
-        try {
-          await handleComponent(env, interaction, ctx);
-        } catch (error) {
-          console.error("Spook N Smash component error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ Spook N Smash error: ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Spook N Smash error:", editError);
-          }
-        }
-      })());
-      return new Response("OK", { status: 200 });
-    }
-
-    // HALLOWEEN FAST PATH: acknowledge Halloween buttons immediately and
-    // bypass the global pre-handler checks. Those checks can perform several
-    // KV reads before the Halloween handler runs, which can make Discord
-    // buttons appear stuck. The handler edits this initial response afterward.
-    if (interaction.type === 3 && isHalloweenComponent) {
-      const spookNsmashPublic =
-        customId === "halloween:start:spook" ||
-        customId.startsWith("halloween:spook:");
-      const privateHalloween =
-        customId === "collection:halloween:open" ||
-        customId.startsWith("collection:halloween:page:") ||
-        customId === "collection:halloween:unlock" ||
-        customId === "halloween:hide:action" ||
-        customId === "halloween:hide:howto" ||
-        customId.startsWith("halloween:hide:hunter:") ||
-        customId.startsWith("halloween:hide:investigate:") ||
-        customId.startsWith("halloween:hide:listen:") ||
-        customId.startsWith("halloween:hide:track:") ||
-        customId.startsWith("halloween:hide:trap:") ||
-        customId.startsWith("halloween:hide:captureroom:") ||
-        customId.startsWith("halloween:hide:move:") ||
-        customId.startsWith("halloween:hide:stay:") ||
-        customId === "halloween:hide:ability" ||
-        customId === "halloween:hide:ghost" ||
-        customId.startsWith("halloween:zombie:");
-
-      const ack = await fetch(
-        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            spookNsmashPublic
-              ? { type: 6 }
-              : {
-                  type: 5,
-                  data: {
-                    ...(privateHalloween ? { flags: 64 } : {})
-                  }
-                }
-          )
-        }
-      );
-      if (!ack.ok) {
-        console.error("Halloween initial response failed:", ack.status, await ack.text());
-        return new Response("OK", { status: 200 });
-      }
-
-      interaction.__deferred = true;
-      interaction.__deferredUpdate = spookNsmashPublic;
-      interaction.__deferredEphemeral = privateHalloween;
-      interaction.__requestUrl = request.url;
-
-      ctx.waitUntil((async () => {
-        try {
-          await handleComponent(env, interaction, ctx);
-        } catch (error) {
-          console.error("Halloween component error:", error);
-          try {
-            await editOriginalResponse(env, interaction, {
-              content: `❌ Halloween button error: ${error?.message || "Unknown error"}`,
-              components: []
-            });
-          } catch (editError) {
-            console.error("Could not send Halloween component error:", editError);
-          }
-        }
-      })());
-
-      return new Response("OK", { status: 200 });
-    }
 
     const relevant = interaction.type === 2 || interaction.type === 3 || interaction.type === 5;
 
