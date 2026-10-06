@@ -29436,11 +29436,42 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
    untouched. Opening the book never launches a browser.
 ========================================================= */
 const HALLOWEEN_BOOK_SLOT_LAYOUT = [
-  // These are percentages of the actual book-page image.  The page artwork
-  // is reused for every spread, with two display frames per spread.
-  { left: 0.26, top: 0.22, width: 0.28, height: 0.30 },
-  { left: 0.64, top: 0.22, width: 0.28, height: 0.30 }
+  // Calibrated to the actual decorative frames in IMG_8140.png.
+  // Each slot has an artwork box plus the little name plaque underneath.
+  {
+    left: 0.17, top: 0.28, width: 0.30, height: 0.34,
+    labelLeft: 0.20, labelTop: 0.64, labelWidth: 0.24, labelHeight: 0.075
+  },
+  {
+    left: 0.57, top: 0.28, width: 0.30, height: 0.34,
+    labelLeft: 0.60, labelTop: 0.64, labelWidth: 0.24, labelHeight: 0.075
+  }
 ];
+
+function halloweenBookLabelText(item, owned) {
+  if (!item || !owned) return "COMING SOON";
+  const labels = {
+    hunters_lantern: "HUNTERS LANTERN",
+    last_antidote: "LAST ANTIDOTE",
+    cursed_candy_bucket: "CURSED CANDY",
+    smasher_relic: "SMASHERS RELIC"
+  };
+  return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
+}
+
+function drawHalloweenBookLabel(frame, item, owned, box) {
+  const text = halloweenBookLabelText(item, owned);
+  const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
+  const labelScale = 2;
+  const glyphW = 5 * labelScale, gap = labelScale;
+  const rawWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * labelScale : glyphW + gap), 0);
+  const scale = rawWidth > maxWidth ? 1 : labelScale;
+  const glyphWidth = 5 * scale, glyphGap = scale;
+  const textWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap), 0) - scale;
+  const x = Math.round(frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2));
+  const y = Math.round(frame.height * box.labelTop + Math.max(0, (frame.height * box.labelHeight - 7 * scale) / 2));
+  drawBitmapText(frame, text, x, y, scale, [55, 34, 22], maxWidth);
+}
 
 async function renderHalloweenBookDirect(env, player, spread) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
@@ -29460,13 +29491,20 @@ async function renderHalloweenBookDirect(env, player, spread) {
 
   for (let slot = 0; slot < 2; slot++) {
     const item = collection[firstIndex + slot];
-    if (!item || !owned.has(item.id) || !item.imageKey) continue;
+    const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
+    if (!item) {
+      drawHalloweenBookLabel(scene, null, false, box);
+      continue;
+    }
+    if (!owned.has(item.id) || !item.imageKey) {
+      drawHalloweenBookLabel(scene, item, false, box);
+      continue;
+    }
 
     try {
       const asset = await getPngAsset(env, IMAGES[item.imageKey]);
       if (!asset) continue;
 
-      const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
       const boxWidth = Math.max(1, Math.round(scene.width * box.width));
       const boxHeight = Math.max(1, Math.round(scene.height * box.height));
       const layer = containRGBA(asset, boxWidth, boxHeight);
@@ -29474,6 +29512,7 @@ async function renderHalloweenBookDirect(env, player, spread) {
       const y = Math.round(scene.height * box.top + (boxHeight - layer.height) / 2);
 
       alphaComposite(scene, layer, x, y, 1);
+      drawHalloweenBookLabel(scene, item, true, box);
     } catch (error) {
       // One broken collectible must never make the entire book unusable.
       console.warn(`Halloween collectible render skipped for ${item.id}:`, error?.message || error);
