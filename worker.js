@@ -29415,8 +29415,10 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
    The collectible name is rendered bold inside the plaque below.
 ========================================================= */
 const HALLOWEEN_BOOK_SLOT_LAYOUT = [
-  { left: 0.17, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.19, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 },
-  { left: 0.558, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.58, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 }
+  // Slightly smaller artwork so wide collectibles stay fully inside the ornate frame.
+  // Labels are shifted slightly left and remain centered within their plaques.
+  { left: 0.185, top: 0.305, width: 0.255, height: 0.285, labelLeft: 0.175, labelTop: 0.64, labelWidth: 0.275, labelHeight: 0.08 },
+  { left: 0.575, top: 0.305, width: 0.255, height: 0.285, labelLeft: 0.555, labelTop: 0.64, labelWidth: 0.275, labelHeight: 0.08 }
 ];
 
 function halloweenBookLabelText(item, owned) {
@@ -30228,7 +30230,23 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
   return sendText(env,interaction,`🍬 **TRICK OR TREAT!**\n\n${story}\n\n👻 **Your Spookies:** ${p.halloweenSpookies.toLocaleString()}\n📚 Outcomes discovered: **${p.halloweenTrickTreatOutcomes.length}/3**${unlocked?"\n\n🍬 **THE CURSED CANDY BUCKET UNLOCKED!**":""}`,[row(button("🍬 Trick or Treat Again Tomorrow","halloween:start:trick",3),button("🎃 Halloween Games","halloween:games",1),button("⬅️ Hub","halloween:hub",2))]);
 }
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
-async function halloweenEnd(env,interaction){const state=await getGuildState(env,interaction.guild_id);const g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");if(!g.players?.[user.id] && user.id!==env.OWNER_ID)return sendText(env,interaction,"❌ You're not a player in the active Halloween game.");state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");}
+async function halloweenEnd(env,interaction){
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.halloween?.activeGame;
+  if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");
+
+  // Emergency server-wide reset: ANYONE can use /halloween end.
+  // This prevents an absent player from trapping the whole Halloween event.
+  if(g.channelId&&g.publicMessageId){
+    try{
+      await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});
+    }catch{}
+  }
+
+  state.halloween.activeGame=null;
+  await saveGuildState(env,interaction.guild_id,state);
+  return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
+}
 
 async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
