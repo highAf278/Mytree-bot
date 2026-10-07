@@ -29246,6 +29246,17 @@ const HALLOWEEN_ROOMS = {
   Courtyard: ["Kitchen", "Graveyard", "Tower"],
   Tower: ["Attic", "Study", "Crypt", "Courtyard"]
 };
+
+// Two-player Hide & Seek uses a smaller connected manor so the game stays
+// tense and playable with only one Hidden player and one Lantern Keeper.
+const HALLOWEEN_TWO_PLAYER_ROOMS = {
+  Foyer: ["Dining Hall", "Library", "Graveyard"],
+  "Dining Hall": ["Foyer", "Kitchen", "Basement"],
+  Library: ["Foyer"],
+  Kitchen: ["Dining Hall", "Basement"],
+  Basement: ["Dining Hall", "Kitchen"],
+  Graveyard: ["Foyer"]
+};
 const HALLOWEEN_HIDDEN_ROLES = ["Mimic", "Gravekeeper", "Web Weaver", "Haunted Doll", "Witch", "Shadow", "Mirror Wraith"];
 const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Abandoned Store", "Safehouse", "Gas Station", "Radio Tower", "Garage", "Woods"];
 
@@ -29258,7 +29269,7 @@ function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
-    "The gates are open. Four games are ready for the first Halloween release. 👻",
+    "The gates are open. Five games are ready for the first Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
     `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
@@ -29272,7 +29283,7 @@ function halloweenGameMenuComponents() {
   return [
     row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
     row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
-    row(button("📖 How Halloween Works", "halloween:howto", 2)),
+    row(button("⚰️ Grave Robber", "halloween:start:grave", 1), button("📖 How Halloween Works", "halloween:howto", 2)),
     row(button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
 }
@@ -29387,7 +29398,6 @@ function halloweenBookCollectionConfig() {
       requirement: "Win a game of Grave Robber.",
       imageKey: HALLOWEEN_BOOK_ASSETS.graveMask
     },
-    { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_7", title: "🎃 Halloween Collectible #7", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
@@ -29998,6 +30008,230 @@ async function halloweenLeaderboard(env,interaction) {
 }
 
 function halloweenNewGameBlocked(state){return state.halloween?.activeGame?.status && state.halloween.activeGame.status!=="ended";}
+
+/* =========================================================
+   GRAVE ROBBER — 2-PLAYER HALLOWEEN GAME
+   Pick graves, claim the loot, survive the curses, and finish with
+   the highest score. Every game gets a fresh balanced graveyard.
+========================================================= */
+const HALLOWEEN_GRAVE_COUNT = 20;
+const HALLOWEEN_GRAVE_GOOD = [
+  { emoji:"🪙", name:"Ancient Coins", points:2 },
+  { emoji:"💰", name:"Bag of Gold", points:3 },
+  { emoji:"💍", name:"Ruby Ring", points:4 },
+  { emoji:"👑", name:"Golden Crown", points:6 },
+  { emoji:"💎", name:"Diamond", points:8 },
+  { emoji:"🏆", name:"Legendary Artifact", points:10 }
+];
+const HALLOWEEN_GRAVE_BAD = [
+  { emoji:"🪱", name:"Grave Worms", points:-1 },
+  { emoji:"🐀", name:"Grave Rats", points:-2 },
+  { emoji:"🕷️", name:"Spider Nest", points:-2 },
+  { emoji:"🧟", name:"Zombie Hand", points:-3 },
+  { emoji:"👻", name:"Angry Ghost", points:-3 },
+  { emoji:"💀", name:"Cursed Bones", points:-4 },
+  { emoji:"☠️", name:"Blood Curse", points:-5 },
+  { emoji:"🔥", name:"Devil's Grave", points:-6 }
+];
+const HALLOWEEN_GRAVE_NEUTRAL = [
+  { emoji:"🦴", name:"Old Bones", points:0 },
+  { emoji:"🪦", name:"Empty Grave", points:0 },
+  { emoji:"🕯️", name:"Dead Man's Candle", points:0 }
+];
+
+function halloweenGraveCreate(guildId,user){
+  return {
+    id:`gr-${Date.now().toString(36)}-${randomInt(100,999)}`,
+    type:"grave",
+    status:"lobby",
+    guildId,
+    hostId:user.id,
+    players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife",score:0,graves:[],good:0,bad:0}},
+    turnId:"",
+    graves:[],
+    claimed:{},
+    lastResult:"",
+    publicMessageId:"",
+    channelId:""
+  };
+}
+
+function halloweenGraveGenerate(){
+  // Keep every board balanced: 9–11 good, 6–8 bad, remainder neutral.
+  const goodCount=randomInt(9,11);
+  const badCount=randomInt(6,8);
+  const neutralCount=HALLOWEEN_GRAVE_COUNT-goodCount-badCount;
+  const pool=[];
+  for(let i=0;i<goodCount;i++) pool.push({...HALLOWEEN_GRAVE_GOOD[randomInt(0,HALLOWEEN_GRAVE_GOOD.length-1)],type:"good"});
+  for(let i=0;i<badCount;i++) pool.push({...HALLOWEEN_GRAVE_BAD[randomInt(0,HALLOWEEN_GRAVE_BAD.length-1)],type:"bad"});
+  for(let i=0;i<neutralCount;i++) pool.push({...HALLOWEEN_GRAVE_NEUTRAL[randomInt(0,HALLOWEEN_GRAVE_NEUTRAL.length-1)],type:"neutral"});
+  for(let i=pool.length-1;i>0;i--){const j=randomInt(0,i);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  return pool;
+}
+
+function halloweenGraveLobbyText(g){
+  return [
+    "⚰️ **GRAVE ROBBER**",
+    "",
+    "Two grave robbers enter the cemetery. Only one leaves with the most treasure. 👀",
+    "",
+    `👥 Players: **${Object.keys(g.players||{}).length}/2**`,
+    "",
+    "Take turns choosing a grave.",
+    "💎 Good graves give points. ☠️ Bad graves take points.",
+    "🪦 Every grave can only be claimed once.",
+    "",
+    "The game begins when both players are ready."
+  ].join("\n");
+}
+function halloweenGraveLobbyRows(g){
+  const full=Object.keys(g.players||{}).length>=2;
+  return [
+    row(button("➕ JOIN",`halloween:grave:join:${g.id}`,1,full),button("🚪 LEAVE",`halloween:grave:leave:${g.id}`,2),button("▶️ START",`halloween:grave:start:${g.id}`,3,!full||g.hostId!==Object.keys(g.players||{})[0])),
+    row(button("📖 HOW TO PLAY","halloween:grave:howto",2),button("⬅️ Games","halloween:games",2))
+  ];
+}
+
+function halloweenGraveBoardText(g){
+  const ids=Object.keys(g.players||{});
+  const p1=g.players?.[ids[0]], p2=g.players?.[ids[1]];
+  const turn=g.players?.[g.turnId];
+  return [
+    "⚰️ **GRAVE ROBBER**",
+    "",
+    `👤 <@${ids[0]}> — **${Number(p1?.score||0)} points**`,
+    `👤 <@${ids[1]}> — **${Number(p2?.score||0)} points**`,
+    "",
+    g.lastResult ? `${g.lastResult}\n` : "",
+    `🎯 **Turn:** <@${g.turnId}>`,
+    "",
+    "Choose an untouched grave. Once claimed, it belongs to you forever.",
+    `🪦 **${Object.keys(g.claimed||{}).length}/${HALLOWEEN_GRAVE_COUNT} graves looted**`
+  ].join("\n");
+}
+function halloweenGraveBoardRows(g){
+  const rows=[];
+  const graves=g.graves||[];
+  for(let i=0;i<graves.length;i+=5){
+    rows.push(row(...graves.slice(i,i+5).map((_,j)=>{
+      const index=i+j;
+      const claimed=g.claimed?.[index];
+      return button(claimed?"🪦":"⚰️",`halloween:grave:pick:${g.id}:${index}`,claimed?2:1,!!claimed);
+    })));
+  }
+  return rows;
+}
+
+async function halloweenGravePublishPublic(env,g){
+  if(!g?.channelId)return null;
+  if(g.publicMessageId){try{await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});}catch{}}
+  const sent=await sendChannelMessage(env,g.channelId,g.status==="ended"?g.endText:halloweenGraveBoardText(g),g.status==="ended"?[]:halloweenGraveBoardRows(g));
+  g.publicMessageId=sent?.id||"";
+  return sent;
+}
+
+function halloweenGraveHowTo(){
+  return [
+    "⚰️ **GRAVE ROBBER — HOW TO PLAY**",
+    "",
+    "👥 Exactly **2 players** compete.",
+    `🪦 There are **${HALLOWEEN_GRAVE_COUNT} graves** every game.`,
+    "🎲 The number and location of good, bad, and neutral graves are randomized every game — but the graveyard stays balanced.",
+    "💎 Good graves give positive points.",
+    "☠️ Bad graves give negative points.",
+    "🦴 Neutral graves give 0 points.",
+    "",
+    "🔒 Once a grave is picked, nobody can pick it again.",
+    "🔄 Players alternate turns until every grave has been looted.",
+    "🏆 The player with the most points wins.",
+    "👻 The winner earns Spookies based on their final score and unlocks the **Grave Mask** collectible."
+  ].join("\n");
+}
+
+function halloweenGraveReward(score){
+  if(score>=20)return 1000;
+  if(score>=15)return 750;
+  if(score>=10)return 500;
+  if(score>=5)return 250;
+  return 100;
+}
+
+async function halloweenGraveStart(env,interaction,g){
+  const ids=Object.keys(g.players||{});
+  if(ids.length!==2)return sendText(env,interaction,"❌ Grave Robber needs exactly 2 players.");
+  g.status="playing";g.turnId=ids[randomInt(0,1)];g.graves=halloweenGraveGenerate();g.claimed={};g.lastResult="";g.channelId=interaction.channel_id;
+  const state=await getGuildState(env,interaction.guild_id);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);
+  await halloweenGravePublishPublic(env,g);
+  return sendText(env,interaction,"⚰️ **GRAVE ROBBER STARTED!** The graveyard is ready. Choose your grave when it's your turn. 😈");
+}
+
+async function halloweenGraveComponent(env,interaction,parts){
+  const action=parts[2];
+  const state=await getGuildState(env,interaction.guild_id);
+  const g=state.halloween?.activeGame;
+  const user=getUserFromInteraction(interaction);
+  if(action==="howto")return sendText(env,interaction,halloweenGraveHowTo(),[row(button("⬅️ Back","halloween:games",2))]);
+  if(action==="join"){
+    if(!g||g.type!=="grave"||g.status!=="lobby")return sendText(env,interaction,"❌ No Grave Robber lobby is waiting.");
+    if(g.players?.[user.id])return sendText(env,interaction,"❌ You're already in this Grave Robber lobby.");
+    if(Object.keys(g.players||{}).length>=2)return sendText(env,interaction,"❌ Grave Robber already has 2 players.");
+    g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife",score:0,graves:[],good:0,bad:0};
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));
+  }
+  if(action==="leave"){
+    if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in this lobby.");
+    delete g.players[user.id];
+    if(!Object.keys(g.players).length)state.halloween.activeGame=null;
+    else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,state.halloween.activeGame?halloweenGraveLobbyText(g):"⚰️ Grave Robber lobby closed.",state.halloween.activeGame?halloweenGraveLobbyRows(g):[]);
+  }
+  if(action==="start"){
+    if(!g||g.type!=="grave"||g.status!=="lobby")return sendText(env,interaction,"❌ That Grave Robber lobby is no longer active.");
+    if(g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start Grave Robber.");
+    return halloweenGraveStart(env,interaction,g);
+  }
+  if(!g||g.type!=="grave"||g.status!=="playing")return sendText(env,interaction,"❌ That Grave Robber game is no longer active.");
+  if(!g.players?.[user.id])return sendText(env,interaction,"❌ You are not in this Grave Robber game.");
+  if(action==="pick"){
+    const index=Number(parts[4]);
+    if(g.turnId!==user.id)return sendText(env,interaction,"⏳ It's not your turn yet.");
+    if(!Number.isInteger(index)||index<0||index>=HALLOWEEN_GRAVE_COUNT)return sendText(env,interaction,"❌ Invalid grave.");
+    if(g.claimed?.[index])return sendText(env,interaction,"❌ That grave has already been looted.");
+    const loot=g.graves[index];
+    if(!loot)return sendText(env,interaction,"❌ That grave is empty.");
+    const p=g.players[user.id];
+    g.claimed[index]=user.id;p.graves.push(index);p.score+=Number(loot.points||0);
+    if(loot.type==="good")p.good++;if(loot.type==="bad")p.bad++;
+    const delta=Number(loot.points||0);
+    const pointText=delta>0?`+${delta}`:String(delta);
+    const reaction=loot.type==="good"?"💎":"☠️";
+    g.lastResult=`${reaction} <@${user.id}> opened **Grave ${index+1}** and found **${loot.emoji} ${loot.name}** — **${pointText} points**!`;
+    if(Object.keys(g.claimed).length>=HALLOWEEN_GRAVE_COUNT){
+      const ids=Object.keys(g.players);const a=g.players[ids[0]],b=g.players[ids[1]];
+      let rewardA=0,rewardB=0;
+      if(a.score>b.score)rewardA=halloweenGraveReward(a.score);
+      else if(b.score>a.score)rewardB=halloweenGraveReward(b.score);
+      else {rewardA=500;rewardB=500;}
+      if(rewardA){await addHalloweenSpookies(env,ids[0],rewardA);await halloweenUnlock(env,ids[0],"grave_mask");}
+      if(rewardB){await addHalloweenSpookies(env,ids[1],rewardB);await halloweenUnlock(env,ids[1],"grave_mask");}
+      g.status="ended";
+      const winner=a.score>b.score?ids[0]:b.score>a.score?ids[1]:null;
+      if(winner){const wp=g.players[winner];const reward=winner===ids[0]?rewardA:rewardB;g.endText=["⚰️ **GRAVE ROBBER — GRAVEYARD LOOTED!**","",`🏆 **WINNER: <@${winner}>**`,`💎 Final Score: **${wp.score} points**`,`👻 Spookies Earned: **${reward.toLocaleString()}**`,"","🎭 **GRAVE MASK UNLOCKED!**","","All 20 graves have been claimed. The graveyard is empty... for now. 😈"].join("\n");}
+      else g.endText=["⚰️ **GRAVE ROBBER — IT'S A TIE!**","",`💎 <@${ids[0]}> — **${a.score} points**`,`💎 <@${ids[1]}> — **${b.score} points**`,"","👻 Both players receive **500 Spookies**!","🎭 **GRAVE MASK UNLOCKED FOR BOTH PLAYERS!**","","All 20 graves have been claimed."].join("\n");
+      await saveGuildState(env,interaction.guild_id,state);await halloweenGravePublishPublic(env,g);
+      // Leave the finished game cleared so another Halloween game can start immediately.
+      state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);
+      return sendText(env,interaction,"⚰️ **Grave Robber is complete!** Check the public results board. 🎭");
+    }
+    const ids=Object.keys(g.players);g.turnId=ids.find(id=>id!==user.id)||ids[0];
+    await saveGuildState(env,interaction.guild_id,state);await halloweenGravePublishPublic(env,g);
+    return sendText(env,interaction,`⚰️ You looted **Grave ${index+1}**. Your turn is complete!`);
+  }
+  return sendText(env,interaction,"❌ Unknown Grave Robber action.");
+}
+
 function halloweenHideLobbyText(g){return `👻 **HAUNTED HIDE & SEEK**\n\n👥 Players: **${Object.keys(g.players||{}).length}/8**\n\nOne player will become the 👹 Lantern Keeper. Everyone else hides.\n\nMinimum **2** players. The host can start when ready.`;}
 function halloweenHideLobbyRows(g){const ids=Object.keys(g.players||{});const host=g.hostId;return [row(button("➕ JOIN",`halloween:hide:join:${g.id}`,1),button("🚪 LEAVE",`halloween:hide:leave:${g.id}`,2),button("▶️ START",`halloween:hide:start:${g.id}`,3,Object.keys(g.players||{}).length<2||host!==g.hostId)),row(button("📖 HOW TO PLAY","halloween:hide:howto",2),button("⬅️ Games","halloween:games",2))];}
 
@@ -30258,7 +30492,7 @@ async function halloweenEnd(env,interaction){
   return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
 }
 
-async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:grave"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenGraveCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));}if(id.startsWith("halloween:grave:"))return halloweenGraveComponent(env,interaction,parts);if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
