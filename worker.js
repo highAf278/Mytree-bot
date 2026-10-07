@@ -382,6 +382,7 @@ const IMAGES = {
   halloweenLastAntidote: "IMG_8143.png",
   halloweenCursedCandyBucket: "IMG_8145.png",
   halloweenSmasherRelic: "IMG_8160.png",
+  halloweenGraveMask: "IMG_8179.png",
 };
 
 const SHOP_ITEMS = {
@@ -29228,7 +29229,8 @@ const HALLOWEEN_BOOK_ASSETS = {
   lantern: "halloweenHuntersLantern",
   antidote: "halloweenLastAntidote",
   candy: "halloweenCursedCandyBucket",
-  smasherRelic: "halloweenSmasherRelic"
+  smasherRelic: "halloweenSmasherRelic",
+  graveMask: "halloweenGraveMask"
 };
 
 const HALLOWEEN_ROOMS = {
@@ -29300,7 +29302,9 @@ function halloweenUnlockText(player) {
     "",
     line("🔨", "The Smasher's Relic", "Reach **Wave 6: JACKPOT** and smash a **Golden Pumpkin** without ever hitting a Skull during that run.", "smasher_relic"),
     "",
-    "🔒 **Collectibles 5–10** — COMING SOON",
+    line("🎭", "Grave Mask", "Win a game of **Grave Robber**.", "grave_mask"),
+    "",
+    "🔒 **Collectibles 6–10** — COMING SOON",
     "Their games and unlock requirements haven't been revealed yet. 👀"
   ].join("\n");
 }
@@ -29345,7 +29349,7 @@ function halloweenBookComponents(spread) {
 function halloweenBookCollectionConfig() {
   /*
     The book has 10 slots total: two collectible frames per spread.
-    The first four already have artwork in R2.  Slots 5-10 are deliberately
+    The first five already have artwork in R2.  Slots 6-10 are deliberately
     configured without artwork until those collectibles are released.
 
     When a future collectible is added, put its R2 image name in IMAGES and
@@ -29377,7 +29381,13 @@ function halloweenBookCollectionConfig() {
       requirement: "Reach Wave 6: JACKPOT and smash a Golden Pumpkin without ever hitting a Skull during that run.",
       imageKey: HALLOWEEN_BOOK_ASSETS.smasherRelic
     },
-    { id: "collectible_5", title: "🎃 Halloween Collectible #5", requirement: "Coming soon...", imageKey: null },
+    {
+      id: "grave_mask",
+      title: "🎭 Grave Mask",
+      requirement: "Win a game of Grave Robber.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.graveMask
+    },
+    { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_6", title: "🎃 Halloween Collectible #6", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_7", title: "🎃 Halloween Collectible #7", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
@@ -29423,7 +29433,7 @@ const HALLOWEEN_BOOK_SLOT_LAYOUT = [
 
 function halloweenBookLabelText(item, owned) {
   if (!item) return "COMING SOON";
-  const labels = { hunters_lantern: "HUNTER'S LANTERN", last_antidote: "LAST ANTIDOTE", cursed_candy_bucket: "CURSED CANDY BUCKET", smasher_relic: "SMASHER'S RELIC" };
+  const labels = { hunters_lantern: "HUNTER'S LANTERN", last_antidote: "LAST ANTIDOTE", cursed_candy_bucket: "CURSED CANDY BUCKET", smasher_relic: "SMASHER'S RELIC", grave_mask: "GRAVE MASK" };
   return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
 }
 
