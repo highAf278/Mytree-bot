@@ -29396,23 +29396,14 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
   const fields = [0, 1].map(offset => {
     const index = firstIndex + offset;
     const item = collection[index];
-    if (!item) return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Coming soon...*", inline: true };
-    if (owned.has(item.id)) {
-      return { name: `✅ ${item.title}`, value: item.requirement, inline: true };
-    }
+    if (!item) return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*COMING SOON*", inline: true };
+    if (owned.has(item.id)) return { name: `✅ ${item.title}`, value: item.requirement, inline: true };
     return { name: `🔒 COLLECTIBLE #${index + 1}`, value: "*Undiscovered — check HOW TO UNLOCK to see the clue.*", inline: true };
   });
 
   return {
     content: `📖 **HALLOWEEN 2026 — SPREAD ${s + 1}/5**\n\n**${owned.size}/10 collectibles discovered.**`,
-    embeds: [{
-      title: `🎃 HALLOWEEN ARCHIVE • SPREAD ${s + 1}/5`,
-      description: "*Your unlocked relics are physically placed inside their book frames.*",
-      color: 0x8b3a12,
-      fields,
-      image: { url: imageUrlOverride || imageUrl(IMAGES.halloweenBookPages) },
-      footer: { text: "WereWives Halloween 2026 • Permanent Collection" }
-    }],
+    embeds: [{ title: `🎃 HALLOWEEN ARCHIVE • SPREAD ${s + 1}/5`, description: "*Your unlocked relics are physically placed inside their book frames.*", color: 0x8b3a12, fields, image: { url: imageUrlOverride || imageUrl(IMAGES.halloweenBookPages) }, footer: { text: "WereWives Halloween 2026 • Permanent Collection" } }],
     components: halloweenBookComponents(s),
     flags: 64
   };
@@ -29420,27 +29411,37 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
 
 /* =========================================================
    HALLOWEEN BOOK — DIRECT PNG COMPOSITE
-
-   This intentionally does NOT use Puppeteer/Browser Rendering.
-   The Worker already has a pure-JS PNG decoder/compositor used elsewhere
-   in WereWives.  We use that same pipeline here:
-
-   1. Fetch the book-page PNG from the public R2 asset URL.
-   2. Fetch only the collectible images the player actually owns.
-   3. Resize each owned relic to fit its matching frame.
-   4. Composite the relic directly onto the page PNG.
-   5. Send the finished PNG to Discord as the book image.
-
-   This means Discord receives ONE image: the actual book page with the
-   unlocked collectible artwork physically inside it. Locked slots remain
-   untouched. Opening the book never launches a browser.
+   Artwork is centered inside each ornate frame.
+   The collectible name is rendered bold inside the plaque below.
 ========================================================= */
 const HALLOWEEN_BOOK_SLOT_LAYOUT = [
-  // These are percentages of the actual book-page image.  The page artwork
-  // is reused for every spread, with two display frames per spread.
-  { left: 0.26, top: 0.22, width: 0.28, height: 0.30 },
-  { left: 0.64, top: 0.22, width: 0.28, height: 0.30 }
+  { left: 0.17, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.19, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 },
+  { left: 0.558, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.58, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 }
 ];
+
+function halloweenBookLabelText(item, owned) {
+  if (!item) return "COMING SOON";
+  const labels = { hunters_lantern: "HUNTER'S LANTERN", last_antidote: "LAST ANTIDOTE", cursed_candy_bucket: "CURSED CANDY BUCKET", smasher_relic: "SMASHER'S RELIC" };
+  return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
+}
+
+function drawHalloweenBookLabel(frame, item, owned, box) {
+  const text = halloweenBookLabelText(item, owned);
+  const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
+  const preferredScale = 3;
+  const fitsAtScale = scale => {
+    const glyphW = 5 * scale, gap = scale;
+    const rawWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphW + gap), 0);
+    return rawWidth <= maxWidth;
+  };
+  const scale = fitsAtScale(preferredScale) ? preferredScale : 2;
+  const glyphWidth = 5 * scale, glyphGap = scale;
+  const textWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap), 0) - scale;
+  const x = Math.round(frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2));
+  const y = Math.round(frame.height * box.labelTop + Math.max(0, (frame.height * box.labelHeight - 7 * scale) / 2));
+  drawBitmapText(frame, text, x, y, scale, [55, 34, 22], maxWidth);
+  drawBitmapText(frame, text, x + 1, y, scale, [55, 34, 22], maxWidth);
+}
 
 async function renderHalloweenBookDirect(env, player, spread) {
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
@@ -29448,67 +29449,46 @@ async function renderHalloweenBookDirect(env, player, spread) {
   const owned = new Set(Array.isArray(player?.halloweenCollection) ? player.halloweenCollection : []);
   const base = await getPngAsset(env, IMAGES.halloweenBookPages);
   if (!base) throw new Error("Halloween book page asset is missing.");
-
-  const scene = {
-    width: base.width,
-    height: base.height,
-    data: new Uint8Array(base.data)
-  };
+  const scene = { width: base.width, height: base.height, data: new Uint8Array(base.data) };
   scene.data.set(base.data);
-
   const firstIndex = s * 2;
 
   for (let slot = 0; slot < 2; slot++) {
     const item = collection[firstIndex + slot];
-    if (!item || !owned.has(item.id) || !item.imageKey) continue;
-
+    const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
+    if (!item || !owned.has(item.id) || !item.imageKey) {
+      drawHalloweenBookLabel(scene, item, false, box);
+      continue;
+    }
     try {
       const asset = await getPngAsset(env, IMAGES[item.imageKey]);
-      if (!asset) continue;
-
-      const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
+      if (!asset) { drawHalloweenBookLabel(scene, item, true, box); continue; }
       const boxWidth = Math.max(1, Math.round(scene.width * box.width));
       const boxHeight = Math.max(1, Math.round(scene.height * box.height));
       const layer = containRGBA(asset, boxWidth, boxHeight);
       const x = Math.round(scene.width * box.left + (boxWidth - layer.width) / 2);
       const y = Math.round(scene.height * box.top + (boxHeight - layer.height) / 2);
-
       alphaComposite(scene, layer, x, y, 1);
+      drawHalloweenBookLabel(scene, item, true, box);
     } catch (error) {
-      // One broken collectible must never make the entire book unusable.
       console.warn(`Halloween collectible render skipped for ${item.id}:`, error?.message || error);
     }
   }
-
   return rgbaToRgbPng(scene);
 }
 
 async function sendHalloweenBook(env, interaction, spread=0) {
   const user = getUserFromInteraction(interaction);
   if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
-
   const player = await getPlayer(env, user.id);
   const s = Math.max(0, Math.min(4, Number(spread) || 0));
-
   try {
     const rendered = await renderHalloweenBookDirect(env, player, s);
     const payload = halloweenBookData(player, s, "attachment://halloween-book.png");
-
     const form = new FormData();
-    form.append("payload_json", JSON.stringify({
-      content: payload.content,
-      embeds: payload.embeds,
-      components: payload.components,
-      attachments: [{ id: 0, filename: "halloween-book.png" }],
-      flags: 64
-    }));
+    form.append("payload_json", JSON.stringify({ content: payload.content, embeds: payload.embeds, components: payload.components, attachments: [{ id: 0, filename: "halloween-book.png" }], flags: 64 }));
     form.append("files[0]", new Blob([rendered], { type: "image/png" }), "halloween-book.png");
-
-    const response = await fetch(
-      `https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`,
-      { method: "PATCH", body: form }
-    );
-
+    const response = await fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`, { method: "PATCH", body: form });
     if (!response.ok) {
       console.error("Halloween book image update failed:", response.status, await response.text());
       return editOriginalResponse(env, interaction, halloweenBookData(player, s));
@@ -29516,8 +29496,6 @@ async function sendHalloweenBook(env, interaction, spread=0) {
     return response;
   } catch (error) {
     console.error("Halloween direct book render failed:", error);
-    // Never strand the user on a loading response.  If the direct image
-    // pipeline fails, show the normal page immediately as a safe fallback.
     return editOriginalResponse(env, interaction, halloweenBookData(player, s));
   }
 }
