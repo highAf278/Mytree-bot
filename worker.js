@@ -29289,8 +29289,7 @@ function halloweenGameMenuComponents() {
     row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
     row(button("⚰️ Grave Robber", "halloween:start:grave", 1), button("🗺️ Haunted Maze", "halloween:start:maze", 1)),
     row(button("🧠 Haunted Trivia", "halloween:start:trivia", 1)),
-    row(button("📖 How Halloween Works", "halloween:howto", 2)),
-    row(button("⬅️ Halloween Hub", "halloween:hub", 2))
+    row(button("📖 How Halloween Works", "halloween:howto", 2), button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
 }
 
