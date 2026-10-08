@@ -29256,10 +29256,10 @@ const HALLOWEEN_ROOMS = {
 const HALLOWEEN_TWO_PLAYER_ROOMS = {
   Foyer: ["Dining Hall", "Library", "Graveyard"],
   "Dining Hall": ["Foyer", "Kitchen", "Basement"],
-  Library: ["Foyer"],
-  Kitchen: ["Dining Hall", "Basement"],
-  Basement: ["Dining Hall", "Kitchen"],
-  Graveyard: ["Foyer"]
+  Library: ["Foyer", "Kitchen"],
+  Kitchen: ["Dining Hall", "Library", "Basement"],
+  Basement: ["Dining Hall", "Kitchen", "Graveyard"],
+  Graveyard: ["Foyer", "Basement"]
 };
 const HALLOWEEN_HIDDEN_ROLES = ["Mimic", "Gravekeeper", "Web Weaver", "Haunted Doll", "Witch", "Shadow", "Mirror Wraith"];
 const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Abandoned Store", "Safehouse", "Gas Station", "Radio Tower", "Garage", "Woods"];
@@ -30863,7 +30863,7 @@ async function halloweenHidePrivateMenu(env,interaction){
   if(g.submitted?.[user.id])return sendText(env,interaction,"✅ You already took your Hidden turn. Waiting for the other Hidden players.");
   const current=g.rooms[user.id]||"Foyer";const movement=[button("🛑 STAY",`halloween:hide:stay:${current}`,2)];
   for(const room of ((g.roomMap||HALLOWEEN_ROOMS)[current]||[]))movement.push(button(`➡️ ${room}`,`halloween:hide:move:${room}`,1));
-  const role=g.hiddenRoles[user.id];const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?"🕷️ WEB TRAP":role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
+  const role=g.hiddenRoles[user.id];const abilityLabel=role==="Mimic"?"🎭 DISGUISE":role==="Gravekeeper"?"🪦 BURY TRAIL":role==="Web Weaver"?"🕸️ WEB SENSE":role==="Haunted Doll"?"🧸 PLAY DEAD":role==="Witch"?"🧙 HEX":role==="Shadow"?"🌑 VANISH":"🪞 MIRROR IMAGE";
   return sendText(env,interaction,`👻 **HIDDEN — PRIVATE TURN**\n\nRound **${g.round}/10**\nRole: **${role}**\nCurrent room: **${current}**\n\nChoose your private move.`,[row(...movement.slice(0,4)),...(movement.length>4?[row(...movement.slice(4))]:[]),row(button(abilityLabel,"halloween:hide:ability",3),button("📖 How to Play","halloween:hide:howto",2))]);
 }
 
@@ -30910,7 +30910,7 @@ async function halloweenHideComponent(env,interaction,parts){
       "🏠 After every Hidden player acts, the Hunter gets 2 actions.",
       "🎯 Capture requires a player AND a room guess.",
       "🕵️ Clues identify players by username when a clue reveals who was found.",
-      "🪤 Traps only tell the Hunter that **someone** was there — never who.",
+      "🪤 Only the Hunter can place traps. A triggered trap tells the Hunter that **someone** was there — never who.",
       "🚫 2-player games have NO traps.",
       "👻 Survive all 10 rounds to win."
     ].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
@@ -30999,10 +30999,15 @@ async function halloweenHideComponent(env,interaction,parts){
     }else if(role==="Gravekeeper"){
       g.evidence.push({type:"gravekeeper",room:g.rooms[user.id],player:user.id,username:g.players[user.id]?.name||"Unknown"});
     }else if(role==="Web Weaver"){
-      g.roleTraps=Array.isArray(g.roleTraps)?g.roleTraps:[];
-      if(Object.keys(g.players||{}).length>2){
-        g.roleTraps.push(g.rooms[user.id]);
-      }
+      // Web Weaver is a Hidden role, but Hidden players NEVER place traps.
+      // Traps belong exclusively to the Hunter. Web Sense instead gives
+      // the Hidden player a private clue about the Hunter's trap state.
+      const trapRooms=Array.isArray(g.traps)?g.traps:[];
+      g.evidence.push({
+        type:"websense",
+        room:g.rooms[user.id],
+        trappedHere:trapRooms.includes(g.rooms[user.id])
+      });
     }else if(role==="Haunted Doll"){
       g.ghostDecoys=Array.isArray(g.ghostDecoys)?g.ghostDecoys:[];
       g.ghostDecoys.push(g.rooms[user.id]);
@@ -31020,7 +31025,10 @@ async function halloweenHideComponent(env,interaction,parts){
     g.submitted[user.id]=true;
     await saveGuildState(env,interaction.guild_id,state);
     await halloweenHideAdvance(env,interaction,g);
-    return sendText(env,interaction,`✨ **${role} ability used.**\n\nYour special ability took effect. Your Hidden turn is complete.`);
+    const abilityResult=role==="Web Weaver"
+      ? `🕸️ **WEB SENSE**\n\n${g.traps?.includes(g.rooms[user.id])?"You sense a Hunter trap in this room.":"You do not sense a Hunter trap in this room."}`
+      : `✨ **${role} ability used.**\n\nYour special ability took effect.`;
+    return sendText(env,interaction,`${abilityResult}\n\nYour Hidden turn is complete.`);
   }
 
   // ---------------- HUNTER TURN ----------------
