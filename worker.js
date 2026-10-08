@@ -29462,7 +29462,15 @@ const HALLOWEEN_BOOK_SLOT_LAYOUT = [
 
 function halloweenBookLabelText(item, owned) {
   if (!item || !owned || !owned.has(item.id)) return "COMING SOON";
-  const labels = { hunters_lantern: "HUNTER'S LANTERN", last_antidote: "LAST ANTIDOTE", cursed_candy_bucket: "CURSED CANDY BUCKET", smasher_relic: "SMASHER'S RELIC", grave_mask: "GRAVE MASK", phantom_compass: "PHANTOM COMPASS" };
+  const labels = {
+    hunters_lantern: "HUNTER'S LANTERN",
+    last_antidote: "LAST ANTIDOTE",
+    cursed_candy_bucket: "CURSED CANDY BUCKET",
+    smasher_relic: "SMASHER'S RELIC",
+    grave_mask: "GRAVE MASK",
+    phantom_compass: "PHANTOM COMPASS",
+    zombie_brain: "ZOMBIE BRAIN"
+  };
   return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
 }
 
@@ -29470,23 +29478,24 @@ function drawHalloweenBookLabel(frame, item, owned, box) {
   const text = halloweenBookLabelText(item, owned);
   if (text === "COMING SOON") return;
   const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
-  // Compact, bold bitmap lettering so every unlocked name stays inside the plaque.
+  const labelHeight = Math.max(12, Math.round(frame.height * box.labelHeight));
   const preferredScale = 2;
-  const fitsAtScale = scale => {
-    const glyphW = 5 * scale, gap = scale;
-    const rawWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphW + gap), 0) - gap;
-    return rawWidth <= maxWidth;
-  };
-  const scale = fitsAtScale(preferredScale) ? preferredScale : 1;
-  const glyphWidth = 5 * scale, glyphGap = scale;
-  const textWidth = [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : glyphWidth + glyphGap), 0) - scale;
-  const labelHeight = Math.round(frame.height * box.labelHeight);
+  const widthAtScale = scale => [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : 6 * scale), 0) - scale;
+  const scale = widthAtScale(preferredScale) <= maxWidth ? preferredScale : 1;
+  const textWidth = widthAtScale(scale);
   const x = Math.round(frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2));
   const y = Math.round(frame.height * box.labelTop + Math.max(0, (labelHeight - 7 * scale) / 2));
-  // Double-pass gives the collectible title a bold printed look.
-  drawBitmapText(frame, text, x, y, scale, [55, 34, 22], maxWidth);
-  drawBitmapText(frame, text, x + 1, y, scale, [55, 34, 22], maxWidth);
-  drawBitmapText(frame, text, x, y + 1, scale, [55, 34, 22], maxWidth);
+  // Give the printed title a strong, high-contrast plaque treatment so the
+  // names remain readable after Discord resizes/compresses the book image.
+  const padX = Math.max(4, scale * 2);
+  const padY = Math.max(3, scale);
+  const plaqueX = Math.max(0, x - padX);
+  const plaqueY = Math.max(0, y - padY);
+  const plaqueW = Math.min(frame.width - plaqueX, textWidth + padX * 2);
+  const plaqueH = Math.min(frame.height - plaqueY, 7 * scale + padY * 2);
+  profileBlendFill(frame, plaqueX, plaqueY, plaqueW, plaqueH, 24, 17, 24, 215);
+  drawBitmapText(frame, text, x + 1, y + 1, scale, [255, 242, 210], maxWidth);
+  drawBitmapText(frame, text, x, y, scale, [255, 255, 255], maxWidth);
 }
 
 async function renderHalloweenBookDirect(env, player, spread) {
@@ -30341,12 +30350,43 @@ async function halloweenTriviaFinish(env,interaction,state,g){
   const totalReward=Math.max(0,g.score+bonus);
   if(totalReward) await addHalloweenSpookies(env,g.playerId,totalReward);
   const before=await getPlayer(env,g.playerId);
-  const newlyUnlocked=g.correct>=10&&!before.halloweenCollection?.includes("zombie_brain");
+  const alreadyHadBrain=Array.isArray(before.halloweenCollection)&&before.halloweenCollection.includes("zombie_brain");
+  const newlyUnlocked=g.correct>=10&&!alreadyHadBrain;
   if(newlyUnlocked) await halloweenUnlock(env,g.playerId,"zombie_brain");
   await halloweenMarkPlayed(env,g.playerId,1);
   const rank=g.correct===15?"☠️ MASTER OF THE MACABRE":g.correct>=13?"👁️ OCCULT SCHOLAR":g.correct>=10?"👻 GHOST WHISPERER":g.correct>=7?"🎃 HALLOWEEN SURVIVOR":g.correct>=4?"🕷️ SPOOKY NOVICE":"💀 HAUNTED";
-  g.endText=["🧠🎃 **HAUNTED TRIVIA COMPLETE!**","",`🧠 Correct: **${g.correct} / 15**`,`❌ Wrong: **${g.wrong}`,`🔥 Best Streak: **${g.bestStreak}**`,`💰 Challenge Score: **${g.score.toLocaleString()} Spookies**`,`🎁 Completion Bonus: **${bonus.toLocaleString()} Spookies**`,`👻 Final Reward: **${totalReward.toLocaleString()} Spookies**`,``, `🏆 **RANK: ${rank}**`,``, newlyUnlocked?"🧠 **ZOMBIE BRAIN UNLOCKED!**\n\nYou answered at least 10 challenges correctly in one run. The brain has been added to your permanent Halloween collection!":before.halloweenCollection?.includes("zombie_brain")?"🧠 **Zombie Brain already collected!**\n\nYou met the unlock requirement again, but this collectible can only be earned once.":"🔒 **Zombie Brain remains undiscovered.**\n\nAnswer at least **10 challenges correctly** in a future run to unlock it."].join("\n");
-  await saveGuildState(env,interaction.guild_id,state); await halloweenTriviaPublishPublic(env,g); state.halloween.activeGame=null; await saveGuildState(env,interaction.guild_id,state);
+  g.endText=[
+    "🧠🎃 **HAUNTED TRIVIA — FINAL RESULTS**",
+    "",
+    `🧠 Correct: **${g.correct} / 15**`,
+    `❌ Wrong: **${g.wrong}**`,
+    `🔥 Best Streak: **${g.bestStreak}**`,
+    `💰 Challenge Score: **${g.score.toLocaleString()} Spookies**`,
+    `🎁 Completion Bonus: **${bonus.toLocaleString()} Spookies**`,
+    `👻 **FINAL REWARD: ${totalReward.toLocaleString()} Spookies**`,
+    "",
+    `🏆 **RANK: ${rank}**`,
+    "",
+    newlyUnlocked
+      ? "🧠🎉 **ZOMBIE BRAIN UNLOCKED!**\n\nYou answered at least **10 challenges correctly in one run**. The 🧠 Zombie Brain has been added to your permanent Halloween collection!"
+      : alreadyHadBrain
+        ? "🧠 **ZOMBIE BRAIN ALREADY COLLECTED!**\n\nYou already own this permanent collectible."
+        : "🔒 **ZOMBIE BRAIN REMAINS LOCKED**\n\nAnswer at least **10 challenges correctly in one run** to unlock it."
+  ].join("\n");
+
+  // Replace the old challenge board with the actual final-results board.
+  // Do NOT publish g through halloweenTriviaRows(), because that would expose
+  // the last question's buttons after the run has ended.
+  if(g.channelId){
+    if(g.publicMessageId){try{await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});}catch{}}
+    const finalRows=[
+      row(button("🎮 HALLOWEEN GAMES","halloween:games",2),button("⬅️ HALLOWEEN HUB","halloween:hub",2))
+    ];
+    const sent=await sendChannelMessage(env,g.channelId,g.endText,finalRows);
+    g.publicMessageId=sent?.id||"";
+  }
+  state.halloween.activeGame=null;
+  await saveGuildState(env,interaction.guild_id,state);
 }
 async function halloweenTriviaComponent(env,interaction,parts){
   const state=await getGuildState(env,interaction.guild_id),g=state.halloween?.activeGame,user=getUserFromInteraction(interaction);
@@ -30371,7 +30411,7 @@ async function halloweenTriviaComponent(env,interaction,parts){
   }
   if(action==="next"){
     if(!g.awaitingNext)return sendText(env,interaction,"➡️ Answer the current challenge first.");
-    if(g.round>=14){await halloweenTriviaFinish(env,interaction,state,g);return sendText(env,interaction,"🏆 **Haunted Trivia complete!** Check the final results board.");}
+    if(g.round>=14){await halloweenTriviaFinish(env,interaction,state,g);return sendText(env,interaction,"🏆 **HAUNTED TRIVIA COMPLETE!** Your final results have been posted in the channel. 🧠🎃");}
     g.round++;g.awaitingNext=false;g.lastResult="";await saveGuildState(env,interaction.guild_id,state);await halloweenTriviaPublishPublic(env,g);return sendText(env,interaction,"🎃 **Next challenge!**");
   }
   return sendText(env,interaction,"❌ Unknown Haunted Trivia action.");
