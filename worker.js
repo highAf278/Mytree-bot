@@ -30064,8 +30064,36 @@ function halloweenMazeNextStep(g,from,to){
 function halloweenMazeBoardText(g){const out=["🗺️ **HAUNTED MAZE**","",`❤️ **Hearts:** ${g.hearts}   🕯️ **Candles:** ${g.candles}   🧪 **Repellent:** ${g.repellents}`,`🗝️ **${g.collected.length}/3 relics found**   👣 **Moves:** ${g.moves}`,""];for(let r=0;r<HALLOWEEN_MAZE_SIZE;r++){let line="";for(let c=0;c<HALLOWEEN_MAZE_SIZE;c++){if(r===g.player.r&&c===g.player.c){line+="🙂";continue;}if(r===g.ghost.r&&c===g.ghost.c&&!g.ghostBanished){line+="👻";continue;}if(!halloweenMazeVisible(g,r,c)){line+="❓";continue;}if(r===g.exit.r&&c===g.exit.c){line+="🚪";continue;}const relic=g.relics.find(x=>!x.found&&x.r===r&&x.c===c);if(relic){line+=relic.emoji;continue;}const treasure=g.treasures.find(x=>!x.claimed&&x.r===r&&x.c===c);if(treasure){line+="💰";continue;}const trap=g.traps.find(x=>!x.triggered&&x.r===r&&x.c===c);if(trap){line+="🕸️";continue;}line+=g.grid[r][c]==="#"?"🧱":"⬜";}out.push(line);}out.push("",g.lastEvent||"⌨️ Type **up**, **down**, **left**, or **right** to move.");return out.join("\n");}
 function halloweenMazeRows(g){return g.status!=="playing"?[]:[row(button("⌨️ ENTER MOVE",`halloween:maze:move:${g.id}`,1),button("🕯️ LIGHT",`halloween:maze:light:${g.id}`,1),button("🧪 REPELLENT",`halloween:maze:repellent:${g.id}`,1)),row(button("📖 HOW TO PLAY",`halloween:maze:howto:${g.id}`,2),button("🏃 END RUN",`halloween:maze:end:${g.id}`,4))];}
 function halloweenMazeCreate(guildId,user,channelId){let grid;do{grid=halloweenMazeGenerateLayout();}while(halloweenMazeDistance({grid},[1,1],[HALLOWEEN_MAZE_SIZE-2,HALLOWEEN_MAZE_SIZE-2])<12);const walk=[];for(let r=1;r<HALLOWEEN_MAZE_SIZE-1;r++)for(let c=1;c<HALLOWEEN_MAZE_SIZE-1;c++)if(grid[r][c]==="."&&!(r===1&&c===1)&&!(r===HALLOWEEN_MAZE_SIZE-2&&c===HALLOWEEN_MAZE_SIZE-2))walk.push([r,c]);for(let i=walk.length-1;i>0;i--){const j=randomInt(0,i);[walk[i],walk[j]]=[walk[j],walk[i]];}const relics=HALLOWEEN_MAZE_RELICS.map((x,i)=>({...x,r:walk[i][0],c:walk[i][1],found:false}));const treasures=walk.slice(3,5).map(([r,c])=>({r,c,claimed:false}));const traps=walk.slice(5,7).map(([r,c])=>({r,c,triggered:false}));const ghost=walk[walk.length-1];const g={id:`mz-${Date.now().toString(36)}-${randomInt(1000,9999)}`,type:"maze",status:"playing",guildId:String(guildId),playerId:String(user.id),channelId:channelId||"",messageId:"",publicMessageId:"",grid,player:{r:1,c:1},exit:{r:HALLOWEEN_MAZE_SIZE-2,c:HALLOWEEN_MAZE_SIZE-2},ghost:{r:ghost[0],c:ghost[1]},ghostBanished:false,relics,collected:[],treasures,traps,revealed:[],hearts:3,candles:3,repellents:2,repelMoves:0,moves:0,lastEvent:"🕯️ The maze closes behind you. Find all three relics, then escape through 🚪."};halloweenMazeReveal(g,1);return g;}
-async function halloweenMazeEditPublic(env,g){if(!g?.channelId||!g?.publicMessageId)return false;const r=await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"PATCH",body:JSON.stringify({content:halloweenMazeBoardText(g),components:halloweenMazeRows(g)})});return r.ok;}
-async function halloweenMazePublishPublic(env,g){if(!g?.channelId)return null;if(g.publicMessageId)return halloweenMazeEditPublic(env,g);const sent=await sendChannelMessage(env,g.channelId,halloweenMazeBoardText(g),halloweenMazeRows(g));g.publicMessageId=sent?.id||"";return sent;}
+async function halloweenMazeEditPublic(env,g){
+  if(!g?.channelId)return false;
+  const oldId=String(g.publicMessageId||"");
+  // Haunted Maze intentionally follows the same public-board pattern as
+  // Color Chaos/Hide & Seek: send the fresh board first, then delete the old one.
+  // This avoids Discord/mobile clients keeping a stale board rendered in place.
+  let sent=null;
+  try{
+    sent=await sendChannelMessage(env,g.channelId,halloweenMazeBoardText(g),halloweenMazeRows(g));
+  }catch(error){
+    console.error("Haunted Maze new board send failed:",error);
+    return false;
+  }
+  if(!sent?.id){
+    console.error("Haunted Maze new board send returned no message id.");
+    return false;
+  }
+  const newId=String(sent.id);
+  g.publicMessageId=newId;
+  if(oldId&&oldId!==newId){
+    try{
+      const deleted=await discordRequest(env,`/channels/${g.channelId}/messages/${oldId}`,{method:"DELETE"});
+      if(!deleted.ok)console.error("Haunted Maze old board delete failed:",deleted.status,await deleted.text());
+    }catch(error){
+      console.error("Haunted Maze old board delete error:",error);
+    }
+  }
+  return true;
+}
+async function halloweenMazePublishPublic(env,g){return halloweenMazeEditPublic(env,g);}
 function halloweenMazeHowToText(){return ["🗺️ **HAUNTED MAZE — HOW TO PLAY**","","This is a solo maze. Your movement is **typed**, not button-by-button.","","⌨️ Press **ENTER MOVE** and type **up**, **down**, **left**, or **right**.","🕯️ Use a Candle to reveal more of the maze.","🧪 Repellent blocks the ghost for your next 5 moves.","👻 The ghost moves after you move. If it catches you, you lose a heart.","🕸️ Web traps cost a heart when triggered.","💰 Treasures give bonus Spookies.","","🗝️ Find the Skeleton Key, 💎 Ghost Gem, and 🎃 Cursed Pumpkin.","🚪 Once all three are found, reach the exit to win and unlock the **Phantom Compass**.","","❤️ You have 3 hearts. If they hit 0, the run ends."].join("\n");}
 async function halloweenMazeShowMoveModal(env,interaction){return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:9,data:{custom_id:"halloween:maze:move_modal",title:"🗺️ Move Through the Haunted Maze",components:[{type:1,components:[{type:4,custom_id:"maze_move",label:"Direction",style:1,placeholder:"Type up, down, left, or right",required:true,max_length:10}]}]}})});}
 async function halloweenMazeFinish(env,interaction,state,g,success,reason=""){g.status="ended";g.finished=true;if(success){const reward=Math.max(250,1000-Math.max(0,g.moves-20)*10);await addHalloweenSpookies(env,g.playerId,reward);await halloweenUnlock(env,g.playerId,"phantom_compass");await halloweenMarkPlayed(env,g.playerId,1);g.lastEvent=`🏆 **MAZE ESCAPED!** You found all three relics in **${g.moves} moves** and earned **${reward.toLocaleString()} Spookies**! 🧭`;}else{await halloweenMarkPlayed(env,g.playerId,1);g.lastEvent=`💀 **THE MAZE CLAIMED YOU.** ${reason||"Your run is over."}`;}await saveGuildState(env,interaction.guild_id,state);await halloweenMazeEditPublic(env,g);state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);}
