@@ -29494,19 +29494,19 @@ async function renderHalloweenBookDirect(env, player, spread) {
     const item = collection[firstIndex + slot];
     const box = HALLOWEEN_BOOK_SLOT_LAYOUT[slot];
     if (!item || !owned.has(item.id) || !item.imageKey) {
-      drawHalloweenBookLabel(scene, item, false, box);
+      drawHalloweenBookLabel(scene, item, owned, box);
       continue;
     }
     try {
       const asset = await getPngAsset(env, IMAGES[item.imageKey]);
-      if (!asset) { drawHalloweenBookLabel(scene, item, true, box); continue; }
+      if (!asset) { drawHalloweenBookLabel(scene, item, owned, box); continue; }
       const boxWidth = Math.max(1, Math.round(scene.width * box.width));
       const boxHeight = Math.max(1, Math.round(scene.height * box.height));
       const layer = containRGBA(asset, boxWidth, boxHeight);
       const x = Math.round(scene.width * box.left + (boxWidth - layer.width) / 2);
       const y = Math.round(scene.height * box.top + (boxHeight - layer.height) / 2);
       alphaComposite(scene, layer, x, y, 1);
-      drawHalloweenBookLabel(scene, item, true, box);
+      drawHalloweenBookLabel(scene, item, owned, box);
     } catch (error) {
       console.warn(`Halloween collectible render skipped for ${item.id}:`, error?.message || error);
     }
