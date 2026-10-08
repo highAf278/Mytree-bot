@@ -30030,7 +30030,37 @@ function halloweenMazeWalkable(g,r,c){return !!g?.grid?.[r]?.[c]&&g.grid[r][c]==
 function halloweenMazeDistance(g,start,goal){const q=[[start[0],start[1],0]],seen=new Set([start.join(",")]);while(q.length){const [r,c,d]=q.shift();if(r===goal[0]&&c===goal[1])return d;for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]){const nr=r+dr,nc=c+dc,k=`${nr},${nc}`;if(!seen.has(k)&&halloweenMazeWalkable(g,nr,nc)){seen.add(k);q.push([nr,nc,d+1]);}}}return Infinity;}
 function halloweenMazeReveal(g,radius=1){g.revealed=Array.isArray(g.revealed)?g.revealed:[];for(let r=0;r<HALLOWEEN_MAZE_SIZE;r++)for(let c=0;c<HALLOWEEN_MAZE_SIZE;c++)if(Math.abs(r-g.player.r)<=radius&&Math.abs(c-g.player.c)<=radius)g.revealed.push(`${r},${c}`);g.revealed=[...new Set(g.revealed)];}
 function halloweenMazeVisible(g,r,c){return new Set(g.revealed||[]).has(`${r},${c}`);}
-function halloweenMazeNextStep(g,from,to){const q=[[from[0],from[1]]],prev=new Map([[from.join(","),null]]);while(q.length){const [r,c]=q.shift();if(r===to[0]&&c===to[1])break;for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]){const nr=r+dr,nc=c+dc,k=`${nr},${nc}`;if(!prev.has(k)&&halloweenMazeWalkable(g,nr,nc)){prev.set(k,[r,c]);q.push([nr,nc]);}}}const key=to.join(",");if(!prev.has(key))return from;let cur=to;while(prev.get(cur.join(","))&&prev.get(cur.join(",")).join(",")!==from.join(","))cur=prev.get(cur.join(","));return cur;}
+function halloweenMazeNextStep(g,from,to){
+  const start=[Number(from?.[0]),Number(from?.[1])];
+  const goal=[Number(to?.[0]),Number(to?.[1])];
+  const startKey=`${start[0]},${start[1]}`;
+  const goalKey=`${goal[0]},${goal[1]}`;
+  if(startKey===goalKey)return start;
+  const q=[start];
+  const prev=new Map();
+  prev.set(startKey,null);
+  while(q.length){
+    const cur=q.shift();
+    const r=Number(cur[0]),c=Number(cur[1]);
+    if(r===goal[0]&&c===goal[1])break;
+    for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nr=r+dr,nc=c+dc,k=`${nr},${nc}`;
+      if(prev.has(k)||!halloweenMazeWalkable(g,nr,nc))continue;
+      prev.set(k,[r,c]);
+      q.push([nr,nc]);
+    }
+  }
+  if(!prev.has(goalKey))return start;
+  let cur=goal;
+  while(true){
+    const key=`${cur[0]},${cur[1]}`;
+    const parent=prev.get(key);
+    if(parent===null||parent===undefined)return cur;
+    const parentKey=`${parent[0]},${parent[1]}`;
+    if(parentKey===startKey)return cur;
+    cur=parent;
+  }
+}
 function halloweenMazeBoardText(g){const out=["🗺️ **HAUNTED MAZE**","",`❤️ **Hearts:** ${g.hearts}   🕯️ **Candles:** ${g.candles}   🧪 **Repellent:** ${g.repellents}`,`🗝️ **${g.collected.length}/3 relics found**   👣 **Moves:** ${g.moves}`,""];for(let r=0;r<HALLOWEEN_MAZE_SIZE;r++){let line="";for(let c=0;c<HALLOWEEN_MAZE_SIZE;c++){if(r===g.player.r&&c===g.player.c){line+="🙂";continue;}if(r===g.ghost.r&&c===g.ghost.c&&!g.ghostBanished){line+="👻";continue;}if(!halloweenMazeVisible(g,r,c)){line+="❓";continue;}if(r===g.exit.r&&c===g.exit.c){line+="🚪";continue;}const relic=g.relics.find(x=>!x.found&&x.r===r&&x.c===c);if(relic){line+=relic.emoji;continue;}const treasure=g.treasures.find(x=>!x.claimed&&x.r===r&&x.c===c);if(treasure){line+="💰";continue;}const trap=g.traps.find(x=>!x.triggered&&x.r===r&&x.c===c);if(trap){line+="🕸️";continue;}line+=g.grid[r][c]==="#"?"🧱":"⬜";}out.push(line);}out.push("",g.lastEvent||"⌨️ Type **up**, **down**, **left**, or **right** to move.");return out.join("\n");}
 function halloweenMazeRows(g){return g.status!=="playing"?[]:[row(button("⌨️ ENTER MOVE",`halloween:maze:move:${g.id}`,1),button("🕯️ LIGHT",`halloween:maze:light:${g.id}`,1),button("🧪 REPELLENT",`halloween:maze:repellent:${g.id}`,1)),row(button("📖 HOW TO PLAY",`halloween:maze:howto:${g.id}`,2),button("🏃 END RUN",`halloween:maze:end:${g.id}`,4))];}
 function halloweenMazeCreate(guildId,user,channelId){let grid;do{grid=halloweenMazeGenerateLayout();}while(halloweenMazeDistance({grid},[1,1],[HALLOWEEN_MAZE_SIZE-2,HALLOWEEN_MAZE_SIZE-2])<12);const walk=[];for(let r=1;r<HALLOWEEN_MAZE_SIZE-1;r++)for(let c=1;c<HALLOWEEN_MAZE_SIZE-1;c++)if(grid[r][c]==="."&&!(r===1&&c===1)&&!(r===HALLOWEEN_MAZE_SIZE-2&&c===HALLOWEEN_MAZE_SIZE-2))walk.push([r,c]);for(let i=walk.length-1;i>0;i--){const j=randomInt(0,i);[walk[i],walk[j]]=[walk[j],walk[i]];}const relics=HALLOWEEN_MAZE_RELICS.map((x,i)=>({...x,r:walk[i][0],c:walk[i][1],found:false}));const treasures=walk.slice(3,5).map(([r,c])=>({r,c,claimed:false}));const traps=walk.slice(5,7).map(([r,c])=>({r,c,triggered:false}));const ghost=walk[walk.length-1];const g={id:`mz-${Date.now().toString(36)}-${randomInt(1000,9999)}`,type:"maze",status:"playing",guildId:String(guildId),playerId:String(user.id),channelId:channelId||"",messageId:"",publicMessageId:"",grid,player:{r:1,c:1},exit:{r:HALLOWEEN_MAZE_SIZE-2,c:HALLOWEEN_MAZE_SIZE-2},ghost:{r:ghost[0],c:ghost[1]},ghostBanished:false,relics,collected:[],treasures,traps,revealed:[],hearts:3,candles:3,repellents:2,repelMoves:0,moves:0,lastEvent:"🕯️ The maze closes behind you. Find all three relics, then escape through 🚪."};halloweenMazeReveal(g,1);return g;}
