@@ -30848,8 +30848,15 @@ async function halloweenHidePrivateMenu(env,interaction){
   if(!g.players?.[user.id])return sendText(env,interaction,"❌ You are not in this game.");
   if(user.id===g.hunterId){
     if(g.phase!=="hunter")return sendText(env,interaction,"⏳ It is the Hidden players' turn right now. The Hunter moves after all Hidden players act.");
-    const actions=[button("🔎 Investigate","halloween:hide:hunter:investigate",1),button("👂 Listen","halloween:hide:hunter:listen",1),button("🧭 Track","halloween:hide:hunter:track",1),button("🪤 Trap","halloween:hide:hunter:trap",1),button("🎯 Capture","halloween:hide:hunter:capture",4)];
-    return sendText(env,interaction,`👹 **LANTERN KEEPER — PRIVATE TURN**\n\nRound **${g.round}/10**\nActions used: **${g.hunterActions}/2**\n\nChoose your private action.`,[row(...actions),row(button("⏭️ End Hunter Turn","halloween:hide:hunter:end",3),button("📖 How to Play","halloween:hide:howto",2))]);
+    const twoPlayer=Object.keys(g.players||{}).length===2;
+    const actions=[
+      button("🔎 Investigate","halloween:hide:hunter:investigate",1),
+      button("👂 Listen","halloween:hide:hunter:listen",1),
+      button("🧭 Track","halloween:hide:hunter:track",1),
+      ...(twoPlayer?[]:[button("🪤 Trap","halloween:hide:hunter:trap",1)]),
+      button("🎯 Capture","halloween:hide:hunter:capture",4)
+    ];
+    return sendText(env,interaction,`👹 **LANTERN KEEPER — PRIVATE TURN**\n\nRound **${g.round}/10**\nActions used: **${g.hunterActions}/2**${twoPlayer?"\n\n🚫 **Traps are disabled in 2-player games.**":""}\n\nChoose your private action.`,[row(...actions),row(button("⏭️ End Hunter Turn","halloween:hide:hunter:end",3),button("📖 How to Play","halloween:hide:howto",2))]);
   }
   if(g.phase!=="hidden")return sendText(env,interaction,"⏳ The Hunter is taking their turn. Your next Hidden turn will appear when the round advances.");
   if(g.ghosts?.[user.id])return sendText(env,interaction,"👻 **GHOST MODE**\n\nYou are no longer an active Hidden player.");
@@ -30905,15 +30912,16 @@ async function halloweenHideComponent(env,interaction,parts){const action=parts[
   if(user.id!==g.hunterId&&action==="ability"){
     if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");const role=g.hiddenRoles[user.id];g.usedAbilities=g.usedAbilities||{};if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");g.usedAbilities[user.id]=true;g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role});g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`✨ **${role} ability used.** Your Hidden turn is complete.`);
   }
-  if(user.id===g.hunterId&&action==="hunter")return halloweenHidePrivateMenu(env,interaction);
+  if(user.id===g.hunterId&&action==="hunter"&&!parts[3])return halloweenHidePrivateMenu(env,interaction);
   if(user.id===g.hunterId&&g.phase!=="hunter")return sendText(env,interaction,"⏳ The Hidden players are taking their turn first.");
-  if(user.id===g.hunterId&&["investigate","listen","track","trap"].includes(action)){
+  const hunterAction=action==="hunter"?parts[3]:"";
+  if(user.id===g.hunterId&&["investigate","listen","track","trap"].includes(hunterAction)){
     if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");g.hunterActions++;
     const roomMap=g.roomMap||HALLOWEEN_ROOMS;
-    if(action==="investigate"){const rooms=Object.keys(roomMap);const room=rooms[randomInt(0,rooms.length-1)];const occupants=Object.entries(g.rooms).filter(([id,r])=>r===room&&id!==g.hunterId&&!g.captured.includes(id));await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🔎 **Investigation**\n\nRoom checked: **${room}**\n${occupants.length?"You found signs that someone may be nearby.":"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);}
-    if(action==="listen"){const rooms=Object.entries(g.rooms).filter(([id])=>id!==g.hunterId&&!g.captured.includes(id));const clue=rooms.length?rooms[randomInt(0,rooms.length-1)][1]:"silence";await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`👂 **Listen**\n\nYou hear faint activity around **${clue}**.\n\nHunter actions: ${g.hunterActions}/2`);}
-    if(action==="track"){const ev=(g.evidence||[]).filter(e=>e.type==="movement").slice(-1)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧭 **Track**\n\n${ev?`A fresh trail points toward **${ev.room}**.`:"There is no fresh trail to follow."}\n\nHunter actions: ${g.hunterActions}/2`);}
-    if(action==="trap"){
+    if(hunterAction==="investigate"){const rooms=Object.keys(roomMap);const room=rooms[randomInt(0,rooms.length-1)];const occupants=Object.entries(g.rooms).filter(([id,r])=>r===room&&id!==g.hunterId&&!g.captured.includes(id));await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🔎 **Investigation**\n\nRoom checked: **${room}**\n${occupants.length?"You found signs that someone may be nearby.":"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(hunterAction==="listen"){const rooms=Object.entries(g.rooms).filter(([id])=>id!==g.hunterId&&!g.captured.includes(id));const clue=rooms.length?rooms[randomInt(0,rooms.length-1)][1]:"silence";await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`👂 **Listen**\n\nYou hear faint activity around **${clue}**.\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(hunterAction==="track"){const ev=(g.evidence||[]).filter(e=>e.type==="movement").slice(-1)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧭 **Track**\n\n${ev?`A fresh trail points toward **${ev.room}**.`:"There is no fresh trail to follow."}\n\nHunter actions: ${g.hunterActions}/2`);}
+    if(hunterAction==="trap"){
       if(Object.keys(g.players||{}).length===2){g.hunterActions--;return sendText(env,interaction,"🚫 **Traps are disabled in 2-player games.** Choose another Hunter action.");}
       const rooms=Object.keys(roomMap);const room=rooms[randomInt(0,rooms.length-1)];g.traps=Array.isArray(g.traps)?g.traps:[];g.traps.push(room);await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🪤 **Trap placed.**\n\nYour trap is armed somewhere in the manor.\nHunter actions: ${g.hunterActions}/2`);
     }
