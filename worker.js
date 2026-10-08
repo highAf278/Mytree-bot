@@ -31097,7 +31097,7 @@ async function halloweenHideComponent(env,interaction,parts){
     }
   }
 
-  if(user.id===g.hunterId&&action==="capture"){
+  if(user.id===g.hunterId&&hunterAction==="capture"){
     if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");
     const hidden=Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
     if(!hidden.length)return sendText(env,interaction,"❌ There are no active Hidden players left to capture.");
