@@ -29454,14 +29454,14 @@ function halloweenBookData(player, spread=0, imageUrlOverride=null) {
    The collectible name is rendered bold inside the plaque below.
 ========================================================= */
 const HALLOWEEN_BOOK_SLOT_LAYOUT = [
-  // Slightly smaller artwork so wide collectibles stay fully inside the ornate frame.
-  // Labels are shifted slightly left and remain centered within their plaques.
-  { left: 0.185, top: 0.305, width: 0.255, height: 0.285, labelLeft: 0.165, labelTop: 0.575, labelWidth: 0.295, labelHeight: 0.085 },
-  { left: 0.575, top: 0.305, width: 0.255, height: 0.285, labelLeft: 0.545, labelTop: 0.575, labelWidth: 0.295, labelHeight: 0.085 }
+  // Match the original full-size artwork/plaque alignment.
+  { left: 0.17, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.19, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 },
+  { left: 0.558, top: 0.29, width: 0.285, height: 0.32, labelLeft: 0.58, labelTop: 0.64, labelWidth: 0.27, labelHeight: 0.08 }
 ];
 
 function halloweenBookLabelText(item, owned) {
-  if (!item || !owned || !owned.has(item.id)) return "COMING SOON";
+  if (!item) return "COMING SOON";
+  if (!owned || !owned.has(item.id)) return "COMING SOON";
   const labels = {
     hunters_lantern: "HUNTER'S LANTERN",
     last_antidote: "LAST ANTIDOTE",
@@ -29476,26 +29476,19 @@ function halloweenBookLabelText(item, owned) {
 
 function drawHalloweenBookLabel(frame, item, owned, box) {
   const text = halloweenBookLabelText(item, owned);
-  if (text === "COMING SOON") return;
   const maxWidth = Math.max(1, Math.round(frame.width * box.labelWidth));
   const labelHeight = Math.max(12, Math.round(frame.height * box.labelHeight));
-  const preferredScale = 2;
+  const preferredScale = 3;
   const widthAtScale = scale => [...text].reduce((n, ch) => n + (ch === " " ? 3 * scale : 6 * scale), 0) - scale;
-  const scale = widthAtScale(preferredScale) <= maxWidth ? preferredScale : 1;
+  const scale = widthAtScale(preferredScale) <= maxWidth ? preferredScale : 2;
   const textWidth = widthAtScale(scale);
   const x = Math.round(frame.width * box.labelLeft + Math.max(0, (maxWidth - textWidth) / 2));
   const y = Math.round(frame.height * box.labelTop + Math.max(0, (labelHeight - 7 * scale) / 2));
-  // Give the printed title a strong, high-contrast plaque treatment so the
-  // names remain readable after Discord resizes/compresses the book image.
-  const padX = Math.max(4, scale * 2);
-  const padY = Math.max(3, scale);
-  const plaqueX = Math.max(0, x - padX);
-  const plaqueY = Math.max(0, y - padY);
-  const plaqueW = Math.min(frame.width - plaqueX, textWidth + padX * 2);
-  const plaqueH = Math.min(frame.height - plaqueY, 7 * scale + padY * 2);
-  profileBlendFill(frame, plaqueX, plaqueY, plaqueW, plaqueH, 24, 17, 24, 215);
-  drawBitmapText(frame, text, x + 1, y + 1, scale, [255, 242, 210], maxWidth);
-  drawBitmapText(frame, text, x, y, scale, [255, 255, 255], maxWidth);
+
+  // The plaque is already part of the book artwork. Print the title directly
+  // inside it, matching the desired physical-book look.
+  drawBitmapText(frame, text, x + 1, y + 1, scale, [118, 78, 50], maxWidth);
+  drawBitmapText(frame, text, x, y, scale, [55, 38, 28], maxWidth);
 }
 
 async function renderHalloweenBookDirect(env, player, spread) {
@@ -30293,6 +30286,102 @@ function halloweenTriviaPick(pool, used) {
   used.add(pool.indexOf(item));
   return item;
 }
+function halloweenTriviaPrepareSpecial(challenge) {
+  const c = { ...challenge, options: Array.isArray(challenge.options) ? [...challenge.options] : [] };
+  const pickIndex = () => randomInt(0, Math.max(0, c.options.length - 1));
+  const shuffledIndexes = () => shuffleArray(c.options.map((_, i) => i));
+
+  /*
+    Special rounds are real mechanics now instead of pretending every random
+    choice has a normal "correct answer". Each hidden outcome is generated once
+    when the run is created and is stored on that challenge.
+  */
+  if (c.prompt.includes("PICK THE RIGHT PUMPKIN")) {
+    const treasure = pickIndex();
+    c.specialOutcome = {
+      mode: "quiz",
+      correctIndex: treasure,
+      reward: 300,
+      wrongPenalty: -25,
+      successText: "🎃 **TREASURE FOUND!**",
+      failText: "🎃 **That pumpkin was empty!**",
+      reveal: `The treasure was hidden in **${c.options[treasure]}**.`
+    };
+  } else if (c.prompt.includes("DON'T PICK THE SPIDER")) {
+    const safe = pickIndex();
+    c.specialOutcome = {
+      mode: "quiz",
+      correctIndex: safe,
+      reward: 250,
+      wrongPenalty: -150,
+      successText: "🕷️ **SAFE GRAVE!**",
+      failText: "🕷️ **CURSED GRAVE!**",
+      reveal: `The safe grave was **${c.options[safe]}**. The other graves were cursed.`
+    };
+  } else if (c.prompt.includes("PUMPKIN MEMORY")) {
+    const treasure = pickIndex();
+    c.specialOutcome = {
+      mode: "quiz",
+      correctIndex: treasure,
+      reward: 350,
+      wrongPenalty: -50,
+      successText: "🎃 **MEMORY SERVED!**",
+      failText: "🎃 **WRONG CLUE!**",
+      reveal: `The treasure was **${c.options[treasure]}**. That was the pumpkin not beside the skull.`
+    };
+  } else if (c.prompt.includes("PICK A CRYSTAL")) {
+    const blessing = pickIndex();
+    c.specialOutcome = {
+      mode: "quiz",
+      correctIndex: blessing,
+      reward: 400,
+      wrongPenalty: -25,
+      successText: "🔮 **BLESSING FOUND!**",
+      failText: "🔮 **NO BLESSING!**",
+      reveal: `The **+400 Spookies** blessing was inside **${c.options[blessing]}**.`
+    };
+  } else if (c.prompt.includes("CHOOSE YOUR GRAVE")) {
+    const indexes = shuffledIndexes();
+    const outcomes = [
+      { label: "💰 **TREASURE!**", delta: 300 },
+      { label: "🕯️ **EMPTY GRAVE!**", delta: 0 },
+      { label: "💀 **CURSED!**", delta: -150 },
+      { label: "🎭 **TRICK!**", delta: 50 }
+    ];
+    const mapped = {};
+    indexes.forEach((optionIndex, i) => { mapped[optionIndex] = outcomes[i]; });
+    c.specialOutcome = {
+      mode: "outcome",
+      outcomes: mapped
+    };
+  } else if (c.prompt.includes("THE FINAL DOOR")) {
+    const door = pickIndex();
+    c.specialOutcome = {
+      mode: "quiz",
+      correctIndex: door,
+      reward: 500,
+      wrongPenalty: -50,
+      successText: "🚪 **THE DOOR WAS SAFE!**",
+      failText: "🚪 **WRONG DOOR!**",
+      reveal: `The graveyard door was **${c.options[door]}**.`
+    };
+  } else if (c.prompt.includes("CURSED GAMBLE")) {
+    const payouts = shuffleArray([100, 500, 1000, -200]);
+    const outcomes = {};
+    payouts.forEach((delta, i) => {
+      outcomes[i] = {
+        delta,
+        label: delta > 0 ? `💰 **+${delta.toLocaleString()} Spookies**` : `💀 **${delta.toLocaleString()} Spookies**`
+      };
+    });
+    c.specialOutcome = {
+      mode: "outcome",
+      outcomes
+    };
+  }
+  return c;
+}
+
 function halloweenTriviaBuildRun() {
   const usedQ=new Set(),usedS=new Set(),run=[];
   const pickQ=(difficulty)=>{
@@ -30300,7 +30389,7 @@ function halloweenTriviaBuildRun() {
     if(!pool.length)return HALLOWEEN_TRIVIA_QUESTIONS[randomInt(0,HALLOWEEN_TRIVIA_QUESTIONS.length-1)];
     const chosen=pool[randomInt(0,pool.length-1)]; usedQ.add(chosen.i); return chosen.x;
   };
-  const pickS=()=>{const pool=HALLOWEEN_TRIVIA_SPECIALS.map((x,i)=>({x,i})).filter(o=>!usedS.has(o.i));if(!pool.length)return null;const chosen=pool[randomInt(0,pool.length-1)];usedS.add(chosen.i);return chosen.x;};
+  const pickS=()=>{const pool=HALLOWEEN_TRIVIA_SPECIALS.map((x,i)=>({x,i})).filter(o=>!usedS.has(o.i));if(!pool.length)return null;const chosen=pool[randomInt(0,pool.length-1)];usedS.add(chosen.i);return halloweenTriviaPrepareSpecial(chosen.x);};
   const plan=[1,1,2,"special",2,3,"special",2,3,"special",3,"special",3,"special",3];
   for(const d of plan) run.push(d==="special"?pickS():pickQ(d));
   return run;
@@ -30337,7 +30426,7 @@ function halloweenTriviaHowTo(){return [
   "🎃 Survive **15 randomized challenges**.",
   "🧠 The game has a huge question bank, so runs won't repeat the same order.",
   "🟢 Early rounds are easier; later rounds get harder.",
-  "🎭 Some rounds aren't questions at all — pick pumpkins, graves, crystals, solve weird choices, and survive cursed challenges.",
+  "🎭 Special rounds have real hidden outcomes: treasures, curses, blessings, safe graves, doors, and the Cursed Gamble payouts are actually applied.",
   "✅ After every answer, the game tells you the **correct answer** before moving on.",
   "🔥 Correct answers build a streak and increase your rewards.",
   "💀 Wrong answers cost **25 Spookies**.",
@@ -30400,15 +30489,87 @@ async function halloweenTriviaComponent(env,interaction,parts){
     if(g.awaitingNext)return sendText(env,interaction,"⏳ Choose **NEXT CHALLENGE** first.");
     const index=Number(parts[4]); const c=g.challenges[g.round];
     if(!c||!Number.isInteger(index)||index<0||index>=c.options.length)return sendText(env,interaction,"❌ Invalid answer.");
-    let answer=c.answer;
-    // Some special rounds are deliberately randomized when created. Store the answer on the challenge.
-    if(answer===null||answer===undefined){ answer=randomInt(0,c.options.length-1); c.answer=answer; }
-    const correct=index===answer; if(correct){g.correct++;g.streak++;g.bestStreak=Math.max(g.bestStreak,g.streak);}else{g.wrong++;g.streak=0;}
-    const delta=halloweenTriviaReward(c.difficulty,correct,g.streak);g.score+=delta;
-    const chosen=c.options[index],correctAnswer=c.options[answer];
-    g.lastResult=correct?`✅ **CORRECT!**\n\nYou chose: **${chosen}**\n\n🧠 **Correct answer: ${correctAnswer}**\n💰 **+${delta} Spookies**\n🔥 Streak: **${g.streak}**`:`❌ **WRONG!**\n\nYou chose: **${chosen}**\n\n✅ **Correct answer: ${correctAnswer}**\n💀 **${delta} Spookies**\n🔥 Streak reset to **0**`;
-    g.awaitingNext=true; await saveGuildState(env,interaction.guild_id,state); await halloweenTriviaPublishPublic(env,g); return sendText(env,interaction,correct?"🧠 Correct!":"💀 Wrong!");
+
+    const chosen=c.options[index];
+
+    // Special rounds with real hidden outcomes.
+    if(c.specialOutcome){
+      if(c.specialOutcome.mode==="outcome"){
+        const outcome=c.specialOutcome.outcomes[index];
+        if(!outcome)return sendText(env,interaction,"❌ That outcome is invalid.");
+        const delta=Number(outcome.delta||0);
+        g.score+=delta;
+        g.streak=0;
+        g.lastResult=[
+          "🧠 **HAUNTED TRIVIA**",
+          "",
+          `🎃 **${c.prompt.split("**")[1] || "SPECIAL ROUND"}**`,
+          "",
+          `You chose: **${chosen}**`,
+          "",
+          outcome.label,
+          "",
+          c.prompt.includes("CURSED GAMBLE")
+            ? "🎰 The four fates were shuffled for this run. There was no right or wrong choice."
+            : "🎃 Your hidden outcome has been revealed."
+        ].join("\n");
+        g.awaitingNext=true;
+        await saveGuildState(env,interaction.guild_id,state);
+        await halloweenTriviaPublishPublic(env,g);
+        return sendText(env,interaction,delta>0?"✨ Reward revealed!":delta<0?"💀 Curse revealed!":"👻 Outcome revealed!");
+      }
+
+      const correct=index===c.specialOutcome.correctIndex;
+      const delta=correct
+        ? Number(c.specialOutcome.reward||0)
+        : Number(c.specialOutcome.wrongPenalty ?? -25);
+      if(correct){
+        g.correct++;
+        g.streak++;
+        g.bestStreak=Math.max(g.bestStreak,g.streak);
+      }else{
+        g.wrong++;
+        g.streak=0;
+      }
+      g.score+=delta;
+      g.lastResult=[
+        correct ? `✅ **${c.specialOutcome.successText.replace(/\*\*/g,"")}**` : `❌ **${c.specialOutcome.failText.replace(/\*\*/g,"")}**`,
+        "",
+        `You chose: **${chosen}**`,
+        "",
+        c.specialOutcome.reveal,
+        `💰 **${delta>=0?"+":""}${delta} Spookies**`,
+        `🔥 Streak: **${g.streak}**`
+      ].join("\n");
+      g.awaitingNext=true;
+      await saveGuildState(env,interaction.guild_id,state);
+      await halloweenTriviaPublishPublic(env,g);
+      return sendText(env,interaction,correct?"🧠 Correct!":"💀 Wrong!");
+    }
+
+    // Normal trivia questions and fixed-answer special questions.
+    const answer=Number(c.answer);
+    const correct=index===answer;
+    if(correct){
+      g.correct++;
+      g.streak++;
+      g.bestStreak=Math.max(g.bestStreak,g.streak);
+    }else{
+      g.wrong++;
+      g.streak=0;
+    }
+    const delta=halloweenTriviaReward(c.difficulty,correct,g.streak);
+    g.score+=delta;
+    const correctAnswer=c.options[answer];
+    g.lastResult=correct
+      ? `✅ **CORRECT!**\n\nYou chose: **${chosen}**\n\n🧠 **Correct answer: ${correctAnswer}**\n💰 **+${delta} Spookies**\n🔥 Streak: **${g.streak}**`
+      : `❌ **WRONG!**\n\nYou chose: **${chosen}**\n\n✅ **Correct answer: ${correctAnswer}**\n💀 **${delta} Spookies**\n🔥 Streak reset to **0**`;
+    g.awaitingNext=true;
+    await saveGuildState(env,interaction.guild_id,state);
+    await halloweenTriviaPublishPublic(env,g);
+    return sendText(env,interaction,correct?"🧠 Correct!":"💀 Wrong!");
   }
+
   if(action==="next"){
     if(!g.awaitingNext)return sendText(env,interaction,"➡️ Answer the current challenge first.");
     if(g.round>=14){await halloweenTriviaFinish(env,interaction,state,g);return sendText(env,interaction,"🏆 **HAUNTED TRIVIA COMPLETE!** Your final results have been posted in the channel. 🧠🎃");}
