@@ -30894,75 +30894,285 @@ async function halloweenHideFinish(env,interaction,g,hunterWin){
   await sendChannelMessage(env,g.channelId,g.endText,[]);
 }
 
-async function halloweenHideComponent(env,interaction,parts){const action=parts[2];const state=await getGuildState(env,interaction.guild_id);let g=state.halloween?.activeGame;const user=getUserFromInteraction(interaction);
-  if(action==="howto")return sendText(env,interaction,["📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","","👹 One player is the Lantern Keeper. Everyone else is Hidden.","👻 The Hidden always take their turn first.","🔔 The public game board shows only the round and whose turn it is.","🤫 All actions, clues, rooms, captures, and results are private to the player taking the action.","🏠 After every Hidden player acts, the Hunter gets 2 private actions.","🎯 The Hunter must correctly guess a player AND room to capture them.","👻 Survive all 10 rounds to win."].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
-  if(action==="join"){if(!g||g.type!=="hide"||g.status!=="lobby")return sendText(env,interaction,"❌ No Haunted Hide & Seek lobby is waiting.");if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ The lobby is full.");g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}
-  if(action==="leave"){if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in the lobby.");delete g.players[user.id];if(!Object.keys(g.players).length)state.halloween.activeGame=null;else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,state.halloween.activeGame?halloweenHideLobbyText(g):"👻 Lobby closed.",state.halloween.activeGame?halloweenHideLobbyRows(g):[]);}
-  if(action==="start"){if(!g||g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start.");return halloweenHideStart(env,interaction,g);}
+async function halloweenHideComponent(env,interaction,parts){
+  const action=parts[2];
+  const state=await getGuildState(env,interaction.guild_id);
+  let g=state.halloween?.activeGame;
+  const user=getUserFromInteraction(interaction);
+
+  if(action==="howto"){
+    return sendText(env,interaction,[
+      "📖 **HAUNTED HIDE & SEEK — HOW TO PLAY**","",
+      "👹 One player is the Lantern Keeper. Everyone else is Hidden.",
+      "👻 The Hidden always take their turn first.",
+      "🔔 The public board shows only the round and whose turn it is.",
+      "🤫 Hunter actions and clues are private.",
+      "🏠 After every Hidden player acts, the Hunter gets 2 actions.",
+      "🎯 Capture requires a player AND a room guess.",
+      "🕵️ Clues identify players by username when a clue reveals who was found.",
+      "🪤 Traps only tell the Hunter that **someone** was there — never who.",
+      "🚫 2-player games have NO traps.",
+      "👻 Survive all 10 rounds to win."
+    ].join("\n"),[row(button("⬅️ Back","halloween:hide:action",2))]);
+  }
+
+  if(action==="join"){
+    if(!g||g.type!=="hide"||g.status!=="lobby")return sendText(env,interaction,"❌ No Haunted Hide & Seek lobby is waiting.");
+    if(Object.keys(g.players).length>=8)return sendText(env,interaction,"❌ The lobby is full.");
+    g.players[user.id]={id:user.id,name:user.global_name||user.username||"Werewife"};
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));
+  }
+
+  if(action==="leave"){
+    if(!g?.players?.[user.id])return sendText(env,interaction,"❌ You're not in the lobby.");
+    delete g.players[user.id];
+    if(!Object.keys(g.players).length)state.halloween.activeGame=null;
+    else if(g.hostId===user.id)g.hostId=Object.keys(g.players)[0];
+    await saveGuildState(env,interaction.guild_id,state);
+    return sendText(env,interaction,state.halloween.activeGame?halloweenHideLobbyText(g):"👻 Lobby closed.",state.halloween.activeGame?halloweenHideLobbyRows(g):[]);
+  }
+
+  if(action==="start"){
+    if(!g||g.hostId!==user.id)return sendText(env,interaction,"❌ Only the host can start.");
+    return halloweenHideStart(env,interaction,g);
+  }
+
   if(action==="action")return halloweenHidePrivateMenu(env,interaction);
   if(!g||g.type!=="hide"||g.status!=="playing")return sendText(env,interaction,"❌ That game is no longer active.");
-  if(user.id!==g.hunterId&&g.ghosts?.[user.id]&&action==="ghost")return sendText(env,interaction,"👻 You are a Ghost and cannot alter the active round.");
-  if(user.id!==g.hunterId&&g.phase!=="hidden")return sendText(env,interaction,"⏳ It is currently the Hunter's turn.");
+
+  // Ghosts have no normal Hidden turn.
+  if(user.id!==g.hunterId&&g.ghosts?.[user.id]&&action==="ghost"){
+    return sendText(env,interaction,"👻 You are a Ghost and cannot alter the active round.");
+  }
+
+  // ---------------- HIDDEN TURN ----------------
+  if(user.id!==g.hunterId&&g.phase!=="hidden"){
+    return sendText(env,interaction,"⏳ It is currently the Hunter's turn.");
+  }
+
   if(user.id!==g.hunterId&&action==="move"){
-    const room=parts.slice(3).join(":");const current=g.rooms[user.id];if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");if(!((g.roomMap||HALLOWEEN_ROOMS)[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there from your current room.");g.rooms[user.id]=room;g.submitted[user.id]=true;g.evidence.push({type:"movement",room,player:user.id});await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`👻 You moved to **${room}**. Your turn is complete.`);
+    const room=parts.slice(3).join(":");
+    const current=g.rooms[user.id];
+    if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");
+    if(!((g.roomMap||HALLOWEEN_ROOMS)[current]||[]).includes(room))return sendText(env,interaction,"❌ You cannot move there from your current room.");
+
+    g.rooms[user.id]=room;
+    g.submitted[user.id]=true;
+    g.evidence=Array.isArray(g.evidence)?g.evidence:[];
+    g.evidence.push({type:"movement",room,player:user.id,username:g.players[user.id]?.name||"Unknown"});
+
+    // Trap rule: the Hunter learns only that SOMEONE was there.
+    const twoPlayer=Object.keys(g.players||{}).length===2;
+    if(!twoPlayer&&Array.isArray(g.traps)&&g.traps.includes(room)){
+      g.traps=g.traps.filter(r=>r!==room);
+      g.evidence.push({type:"trap",room});
+      await saveGuildState(env,interaction.guild_id,state);
+      await halloweenHideAdvance(env,interaction,g);
+      return sendText(env,interaction,`🕸️ **TRAP TRIGGERED!**\n\nYou stepped into a trapped room. The Hunter will be told that **someone was there**, but not who.\n\n👻 Your turn is complete.`);
+    }
+
+    await saveGuildState(env,interaction.guild_id,state);
+    await halloweenHideAdvance(env,interaction,g);
+    return sendText(env,interaction,`👻 You moved to **${room}**. Your turn is complete.`);
   }
+
   if(user.id!==g.hunterId&&action==="stay"){
-    if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"🤫 You stayed in place. Your turn is complete.");
+    if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");
+    g.submitted[user.id]=true;
+    await saveGuildState(env,interaction.guild_id,state);
+    await halloweenHideAdvance(env,interaction,g);
+    return sendText(env,interaction,"🤫 You stayed in place. Your turn is complete.");
   }
+
   if(user.id!==g.hunterId&&action==="ability"){
-    if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");const role=g.hiddenRoles[user.id];g.usedAbilities=g.usedAbilities||{};if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");g.usedAbilities[user.id]=true;g.evidence.push({type:"ability",room:g.rooms[user.id],player:user.id,role});g.submitted[user.id]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`✨ **${role} ability used.** Your Hidden turn is complete.`);
+    if(g.submitted?.[user.id])return sendText(env,interaction,"❌ You already took your turn.");
+    const role=g.hiddenRoles[user.id];
+    g.usedAbilities=g.usedAbilities||{};
+    if(g.usedAbilities[user.id])return sendText(env,interaction,"❌ Your signature ability has already been used.");
+    g.usedAbilities[user.id]=true;
+    g.evidence=Array.isArray(g.evidence)?g.evidence:[];
+
+    // Every role now has a real, distinct effect.
+    if(role==="Mimic"){
+      g.evidence.push({type:"mimic",room:g.rooms[user.id],username:g.players[user.id]?.name||"Unknown"});
+    }else if(role==="Gravekeeper"){
+      g.evidence.push({type:"gravekeeper",room:g.rooms[user.id],player:user.id,username:g.players[user.id]?.name||"Unknown"});
+    }else if(role==="Web Weaver"){
+      g.roleTraps=Array.isArray(g.roleTraps)?g.roleTraps:[];
+      if(Object.keys(g.players||{}).length>2){
+        g.roleTraps.push(g.rooms[user.id]);
+      }
+    }else if(role==="Haunted Doll"){
+      g.ghostDecoys=Array.isArray(g.ghostDecoys)?g.ghostDecoys:[];
+      g.ghostDecoys.push(g.rooms[user.id]);
+    }else if(role==="Witch"){
+      g.cursedRooms=Array.isArray(g.cursedRooms)?g.cursedRooms:[];
+      g.cursedRooms.push(g.rooms[user.id]);
+    }else if(role==="Shadow"){
+      g.shadowHidden=g.shadowHidden||{};
+      g.shadowHidden[user.id]=true;
+    }else if(role==="Mirror Wraith"){
+      g.mirrorRooms=Array.isArray(g.mirrorRooms)?g.mirrorRooms:[];
+      g.mirrorRooms.push(g.rooms[user.id]);
+    }
+
+    g.submitted[user.id]=true;
+    await saveGuildState(env,interaction.guild_id,state);
+    await halloweenHideAdvance(env,interaction,g);
+    return sendText(env,interaction,`✨ **${role} ability used.**\n\nYour special ability took effect. Your Hidden turn is complete.`);
   }
+
+  // ---------------- HUNTER TURN ----------------
   if(user.id===g.hunterId&&action==="hunter"&&!parts[3])return halloweenHidePrivateMenu(env,interaction);
   if(user.id===g.hunterId&&g.phase!=="hunter")return sendText(env,interaction,"⏳ The Hidden players are taking their turn first.");
+
   const hunterAction=action==="hunter"?parts[3]:"";
+
   if(user.id===g.hunterId&&["investigate","listen","track","trap"].includes(hunterAction)){
     if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions this round.");
+
     const roomMap=g.roomMap||HALLOWEEN_ROOMS;
     const rooms=Object.keys(roomMap);
     const selectedRoom=parts.length>=5?parts.slice(4).join(":"):"";
+
     if(!selectedRoom){
-      if(hunterAction==="trap"&&Object.keys(g.players||{}).length===2)return sendText(env,interaction,"🚫 **Traps are disabled in 2-player games.** Choose another Hunter action.");
-      const labels={investigate:"🔎 **Choose a room to investigate.**",listen:"👂 **Choose a room to listen to.**",track:"🧭 **Choose a room to track.**",trap:"🪤 **Choose where to place the trap.**"};
-      const rows=[];for(let i=0;i<rooms.length;i+=3)rows.push(row(...rooms.slice(i,i+3).map(room=>button(room,`halloween:hide:hunter:${hunterAction}:${room}`,hunterAction==="trap"?1:1))));
+      if(hunterAction==="trap"&&Object.keys(g.players||{}).length===2){
+        return sendText(env,interaction,"🚫 **Traps are disabled in 2-player games.** Choose another Hunter action.");
+      }
+      const labels={
+        investigate:"🔎 **Choose a room to investigate.**",
+        listen:"👂 **Choose a room to listen to.**",
+        track:"🧭 **Choose a room to track.**",
+        trap:"🪤 **Choose where to place the trap.**"
+      };
+      const rows=[];
+      for(let i=0;i<rooms.length;i+=3){
+        rows.push(row(...rooms.slice(i,i+3).map(room=>button(room,`halloween:hide:hunter:${hunterAction}:${room}`,1))));
+      }
       return sendText(env,interaction,`${labels[hunterAction]}\n\nThis choice is private to you.`,rows);
     }
+
     if(!rooms.includes(selectedRoom))return sendText(env,interaction,"❌ That room is not part of this manor.");
+    if(hunterAction==="trap"&&Object.keys(g.players||{}).length===2)return sendText(env,interaction,"🚫 **Traps are disabled in 2-player games.**");
+
     g.hunterActions++;
+    g.evidence=Array.isArray(g.evidence)?g.evidence:[];
+
     if(hunterAction==="investigate"){
       const occupants=Object.entries(g.rooms).filter(([id,r])=>r===selectedRoom&&id!==g.hunterId&&!g.captured.includes(id));
+      const names=occupants.map(([id])=>g.players[id]?.name||"Unknown");
       await saveGuildState(env,interaction.guild_id,state);
-      return sendText(env,interaction,`🔎 **Investigation — ${selectedRoom}**\n\n${occupants.length?"You found signs that someone may be nearby.":"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);
+      return sendText(env,interaction,`🔎 **Investigation — ${selectedRoom}**\n\n${names.length?`You found signs belonging to: **${names.join(", ")}**.`:"Nothing conclusive."}\n\nHunter actions: ${g.hunterActions}/2`);
     }
+
     if(hunterAction==="listen"){
       const occupants=Object.entries(g.rooms).filter(([id,r])=>r===selectedRoom&&id!==g.hunterId&&!g.captured.includes(id));
+      const names=occupants.map(([id])=>g.players[id]?.name||"Unknown");
       await saveGuildState(env,interaction.guild_id,state);
-      return sendText(env,interaction,`👂 **Listen — ${selectedRoom}**\n\n${occupants.length?"You hear faint movement nearby.":"The room is eerily silent."}\n\nHunter actions: ${g.hunterActions}/2`);
+      return sendText(env,interaction,`👂 **Listen — ${selectedRoom}**\n\n${names.length?`You hear movement from **${names.join(", ")}**.`:"The room is eerily silent."}\n\nHunter actions: ${g.hunterActions}/2`);
     }
+
     if(hunterAction==="track"){
       const ev=(g.evidence||[]).filter(e=>e.type==="movement").slice(-1)[0];
+      const name=ev?.username||"someone";
       const found=ev&&ev.room===selectedRoom;
       await saveGuildState(env,interaction.guild_id,state);
-      return sendText(env,interaction,`🧭 **Track — ${selectedRoom}**\n\n${found?"A fresh trail points toward this room.":"No fresh trail leads to this room."}\n\nHunter actions: ${g.hunterActions}/2`);
+      return sendText(env,interaction,`🧭 **Track — ${selectedRoom}**\n\n${found?`A fresh trail from **${name}** leads toward this room.`:"No fresh trail leads to this room."}\n\nHunter actions: ${g.hunterActions}/2`);
     }
+
     if(hunterAction==="trap"){
       g.traps=Array.isArray(g.traps)?g.traps:[];
       g.traps.push(selectedRoom);
       await saveGuildState(env,interaction.guild_id,state);
-      return sendText(env,interaction,`🪤 **Trap placed in ${selectedRoom}.**\n\nThe trap is armed.\nHunter actions: ${g.hunterActions}/2`);
+      return sendText(env,interaction,`🪤 **Trap placed in ${selectedRoom}.**\n\nThe trap will reveal only that **someone** was there — never who.\nHunter actions: ${g.hunterActions}/2`);
     }
   }
+
   if(user.id===g.hunterId&&action==="capture"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const hidden=Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.captured.includes(id));const rows=[];for(let i=0;i<hidden.length;i+=3)rows.push(row(...hidden.slice(i,i+3).map(id=>button(g.players[id].name,`halloween:hide:capturetarget:${id}`,4))));return sendText(env,interaction,"🎯 **Choose who you think you are capturing.**\n\nThis menu is private to you.",rows);
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");
+    const hidden=Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
+    if(!hidden.length)return sendText(env,interaction,"❌ There are no active Hidden players left to capture.");
+    const rows=[];
+    for(let i=0;i<hidden.length;i+=3){
+      rows.push(row(...hidden.slice(i,i+3).map(id=>button(g.players[id].name,`halloween:hide:capturetarget:${id}`,4))));
+    }
+    return sendText(env,interaction,"🎯 **Choose who you think you are capturing.**\n\nThis menu is private to you.",rows);
   }
+
   if(user.id===g.hunterId&&action==="capturetarget"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3];const roomIds=Object.keys(g.roomMap||HALLOWEEN_ROOMS);const rows=[];for(let i=0;i<roomIds.length;i+=3)rows.push(row(...roomIds.slice(i,i+3).map(room=>button(room,`halloween:hide:captureroom:${target}:${room}`,2))));return sendText(env,interaction,"🎯 **Choose the room.**\n\nThis menu is private to you.",rows);
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");
+    const target=parts[3];
+    const activeHidden=Object.keys(g.players||{}).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
+    if(!activeHidden.includes(target))return sendText(env,interaction,"❌ That Hidden player is no longer available.");
+
+    const roomIds=Object.keys(g.roomMap||HALLOWEEN_ROOMS);
+    const rows=[];
+    for(let i=0;i<roomIds.length;i+=3){
+      rows.push(row(...roomIds.slice(i,i+3).map(room=>button(room,`halloween:hide:captureroom:${target}:${room}`,2))));
+    }
+    return sendText(env,interaction,"🎯 **Choose the room you think they are in.**\n\nThis menu is private to you.",rows);
   }
+
   if(user.id===g.hunterId&&action==="captureroom"){
-    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");const target=parts[3],room=parts.slice(4).join(":");g.hunterActions++;g.everLocated=g.everLocated||{};
-    if(g.rooms[target]===room){g.everLocated[target]=true;g.captured.push(target);g.ghosts[target]=true;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,`🎯 **Capture successful.** Your target was in the room you chose.`);}
-    await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"❌ **Capture missed.** Your player/room guess was wrong.");
+    if(g.hunterActions>=2)return sendText(env,interaction,"❌ You've used both Hunter actions.");
+    const target=parts[3];
+    const room=parts.slice(4).join(":");
+    const activeHidden=Object.keys(g.players||{}).filter(id=>id!==g.hunterId&&!g.captured.includes(id));
+    if(!activeHidden.includes(target))return sendText(env,interaction,"❌ That Hidden player is no longer available.");
+    if(!(g.roomMap||HALLOWEEN_ROOMS)[room])return sendText(env,interaction,"❌ That room is not part of this manor.");
+
+    // Consume the Hunter action exactly once, then resolve exactly once.
+    g.hunterActions++;
+    g.everLocated=g.everLocated||{};
+    let resultText;
+
+    if(g.rooms[target]===room){
+      g.everLocated[target]=true;
+      g.captured=Array.isArray(g.captured)?g.captured:[];
+      g.ghosts=g.ghosts||{};
+      g.captured.push(target);
+      g.ghosts[target]=true;
+      resultText=`🎯 **CAPTURE SUCCESS!**\n\n**${g.players[target]?.name||"The Hidden player"}** was found in **${room}**! 👻`;
+    }else{
+      // A wrong player+room guess still means the Hunter has located that
+      // username as a subject of the failed attempt, matching the username-
+      // based clue system without revealing any other player's identity.
+      g.everLocated[target]=true;
+      resultText=`❌ **CAPTURE MISSED.**\n\n**${g.players[target]?.name||"The Hidden player"}** was not in **${room}**.`;
+    }
+
+    g.pendingCaptureTarget=null;
+    await saveGuildState(env,interaction.guild_id,state);
+
+    // If the capture ended the game, finish() owns the public end message.
+    const hiddenBefore=g.players?Object.keys(g.players).filter(id=>id!==g.hunterId&&!g.ghosts?.[id]).length:0;
+    const captureWin=Object.keys(g.players||{}).filter(id=>id!==g.hunterId&&g.ghosts?.[id]).length>=Math.ceil(Math.max(1,Object.keys(g.players||{}).length-1)/2);
+
+    if(captureWin){
+      g.status="ended";
+      await halloweenHideFinish(env,interaction,g,true);
+      return sendText(env,interaction,`${resultText}\n\n🏆 **THE HUNTER HAS WON!**`);
+    }
+
+    if(g.hunterActions>=2){
+      await halloweenHideAdvance(env,interaction,g);
+      return sendText(env,interaction,`${resultText}\n\n⏭️ **Hunter actions complete.**`);
+    }
+
+    await halloweenHideAdvance(env,interaction,g);
+    return sendText(env,interaction,`${resultText}\n\n🎮 Choose your next Hunter action.`);
   }
-  if(user.id===g.hunterId&&hunterAction==="end"){g.hunterActions=2;await saveGuildState(env,interaction.guild_id,state);await halloweenHideAdvance(env,interaction,g);return sendText(env,interaction,"⏭️ Hunter turn ended. The next round will begin when the game advances.");}
+
+  if(user.id===g.hunterId&&hunterAction==="end"){
+    g.hunterActions=2;
+    g.pendingCaptureTarget=null;
+    await saveGuildState(env,interaction.guild_id,state);
+    await halloweenHideAdvance(env,interaction,g);
+    return sendText(env,interaction,"⏭️ Hunter turn ended. The round has advanced.");
+  }
+
+  return sendText(env,interaction,"❌ Unknown Hide & Seek action.");
 }
 
 async function halloweenZombieLobby(env,interaction){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const user=getUserFromInteraction(interaction);const g={id:`zp-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"zombie",status:"lobby",hostId:user.id,players:{[user.id]:{id:user.id,name:user.global_name||user.username||"Werewife"}}};state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,`🧟 **ZOMBIE PANIC**\n\n👥 Players: **1/8**\n\nNeed **3–8 players**.`,[row(button("➕ JOIN","halloween:zombie:join",1),button("🚪 LEAVE","halloween:zombie:leave",2),button("▶️ START","halloween:zombie:start",3)),row(button("📖 HOW TO PLAY","halloween:zombie:howto",2),button("⬅️ Games","halloween:games",2))]);}
@@ -34961,6 +35171,7 @@ export default {
         customId.startsWith("halloween:hide:track:") ||
         customId.startsWith("halloween:hide:trap:") ||
         customId.startsWith("halloween:hide:captureroom:") ||
+        customId.startsWith("halloween:hide:capturetarget:") ||
         customId.startsWith("halloween:hide:move:") ||
         customId.startsWith("halloween:hide:stay:") ||
         customId === "halloween:hide:ability" ||
