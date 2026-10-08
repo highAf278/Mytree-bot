@@ -384,6 +384,7 @@ const IMAGES = {
   halloweenSmasherRelic: "IMG_8160.png",
   halloweenGraveMask: "IMG_8179.png",
   halloweenPhantomCompass: "IMG_8189.png",
+  halloweenZombieBrain: "IMG_8192.png",
 };
 
 const SHOP_ITEMS = {
@@ -29232,7 +29233,8 @@ const HALLOWEEN_BOOK_ASSETS = {
   candy: "halloweenCursedCandyBucket",
   smasherRelic: "halloweenSmasherRelic",
   graveMask: "halloweenGraveMask",
-  phantomCompass: "halloweenPhantomCompass"
+  phantomCompass: "halloweenPhantomCompass",
+  zombieBrain: "halloweenZombieBrain"
 };
 
 const HALLOWEEN_ROOMS = {
@@ -29271,7 +29273,7 @@ function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
-    "The gates are open. Six games are ready for the first Halloween release. 👻",
+    "The gates are open. Seven games are ready for the first Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
     `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
@@ -29286,6 +29288,7 @@ function halloweenGameMenuComponents() {
     row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
     row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
     row(button("⚰️ Grave Robber", "halloween:start:grave", 1), button("🗺️ Haunted Maze", "halloween:start:maze", 1)),
+    row(button("🧠 Haunted Trivia", "halloween:start:trivia", 1)),
     row(button("📖 How Halloween Works", "halloween:howto", 2)),
     row(button("⬅️ Halloween Hub", "halloween:hub", 2))
   ];
@@ -29320,7 +29323,9 @@ function halloweenUnlockText(player) {
     "",
     line("🧭", "Phantom Compass", "Escape the **Haunted Maze** with all three cursed relics.", "phantom_compass"),
     "",
-    "🔒 **Collectibles 7–10** — COMING SOON",
+    line("🧠", "Zombie Brain", "Answer **at least 10 challenges correctly in one Haunted Trivia run**.", "zombie_brain"),
+    "",
+    "🔒 **Collectibles 8–10** — COMING SOON",
     "Their games and unlock requirements haven't been revealed yet. 👀"
   ].join("\n");
 }
@@ -29365,7 +29370,7 @@ function halloweenBookComponents(spread) {
 function halloweenBookCollectionConfig() {
   /*
     The book has 10 slots total: two collectible frames per spread.
-    The first six now have artwork in R2.  Slots 7-10 are deliberately
+    The first seven now have artwork in R2.  Slots 8-10 are deliberately
     configured without artwork until those collectibles are released.
 
     When a future collectible is added, put its R2 image name in IMAGES and
@@ -29409,7 +29414,12 @@ function halloweenBookCollectionConfig() {
       requirement: "Escape the Haunted Maze with all three cursed relics.",
       imageKey: HALLOWEEN_BOOK_ASSETS.phantomCompass
     },
-    { id: "collectible_7", title: "🎃 Halloween Collectible #7", requirement: "Coming soon...", imageKey: null },
+    {
+      id: "zombie_brain",
+      title: "🧠 Zombie Brain",
+      requirement: "Answer at least 10 challenges correctly in one Haunted Trivia run.",
+      imageKey: HALLOWEEN_BOOK_ASSETS.zombieBrain
+    },
     { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_9", title: "🎃 Halloween Collectible #9", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_10", title: "🎃 Halloween Collectible #10", requirement: "Coming soon...", imageKey: null }
@@ -29986,6 +29996,7 @@ function halloweenHowToText() {
     "📚 Your collectibles are permanent and live in `/collections`.",
     "",
     "🔒 Each game has its own collectible with a specific unlock requirement.",
+    "🧠 Haunted Trivia has 15 randomized challenges, including special rounds that are not normal questions.",
     "",
     "🆘 If you ever get trapped in a Halloween game, use **/halloween end**."
   ].join("\n");
@@ -30136,6 +30147,242 @@ async function halloweenMazeMove(env,interaction,g,state,direction){const user=g
   return sendText(env,interaction,newlyUnlocked?"🧭 **PHANTOM COMPASS UNLOCKED!** 🎉\n\nYou escaped the Haunted Maze with all three cursed relics. The Phantom Compass has been added to your permanent Halloween collection! 👻": "🗺️ **MAZE ESCAPED!**\n\nYou already own the 🧭 Phantom Compass, so no duplicate collectible was awarded.");
 }if(g.hearts<=0){await halloweenMazeFinish(env,interaction,state,g,false,"You ran out of hearts.");return sendText(env,interaction,"💀 **GAME OVER.** The Haunted Maze won this time.");}const repelActive=Number(g.repelMoves||0)>0;const ghostSteps=(g.moves%4===0)?2:1;let ghostCaught=false;for(let step=0;step<ghostSteps&&!ghostCaught;step++){const ghostNext=halloweenMazeNextStep(g,g.ghost,g.player);if(repelActive&&ghostNext[0]===g.player.r&&ghostNext[1]===g.player.c){events.push("🧪 The repellent forces the ghost back!");break;}g.ghost={r:ghostNext[0],c:ghostNext[1]};if(g.ghost.r===g.player.r&&g.ghost.c===g.player.c){g.hearts--;ghostCaught=true;events.push("👻 **THE GHOST CAUGHT YOU!** You lost **1 heart**.");g.player={r:1,c:1};halloweenMazeReveal(g,1);}}if(ghostSteps===2&&!ghostCaught)events.push("⚡ **GHOST SURGE!** The ghost moved twice this turn.");if(repelActive)g.repelMoves=Math.max(0,g.repelMoves-1);if(g.hearts<=0){await halloweenMazeFinish(env,interaction,state,g,false,"The ghost took your last heart.");return sendText(env,interaction,"💀 **GAME OVER.** The ghost caught you one time too many.");}if(g.collected.length===3)events.push("🗝️ **All three relics are yours. Find 🚪 to escape!**");g.lastEvent=events.length?events.join("\n"):"👣 You move deeper into the maze...";await saveGuildState(env,interaction.guild_id,state);await halloweenMazeEditPublic(env,g);return sendText(env,interaction,"👣 **Move recorded.** The maze shifts around you...");}
 async function halloweenMazeComponent(env,interaction,parts){const state=await getGuildState(env,interaction.guild_id),g=state.halloween?.activeGame,user=getUserFromInteraction(interaction);if(!g||g.type!=="maze")return sendText(env,interaction,"🗺️ There is no active Haunted Maze.");if(!user||String(user.id)!==String(g.playerId))return sendText(env,interaction,"❌ This Haunted Maze belongs to another player.");const action=parts[2];if(action==="move"){const direction=parts[4]||"";return halloweenMazeMove(env,interaction,g,state,direction);}if(action==="howto")return sendText(env,interaction,halloweenMazeHowToText(),[row(button("⬅️ Back to Maze",`halloween:maze:back:${g.id}`,2))]);if(action==="back")return sendText(env,interaction,halloweenMazeBoardText(g),halloweenMazeRows(g));if(action==="light"){if(g.status!=="playing")return sendText(env,interaction,"🗺️ This maze run has ended.");if(g.candles<=0)return sendText(env,interaction,"🕯️ You're out of candles!");g.candles--;halloweenMazeReveal(g,3);g.lastEvent="🕯️ Your candle burns brightly. The maze reveals itself...";await saveGuildState(env,interaction.guild_id,state);await halloweenMazeEditPublic(env,g);return sendText(env,interaction,"🕯️ **The darkness recedes.**");}if(action==="repellent"){if(g.status!=="playing")return sendText(env,interaction,"🗺️ This maze run has ended.");if(g.repellents<=0)return sendText(env,interaction,"🧪 You're out of ghost repellent!");g.repellents--;g.repelMoves=3;g.lastEvent="🧪 **GHOST REPELLENT ACTIVE!** The ghost cannot hurt you for the next 3 moves.";await saveGuildState(env,interaction.guild_id,state);await halloweenMazeEditPublic(env,g);return sendText(env,interaction,"🧪 **Repellent activated!**");}if(action==="end"){g.status="ended";g.finished=true;g.lastEvent="🏃 **RUN ENDED.** You escaped the maze... but left the relics behind.";await halloweenMazeEditPublic(env,g);state.halloween.activeGame=null;await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,"🏃 **Haunted Maze ended.** No collectible was awarded.");}return sendText(env,interaction,"❌ Unknown Haunted Maze action.");}
+
+/* =========================================================
+   HAUNTED TRIVIA — 15-ROUND SOLO HALLOWEEN CHALLENGE
+   Large randomized bank + special non-question challenges.
+========================================================= */
+const HALLOWEEN_TRIVIA_QUESTIONS = [
+{"q": "What ancient Celtic festival is commonly associated with the origins of Halloween?", "options": ["Samhain", "Yule", "Beltane", "Imbolc"], "answer": 0, "difficulty": 1},
+{"q": "Halloween is short for which phrase?", "options": ["All Hallows' Eve", "All Heroes' Eve", "Holy Harvest Eve", "Hallows' Night"], "answer": 0, "difficulty": 1},
+{"q": "All Saints' Day is traditionally observed on what date?", "options": ["October 31", "November 1", "November 2", "December 1"], "answer": 1, "difficulty": 1},
+{"q": "What vegetable was commonly carved into lanterns before pumpkins became popular?", "options": ["Turnips", "Potatoes", "Carrots", "Beets"], "answer": 0, "difficulty": 1},
+{"q": "What animal is most famously associated with witches in Halloween folklore?", "options": ["Black cat", "White rabbit", "Fox", "Crow"], "answer": 0, "difficulty": 1},
+{"q": "What color combination is especially associated with Halloween?", "options": ["Orange and black", "Blue and silver", "Pink and gold", "Green and white"], "answer": 0, "difficulty": 1},
+{"q": "What creature is traditionally said to transform during a full moon?", "options": ["Werewolf", "Vampire", "Witch", "Zombie"], "answer": 0, "difficulty": 1},
+{"q": "What object is traditionally used to ward off vampires in folklore?", "options": ["Garlic", "Pepper", "Cinnamon", "Mint"], "answer": 0, "difficulty": 1},
+{"q": "What animal is a mammal and is strongly associated with Halloween?", "options": ["Bat", "Owl", "Raven", "Spider"], "answer": 0, "difficulty": 1},
+{"q": "How many legs does a spider have?", "options": ["6", "8", "10", "12"], "answer": 1, "difficulty": 1},
+{"q": "What is a group of witches often called in fantasy and folklore?", "options": ["Coven", "Cackle", "Circle", "Brood"], "answer": 0, "difficulty": 1},
+{"q": "What do you traditionally carve to make a jack-o'-lantern?", "options": ["Pumpkin", "Apple", "Watermelon", "Coconut"], "answer": 0, "difficulty": 1},
+{"q": "What sweet treat is famous for its orange, yellow, and white stripes?", "options": ["Candy corn", "Taffy", "Gummy worms", "Caramel apple"], "answer": 0, "difficulty": 1},
+{"q": "What is the name of the holiday celebrated on November 2 in Catholic tradition?", "options": ["All Souls' Day", "All Witches' Day", "Harvest Day", "Saints' Eve"], "answer": 0, "difficulty": 2},
+{"q": "What does the word 'Halloween' ultimately relate to?", "options": ["The evening before All Hallows' Day", "The harvest moon", "The night of ghosts", "The Celtic new year"], "answer": 0, "difficulty": 2},
+{"q": "What legendary creature is known for drinking blood?", "options": ["Vampire", "Goblin", "Banshee", "Gargoyle"], "answer": 0, "difficulty": 1},
+{"q": "What legendary creature is associated with a curse that causes a person to become a wolf?", "options": ["Werewolf", "Vampire", "Troll", "Kelpie"], "answer": 0, "difficulty": 1},
+{"q": "What Irish folklore spirit is famous for a mournful cry?", "options": ["Banshee", "Selkie", "Leprechaun", "Dullahan"], "answer": 0, "difficulty": 2},
+{"q": "What headless figure appears in The Legend of Sleepy Hollow?", "options": ["The Headless Horseman", "The Hollow Man", "The Galloping Ghost", "The Headless King"], "answer": 0, "difficulty": 1},
+{"q": "Who wrote The Legend of Sleepy Hollow?", "options": ["Washington Irving", "Edgar Allan Poe", "Nathaniel Hawthorne", "Bram Stoker"], "answer": 0, "difficulty": 2},
+{"q": "Who wrote Dracula?", "options": ["Bram Stoker", "Mary Shelley", "Robert Louis Stevenson", "H. G. Wells"], "answer": 0, "difficulty": 2},
+{"q": "In what year was Bram Stoker's Dracula published?", "options": ["1818", "1888", "1897", "1905"], "answer": 2, "difficulty": 3},
+{"q": "Who wrote Frankenstein?", "options": ["Mary Shelley", "Jane Austen", "Emily Brontë", "Louisa May Alcott"], "answer": 0, "difficulty": 2},
+{"q": "In what year was Frankenstein first published?", "options": ["1818", "1848", "1871", "1897"], "answer": 0, "difficulty": 3},
+{"q": "What is Frankenstein's first name?", "options": ["Victor", "Henry", "Edgar", "Jonathan"], "answer": 0, "difficulty": 2},
+{"q": "Who wrote The Raven?", "options": ["Edgar Allan Poe", "Washington Irving", "Bram Stoker", "H. P. Lovecraft"], "answer": 0, "difficulty": 2},
+{"q": "What is the name of the narrator's lost love in The Raven?", "options": ["Lenore", "Lucy", "Eleanor", "Annabel Lee"], "answer": 0, "difficulty": 3},
+{"q": "Which Poe poem begins with a mysterious bird entering a room?", "options": ["The Raven", "The Black Cat", "The Tell-Tale Heart", "The Masque of the Red Death"], "answer": 0, "difficulty": 2},
+{"q": "Which author created the character Sherlock Holmes?", "options": ["Arthur Conan Doyle", "Edgar Allan Poe", "Bram Stoker", "Oscar Wilde"], "answer": 0, "difficulty": 2},
+{"q": "Which classic monster is commonly associated with a castle in Transylvania?", "options": ["Dracula", "Frankenstein", "The Mummy", "The Wolf Man"], "answer": 0, "difficulty": 1},
+{"q": "Which classic monster was originally brought to life in Mary Shelley's novel?", "options": ["Frankenstein's creature", "Dracula", "The Mummy", "The Invisible Man"], "answer": 0, "difficulty": 2},
+{"q": "What is the name of the vampire in Bram Stoker's novel?", "options": ["Count Dracula", "Count Orlok", "Lord Ruthven", "Baron Samedi"], "answer": 0, "difficulty": 2},
+{"q": "Count Orlok appears in which 1922 silent horror film?", "options": ["Nosferatu", "Dracula", "The Cabinet of Dr. Caligari", "Metropolis"], "answer": 0, "difficulty": 3},
+{"q": "Which 1978 horror film introduced Michael Myers?", "options": ["Halloween", "Friday the 13th", "Psycho", "Scream"], "answer": 0, "difficulty": 2},
+{"q": "Who directed the 1978 film Halloween?", "options": ["John Carpenter", "Wes Craven", "Tim Burton", "George Romero"], "answer": 0, "difficulty": 3},
+{"q": "What is Michael Myers' masked weapon commonly shown as?", "options": ["A kitchen knife", "A chainsaw", "A sword", "An axe"], "answer": 0, "difficulty": 2},
+{"q": "Which 1996 horror film helped popularize the Ghostface killer?", "options": ["Scream", "The Ring", "I Know What You Did Last Summer", "Candyman"], "answer": 0, "difficulty": 2},
+{"q": "Who directed Scream (1996)?", "options": ["Wes Craven", "John Carpenter", "Tim Burton", "Sam Raimi"], "answer": 0, "difficulty": 3},
+{"q": "Which 1993 film features three witches named the Sanderson sisters?", "options": ["Hocus Pocus", "The Craft", "Practical Magic", "The Witches"], "answer": 0, "difficulty": 1},
+{"q": "Which 1993 stop-motion film follows Jack Skellington?", "options": ["The Nightmare Before Christmas", "Coraline", "Corpse Bride", "ParaNorman"], "answer": 0, "difficulty": 2},
+{"q": "Who directed The Nightmare Before Christmas?", "options": ["Henry Selick", "Tim Burton", "Henry Winkler", "Sam Raimi"], "answer": 0, "difficulty": 3},
+{"q": "What is Jack Skellington's title?", "options": ["The Pumpkin King", "The Skeleton King", "The Mayor of Halloween", "The Bone Prince"], "answer": 0, "difficulty": 2},
+{"q": "Which 1980 film was directed by Stanley Kubrick?", "options": ["The Shining", "Psycho", "The Exorcist", "The Thing"], "answer": 0, "difficulty": 2},
+{"q": "Which 1960 Alfred Hitchcock film features the Bates Motel?", "options": ["Psycho", "Vertigo", "The Birds", "Rebecca"], "answer": 0, "difficulty": 2},
+{"q": "Which actor played Norman Bates in Psycho?", "options": ["Anthony Perkins", "Jack Nicholson", "Vincent Price", "Christopher Lee"], "answer": 0, "difficulty": 3},
+{"q": "Which 1982 horror film features a shape-shifting alien organism?", "options": ["The Thing", "The Fly", "Alien", "Poltergeist"], "answer": 0, "difficulty": 3},
+{"q": "Which 1986 horror film stars Jeff Goldblum after a scientific experiment goes wrong?", "options": ["The Fly", "The Thing", "Gremlins", "The Lost Boys"], "answer": 0, "difficulty": 3},
+{"q": "Which family was created by cartoonist Charles Addams?", "options": ["The Addams Family", "The Munsters", "The Spooky Family", "The Graves"], "answer": 0, "difficulty": 2},
+{"q": "What is Wednesday Addams' brother's name?", "options": ["Pugsley", "Fester", "Gomez", "Thing"], "answer": 0, "difficulty": 2},
+{"q": "What is the name of the disembodied hand in The Addams Family?", "options": ["Thing", "Handy", "Palm", "Digits"], "answer": 0, "difficulty": 2},
+{"q": "What is the Addams family's butler named?", "options": ["Lurch", "Igor", "Herman", "Bates"], "answer": 0, "difficulty": 2},
+{"q": "Which Halloween-themed author wrote Something Wicked This Way Comes?", "options": ["Ray Bradbury", "Stephen King", "Dean Koontz", "Clive Barker"], "answer": 0, "difficulty": 3},
+{"q": "What year was Ray Bradbury's Something Wicked This Way Comes published?", "options": ["1948", "1952", "1962", "1972"], "answer": 2, "difficulty": 3},
+{"q": "Who wrote The Halloween Tree?", "options": ["Ray Bradbury", "Stephen King", "R. L. Stine", "Neil Gaiman"], "answer": 0, "difficulty": 3},
+{"q": "Which holiday is celebrated in Mexico on November 1 and 2 and honors deceased loved ones?", "options": ["Día de los Muertos", "Cinco de Mayo", "Las Posadas", "Día de la Candelaria"], "answer": 0, "difficulty": 2},
+{"q": "What flower is especially associated with Día de los Muertos?", "options": ["Marigold", "Rose", "Tulip", "Lavender"], "answer": 0, "difficulty": 2},
+{"q": "What are the colorful skulls associated with Día de los Muertos called?", "options": ["Calaveras", "Catrinas", "Almas", "Azucenas"], "answer": 0, "difficulty": 3},
+{"q": "What is a traditional altar for Día de los Muertos called?", "options": ["Ofrenda", "Altar de luna", "Memoria", "Calavera"], "answer": 0, "difficulty": 3},
+{"q": "The Salem witch trials took place primarily in which U.S. state?", "options": ["Massachusetts", "Virginia", "New York", "Pennsylvania"], "answer": 0, "difficulty": 2},
+{"q": "In what year did the Salem witch trials begin?", "options": ["1492", "1692", "1792", "1892"], "answer": 1, "difficulty": 3},
+{"q": "Which English village is famous for the Pendle witch trials of 1612?", "options": ["Pendle", "Whitby", "York", "Bath"], "answer": 0, "difficulty": 3},
+{"q": "What is the traditional fear of Friday the 13th called?", "options": ["Paraskevidekatriaphobia", "Triskaidekaphobia", "Samhainophobia", "Nyctophobia"], "answer": 0, "difficulty": 3},
+{"q": "What is the fear of the number 13 called?", "options": ["Triskaidekaphobia", "Thanatophobia", "Arachnophobia", "Nyctophobia"], "answer": 0, "difficulty": 3},
+{"q": "What is the fear of spiders called?", "options": ["Arachnophobia", "Entomophobia", "Herpetophobia", "Acrophobia"], "answer": 0, "difficulty": 2},
+{"q": "What is the fear of darkness called?", "options": ["Nyctophobia", "Necrophobia", "Claustrophobia", "Scotophobia"], "answer": 0, "difficulty": 3},
+{"q": "What is the fear of death called?", "options": ["Thanatophobia", "Necrophobia", "Somniphobia", "Atelophobia"], "answer": 0, "difficulty": 3},
+{"q": "What is a bat biologically classified as?", "options": ["A mammal", "A bird", "A reptile", "An insect"], "answer": 0, "difficulty": 1},
+{"q": "Which animal is the only mammal capable of true sustained flight?", "options": ["Bat", "Flying squirrel", "Sugar glider", "Colugo"], "answer": 0, "difficulty": 3},
+{"q": "What is a group of bats commonly called?", "options": ["Colony", "Murder", "Parliament", "Crash"], "answer": 0, "difficulty": 2},
+{"q": "What is a group of crows commonly called?", "options": ["Murder", "Colony", "Parliament", "Gaggle"], "answer": 0, "difficulty": 2},
+{"q": "What is a group of owls commonly called?", "options": ["Parliament", "Murder", "Convocation", "Horde"], "answer": 0, "difficulty": 3},
+{"q": "Spiders belong to which class of animals?", "options": ["Arachnids", "Insects", "Crustaceans", "Mollusks"], "answer": 0, "difficulty": 2},
+{"q": "How many eyes do most spiders have?", "options": ["8", "6", "4", "10"], "answer": 0, "difficulty": 2},
+{"q": "Which creature is traditionally said to be unable to cross running water in some folklore?", "options": ["Vampire", "Werewolf", "Goblin", "Mummy"], "answer": 0, "difficulty": 3},
+{"q": "Which metal is traditionally associated with defeating werewolves?", "options": ["Silver", "Iron", "Copper", "Gold"], "answer": 0, "difficulty": 1},
+{"q": "Which object is traditionally associated with breaking a vampire's curse in some folklore?", "options": ["A stake", "A bell", "A mirror", "A horseshoe"], "answer": 0, "difficulty": 2},
+{"q": "What household item is famously associated with a vampire's inability to see its own reflection?", "options": ["Mirror", "Clock", "Window", "Candle"], "answer": 0, "difficulty": 2},
+{"q": "Which folklore creature is sometimes described as a small household spirit or goblin?", "options": ["Brownie", "Banshee", "Kraken", "Selkie"], "answer": 0, "difficulty": 3},
+{"q": "What is a selkie in folklore?", "options": ["A seal that can take human form", "A forest witch", "A ghostly horse", "A winged goblin"], "answer": 0, "difficulty": 3},
+{"q": "What is a kelpie in Scottish folklore?", "options": ["A shape-shifting water spirit", "A vampire", "A grave witch", "A giant spider"], "answer": 0, "difficulty": 3},
+{"q": "What is a gargoyle traditionally associated with?", "options": ["Architecture and protecting buildings", "Harvesting pumpkins", "Sea voyages", "Moon rituals"], "answer": 0, "difficulty": 2},
+{"q": "What is a grimoire?", "options": ["A book of magic or spells", "A haunted house", "A type of potion", "A witch's broom"], "answer": 0, "difficulty": 2},
+{"q": "What is a coven?", "options": ["A group of witches", "A haunted cemetery", "A vampire clan only", "A type of spell"], "answer": 0, "difficulty": 1},
+{"q": "What is the traditional name for a witch's pointed hat in Halloween imagery?", "options": ["A witch hat", "A cone cap", "A moon cap", "A crone hood"], "answer": 0, "difficulty": 1},
+{"q": "Which plant is traditionally associated with protection from evil in some European folklore?", "options": ["Garlic", "Tulip", "Cactus", "Fern"], "answer": 0, "difficulty": 2},
+{"q": "Which herb is commonly associated with protection and purification in folklore?", "options": ["Sage", "Basil", "Rosemary", "All of these"], "answer": 3, "difficulty": 2},
+{"q": "Which ancient Roman festival honoring the dead is sometimes discussed alongside the history of Halloween?", "options": ["Feralia", "Saturnalia", "Lupercalia", "Floralia"], "answer": 0, "difficulty": 3},
+{"q": "What Roman goddess was associated with the festival Lemuria?", "options": ["No single goddess; Lemuria was a Roman festival for restless spirits", "Minerva", "Venus", "Diana"], "answer": 0, "difficulty": 3},
+{"q": "Which month contains Halloween?", "options": ["October", "September", "November", "December"], "answer": 0, "difficulty": 1},
+{"q": "What date is Halloween?", "options": ["October 31", "October 30", "November 1", "September 31"], "answer": 0, "difficulty": 1}
+];
+
+const HALLOWEEN_TRIVIA_SPECIALS = [
+{"prompt": "🎃 **PICK THE RIGHT PUMPKIN**\nOnly one pumpkin contains the treasure. Choose wisely!", "options": ["🎃 Pumpkin 1", "🎃 Pumpkin 2", "🎃 Pumpkin 3", "🎃 Pumpkin 4", "🎃 Pumpkin 5"], "answer": null, "difficulty": 2},
+{"prompt": "🕷️ **DON'T PICK THE SPIDER**\nOne grave is safe. The others are cursed.", "options": ["🪦 Grave 1", "🪦 Grave 2", "🪦 Grave 3", "🪦 Grave 4"], "answer": null, "difficulty": 2},
+{"prompt": "👻 **WHICH GHOST IS LYING?**\nGhost A says Halloween is October 31. Ghost B says All Saints' Day is November 1. Ghost C says All Souls' Day is November 3.", "options": ["Ghost A", "Ghost B", "Ghost C", "They're all lying"], "answer": 2, "difficulty": 2},
+{"prompt": "🎃 **PUMPKIN MEMORY**\nWhich pumpkin matches the clue: the treasure is NOT beside a skull?", "options": ["🎃 Pumpkin 1", "🎃 Pumpkin 2", "🎃 Pumpkin 3", "🎃 Pumpkin 4"], "answer": null, "difficulty": 2},
+{"prompt": "🔮 **PICK A CRYSTAL**\nOne crystal contains a +400 Spookies blessing.", "options": ["🔮 Crystal 1", "🔮 Crystal 2", "🔮 Crystal 3", "🔮 Crystal 4"], "answer": null, "difficulty": 3},
+{"prompt": "🧪 **WITCH'S POTION**\nPick the ingredient that does NOT belong in a classic spooky potion.", "options": ["🦇 Bat wing", "🍄 Mushroom", "🧛 Vampire cape", "🌹 Rose"], "answer": 2, "difficulty": 1},
+{"prompt": "🪦 **CHOOSE YOUR GRAVE**\nOne grave contains +300 Spookies. One is empty. One is cursed. One is a trick.", "options": ["⚰️ Grave 1", "⚰️ Grave 2", "⚰️ Grave 3", "⚰️ Grave 4"], "answer": null, "difficulty": 2},
+{"prompt": "🐺 **WHO GOES THERE?**\nChoose the creature associated with a full moon.", "options": ["🐺 Werewolf", "🧛 Vampire", "🧙 Witch", "🧟 Zombie"], "answer": 0, "difficulty": 1},
+{"prompt": "🕯️ **CANDLE TEST**\nWhich flame should you follow? Only one leads toward safety.", "options": ["🕯️ Blue Flame", "🕯️ Green Flame", "🕯️ Purple Flame", "🕯️ Black Flame"], "answer": 0, "difficulty": 2},
+{"prompt": "🧠 **BRAIN OR BANE?**\nPick the thing most traditionally associated with zombies.", "options": ["🧠 Brain", "🍎 Apple", "🌹 Rose", "💎 Diamond"], "answer": 0, "difficulty": 1},
+{"prompt": "🧛 **VAMPIRE'S CHOICE**\nWhich item is the classic folklore defense?", "options": ["🧄 Garlic", "🍫 Chocolate", "🌻 Sunflower", "🍬 Candy corn"], "answer": 0, "difficulty": 1},
+{"prompt": "🧹 **WITCH'S CHOICE**\nWhich object belongs with the witch?", "options": ["🧹 Broom", "🏄 Surfboard", "🎻 Violin", "🪁 Kite"], "answer": 0, "difficulty": 1},
+{"prompt": "🧩 **UNSCRAMBLE IT**\nWhich spooky word can be made from these letters: S A H T G O?", "options": ["GHOST", "SHOATG", "GHOSTS", "THOGSA"], "answer": 0, "difficulty": 2},
+{"prompt": "🧩 **UNSCRAMBLE IT**\nWhich word can be made from: M P K U I N?", "options": ["PUMKIN", "PUMPKIN", "PUNKIM", "KUMPIN"], "answer": 1, "difficulty": 1},
+{"prompt": "⚰️ **THE FINAL DOOR**\nOnly one door leads to the graveyard. Pick it.", "options": ["🚪 Door 1", "🚪 Door 2", "🚪 Door 3", "🚪 Door 4"], "answer": null, "difficulty": 3},
+{"prompt": "🎭 **MASK MATCH**\nWhich mask is traditionally associated with the Day of the Dead?", "options": ["💀 Calavera", "🎭 Comedy mask", "😷 Surgical mask", "👺 Oni mask"], "answer": 0, "difficulty": 2},
+{"prompt": "🌕 **MOONLIGHT ROUND**\nWhich creature is the best match for a full moon?", "options": ["🐺 Werewolf", "🧟 Zombie", "🧙 Witch", "🕷️ Spider"], "answer": 0, "difficulty": 1},
+{"prompt": "📜 **ANCIENT CLUE**\nWhich festival is most directly associated with Halloween's Celtic roots?", "options": ["Samhain", "Saturnalia", "Yule", "Beltane"], "answer": 0, "difficulty": 2},
+{"prompt": "🕸️ **ODD ONE OUT**\nWhich does NOT belong with the others?", "options": ["🕷️ Spider", "🦂 Scorpion", "🦀 Crab", "🦇 Bat"], "answer": 3, "difficulty": 2},
+{"prompt": "🐈‍⬛ **BLACK CAT TEST**\nWhich animal is traditionally linked with witches?", "options": ["🐈‍⬛ Cat", "🐇 Rabbit", "🦌 Deer", "🐿️ Squirrel"], "answer": 0, "difficulty": 1},
+{"prompt": "🎃 **HALLOWEEN DATE**\nPick the correct date.", "options": ["October 29", "October 30", "October 31", "November 1"], "answer": 2, "difficulty": 1},
+{"prompt": "💀 **NUMBER OF DOOM**\nWhich number is traditionally considered unlucky in Western folklore?", "options": ["7", "9", "13", "21"], "answer": 2, "difficulty": 2},
+{"prompt": "🕯️ **RIDDLE OF THE NIGHT**\nI glow, I melt, and I help you see in haunted halls. What am I?", "options": ["Candle", "Moon", "Firefly", "Lanternfish"], "answer": 0, "difficulty": 1},
+{"prompt": "🧠 **FINAL BRAIN TEST**\nWhich classic novel was written by Mary Shelley?", "options": ["Frankenstein", "Dracula", "The Raven", "The Shining"], "answer": 0, "difficulty": 2},
+{"prompt": "🎰 **CURSED GAMBLE**\nChoose your fate: one option gives +100, one +500, one +1,000, one -200.", "options": ["🎲 Fate A", "🎲 Fate B", "🎲 Fate C", "🎲 Fate D"], "answer": null, "difficulty": 3},
+{"prompt": "🪄 **SPELLBOOK CHOICE**\nWhich book is most associated with magic spells?", "options": ["📖 Grimoire", "📕 Atlas", "📗 Cookbook", "📘 Dictionary"], "answer": 0, "difficulty": 2},
+{"prompt": "🦇 **BAT OR BIRD?**\nWhich is actually a mammal?", "options": ["🦇 Bat", "🦉 Owl", "🐦 Crow", "🦅 Raven"], "answer": 0, "difficulty": 1},
+{"prompt": "🧛 **WHO IS THE LIAR?**\nA says garlic is folklore protection from vampires. B says vampires are associated with blood. C says Dracula was written by Mary Shelley.", "options": ["A", "B", "C", "All three"], "answer": 2, "difficulty": 2},
+{"prompt": "🕷️ **COUNT THE LEGS**\nPick the creature with eight legs.", "options": ["🕷️ Spider", "🦇 Bat", "🐺 Wolf", "🧙 Witch"], "answer": 0, "difficulty": 1},
+{"prompt": "⚡ **RAPID FIRE**\nWhich answer belongs with the clue: 'Headless rider'?", "options": ["Sleepy Hollow", "Transylvania", "Salem", "Halloweentown"], "answer": 0, "difficulty": 2}
+];
+
+function halloweenTriviaPick(pool, used) {
+  const available = pool.filter((_,i)=>!used.has(i));
+  if(!available.length) return null;
+  const item=available[randomInt(0,available.length-1)];
+  used.add(pool.indexOf(item));
+  return item;
+}
+function halloweenTriviaBuildRun() {
+  const usedQ=new Set(),usedS=new Set(),run=[];
+  const pickQ=(difficulty)=>{
+    const pool=HALLOWEEN_TRIVIA_QUESTIONS.map((x,i)=>({x,i})).filter(o=>o.x.difficulty===difficulty&&!usedQ.has(o.i));
+    if(!pool.length)return HALLOWEEN_TRIVIA_QUESTIONS[randomInt(0,HALLOWEEN_TRIVIA_QUESTIONS.length-1)];
+    const chosen=pool[randomInt(0,pool.length-1)]; usedQ.add(chosen.i); return chosen.x;
+  };
+  const pickS=()=>{const pool=HALLOWEEN_TRIVIA_SPECIALS.map((x,i)=>({x,i})).filter(o=>!usedS.has(o.i));if(!pool.length)return null;const chosen=pool[randomInt(0,pool.length-1)];usedS.add(chosen.i);return chosen.x;};
+  const plan=[1,1,2,"special",2,3,"special",2,3,"special",3,"special",3,"special",3];
+  for(const d of plan) run.push(d==="special"?pickS():pickQ(d));
+  return run;
+}
+function halloweenTriviaCreate(guildId,user,channelId){
+  return {id:`ht-${Date.now().toString(36)}-${randomInt(100,999)}`,type:"trivia",status:"playing",guildId,channelId,playerId:user.id,round:0,correct:0,wrong:0,streak:0,bestStreak:0,score:0,challenges:halloweenTriviaBuildRun(),lastResult:"",awaitingNext:false,publicMessageId:"",finished:false};
+}
+function halloweenTriviaDifficultyLabel(d){return d===1?"🟢 EASY":d===2?"🟡 MEDIUM":"🔴 HARD";}
+function halloweenTriviaReward(d,correct,streak){if(!correct)return -25;if(d>=3)return 250+Math.min(150,Math.max(0,streak-1)*25);if(d===2)return 150+Math.min(100,Math.max(0,streak-1)*20);return 100+Math.min(75,Math.max(0,streak-1)*15);}
+function halloweenTriviaBoardText(g){
+  const c=g.challenges[g.round];
+  if(!c)return "🧠 **HAUNTED TRIVIA**";
+  if(g.awaitingNext) return ["🧠 **HAUNTED TRIVIA**",``,g.lastResult,"",`🧠 Correct: **${g.correct}/${g.round+1}**`, `🔥 Best Streak: **${g.bestStreak}**`].join("\n");
+  const special=Boolean(c.prompt);
+  return ["🧠 **HAUNTED TRIVIA**",``, `🎃 **CHALLENGE ${g.round+1} / 15**`, special?c.prompt:`**${c.q}**`, ``, `🎯 Difficulty: **${halloweenTriviaDifficultyLabel(c.difficulty)}**`, ``, `🧠 Correct: **${g.correct}**  •  🔥 Streak: **${g.streak}**`, `💰 Score: **${g.score} Spookies**`].join("\n");
+}
+function halloweenTriviaRows(g){
+  if(g.awaitingNext) return [row(button(g.round>=14?"🏆 SEE FINAL RESULTS":"➡️ NEXT CHALLENGE",`halloween:trivia:next:${g.id}`,1))];
+  const c=g.challenges[g.round];
+  return [
+    row(...c.options.map((opt,i)=>button(String(opt),`halloween:trivia:answer:${g.id}:${i}`,1))),
+    row(button("📖 HOW TO PLAY","halloween:trivia:howto",2),button("🎮 HALLOWEEN GAMES","halloween:games",2))
+  ];
+}
+async function halloweenTriviaPublishPublic(env,g){
+  if(!g?.channelId)return null;
+  if(g.publicMessageId){try{await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});}catch{}}
+  const sent=await sendChannelMessage(env,g.channelId,halloweenTriviaBoardText(g),halloweenTriviaRows(g));
+  g.publicMessageId=sent?.id||"";
+  return sent;
+}
+function halloweenTriviaHowTo(){return [
+  "🧠 **HAUNTED TRIVIA — HOW TO PLAY**","",
+  "🎃 Survive **15 randomized challenges**.",
+  "🧠 The game has a huge question bank, so runs won't repeat the same order.",
+  "🟢 Early rounds are easier; later rounds get harder.",
+  "🎭 Some rounds aren't questions at all — pick pumpkins, graves, crystals, solve weird choices, and survive cursed challenges.",
+  "✅ After every answer, the game tells you the **correct answer** before moving on.",
+  "🔥 Correct answers build a streak and increase your rewards.",
+  "💀 Wrong answers cost **25 Spookies**.",
+  "🏆 Reach **10 correct answers in one run** to unlock the 🧠 **Zombie Brain** collectible.",
+  "💰 Finish all 15 challenges for your final Spookies payout."
+].join("\n");}
+async function halloweenTriviaFinish(env,interaction,state,g){
+  g.status="ended";g.finished=true;g.awaitingNext=false;
+  const bonus=g.correct===15?750:g.correct>=12?500:g.correct>=10?300:0;
+  const totalReward=Math.max(0,g.score+bonus);
+  if(totalReward) await addHalloweenSpookies(env,g.playerId,totalReward);
+  const before=await getPlayer(env,g.playerId);
+  const newlyUnlocked=g.correct>=10&&!before.halloweenCollection?.includes("zombie_brain");
+  if(newlyUnlocked) await halloweenUnlock(env,g.playerId,"zombie_brain");
+  await halloweenMarkPlayed(env,g.playerId,1);
+  const rank=g.correct===15?"☠️ MASTER OF THE MACABRE":g.correct>=13?"👁️ OCCULT SCHOLAR":g.correct>=10?"👻 GHOST WHISPERER":g.correct>=7?"🎃 HALLOWEEN SURVIVOR":g.correct>=4?"🕷️ SPOOKY NOVICE":"💀 HAUNTED";
+  g.endText=["🧠🎃 **HAUNTED TRIVIA COMPLETE!**","",`🧠 Correct: **${g.correct} / 15**`,`❌ Wrong: **${g.wrong}`,`🔥 Best Streak: **${g.bestStreak}**`,`💰 Challenge Score: **${g.score.toLocaleString()} Spookies**`,`🎁 Completion Bonus: **${bonus.toLocaleString()} Spookies**`,`👻 Final Reward: **${totalReward.toLocaleString()} Spookies**`,``, `🏆 **RANK: ${rank}**`,``, newlyUnlocked?"🧠 **ZOMBIE BRAIN UNLOCKED!**\n\nYou answered at least 10 challenges correctly in one run. The brain has been added to your permanent Halloween collection!":before.halloweenCollection?.includes("zombie_brain")?"🧠 **Zombie Brain already collected!**\n\nYou met the unlock requirement again, but this collectible can only be earned once.":"🔒 **Zombie Brain remains undiscovered.**\n\nAnswer at least **10 challenges correctly** in a future run to unlock it."].join("\n");
+  await saveGuildState(env,interaction.guild_id,state); await halloweenTriviaPublishPublic(env,g); state.halloween.activeGame=null; await saveGuildState(env,interaction.guild_id,state);
+}
+async function halloweenTriviaComponent(env,interaction,parts){
+  const state=await getGuildState(env,interaction.guild_id),g=state.halloween?.activeGame,user=getUserFromInteraction(interaction);
+  if(!g||g.type!=="trivia")return sendText(env,interaction,"🧠 There is no active Haunted Trivia game.");
+  if(!user||String(user.id)!==String(g.playerId))return sendText(env,interaction,"❌ This Haunted Trivia game belongs to another player.");
+  const action=parts[2];
+  if(action==="howto")return sendText(env,interaction,halloweenTriviaHowTo(),[row(button("⬅️ Back to Trivia",`halloween:trivia:back:${g.id}`,2))]);
+  if(action==="back")return sendText(env,interaction,halloweenTriviaBoardText(g),halloweenTriviaRows(g));
+  if(g.status!=="playing")return sendText(env,interaction,"🧠 This Haunted Trivia run has ended.");
+  if(action==="answer"){
+    if(g.awaitingNext)return sendText(env,interaction,"⏳ Choose **NEXT CHALLENGE** first.");
+    const index=Number(parts[4]); const c=g.challenges[g.round];
+    if(!c||!Number.isInteger(index)||index<0||index>=c.options.length)return sendText(env,interaction,"❌ Invalid answer.");
+    let answer=c.answer;
+    // Some special rounds are deliberately randomized when created. Store the answer on the challenge.
+    if(answer===null||answer===undefined){ answer=randomInt(0,c.options.length-1); c.answer=answer; }
+    const correct=index===answer; if(correct){g.correct++;g.streak++;g.bestStreak=Math.max(g.bestStreak,g.streak);}else{g.wrong++;g.streak=0;}
+    const delta=halloweenTriviaReward(c.difficulty,correct,g.streak);g.score+=delta;
+    const chosen=c.options[index],correctAnswer=c.options[answer];
+    g.lastResult=correct?`✅ **CORRECT!**\n\nYou chose: **${chosen}**\n\n🧠 **Correct answer: ${correctAnswer}**\n💰 **+${delta} Spookies**\n🔥 Streak: **${g.streak}**`:`❌ **WRONG!**\n\nYou chose: **${chosen}**\n\n✅ **Correct answer: ${correctAnswer}**\n💀 **${delta} Spookies**\n🔥 Streak reset to **0**`;
+    g.awaitingNext=true; await saveGuildState(env,interaction.guild_id,state); await halloweenTriviaPublishPublic(env,g); return sendText(env,interaction,correct?"🧠 Correct!":"💀 Wrong!");
+  }
+  if(action==="next"){
+    if(!g.awaitingNext)return sendText(env,interaction,"➡️ Answer the current challenge first.");
+    if(g.round>=14){await halloweenTriviaFinish(env,interaction,state,g);return sendText(env,interaction,"🏆 **Haunted Trivia complete!** Check the final results board.");}
+    g.round++;g.awaitingNext=false;g.lastResult="";await saveGuildState(env,interaction.guild_id,state);await halloweenTriviaPublishPublic(env,g);return sendText(env,interaction,"🎃 **Next challenge!**");
+  }
+  return sendText(env,interaction,"❌ Unknown Haunted Trivia action.");
+}
+async function halloweenTriviaStart(env,interaction){
+  const user=getUserFromInteraction(interaction); if(!user)return sendText(env,interaction,"❌ I couldn't identify your account.");
+  const state=await getGuildState(env,interaction.guild_id); if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");
+  const g=halloweenTriviaCreate(interaction.guild_id,user,interaction.channel_id); state.halloween={activeGame:g}; await saveGuildState(env,interaction.guild_id,state); await halloweenTriviaPublishPublic(env,g);
+  return sendText(env,interaction,"🧠 **HAUNTED TRIVIA STARTED!** Your 15-challenge run is in the channel. Good luck. 👻");
+}
 
 /* =========================================================
    GRAVE ROBBER — 2-PLAYER HALLOWEEN GAME
@@ -30620,7 +30867,7 @@ async function halloweenEnd(env,interaction){
   return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
 }
 
-async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:grave"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenGraveCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));}if(id==="halloween:start:maze"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenMazeCreate(interaction.guild_id,user,interaction.channel_id);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);await halloweenMazePublishPublic(env,g);return sendText(env,interaction,"🗺️ **HAUNTED MAZE STARTED!** Your maze is in the channel above. Find all three relics and escape! 👻");}if(id.startsWith("halloween:maze:"))return halloweenMazeComponent(env,interaction,parts);if(id.startsWith("halloween:grave:"))return halloweenGraveComponent(env,interaction,parts);if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:grave"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenGraveCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));}if(id==="halloween:start:maze"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenMazeCreate(interaction.guild_id,user,interaction.channel_id);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);await halloweenMazePublishPublic(env,g);return sendText(env,interaction,"🗺️ **HAUNTED MAZE STARTED!** Your maze is in the channel above. Find all three relics and escape! 👻");}if(id==="halloween:start:trivia")return halloweenTriviaStart(env,interaction);if(id==="halloween:trivia:howto")return sendText(env,interaction,halloweenTriviaHowTo(),[row(button("⬅️ Back to Trivia","halloween:trivia:back:current",2))]);if(id.startsWith("halloween:trivia:"))return halloweenTriviaComponent(env,interaction,parts);if(id.startsWith("halloween:maze:"))return halloweenMazeComponent(env,interaction,parts);if(id.startsWith("halloween:grave:"))return halloweenGraveComponent(env,interaction,parts);if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
@@ -34485,7 +34732,8 @@ export default {
         customId.startsWith("halloween:hide:stay:") ||
         customId === "halloween:hide:ability" ||
         customId === "halloween:hide:ghost" ||
-        customId.startsWith("halloween:zombie:");
+        customId.startsWith("halloween:zombie:") ||
+        customId.startsWith("halloween:trivia:");
 
       const ack = await fetch(
         `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
