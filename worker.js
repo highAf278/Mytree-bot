@@ -1159,6 +1159,9 @@ function defaultPlayer() {
     seenNewsIds: [],
     sparklePendingPurchaseId: "",
     halloweenSpookies: 0,
+    witchShopInventory: {},
+    witchEffects: {},
+    witchMessageState: {},
     halloweenDailyDate: "",
     halloweenDailyStreak: 0,
     halloweenGamesPlayed: 0,
@@ -2529,6 +2532,41 @@ async function savePlayer(env, player, ownerId = null, options = {}) {
     } catch (error) {
       // Never let Empire bookkeeping prevent the original save.
       console.error("Raccoon Empire bonus processing failed:", error);
+    }
+  }
+
+  /*
+     WITCH'S SHOP — Sparkle Alchemy and Sparkle curses.
+     Apply only to positive balance changes so purchases/spending are not
+     modified. This central hook covers reward systems that save player data
+     without each game needing its own Witch's Shop integration.
+  */
+  if (!options.skipWitchSparkleModifiers) {
+    try {
+      const rawPreviousWitch = await env.TREE_DATA.get(key);
+      if (rawPreviousWitch) {
+        const previousWitch = JSON.parse(rawPreviousWitch);
+        const before = Number(previousWitch.sparkles || 0);
+        const after = Number(player.sparkles || 0);
+        const gain = after - before;
+        if (gain > 0) {
+          const effects = player.witchEffects || {};
+          const now = Date.now();
+          let multiplier = 1;
+          if (Number(effects.sparkle_alchemy_until || 0) > now) multiplier *= 1.25;
+          if (Number(effects.broken_fortune_until || 0) > now) multiplier *= 0.25;
+          if (Number(effects.hollow_soul_until || 0) > now) multiplier *= 0.5;
+          const adjusted = Math.max(0, Math.floor(gain * multiplier));
+          player.sparkles = before + adjusted;
+          const delta = adjusted - gain;
+          if (delta > 0) {
+            player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
+            player.badgeStats.sparklesEarned = Math.max(0, Number(player.badgeStats.sparklesEarned || 0) + delta);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Witch Shop Sparkle modifier failed:", error);
     }
   }
 
@@ -7716,8 +7754,16 @@ async function handleWater(
     player.waterCount =
       Number(player.waterCount || 0) + 1;
 
-    player.exp +=
-      EXP_PER_WATER;
+    const witchEffectsNow = player.witchEffects || {};
+    const witchNow = Date.now();
+    const doubleGrowthActive = Number(witchEffectsNow.double_growth_until || 0) > witchNow;
+    const slothActive = Number(witchEffectsNow.sloth_until || 0) > witchNow;
+    const witheringActive = Number(witchEffectsNow.withering_until || 0) > witchNow;
+    const judgmentActive = Number(witchEffectsNow.final_judgment_until || 0) > witchNow;
+    const wateringExp = (judgmentActive || slothActive || witheringActive)
+      ? 0
+      : EXP_PER_WATER * (doubleGrowthActive ? 2 : 1);
+    player.exp += wateringExp;
 
     const oldLevel =
       player.level;
@@ -7749,7 +7795,7 @@ async function handleWater(
     const personality = getPersonality(player);
 
     const parts = [
-      `💧 You watered your tree! +${EXP_PER_WATER} EXP.`,
+      `💧 You watered your tree! +${wateringExp} EXP${wateringExp === 0 ? " (a curse blocked the growth 😭)" : doubleGrowthActive ? " (DOUBLE GROWTH! 🧪)" : ""}.`,
       `🎭 **${personality.name} Tree:** ${personality.messages[randomInt(0, personality.messages.length - 1)]}`
     ];
 
@@ -11770,13 +11816,14 @@ function birthdayTruthPassButtons(g) {
   const active = Array.isArray(g?.players) ? g.players.filter(p => p.active !== false) : [];
   const refresh = button("🔄 Refresh", "truthpass:refresh", 2);
   const skip = button("⏭️ Host Skip", "truthpass:skip", 2);
-  if (g?.status === "lobby") return [row(button("🎉 Join", "truthpass:join", 1), button("🚪 Leave", "truthpass:leave", 2), button("▶️ Start", "truthpass:start", 3), refresh)];
-  if (g?.status === "choosing") return [row(button("💬 Truth", "truthpass:truth", 1), button("🎭 Dare", "truthpass:dare", 4), button("🚪 Quit", "truthpass:quit", 2), refresh, skip)];
-  if (g?.status === "truth") return [row(button("✍️ Answer Truth", "truthpass:answer", 1), button("⏭️ Pass", "truthpass:pass", 2), button("🚪 Quit", "truthpass:quit", 2), refresh, skip)];
-  if (g?.status === "dare") return [row(button("✅ I Did It!", "truthpass:done", 3), button("🚪 Quit", "truthpass:quit", 2), refresh, skip)];
+  const end = button("🛑 End Game", "truthpass:end", 4);
+  if (g?.status === "lobby") return [row(button("🎉 Join", "truthpass:join", 1), button("🚪 Leave", "truthpass:leave", 2), button("▶️ Start", "truthpass:start", 3), refresh), row(end)];
+  if (g?.status === "choosing") return [row(button("💬 Truth", "truthpass:truth", 1), button("🎭 Dare", "truthpass:dare", 4), button("🚪 Quit", "truthpass:quit", 2), refresh, skip), row(end)];
+  if (g?.status === "truth") return [row(button("✍️ Answer Truth", "truthpass:answer", 1), button("⏭️ Pass", "truthpass:pass", 2), button("🚪 Quit", "truthpass:quit", 2), refresh, skip), row(end)];
+  if (g?.status === "dare") return [row(button("✅ I Did It!", "truthpass:done", 3), button("🚪 Quit", "truthpass:quit", 2), refresh, skip), row(end)];
   if (g?.status === "confirming") {
     const confirmed = active.filter(p => String(p.id) !== String(g.currentId) && g.confirmations?.[p.id]).length;
-    return [row(button(`✅ Confirm (${confirmed}/${Math.max(0, active.length - 1)})`, "truthpass:confirm", 3), button("🚪 Quit", "truthpass:quit", 2), refresh, skip)];
+    return [row(button(`✅ Confirm (${confirmed}/${Math.max(0, active.length - 1)})`, "truthpass:confirm", 3), button("🚪 Quit", "truthpass:quit", 2), refresh, skip), row(end)];
   }
   return [];
 }
@@ -11817,6 +11864,28 @@ async function newBirthdayTruthPassTurnMessage(env, g) {
   g.messageId = msg?.id || "";
 }
 async function birthdayTruthPassReply(env,interaction,content,components=[]) { return interaction.__deferred ? sendEphemeralFollowup(env,interaction,content,components) : sendText(env,interaction,content,components); }
+
+async function birthdayTruthPassEnd(env, interaction) {
+  const guildId = interaction.guild_id;
+  if (!guildId) return birthdayTruthPassReply(env, interaction, "❌ Truth or Drink can only be ended inside a server.");
+  const state = await getGuildState(env, guildId);
+  const g = state.games?.truthPass || state.birthday?.games?.truthDrink;
+  if (!g?.active && (!g?.status || g.status === "finished")) {
+    return birthdayTruthPassReply(env, interaction, "💬 There is no active Truth or Drink game to end.");
+  }
+  // This is a public party game; any server member can clear a stuck session
+  // so an absent host cannot lock everyone else out of starting a new game.
+  g.active = false;
+  g.status = "finished";
+  g.endedAt = Date.now();
+  g.actionLabel = "🛑 The game was ended manually. Start a fresh lobby whenever you're ready.";
+  state.games = state.games || {};
+  state.games.truthPass = g;
+  if (state.birthday?.games?.truthDrink) state.birthday.games.truthDrink = null;
+  await saveGuildState(env, guildId, state);
+  await editBirthdayTruthPassMessage(env, g);
+  return birthdayTruthPassReply(env, interaction, "🛑 **Truth or Drink ended.** The stuck game has been cleared, and someone can start a fresh one now.");
+}
 
 async function birthdayTruthPassRefresh(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);const g=state.games?.truthPass;
@@ -15754,6 +15823,7 @@ async function handleComponent(
   }
   if (id.startsWith("truthpass:")) {
     const sub=id.split(":")[1];
+    if(sub==="end") return birthdayTruthPassEnd(env,interaction);
     if(sub==="join") return birthdayTruthPassJoin(env,interaction);
     if(sub==="leave") return birthdayTruthPassLeave(env,interaction);
     if(sub==="start") return birthdayTruthPassStart(env,interaction);
@@ -29266,7 +29336,8 @@ const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Aban
 
 function halloweenHubComponents() {
   return [
-    row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3))
+    row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3)),
+    row(button("🧙‍♀️ Witch’s Shop", "halloween:witch:shop", 1))
   ];
 }
 function halloweenHubText(player) {
@@ -29802,7 +29873,7 @@ async function spookSmashFinish(env, interaction, g) {
   g.newBest = Number(g.score || 0) > oldBest;
   p.halloweenSpookSmashBest = Math.max(oldBest, Number(g.score || 0));
   p.halloweenSpookSmashRuns = Number(p.halloweenSpookSmashRuns || 0) + 1;
-  p.halloweenSpookies = Math.max(0, Number(p.halloweenSpookies || 0) + g.reward);
+  p.halloweenSpookies = Math.max(0, Number(p.halloweenSpookies || 0) + witchSpookieRewardAmount(p, g.reward));
   p.halloweenGamesPlayed = Number(p.halloweenGamesPlayed || 0) + 1;
   refreshProfileBadges(p);
   await savePlayer(env, p, g.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
@@ -30004,7 +30075,7 @@ function halloweenHowToText() {
 }
 
 async function addHalloweenSpookies(env,userId,amount) {
-  const p=await getPlayer(env,userId); p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+Number(amount||0)); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
+  const p=await getPlayer(env,userId); p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+witchSpookieRewardAmount(p, amount)); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
 }
 async function halloweenMarkPlayed(env,userId,amount=1) {
   const p=await getPlayer(env,userId); p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+amount; refreshProfileBadges(p); await savePlayer(env,p,userId,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true}); return p;
@@ -31315,7 +31386,7 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
   ];
 
   p.halloweenTrickTreatOutcomes=Array.isArray(p.halloweenTrickTreatOutcomes)?p.halloweenTrickTreatOutcomes:[];if(!p.halloweenTrickTreatOutcomes.includes(outcome))p.halloweenTrickTreatOutcomes.push(outcome);
-  p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+amount);p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+1;
+  p.halloweenSpookies=Math.max(0,Number(p.halloweenSpookies||0)+witchSpookieRewardAmount(p, amount));p.halloweenGamesPlayed=Number(p.halloweenGamesPlayed||0)+1;
   p.halloweenCollection=Array.isArray(p.halloweenCollection)?p.halloweenCollection:[];let unlocked=false;if(p.halloweenTrickTreatOutcomes.includes("treat")&&p.halloweenTrickTreatOutcomes.includes("trick")&&p.halloweenTrickTreatOutcomes.includes("rare")&&!p.halloweenCollection.includes("cursed_candy_bucket")){p.halloweenCollection.push("cursed_candy_bucket");unlocked=true;}
   refreshProfileBadges(p);await savePlayer(env,p,user.id,{skipRaccoonEmpireBonus:true,skipSparkleMagnet:true});
   const story=rare?rareLines[randomInt(0,rareLines.length-1)]:outcome==="treat"?treatLines[randomInt(0,treatLines.length-1)]:trickLines[randomInt(0,trickLines.length-1)];
@@ -31340,7 +31411,110 @@ async function halloweenEnd(env,interaction){
   return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
 }
 
-async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:grave"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenGraveCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));}if(id==="halloween:start:maze"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenMazeCreate(interaction.guild_id,user,interaction.channel_id);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);await halloweenMazePublishPublic(env,g);return sendText(env,interaction,"🗺️ **HAUNTED MAZE STARTED!** Your maze is in the channel above. Find all three relics and escape! 👻");}if(id==="halloween:start:trivia")return halloweenTriviaStart(env,interaction);if(id==="halloween:trivia:howto")return sendText(env,interaction,halloweenTriviaHowTo(),[row(button("⬅️ Back to Trivia","halloween:trivia:back:current",2))]);if(id.startsWith("halloween:trivia:"))return halloweenTriviaComponent(env,interaction,parts);if(id.startsWith("halloween:maze:"))return halloweenMazeComponent(env,interaction,parts);if(id.startsWith("halloween:grave:"))return halloweenGraveComponent(env,interaction,parts);if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
+
+const WITCH_ITEMS = {
+  double_growth: {name:"🧪 Potion of Double Growth", price:5000, kind:"potion", duration:6*3600000, description:"2× watering EXP for 6 hours."},
+  haunted_fortune: {name:"🎃 Potion of Haunted Fortune", price:8000, kind:"potion", duration:6*3600000, description:"+50% eligible Halloween-game Spookies for 6 hours."},
+  sparkle_alchemy: {name:"✨ Potion of Sparkle Alchemy", price:12000, kind:"potion", duration:3*3600000, description:"+25% eligible Sparkle earnings for 3 hours."},
+  sloth: {name:"💤 Curse of Eternal Slumber", price:25000, kind:"curse", duration:12*3600000, description:"Target earns 0 watering EXP for 12 hours."},
+  empty_coffers: {name:"💸 Curse of the Empty Coffers", price:30000, kind:"curse", duration:12*3600000, description:"Target earns 75% fewer eligible game Spookies for 12 hours."},
+  broken_fortune: {name:"🌩️ Curse of the Broken Fortune", price:35000, kind:"curse", duration:12*3600000, description:"Target earns 75% fewer eligible Sparkles for 12 hours."},
+  withering: {name:"🥀 Curse of the Dying Tree", price:40000, kind:"curse", duration:24*3600000, description:"Tree looks cursed for 24 hours; 0 watering EXP for the first 12 hours."},
+  mad_jester: {name:"🤡 Curse of the Mad Jester", price:25000, kind:"curse", duration:6*3600000, description:"Each eligible Halloween-game reward has a 50% chance to be cut in half for 6 hours."},
+  hollow_soul: {name:"💀 Curse of the Hollow Soul", price:60000, kind:"curse", duration:24*3600000, description:"50% fewer eligible Spookies and Sparkles for 24 hours."},
+  final_judgment: {name:"⚖️ The Witch’s Final Judgment", price:100000, kind:"curse", duration:24*3600000, description:"0 watering EXP and 75% fewer eligible game Spookies for 24 hours."}
+};
+const WITCH_MESSAGES = {
+ double_growth:["🌱 The witch reviewed your watering records. You are now the teacher’s pet. This is suspicious.","🧪 DOUBLE GROWTH! Your tree hired an unpaid intern. It is also you.","🌳 Your tree is growing so fast the HOA has filed a complaint."],
+ haunted_fortune:["🎃 The Spookie goblin has been bribed. It denies everything.","💰 Your game rewards have been lightly hexed in your favor. The accountant is sobbing.","🦇 The bats audited your earnings. They demand snacks."],
+ sparkle_alchemy:["✨ Sparkles are multiplying. Please do not ask the witch about her accounting methods.","💎 Your sparkle income has entered its suspiciously shiny era.","🧙‍♀️ The witch says this is definitely legal alchemy. She will not elaborate."],
+ sloth:["💤 The witch put your watering EXP in airplane mode.","🌱 Your tree filed a missing-person report for its growth points.","🧙‍♀️ Your EXP has gone to nap. It left a note saying ‘do not disturb.’"],
+ empty_coffers:["💸 Your Spookies have been placed on unpaid vacation. No forwarding address.","🦇 The bank called. Your wallet has been classified as a historical artifact.","🎃 A tiny goblin reviewed your earnings and whispered ‘yikes.’"],
+ broken_fortune:["✨ Your Sparkles are moving through airport security one at a time.","💎 The witch put your sparkle earnings on a very long loading screen.","🧙‍♀️ Your Sparkles have been grounded for suspicious levels of glitter."],
+ withering:["🥀 Your tree has entered its dramatic Victorian widow era.","🌳 The leaves filed a group resignation. HR is unavailable.","🪦 Your tree would like everyone to know it is going through something."],
+ mad_jester:["🤡 The Jester has reviewed your gameplay. The Jester has no qualifications.","🎭 A tiny clown has entered your game and made everything legally confusing.","🃏 The Jester says ‘skill issue’ and vanishes into a suspicious puff."],
+ hollow_soul:["💀 Your wallet has achieved inner emptiness. Congratulations?","🕯️ The witch says your earnings are now on a spiritual journey.","👻 Your rewards have been haunted by the concept of budgeting."],
+ final_judgment:["⚖️ The Witch’s Court has reviewed your case. Your lawyer was a raccoon.","💀 The judgment remains in effect. The witch has chosen to be difficult.","🕯️ The witch says you may appeal. The appeal form is a potato."]
+};
+function witchSpookieRewardAmount(player, amount) {
+  let result = Math.max(0, Number(amount || 0));
+  const e = player?.witchEffects || {}; const now = Date.now();
+  if (Number(e.haunted_fortune_until || 0) > now) result = Math.floor(result * 1.5);
+  if (Number(e.empty_coffers_until || 0) > now) result = Math.floor(result * 0.25);
+  if (Number(e.hollow_soul_until || 0) > now) result = Math.floor(result * 0.5);
+  if (Number(e.final_judgment_until || 0) > now) result = Math.floor(result * 0.25);
+  // The Mad Jester adds a real randomized reward twist, not just flavor text.
+  // It has a 50% chance to halve each eligible Halloween-game payout.
+  if (Number(e.mad_jester_until || 0) > now && randomInt(0, 1) === 0) result = Math.floor(result * 0.5);
+  return result;
+}
+function witchShopRows() {
+ return [
+  row(button("🧪 Potions","halloween:witch:category:potion",1),button("🔮 Curses","halloween:witch:category:curse",4)),
+  row(button("🎒 My Inventory","halloween:witch:inventory",2),button("⬅️ Halloween Hub","halloween:hub",2))
+ ];
+}
+function witchShopText(p) {
+ return `🧙‍♀️ **THE WITCH’S SHOP**\n\n*Rubber Bands are useless against witchcraft. Every item bypasses Rubber Band.*\n\n👻 **Your Spookies:** ${Number(p.halloweenSpookies||0).toLocaleString()}\n\n🧪 Potions boost your own earnings. 🔮 Curses sabotage a target’s eligible rewards.\n\nUnlimited stock. Spookies only. Decorations are coming later.`;
+}
+function witchCategoryRows(kind) {
+ const entries=Object.entries(WITCH_ITEMS).filter(([,v])=>v.kind===kind);
+ const rows=entries.map(([id,v])=>row(button(`${v.name} · ${v.price.toLocaleString()} Spookies`, `halloween:witch:buy:${id}`, 1)));
+ rows.push(row(button("🎒 My Inventory","halloween:witch:inventory",2),button("⬅️ Witch’s Shop","halloween:witch:shop",2)));
+ return rows;
+}
+function witchInventoryText(p) {
+ const inv=p.witchShopInventory||{};
+ const lines=Object.entries(WITCH_ITEMS).map(([id,item])=>`• ${item.name}: **${Number(inv[id]||0)}**`);
+ const active=Object.entries(p.witchEffects||{}).filter(([,until])=>Number(until)>Date.now()).map(([key,until])=>`• **${key.replace(/_until$/,"").replaceAll("_"," ")}** — <t:${Math.floor(Number(until)/1000)}:R>`);
+ return `🎒 **WITCH’S INVENTORY**\n\n${lines.join("\n")}\n\n⏳ **Active effects**\n${active.length?active.join("\n"):"No active witch effects."}`;
+}
+async function witchShopComponent(env,interaction,id,parts) {
+ const user=getUserFromInteraction(interaction); const p=await getPlayer(env,user.id);
+ if(id==="halloween:witch:shop") return sendText(env,interaction,witchShopText(p),witchShopRows());
+ if(id==="halloween:witch:category:potion") return sendText(env,interaction,"🧪 **POTIONS**\n\nChoose a potion to purchase. Effects begin when used.",witchCategoryRows("potion"));
+ if(id==="halloween:witch:category:curse") return sendText(env,interaction,"🔮 **CURSES**\n\nChoose a curse to purchase. You’ll select a target when using it. Rubber Band cannot block these.",witchCategoryRows("curse"));
+ if(id==="halloween:witch:inventory") {
+  const useRows=Object.entries(WITCH_ITEMS).filter(([key])=>Number(p.witchShopInventory?.[key]||0)>0).map(([key,item])=>row(button(`Use ${item.name}`,`halloween:witch:use:${key}`,1)));
+  useRows.push(...witchShopRows());
+  return sendText(env,interaction,witchInventoryText(p),useRows);
+ }
+ if(id.startsWith("halloween:witch:buy:")) {
+  const key=parts[3], item=WITCH_ITEMS[key]; if(!item)return sendText(env,interaction,"❌ That item doesn't exist.");
+  if(Number(p.halloweenSpookies||0)<item.price)return sendText(env,interaction,`❌ You need **${(item.price-Number(p.halloweenSpookies||0)).toLocaleString()}** more Spookies for ${item.name}.`,[row(button("⬅️ Back","halloween:witch:category:"+item.kind,2))]);
+  p.halloweenSpookies=Number(p.halloweenSpookies||0)-item.price;p.witchShopInventory=p.witchShopInventory||{};p.witchShopInventory[key]=Number(p.witchShopInventory[key]||0)+1;
+  await savePlayer(env,p,user.id);
+  return sendText(env,interaction,`🛍️ **PURCHASE SUCCESSFUL!**\n\nYou bought **${item.name}** for **${item.price.toLocaleString()} Spookies**.\n📦 Owned: **${p.witchShopInventory[key]}**\n👻 Remaining: **${p.halloweenSpookies.toLocaleString()} Spookies**\n\n${item.description}`,[row(button("🛍️ Keep Shopping","halloween:witch:shop",1),button("🎒 Inventory","halloween:witch:inventory",2))]);
+ }
+ if(id.startsWith("halloween:witch:use:")) {
+  const key=parts[3], item=WITCH_ITEMS[key]; if(!item)return sendText(env,interaction,"❌ Unknown item.");
+  if(Number(p.witchShopInventory?.[key]||0)<1)return sendText(env,interaction,"❌ You don't own that item.");
+  if(item.kind==="curse") return sendText(env,interaction,`🔮 **${item.name}**\n\nChoose a target using the player selector below. Rubber Band will not block it.`,[
+   {type:1,components:[{type:5,custom_id:`halloween:witch:target:${key}`,placeholder:"Choose a player to curse",min_values:1,max_values:1}]},
+   row(button("⬅️ Inventory","halloween:witch:inventory",2))
+  ]);
+  const effectMap={double_growth:"double_growth_until",haunted_fortune:"haunted_fortune_until",sparkle_alchemy:"sparkle_alchemy_until"};
+  const effect=effectMap[key]; if(Number(p.witchEffects?.[effect]||0)>Date.now())return sendText(env,interaction,"⏳ That potion is already active. Use it again after it expires.");
+  p.witchShopInventory[key]--;p.witchEffects=p.witchEffects||{};p.witchEffects[effect]=Date.now()+item.duration;p.witchMessageState=p.witchMessageState||{};p.witchMessageState[key]={nextAt:Date.now()+randomInt(15,50)*60000};
+  await savePlayer(env,p,user.id);
+  const msgs=WITCH_MESSAGES[key];return sendText(env,interaction,`🧪 **${item.name} ACTIVATED!**\n\n${item.description}\n⏳ Expires <t:${Math.floor(p.witchEffects[effect]/1000)}:R>\n\n${msgs[randomInt(0,msgs.length-1)]}`,[row(button("🎒 Inventory","halloween:witch:inventory",2))]);
+ }
+ if(id.startsWith("halloween:witch:target:")) {
+  const key=parts[3], item=WITCH_ITEMS[key], targetId=interaction.data?.values?.[0];
+  if(!item||item.kind!=="curse"||!targetId)return sendText(env,interaction,"❌ Choose a valid target.");
+  if(String(targetId)===String(user.id))return sendText(env,interaction,"🪞 You cannot curse yourself. The witch has standards.");
+  const target=await getPlayer(env,targetId); target.witchEffects=target.witchEffects||{};
+  const effectMap={sloth:"sloth_until",empty_coffers:"empty_coffers_until",broken_fortune:"broken_fortune_until",withering:"withering_until",mad_jester:"mad_jester_until",hollow_soul:"hollow_soul_until",final_judgment:"final_judgment_until"};
+  const effect=effectMap[key]; if(!effect)return sendText(env,interaction,"❌ This curse is not ready.");
+  if(Number(p.witchShopInventory?.[key]||0)<1)return sendText(env,interaction,"❌ You don't own that curse anymore.");
+  target.witchEffects[effect]=Date.now()+item.duration;target.witchMessageState=target.witchMessageState||{};target.witchMessageState[key]={nextAt:Date.now()+randomInt(15,50)*60000,attackerId:user.id};
+  p.witchShopInventory[key]--;await savePlayer(env,p,user.id);await savePlayer(env,target,targetId);
+  const msgs=WITCH_MESSAGES[key];return sendText(env,interaction,`🔮 **CURSE CAST SUCCESSFULLY!**\n\n${item.name} was cast on <@${targetId}> for **${Math.round(item.duration/3600000)} hour(s)**.\n🪢 Rubber Band was ignored. The curse cannot be reflected.\n\n${msgs[randomInt(0,msgs.length-1)]}`,[row(button("🛍️ Witch’s Shop","halloween:witch:shop",1))]);
+ }
+ return sendText(env,interaction,"❌ Unknown Witch’s Shop action.");
+}
+
+async function handleHalloweenComponent(env,interaction,ctx=null){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(id.startsWith("halloween:witch:"))return witchShopComponent(env,interaction,id,parts);if(id==="halloween:hub"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenHubText(p),halloweenHubComponents());}if(id==="halloween:games"){const p=await getPlayer(env,user.id);return sendText(env,interaction,halloweenGamesText(p),halloweenGameMenuComponents());}if(id==="halloween:daily")return halloweenDaily(env,interaction);if(id==="halloween:leaderboard")return halloweenLeaderboard(env,interaction);if(id==="halloween:howto")return sendText(env,interaction,halloweenHowToText(),[row(button("⬅️ Hub","halloween:hub",2))]);if(id==="halloween:start:spook"){return startSpookSmash(env,interaction,ctx);}if(id==="halloween:spook:howto"||id.startsWith("halloween:spook:howto:")){return spookSmashHowTo(env,interaction,parts[3]||"");}if(id.startsWith("halloween:spook:end:")){return spookSmashEndRun(env,interaction,parts[3]);}if(id.startsWith("halloween:spook:back:")){const session=parts[3];const g=await spookSmashLoad(env,interaction.guild_id,user.id);if(!g||!g.active||g.session!==session)return sendText(env,interaction,"🎃 That Spook N Smash run is no longer active.");const board=await spookSmashLoadBoard(env,interaction.guild_id,user.id);return editOriginalResponse(env,interaction,spookSmashData({...g,board}));}if(id.startsWith("halloween:spook:")){return spookSmashClick(env,interaction,parts[2],Number(parts[3]));}if(id==="halloween:start:hide"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenHideCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenHideLobbyText(g),halloweenHideLobbyRows(g));}if(id==="halloween:start:grave"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenGraveCreate(interaction.guild_id,user);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);return sendText(env,interaction,halloweenGraveLobbyText(g),halloweenGraveLobbyRows(g));}if(id==="halloween:start:maze"){const state=await getGuildState(env,interaction.guild_id);if(halloweenNewGameBlocked(state))return sendText(env,interaction,"❌ A Halloween game is already active in this server.");const g=halloweenMazeCreate(interaction.guild_id,user,interaction.channel_id);state.halloween={activeGame:g};await saveGuildState(env,interaction.guild_id,state);await halloweenMazePublishPublic(env,g);return sendText(env,interaction,"🗺️ **HAUNTED MAZE STARTED!** Your maze is in the channel above. Find all three relics and escape! 👻");}if(id==="halloween:start:trivia")return halloweenTriviaStart(env,interaction);if(id==="halloween:trivia:howto")return sendText(env,interaction,halloweenTriviaHowTo(),[row(button("⬅️ Back to Trivia","halloween:trivia:back:current",2))]);if(id.startsWith("halloween:trivia:"))return halloweenTriviaComponent(env,interaction,parts);if(id.startsWith("halloween:maze:"))return halloweenMazeComponent(env,interaction,parts);if(id.startsWith("halloween:grave:"))return halloweenGraveComponent(env,interaction,parts);if(id==="halloween:start:zombie")return halloweenZombieLobby(env,interaction);if(id==="halloween:start:trick")return halloweenTrickOrTreat(env,interaction);if(id==="halloween:trick:target_select"){const selected=interaction.data?.values?.[0];if(!selected)return sendText(env,interaction,"❌ Pick a door first.");return halloweenTrickOrTreat(env,interaction,selected);}if(id.startsWith("halloween:trick:target:"))return halloweenTrickOrTreat(env,interaction,parts[3]);if(id==="halloween:exit")return halloweenEnd(env,interaction);if(id.startsWith("halloween:hide:"))return halloweenHideComponent(env,interaction,parts);if(id.startsWith("halloween:zombie:"))return zombieComponent(env,interaction,parts);return sendText(env,interaction,"❌ Unknown Halloween button.");}
 
 async function handleCommand(
   env,
@@ -34825,6 +34999,41 @@ async function handleBombExpirationRequest(env, ctx, guildId, bombId) {
   }
 }
 
+
+async function processWitchMessages(env) {
+  try {
+    const listed=await env.TREE_DATA.list({limit:1000});
+    const now=Date.now();
+    for(const key of (listed.keys||[])) {
+      if(!/^\d{15,25}$/.test(String(key.name))) continue;
+      const p=await getPlayer(env,key.name); let changed=false;
+      const state=p.witchMessageState||{};
+      for(const [itemKey,job] of Object.entries(state)) {
+        const item=WITCH_ITEMS[itemKey]; const effects=p.witchEffects||{};
+        const effectKey=Object.keys(effects).find(k=>k.replace(/_until$/,"")===itemKey);
+        const until=effectKey?Number(effects[effectKey]||0):0;
+        if(!item||!until){delete state[itemKey];continue;}
+        if(until<=now){
+          try {
+            const dm=await fetch("https://discord.com/api/v10/users/@me/channels",{method:"POST",headers:{"Authorization":`Bot ${env.BOT_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify({recipient_id:key.name})});
+            if(dm.ok){const ch=await dm.json();await fetch(`https://discord.com/api/v10/channels/${ch.id}/messages`,{method:"POST",headers:{"Authorization":`Bot ${env.BOT_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify({content:`🕯️ **THE WITCH’S SPELL HAS ENDED!**\n\n${item.name} has worn off. You are free… until someone visits the shop again. 😈`})});}
+          } catch {}
+          delete state[itemKey];changed=true;continue;
+        }
+        if(Number(job.nextAt||0)>now)continue;
+        const messages=WITCH_MESSAGES[itemKey]||[];
+        if(messages.length) {
+          const text=`🧙‍♀️ **THE WITCH CHECKS IN...**\n\n${messages[randomInt(0,messages.length-1)]}\n\n⏳ Your effect expires <t:${Math.floor(until/1000)}:R>.`;
+          await fetch(`https://discord.com/api/v10/users/@me/channels`,{method:"POST",headers:{"Authorization":`Bot ${env.BOT_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify({recipient_id:key.name})}).then(async r=>{if(r.ok){const ch=await r.json();await fetch(`https://discord.com/api/v10/channels/${ch.id}/messages`,{method:"POST",headers:{"Authorization":`Bot ${env.BOT_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify({content:text})});}});
+        }
+        job.nextAt=now+randomInt(45,120)*60000;changed=true;
+      }
+      p.witchMessageState=state;
+      if(changed)await savePlayer(env,p,key.name);
+    }
+  } catch(e) { console.error("Witch Shop scheduled messages failed:",e); }
+}
+
 export default {
   async fetch(
     request,
@@ -35768,7 +35977,7 @@ export default {
         processRaccoonMegaphoneJobs(env),
         processRaccoonSuitPaydays(env),
         processRaccoonEmpireDividends(env)
-        ,processBombTimers(env)
+        ,processBombTimers(env),processWitchMessages(env)
       ])
     );
   }
