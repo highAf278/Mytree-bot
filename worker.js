@@ -11866,25 +11866,34 @@ async function newBirthdayTruthPassTurnMessage(env, g) {
 async function birthdayTruthPassReply(env,interaction,content,components=[]) { return interaction.__deferred ? sendEphemeralFollowup(env,interaction,content,components) : sendText(env,interaction,content,components); }
 
 async function birthdayTruthPassEnd(env, interaction) {
+  // Respond to the slash command/button immediately; old Discord messages can
+  // take extra time to update or may no longer exist.
+  await deferInteraction(env, interaction, {ephemeral:true});
   const guildId = interaction.guild_id;
   if (!guildId) return birthdayTruthPassReply(env, interaction, "❌ Truth or Drink can only be ended inside a server.");
   const state = await getGuildState(env, guildId);
-  const g = state.games?.truthPass || state.birthday?.games?.truthDrink;
-  if (!g?.active && (!g?.status || g.status === "finished")) {
-    return birthdayTruthPassReply(env, interaction, "💬 There is no active Truth or Drink game to end.");
-  }
-  // This is a public party game; any server member can clear a stuck session
-  // so an absent host cannot lock everyone else out of starting a new game.
-  g.active = false;
-  g.status = "finished";
-  g.endedAt = Date.now();
-  g.actionLabel = "🛑 The game was ended manually. Start a fresh lobby whenever you're ready.";
+  const g = state.games?.truthPass || state.birthday?.games?.truthDrink || null;
   state.games = state.games || {};
-  state.games.truthPass = g;
-  if (state.birthday?.games?.truthDrink) state.birthday.games.truthDrink = null;
+  // Clear both storage locations even if the old game has no active flag,
+  // no message ID, or points to a message that was deleted long ago.
+  if (g) {
+    g.active = false;
+    g.status = "finished";
+    g.endedAt = Date.now();
+    g.actionLabel = "🛑 Truth or Drink was force-ended with the emergency end control. Start a fresh lobby whenever you're ready.";
+    state.games.truthPass = g;
+  } else {
+    state.games.truthPass = null;
+  }
+  if (state.birthday?.games) state.birthday.games.truthDrink = null;
   await saveGuildState(env, guildId, state);
-  await editBirthdayTruthPassMessage(env, g);
-  return birthdayTruthPassReply(env, interaction, "🛑 **Truth or Drink ended.** The stuck game has been cleared, and someone can start a fresh one now.");
+  // Editing the old public message is best-effort. A deleted/archived message
+  // must never prevent the stale game state from being cleared.
+  if (g?.channelId && g?.messageId) {
+    try { await editBirthdayTruthPassMessage(env, g); }
+    catch (error) { console.error("Truth or Drink old message could not be updated:", error); }
+  }
+  return birthdayTruthPassReply(env, interaction, "🛑 **Truth or Drink has been force-ended.** The old session was cleared even if its original message is too old to use. Run `/truthpass` to start a fresh game.");
 }
 
 async function birthdayTruthPassRefresh(env,interaction){
@@ -11904,30 +11913,42 @@ async function startBirthdayTruthPass(env,interaction) {
   if(!guildId)return birthdayTruthPassReply(env,interaction,"❌ Truth or Drink can only be used inside a server.");
   const state=await getGuildState(env,guildId);
   state.games=state.games||{};
-  const legacy=state.birthday?.games?.truthDrink;
-  const existing=state.games.truthPass || legacy;
-  const existingStarted=Number(existing?.startedAt||0);
-  const staleTruthGame=existing?.status&&existing.status!=="finished"&&existingStarted>0&&(Date.now()-existingStarted>2*60*60*1000);
+  const legacy=state.birthday?.games?.truthDrink||null;
+  let existing=state.games.truthPass||legacy||null;
+  const now=Date.now();
+  const lastActivity=Number(existing?.lastActivityAt||existing?.startedAt||existing?.createdAt||0);
+  // Sessions older than 2 hours, sessions missing timestamps (legacy stuck
+  // sessions), and finished/inactive sessions are stale and cannot lock a guild.
+  const staleTruthGame=Boolean(existing) && (
+    existing.active===false || existing.status==="finished" ||
+    !lastActivity || now-lastActivity>2*60*60*1000
+  );
   if(staleTruthGame){
     state.games.truthPass=null;
-    if(state.birthday?.games?.truthDrink) state.birthday.games.truthDrink=null;
+    if(state.birthday?.games) state.birthday.games.truthDrink=null;
+    existing=null;
+    await saveGuildState(env,guildId,state);
   }
-  if(legacy && !state.games.truthPass) state.games.truthPass=legacy;
-  if(existing?.status&&existing.status!=="finished")return birthdayTruthPassReply(env,interaction,`⏭️ **Truth or Drink is already running!**\n\n👥 **${(existing.players||[]).filter(p=>p.active!==false).length}** players are in the game.`,[]);
+  if(existing && (existing.active!==false) && existing.status && existing.status!=="finished"){
+    return birthdayTruthPassReply(env,interaction,`⏭️ **Truth or Drink is already running!**\n\n👥 **${(existing.players||[]).filter(p=>p.active!==false).length}** players are in the game.\n\nIf that session is stuck, run **/truthpass-end** to clear it.`,[]);
+  }
   const user=getUserFromInteraction(interaction); if(!user)return birthdayTruthPassReply(env,interaction,"❌ I couldn't identify your Discord account.");
   const name=String(user.global_name||user.username||"Player").slice(0,32);
-  const g={active:true,status:"lobby",hostId:String(user.id),players:[{id:String(user.id),name,active:true}],turn:1,currentId:"",currentName:"",currentKind:"",prompt:"",actionLabel:"",confirmations:{},usedTruths:[],usedDares:[],channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:Date.now()};
-  state.games.truthPass=g; await saveGuildState(env,guildId,state);
+  const g={active:true,status:"lobby",hostId:String(user.id),players:[{id:String(user.id),name,active:true}],turn:1,currentId:"",currentName:"",currentKind:"",prompt:"",actionLabel:"",confirmations:{},usedTruths:[],usedDares:[],channelId:interaction.channel_id||state.announcementChannelId||"",messageId:"",startedAt:now,lastActivityAt:now};
+  state.games.truthPass=g;
+  if(state.birthday?.games) state.birthday.games.truthDrink=null;
+  await saveGuildState(env,guildId,state);
   const msg=await sendChannelMessage(env,g.channelId,birthdayTruthPassText(g),birthdayTruthPassButtons(g));
   if(msg?.id){g.messageId=msg.id;await saveGuildState(env,guildId,state);}
   return birthdayTruthPassReply(env,interaction,"⏭️🔥 **Truth or Drink lobby created!** Join below!",[]);
 }
+
 async function birthdayTruthPassJoin(env,interaction){
   const guildId=interaction.guild_id,user=getUserFromInteraction(interaction);const state=await getGuildState(env,guildId);const g=state.games?.truthPass;
   if(!g?.active||g.status!=="lobby")return birthdayTruthPassReply(env,interaction,"⏭️ The Truth or Drink lobby is not open."); if(!user)return birthdayTruthPassReply(env,interaction,"❌ I couldn't identify you.");
   if((g.players||[]).some(p=>String(p.id)===String(user.id)&&p.active!==false))return birthdayTruthPassReply(env,interaction,"😂 You are already in the lobby!");
   const active=(g.players||[]).filter(p=>p.active!==false);if(active.length>=10)return birthdayTruthPassReply(env,interaction,"⏭️ The lobby is full at 10 players!");
-  g.players.push({id:String(user.id),name:String(user.global_name||user.username||"Player").slice(0,32),active:true});await saveGuildState(env,guildId,state);await editBirthdayTruthPassMessage(env,g);return birthdayTruthPassReply(env,interaction,"🎉 **You joined Truth or Drink!**");
+  g.players.push({id:String(user.id),name:String(user.global_name||user.username||"Player").slice(0,32),active:true});g.lastActivityAt=Date.now();await saveGuildState(env,guildId,state);await editBirthdayTruthPassMessage(env,g);return birthdayTruthPassReply(env,interaction,"🎉 **You joined Truth or Drink!**");
 }
 async function birthdayTruthPassLeave(env,interaction){
   const guildId=interaction.guild_id,user=getUserFromInteraction(interaction);const state=await getGuildState(env,guildId);const g=state.games?.truthPass;
@@ -31470,7 +31491,12 @@ function witchInventoryText(p) {
  return `🎒 **WITCH’S INVENTORY**\n\n${lines.join("\n")}\n\n⏳ **Active effects**\n${active.length?active.join("\n"):"No active witch effects."}`;
 }
 async function witchShopComponent(env,interaction,id,parts) {
- const user=getUserFromInteraction(interaction); const p=await getPlayer(env,user.id);
+ // Acknowledge immediately so Discord never leaves Witch's Shop buttons/selects
+ // spinning while player data is loaded from Cloudflare storage.
+ await deferInteraction(env, interaction, {ephemeral:true});
+ const user=getUserFromInteraction(interaction);
+ if(!user?.id) return sendText(env,interaction,"❌ I couldn't identify your Discord account. Please try the Witch's Shop again.");
+ const p=await getPlayer(env,user.id);
  if(id==="halloween:witch:shop") return sendText(env,interaction,witchShopText(p),witchShopRows());
  if(id==="halloween:witch:category:potion") return sendText(env,interaction,"🧪 **POTIONS**\n\nChoose a potion to purchase. Effects begin when used.",witchCategoryRows("potion"));
  if(id==="halloween:witch:category:curse") return sendText(env,interaction,"🔮 **CURSES**\n\nChoose a curse to purchase. You’ll select a target when using it. Rubber Band cannot block these.",witchCategoryRows("curse"));
@@ -31534,6 +31560,7 @@ async function handleCommand(
 
   if (name === "birthday") { await handleBirthdayCommand(env, interaction); return; }
   if (name === "truthpass") { await startBirthdayTruthPass(env, interaction); return; }
+  if (name === "truthpass-end") { await birthdayTruthPassEnd(env, interaction); return; }
   if (name === "talentshow") { const text=getOption(interaction,"text"); const voice=getBirthdayTalentAttachment(interaction); if(text||voice) await birthdayTalentAddSubmission(env,interaction,text,voice); else await startBirthdayTalent(env,interaction); return; }
   if (name === "birthday-games") { await handleBirthdayGamesCommand(env, interaction); return; }
   if (name === "birthday-set") { await handleBirthdaySet(env, interaction); return; }
@@ -33862,6 +33889,10 @@ const COMMANDS = [
   {
     name: "truthpass",
     description: "Play WereWives Truth or Drink — chaotic truths, dares, and group confirmations"
+  },
+  {
+    name: "truthpass-end",
+    description: "Force-end a stuck Truth or Drink session so a new game can start"
   },
   {
     name: "talentshow",
