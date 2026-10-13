@@ -3202,18 +3202,26 @@ async function editOriginalResponse(
    TREE MESSAGE
 ========================================================= */
 
+function getWaterCooldown(player, now = Date.now()) {
+  const effects = player?.witchEffects || {};
+  return Number(effects.moonroot_haste_until || 0) > now
+    ? 10 * 60 * 1000
+    : WATER_COOLDOWN;
+}
+
 function formatWaterCooldown(player) {
   const now = Date.now();
+  const cooldown = getWaterCooldown(player, now);
 
   if (
     !player.lastWater ||
-    now - player.lastWater >= WATER_COOLDOWN
+    now - player.lastWater >= cooldown
   ) {
     return "Now! 💖";
   }
 
   const remaining =
-    WATER_COOLDOWN -
+    cooldown -
     (now - player.lastWater);
 
   const totalSeconds =
@@ -7760,13 +7768,14 @@ async function handleWater(
     const now =
       Date.now();
 
+    const activeWaterCooldown = getWaterCooldown(player, now);
     if (
       player.lastWater &&
       now - player.lastWater <
-        WATER_COOLDOWN
+        activeWaterCooldown
     ) {
       const remaining =
-        WATER_COOLDOWN -
+        activeWaterCooldown -
         (now - player.lastWater);
 
       const minutes =
@@ -31724,6 +31733,7 @@ const WITCH_ITEMS = {
   double_growth: {name:"🧪 Potion of Double Growth", price:5000, kind:"potion", duration:6*3600000, description:"2× watering EXP for 6 hours."},
   haunted_fortune: {name:"🎃 Potion of Haunted Fortune", price:8000, kind:"potion", duration:6*3600000, description:"+50% eligible Halloween-game Spookies for 6 hours."},
   sparkle_alchemy: {name:"✨ Potion of Sparkle Alchemy", price:12000, kind:"potion", duration:3*3600000, description:"+25% eligible Sparkle earnings for 3 hours."},
+  moonroot_haste: {name:"🌙 Moonroot Haste Elixir", price:5000, kind:"potion", duration:24*3600000, description:"Reduces your tree-watering cooldown to 10 minutes for 24 hours."},
   sloth: {name:"💤 Curse of Eternal Slumber", price:25000, kind:"curse", duration:12*3600000, description:"Target earns 0 watering EXP for 12 hours."},
   empty_coffers: {name:"💸 Curse of the Empty Coffers", price:30000, kind:"curse", duration:12*3600000, description:"Target earns 75% fewer eligible game Spookies for 12 hours."},
   broken_fortune: {name:"🌩️ Curse of the Broken Fortune", price:35000, kind:"curse", duration:12*3600000, description:"Target earns 75% fewer eligible Sparkles for 12 hours."},
@@ -31736,6 +31746,7 @@ const WITCH_MESSAGES = {
  double_growth:["🌱 The witch reviewed your watering records. You are now the teacher’s pet. This is suspicious.","🧪 DOUBLE GROWTH! Your tree hired an unpaid intern. It is also you.","🌳 Your tree is growing so fast the HOA has filed a complaint."],
  haunted_fortune:["🎃 The Spookie goblin has been bribed. It denies everything.","💰 Your game rewards have been lightly hexed in your favor. The accountant is sobbing.","🦇 The bats audited your earnings. They demand snacks."],
  sparkle_alchemy:["✨ Sparkles are multiplying. Please do not ask the witch about her accounting methods.","💎 Your sparkle income has entered its suspiciously shiny era.","🧙‍♀️ The witch says this is definitely legal alchemy. She will not elaborate."],
+ moonroot_haste:["🌙 Moonroot has awakened your tree. Ten-minute watering? The moon says yes.","🌱 The witch put your tree on express growth. Please keep your watering can ready.","🧙‍♀️ Moonroot Haste activated! Your tree has filed for a faster schedule."],
  sloth:["💤 The witch put your watering EXP in airplane mode.","🌱 Your tree filed a missing-person report for its growth points.","🧙‍♀️ Your EXP has gone to nap. It left a note saying ‘do not disturb.’"],
  empty_coffers:["💸 Your Spookies have been placed on unpaid vacation. No forwarding address.","🦇 The bank called. Your wallet has been classified as a historical artifact.","🎃 A tiny goblin reviewed your earnings and whispered ‘yikes.’"],
  broken_fortune:["✨ Your Sparkles are moving through airport security one at a time.","💎 The witch put your sparkle earnings on a very long loading screen.","🧙‍♀️ Your Sparkles have been grounded for suspicious levels of glitter."],
@@ -31811,7 +31822,7 @@ async function witchShopComponent(env,interaction,id,parts) {
    {type:1,components:[{type:5,custom_id:`halloween:witch:target:${key}`,placeholder:"Choose a player to curse",min_values:1,max_values:1}]},
    row(button("⬅️ Inventory","halloween:witch:inventory",2))
   ]);
-  const effectMap={double_growth:"double_growth_until",haunted_fortune:"haunted_fortune_until",sparkle_alchemy:"sparkle_alchemy_until"};
+  const effectMap={double_growth:"double_growth_until",haunted_fortune:"haunted_fortune_until",sparkle_alchemy:"sparkle_alchemy_until",moonroot_haste:"moonroot_haste_until"};
   const effect=effectMap[key]; if(Number(p.witchEffects?.[effect]||0)>Date.now())return sendText(env,interaction,"⏳ That potion is already active. Use it again after it expires.");
   p.witchShopInventory[key]--;p.witchEffects=p.witchEffects||{};p.witchEffects[effect]=Date.now()+item.duration;p.witchMessageState=p.witchMessageState||{};p.witchMessageState[key]={nextAt:Date.now()+randomInt(15,50)*60000};
   await savePlayer(env,p,user.id);
