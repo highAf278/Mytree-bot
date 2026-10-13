@@ -25,6 +25,9 @@ const MAX_ACTIVE_SPARKLES = 5;
 /* WATER IS NOW 30 MINUTES */
 const WATER_COOLDOWN = 30 * 60 * 1000;
 const RECYCLE_COOLDOWN = 5 * 60 * 60 * 1000;
+const RECYCLE_MIN_AMOUNT = 20;
+const RECYCLE_MAX_AMOUNT = 50000;
+const RECYCLE_LOSS_CHANCE = 0.15; // 15% chance to lose only the wagered amount.
 const RACCOON_COOLDOWN = 3 * 60 * 60 * 1000;
 const FORTUNE_COOLDOWN = 60 * 60 * 1000;
 
@@ -8032,8 +8035,9 @@ async function handleCatch(
 
 /* =========================================================
    RECYCLE
-   INPUT: 20–200 SPARKLES
-   PAYOUT: RANDOM 1x–10x
+   INPUT: 20–50,000 SPARKLES
+   85% WIN: RANDOM 1x–10x payout
+   15% LOSS: lose only the wagered amount
 ========================================================= */
 
 async function courtRestriction(env, interaction, field, label) {
@@ -8120,15 +8124,14 @@ async function handleRecycle(
 
   if (
     !Number.isFinite(amount) ||
-    amount < 20 ||
-    amount > 200
+    amount < RECYCLE_MIN_AMOUNT ||
+    amount > RECYCLE_MAX_AMOUNT
   ) {
     await sendText(
       env,
       interaction,
-      "♻️ You can recycle between **20 and 200 sparkles** at a time."
+      `♻️ You can recycle between **${RECYCLE_MIN_AMOUNT.toLocaleString()} and ${RECYCLE_MAX_AMOUNT.toLocaleString()} sparkles** at a time.`
     );
-
     return;
   }
 
@@ -8147,60 +8150,54 @@ async function handleRecycle(
 
   player.lastRecycle = now;
 
-  /*
-    Remove the input amount first.
-  */
+  // The wager is the maximum possible loss. A losing roll never touches
+  // any sparkles beyond this exact amount.
+  const lostRoll = Math.random() < RECYCLE_LOSS_CHANCE;
+  let multiplier = 0;
+  let payout = 0;
+  let net = -amount;
+  let resultText = "";
 
-  player.sparkles -=
-    amount;
+  if (lostRoll) {
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - amount);
+    resultText = [
+      "🗑️ The recycler ate the wager. The raccoons deny all responsibility.",
+      "💥 OH NO. The machine made a very expensive crunching noise.",
+      "🦝 The raccoon operator pressed the wrong button. Your wager is gone—but only the wager.",
+      "♻️ The recycler rejected the batch and kept the wager as scrap.",
+      "⚠️ Recycling malfunction! The machine swallowed the wager and shut itself off.",
+      "😭 The sparkle compactor won this round. Your wager was the only loss."
+    ][randomInt(0, 5)];
+    player.sceneMessage = `♻️ Recycle loss: wagered ${amount} ✨ and lost exactly ${amount} ✨.`;
+  } else {
+    // On a win, preserve the existing 1x–10x payout system.
+    multiplier = randomInt(1, 10);
+    payout = amount * multiplier;
+    player.sparkles = Math.max(0, Number(player.sparkles || 0) - amount) + payout;
+    net = payout - amount;
+    resultText = [
+      "✨ The recycler hummed, flashed gold, and paid out!",
+      "🦝 The raccoon accountant has approved your recycling claim.",
+      "💎 Sparkles recovered! The machine is suspiciously proud of itself.",
+      "♻️ Recycling success! The sparkle economy survives another day.",
+      "🎰 The recycler rolled your batch through its very questionable multiplier gears.",
+      "🌟 A clean batch, a shiny payout, and absolutely no questions from accounting."
+    ][randomInt(0, 5)];
+    player.sceneMessage = `♻️ You recycled ${amount} ✨ and received ${payout} ✨ (${multiplier}×).`;
+  }
 
-  /*
-    Random multiplier from 1x through 10x.
-  */
+  await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true });
 
-  const multiplier =
-    randomInt(
-      1,
-      10
-    );
-
-  const payout =
-    amount *
-    multiplier;
-
-  player.sparkles +=
-    payout;
-
-  const net =
-    payout -
-    amount;
-
-  player.sceneMessage =
-    `♻️ You recycled **${amount} sparkles** and got **${payout} sparkles** back! (${multiplier}×)`;
-
-  await savePlayer(
-    env,
-    player
-  );
-
-  const netText =
-    net >= 0
-      ? `+${net}`
-      : `${net}`;
+  const netText = net >= 0 ? `+${net.toLocaleString()}` : `${net.toLocaleString()}`;
+  const outcomeText = lostRoll
+    ? `❌ **BAD LUCK — 15% LOSS!**\n\n${resultText}\n\n💸 Wager lost: **${amount.toLocaleString()} ✨**\n🛡️ No other sparkles were taken.\n💰 Net change: **-${amount.toLocaleString()} ✨**`
+    : `✅ **YOU WON!**\n\n${resultText}\n\n🎰 Multiplier: **${multiplier}×**\n✨ Payout: **${payout.toLocaleString()} ✨**\n💰 Net change: **${netText} ✨**`;
 
   await sendText(
     env,
     interaction,
-    `♻️ **SPARKLE RECYCLER**\n\nYou put in **${amount} sparkles**.\n\n🎰 Multiplier: **${multiplier}×**\n✨ You got back: **${payout} sparkles**\n💰 Net change: **${netText} sparkles**\n\nYou now have **${player.sparkles} sparkles**! 💖`,
-    [
-      row(
-        button(
-          "🌳 Back to Tree",
-          "back_tree",
-          2
-        )
-      )
-    ]
+    `♻️ **SPARKLE RECYCLER**\n\n🎲 Win chance: **85%** · Loss chance: **15%**\n🎟️ Wager: **${amount.toLocaleString()} ✨**\n\n${outcomeText}\n\n💖 Your balance: **${Number(player.sparkles).toLocaleString()} ✨**\n⏳ Cooldown: **5 hours**`,
+    [row(button("🌳 Back to Tree", "back_tree", 2))]
   );
 }
 
@@ -15890,7 +15887,7 @@ async function millionaireComponent(env,interaction){const id=String(interaction
  if(parts[1]==="details")return sendText(env,interaction,(MILLIONAIRE_ITEMS[parts[2]]?.description||"No details found.")+(parts[2]==="immortal_phoenix"?"\n\n🔥 **PHOENIX RELIC**\nPermanent protection: each eligible theft attempt has a 40% chance to be blocked and reflected back at double the attempted amount, capped by the attacker’s available balance.":""),millionaireInventoryRows(p));
  if(id==="millionaire:use:boomerang_bomb"){if(!millionaireOwned(p,"boomerang_bomb"))return sendText(env,interaction,"❌ You don't own a Boomerang Bomb.");const ready=Number(p.millionaireState.boomerangReadyAt||0);if(Date.now()<ready)return sendText(env,interaction,`⏳ Your Boomerang Bomb is recharging. Ready <t:${Math.ceil(ready/1000)}:R>.`);return sendText(env,interaction,`💣 **BOOMERANG BOMB**\n\nChoose a target. The fuse is 40 seconds after launch.\n\n![Royal Boomerang Bomb](${BASE_URL}${IMAGES.boomerangBomb})`,[ {type:1,components:[{type:5,custom_id:"millionaire:target:boomerang_bomb",placeholder:"Choose a target",min_values:1,max_values:1}]},row(button("⬅️ Golden Chest","millionaire:inventory",2))]);}
  if(id==="millionaire:use:doppelganger"){if(!millionaireOwned(p,"doppelganger"))return sendText(env,interaction,"❌ You don't own a Doppelgänger.");if(Date.now()<Number(p.millionaireState.doppelgangerReadyAt||0))return sendText(env,interaction,`⏳ Doppelgänger cooldown active until <t:${Math.ceil(p.millionaireState.doppelgangerReadyAt/1000)}:R>.`);return sendText(env,interaction,"🪞 **DOPPELGÄNGER**\n\nChoose a target for a secret 24-hour link.",[ {type:1,components:[{type:5,custom_id:"millionaire:target:doppelganger",placeholder:"Choose a target",min_values:1,max_values:1}]},row(button("⬅️ Golden Chest","millionaire:inventory",2))]);}
- if(parts[1]==="target"){const kind=parts[2],targetId=interaction.data?.values?.[0];if(!targetId||targetId===user.id)return sendText(env,interaction,"❌ Choose another player.");const target=await getPlayer(env,targetId);target.millionaireState=target.millionaireState||{};if(kind==="boomerang_bomb"){if(Date.now()<Number(p.millionaireState.boomerangReadyAt||0))return sendText(env,interaction,"⏳ Your bomb is recharging.");p.millionaireState.boomerangReadyAt=Date.now()+6*60*60*1000;target.millionaireState.boomerangDrains=Array.isArray(target.millionaireState.boomerangDrains)?target.millionaireState.boomerangDrains:[];const now=Date.now();const detonateAt=now+40000;target.millionaireState.boomerangDrains=target.millionaireState.boomerangDrains.filter(d=>Number(d.collections||0)<6||d.pendingTransfer);target.millionaireState.boomerangDrains.push({id:`${user.id}:${now}:${Math.random().toString(36).slice(2,8)}`,attackerId:String(user.id),channelId:String(interaction.channel_id||""),detonateAt,nextAt:detonateAt+30*60*1000,detonated:false,collections:0,cap:null,collected:0,processedAt:0,pendingTransfer:null});await savePlayer(env,p,user.id,{skipDoppelganger:true});await savePlayer(env,target,targetId,{skipDoppelganger:true});return sendText(env,interaction,`${MILLIONAIRE_MESSAGES.bomb[randomInt(0,MILLIONAIRE_MESSAGES.bomb.length-1)]}\n\n💣 **BOOMERANG BOMB LAUNCHED!** The fuse is lit on <@${targetId}>. Detonation occurs in 40 seconds; six collection attempts begin 30 minutes after detonation and continue every 30 minutes.\n\n![Royal Boomerang Bomb](${BASE_URL}${IMAGES.boomerangBomb})`,[row(button("🎁 Golden Chest","millionaire:inventory",2))]);}
+ if(parts[1]==="target"){const kind=parts[2],targetId=interaction.data?.values?.[0];if(!targetId||targetId===user.id)return sendText(env,interaction,"❌ Choose another player.");const target=await getPlayer(env,targetId);target.millionaireState=target.millionaireState||{};if(kind==="boomerang_bomb"){if(Date.now()<Number(p.millionaireState.boomerangReadyAt||0))return sendText(env,interaction,"⏳ Your bomb is recharging.");/* Millionaire Boomerang Bomb intentionally bypasses Rubber Band reflection: this is a premium item effect, not the ordinary bomb target handler. */p.millionaireState.boomerangReadyAt=Date.now()+6*60*60*1000;target.millionaireState.boomerangDrains=Array.isArray(target.millionaireState.boomerangDrains)?target.millionaireState.boomerangDrains:[];const now=Date.now();const detonateAt=now+40000;target.millionaireState.boomerangDrains=target.millionaireState.boomerangDrains.filter(d=>Number(d.collections||0)<6||d.pendingTransfer);target.millionaireState.boomerangDrains.push({id:`${user.id}:${now}:${Math.random().toString(36).slice(2,8)}`,attackerId:String(user.id),channelId:String(interaction.channel_id||""),detonateAt,nextAt:detonateAt+30*60*1000,detonated:false,collections:0,cap:null,collected:0,processedAt:0,pendingTransfer:null});await savePlayer(env,p,user.id,{skipDoppelganger:true});await savePlayer(env,target,targetId,{skipDoppelganger:true});return sendText(env,interaction,`${MILLIONAIRE_MESSAGES.bomb[randomInt(0,MILLIONAIRE_MESSAGES.bomb.length-1)]}\n\n💣 **BOOMERANG BOMB LAUNCHED!** The fuse is lit on <@${targetId}>. Detonation occurs in 40 seconds; six collection attempts begin 30 minutes after detonation and continue every 30 minutes.\n\n![Royal Boomerang Bomb](${BASE_URL}${IMAGES.boomerangBomb})`,[row(button("🎁 Golden Chest","millionaire:inventory",2))]);}
  if(kind==="doppelganger"){if(Date.now()<Number(p.millionaireState.doppelgangerReadyAt||0))return sendText(env,interaction,"⏳ Doppelgänger cooldown active.");if(Date.now()<Number(target.millionaireState.doppelgangerProtectedUntil||0))return sendText(env,interaction,`🛡️ <@${targetId}> is protected from Doppelgängers until <t:${Math.ceil(Number(target.millionaireState.doppelgangerProtectedUntil)/1000)}:R>.`);if(target.doppelgangerOwnerId&&Number(target.doppelgangerUntil||0)>Date.now())return sendText(env,interaction,"🛡️ That player already has an active secret mirror link.");if(p.millionaireState.doppelgangerLink&&Date.now()<Number(p.millionaireState.doppelgangerLink.endsAt||0))return sendText(env,interaction,"🪞 You already have an active Doppelgänger link.");p.millionaireState.doppelgangerLink={targetId:String(targetId),startedAt:Date.now(),endsAt:Date.now()+24*60*60*1000};p.millionaireState.doppelgangerReadyAt=Date.now()+48*60*60*1000;target.millionaireState.doppelgangerProtectedUntil=Date.now()+7*24*60*60*1000;target.doppelgangerOwnerId=String(user.id);target.doppelgangerUntil=Date.now()+24*60*60*1000;await savePlayer(env,p,user.id);await savePlayer(env,target,targetId);return sendText(env,interaction,`${MILLIONAIRE_MESSAGES.doppel[randomInt(0,MILLIONAIRE_MESSAGES.doppel.length-1)]}\n\n🪞 **THE DOPPELGÄNGER LINK IS ACTIVE.** Your link with <@${targetId}> lasts 24 hours. Eligible earnings are redirected to you while it is active. The reveal happens when it ends.`);}}
  return sendText(env,interaction,"❌ Unknown Millionaire Shop action.");}
 async function processMillionaireTimers(env){
@@ -36772,3 +36769,4 @@ async function birthdayMemoryNext(env, interaction) {
 
 
 ;
+
