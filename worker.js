@@ -259,7 +259,7 @@ async function handleSparklePurchaseComponent(env, interaction) {
     const player = await getPlayer(env, purchase.userId);
     if (String(player.sparklePendingPurchaseId || "") === purchase.id) {
       player.sparklePendingPurchaseId = "";
-      await savePlayer(env, player, purchase.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+      await savePlayer(env, player, purchase.userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true, skipDoppelganger: true });
     }
 
     await sendUserDM(env, purchase.userId, `❌💎 **SPARKLE PURCHASE REJECTED**\n\nYour purchase **${purchase.id}** for **$${purchase.price}** was rejected by the Werewives owner.\n\nIf you believe this was a mistake, contact the owner directly.`);
@@ -323,6 +323,9 @@ const IMAGES = {
   raccoonCourtStinkEffect: "IMG_7441.png",
   candyEffect: "IMG_7397.png",
   halloweenEffect: "IMG_7390.png",
+  goldenGoose: "IMG_8264.png",
+  boomerangBomb: "IMG_8267.png",
+  boomerangExplosion: "IMG_8268.gif",
   raccoonThief: "IMG_7402.png",
   frankFrog: "IMG_7403.png",
   duckHatBoots: "IMG_7405.png",
@@ -1307,6 +1310,7 @@ const PROFILE_BADGES = {
   raccoon_boss: { name: "🦝 Raccoon Boss", label: "RACCOON BOSS", icon: "RB", style: "raccoon_boss" },
   diamond_darling: { name: "💎 Diamond Darling", label: "DIAMOND DARLING", icon: "DD", style: "black_ice" },
   millionaire: { name: "💰 Millionaire", label: "MILLIONAIRE", icon: "M", style: "millionaire" },
+  phoenix: { name: "🔥 Immortal Phoenix", label: "IMMORTAL PHOENIX", icon: "✦", style: "phoenix" },
   halloween_haunter: { name: "🎃 Halloween Haunter", label: "HALLOWEEN HAUNTER", icon: "HH", style: "haunted" },
   bot_owner: { name: "💗 Bot Owner", label: "BOT OWNER", icon: "♥", style: "owner_heart" }
 };
@@ -2629,6 +2633,33 @@ async function savePlayer(env, player, ownerId = null, options = {}) {
     }
   }
 
+  // MILLIONAIRE SHOP — Doppelgänger redirect for eligible positive earnings.
+  // Purchases/transfers can opt out with skipDoppelganger; redirect owner is
+  // saved with recursion disabled so the owner cannot redirect the same gain.
+  if (!options.skipDoppelganger) {
+    try {
+      const rawBeforeDoppel = await env.TREE_DATA.get(key);
+      if (rawBeforeDoppel && player.doppelgangerOwnerId && Number(player.doppelgangerUntil || 0) > Date.now()) {
+        const beforeDoppel = JSON.parse(rawBeforeDoppel);
+        const beforeBalance = Number(beforeDoppel.sparkles || 0);
+        const afterBalance = Number(player.sparkles || 0);
+        const gain = afterBalance - beforeBalance;
+        const ownerId = String(player.doppelgangerOwnerId);
+        if (gain > 0 && ownerId && ownerId !== key) {
+          const owner = await getPlayer(env, ownerId);
+          owner.sparkles = Number(owner.sparkles || 0) + gain;
+          owner.badgeStats = owner.badgeStats && typeof owner.badgeStats === "object" ? owner.badgeStats : {};
+          owner.badgeStats.sparklesEarned = Number(owner.badgeStats.sparklesEarned || 0) + gain;
+          player.sparkles = beforeBalance;
+          await savePlayer(env, owner, ownerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+        }
+      } else if (player.doppelgangerOwnerId && Number(player.doppelgangerUntil || 0) <= Date.now()) {
+        delete player.doppelgangerOwnerId; delete player.doppelgangerUntil;
+      }
+    } catch (error) { console.error("Doppelgänger reward redirect failed:", error); }
+  }
+
+  if (Number(player.sparkles || 0) >= 1000000) player.millionaireShopUnlocked = true;
   await env.TREE_DATA.put(key, JSON.stringify(player));
 }
 
@@ -3635,6 +3666,9 @@ function getDecorationImage(player) {
 
     case "cheddar_falls":
       return IMAGES.cheddarFalls;
+
+    case "golden_goose":
+      return IMAGES.goldenGoose;
 
     case "birthday":
       return IMAGES.birthdayDecoration;
@@ -5585,7 +5619,7 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     cool:[[65,190,255],[215,250,255]], danger:[[250,65,105],[255,195,170]],
     speed:[[55,211,255],[230,253,255]], raccoon_boss:[[240,175,80],[255,238,155]],
     black_ice:[[45,170,255],[245,253,255]], millionaire:[[255,195,42],[255,241,145]],
-    owner_heart:[[255,82,170],[255,220,240]]
+    phoenix:[[224,86,24],[255,218,91]], owner_heart:[[255,82,170],[255,220,240]]
   };
   const [base,hi]=palettes[b.style]||[[190,195,210],[255,255,255]];
 
@@ -5748,6 +5782,11 @@ function drawProfileBadgeEmblem(frame,badgeId,cx,cy,size=34,phase=0){
     O(50,50,40,base,255); O(50,50,32,black,255); O(50,50,28,hi,255); O(50,50,23,black,255);
     L(35,72,35,30,7,hi,255); L(35,30,50,52,7,hi,255); L(50,52,65,30,7,hi,255); L(65,30,65,72,7,hi,255);
     O(18,22,4,white,225); O(82,78,4,hi,225);
+  } else if(b.style==='phoenix'){
+    // Immortal Phoenix: bold wings and a rising flame, readable at tiny Discord size.
+    POLY([[50,84],[39,68],[20,72],[8,54],[25,58],[16,39],[37,48],[50,20],[63,48],[84,39],[75,58],[92,54],[80,72],[61,68]],base,255);
+    POLY([[50,75],[42,59],[32,62],[25,52],[41,54],[50,34],[59,54],[75,52],[68,62],[58,59]],hi,255);
+    O(50,68,5,[255,245,195],255); ST(50,20,7,[255,245,195],255);
   } else if(b.style==='owner_heart'){
     // Bot Owner: a cute pink heart, deliberately different from the crown/star badges.
     POLY([[50,88],[15,49],[12,37],[16,25],[27,17],[39,18],[50,30],[61,18],[73,17],[84,25],[88,37],[85,49]],base,255);
@@ -7754,11 +7793,19 @@ async function handleWater(
     player.waterCount =
       Number(player.waterCount || 0) + 1;
 
+    // Golden Goose reward: only successful waterings, and exactly one roll per watering.
+    let goldenGooseReward = 0;
+    if (player.equipped?.decoration === "golden_goose" && Number(player.millionaireItems?.golden_goose || 0) > 0 && Math.random() < 0.20) {
+      const roll = Math.random();
+      goldenGooseReward = roll < 0.60 ? randomInt(1000, 8000) : roll < 0.88 ? randomInt(8001, 20000) : roll < 0.98 ? randomInt(20001, 40000) : randomInt(40001, 50000);
+      player.sparkles = Number(player.sparkles || 0) + goldenGooseReward;
+    }
+
     const witchEffectsNow = player.witchEffects || {};
     const witchNow = Date.now();
     const doubleGrowthActive = Number(witchEffectsNow.double_growth_until || 0) > witchNow;
     const slothActive = Number(witchEffectsNow.sloth_until || 0) > witchNow;
-    const witheringActive = Number(witchEffectsNow.withering_until || 0) > witchNow;
+    const witheringActive = Number(witchEffectsNow.witheringExpUntil || 0) > witchNow;
     const judgmentActive = Number(witchEffectsNow.final_judgment_until || 0) > witchNow;
     const wateringExp = (judgmentActive || slothActive || witheringActive)
       ? 0
@@ -7796,6 +7843,7 @@ async function handleWater(
 
     const parts = [
       `💧 You watered your tree! +${wateringExp} EXP${wateringExp === 0 ? " (a curse blocked the growth 😭)" : doubleGrowthActive ? " (DOUBLE GROWTH! 🧪)" : ""}.`,
+      ...(goldenGooseReward > 0 ? [`${MILLIONAIRE_MESSAGES.goose[randomInt(0, MILLIONAIRE_MESSAGES.goose.length - 1)]}\n🥚 **Golden egg reward: +${goldenGooseReward.toLocaleString()} ✨!**` ] : []),
       `🎭 **${personality.name} Tree:** ${personality.messages[randomInt(0, personality.messages.length - 1)]}`
     ];
 
@@ -9047,6 +9095,16 @@ async function useMegaphone(env, interaction, targetId) {
   await sendText(env, interaction, `📢🦝 **MEGAPHONE FIRED!**\n\n<@${targetId}> is now getting the full Raccoon Megaphone treatment. 😭\n\n📣 Announcements: **4 total** — now, +15m, +30m, +45m.\n📦 Megaphones remaining: **${raccoonMartCount(player, "raccoon_megaphone")}**`, raccoonMartHomeRows(player));
 }
 
+// Shared Phoenix decision for direct theft handlers. Call before transferring stolen sparkles.
+// Returns reflected amount when protection triggers, or null when theft proceeds.
+function phoenixBackfireAmount(attacker, target, attemptedAmount) {
+  if (!millionaireOwned(target, "immortal_phoenix") || Math.random() >= 0.40) return null;
+  const reflected = Math.min(Math.max(0, Number(attacker.sparkles || 0)), Math.max(0, Number(attemptedAmount || 0)) * 2);
+  attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - reflected);
+  target.sparkles = Math.max(0, Number(target.sparkles || 0) + reflected);
+  return reflected;
+}
+
 async function useRaccoonBoomerang(env, interaction, targetId) {
   const user = getUserFromInteraction(interaction);
   if (!user || !targetId || targetId === user.id) {
@@ -9070,8 +9128,8 @@ async function useRaccoonBoomerang(env, interaction, targetId) {
     const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
     target.sparkles = Number(target.sparkles || 0) + lost;
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     return sendText(
       env,
       interaction,
@@ -9085,7 +9143,7 @@ async function useRaccoonBoomerang(env, interaction, targetId) {
   if (backfire) {
     const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
-    await savePlayer(env, player, user.id);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     return sendText(env, interaction,
       `🦝🪃💥 **THE RACCOON BOOMERANG BACKFIRED!**\n\nThe boomerang completely ignored <@${targetId}> and came flying straight back at you. 😭\n\n💸 **You lost ${lost.toLocaleString()} ✨.**\n\n📦 Boomerangs remaining: **${raccoonMartCount(player, "raccoon_boomerang")}**`,
       raccoonMartHomeRows(player)
@@ -9093,13 +9151,23 @@ async function useRaccoonBoomerang(env, interaction, targetId) {
   }
 
   const stolen = Math.min(amount, targetSparkles);
+  // Immortal Phoenix protection: 40% independent chance on each legitimate theft attempt.
+  const reflected = phoenixBackfireAmount(player, target, stolen);
+  if (reflected !== null) {
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await sendUserDM(env, targetId, `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\nYour Phoenix blocked a Raccoon Boomerang theft from <@${user.id}>. The attack backfired and **${reflected.toLocaleString()} ✨** was transferred to you.`);
+    return sendText(env, interaction,
+      `🔥🪽 **IMMORTAL PHOENIX — DOUBLE BACKFIRE!**\n\nThe Phoenix blocked the Raccoon Boomerang aimed at <@${targetId}>. The attacker's boomerang was turned back: **${reflected.toLocaleString()} ✨** went to the Phoenix owner.`,
+      raccoonMartHomeRows(player));
+  }
   target.sparkles = Math.max(0, targetSparkles - stolen);
   player.sparkles = Number(player.sparkles || 0) + stolen;
   player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
   player.badgeStats.sparklesStolen = Number(player.badgeStats.sparklesStolen || 0) + stolen;
 
-  await savePlayer(env, target, targetId);
-  await savePlayer(env, player, user.id);
+  await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+  await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
   return sendText(env, interaction,
     `🦝🪃 **RACCOON BOOMERANG!**\n\nYou launched a boomerang at <@${targetId}> and successfully stole **${stolen.toLocaleString()} ✨**! 😭\n\n💰 **Your haul:** +${stolen.toLocaleString()} ✨\n📦 Boomerangs remaining: **${raccoonMartCount(player, "raccoon_boomerang")}**`,
     raccoonMartHomeRows(player)
@@ -9129,8 +9197,8 @@ async function usePickleSlap(env, interaction, targetId) {
     const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
     target.sparkles = Number(target.sparkles || 0) + lost;
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     return sendText(
       env,
       interaction,
@@ -9144,7 +9212,7 @@ async function usePickleSlap(env, interaction, targetId) {
   if (backfire) {
     const lost = Math.min(amount, Math.max(0, Number(player.sparkles || 0)));
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
-    await savePlayer(env, player, user.id);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     return sendText(env, interaction,
       `🥒💥 **PICKLE SLAP BACKFIRE!**\n\nYou swung that pickle way too confidently and it smacked YOU instead. 😭\n\n💸 **You lost ${lost.toLocaleString()} ✨.**\n\n📦 Pickle Slaps remaining: **${raccoonMartCount(player, "pickle_slap")}**`,
       raccoonMartHomeRows(player)
@@ -9152,13 +9220,20 @@ async function usePickleSlap(env, interaction, targetId) {
   }
 
   const stolen = Math.min(amount, targetSparkles);
+  const phoenixReflected = phoenixBackfireAmount(player, target, stolen);
+  if (phoenixReflected !== null) {
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await sendUserDM(env, targetId, `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\nYour Phoenix blocked a Pickle Slap theft from <@${user.id}>. The attack backfired and **${phoenixReflected.toLocaleString()} ✨** was transferred to you.`);
+    return sendText(env, interaction, `🔥🪽 **IMMORTAL PHOENIX — DOUBLE BACKFIRE!**\n\nThe Phoenix blocked the Pickle Slap aimed at <@${targetId}>. The attacker lost **${phoenixReflected.toLocaleString()} ✨** to the Phoenix owner.`, raccoonMartHomeRows(player));
+  }
   target.sparkles = Math.max(0, targetSparkles - stolen);
   player.sparkles = Number(player.sparkles || 0) + stolen;
   player.badgeStats = player.badgeStats && typeof player.badgeStats === "object" ? player.badgeStats : {};
   player.badgeStats.sparklesStolen = Number(player.badgeStats.sparklesStolen || 0) + stolen;
 
-  await savePlayer(env, target, targetId);
-  await savePlayer(env, player, user.id);
+  await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+  await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
   return sendText(env, interaction,
     `🥒💥 **PICKLE SLAP!**\n\nYou absolutely SMACKED <@${targetId}> with a pickle and stole **${stolen.toLocaleString()} ✨**! 😭\n\n💰 **Your haul:** +${stolen.toLocaleString()} ✨\n📦 Pickle Slaps remaining: **${raccoonMartCount(player, "pickle_slap")}**`,
     raccoonMartHomeRows(player)
@@ -9463,6 +9538,9 @@ async function showRegularShop(env, interaction) {
   rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
   rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2),button("🎞️ Animated","shop_animated_effects",1)));
   rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
+  const shopPlayer = await getPlayer(env, getUserFromInteraction(interaction).id);
+  if (Number(shopPlayer.sparkles || 0) >= 1000000 && !shopPlayer.millionaireShopUnlocked) { shopPlayer.millionaireShopUnlocked = true; await savePlayer(env, shopPlayer, shopPlayer.userId); }
+  if (millionaireUnlocked(shopPlayer)) rows.push(row(button("👑 Millionaire Shop","millionaire:shop",1)));
   await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle in the Regular Shop. Forest and nature cosmetics are sold in their proper individual categories. Candyland items are bundle-only here. ✨",rows);
 }
 
@@ -9760,7 +9838,8 @@ function refreshProfileBadges(player) {
     speed_demon: Number(player.badgeStats.speedWins || 0) >= 10,
     raccoon_boss: Array.isArray(player.badgeStats.uniqueRaccoonTargets) && player.badgeStats.uniqueRaccoonTargets.length >= 25,
     diamond_darling: inv.some(id => id === "black_ice_tree" || id === "black_ice_background" || id === "black_ice_decoration" || id === "black_ice_snow_animated_effect"),
-    millionaire: Number(player.sparkles || 0) >= 1000000
+    millionaire: Number(player.sparkles || 0) >= 1000000,
+    phoenix: Number(player.millionaireItems?.immortal_phoenix || 0) > 0
   };
   for (const [id, ok] of Object.entries(checks)) {
     if (ok && !player.unlockedBadges.includes(id)) player.unlockedBadges.push(id);
@@ -12343,7 +12422,7 @@ function birthdayGiftCostOK(p,id){ const g=BIRTHDAY_GIFTS[id]; if(!g)return fals
 async function showBirthdayCollection(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const c=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];const names={midnight_keepsake:"🦇 Midnight Keepsake",moonlit_relic:"🌙 Moonlit Birthday Relic",cursed_birthday_cake:"🦇🎂 Cursed Birthday Cake",midnight_heart_cupcake:"🖤🧁 Midnight Heart Cupcake"};return sendText(env,interaction,`🎂✨ **BIRTHDAY COLLECTION**\n\n${c.length?c.map(x=>`• ${names[x]||x}`).join("\n"):"Your collection is empty... for now. 👀"}`,[row(button("🎂 Birthday Menu","birthday:home",2))]);}
 
 async function showBirthdayGifts(env,interaction){const p=await getPlayer(env,getUserFromInteraction(interaction).id);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];if(!gifts.length)return sendText(env,interaction,"🎁 **CURSED BIRTHDAY GIFTS**\n\nYou have no unopened birthday gifts.", [row(button("🎂 Birthday Menu","birthday:home",2))]);return sendText(env,interaction,`🎁 **YOUR UNOPENED BIRTHDAY GIFTS**\n\n${gifts.map((g,i)=>`${i+1}. ${BIRTHDAY_GIFTS[g.type]?.name||g.type} — ${BIRTHDAY_GIFTS[g.type]?.rarity||"Gift"}`).join("\n")}`,[...gifts.map(g=>row(button(`🎁 Open ${BIRTHDAY_GIFTS[g.type]?.name||g.type}`,`birthday:open:${g.id}`,1))),row(button("🎂 Birthday Menu","birthday:home",2))]);}
-async function openBirthdayGift(env,interaction,id){const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p);if(def.reward.sparkles)await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,msg);}
+async function openBirthdayGift(env,interaction,id){const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const gifts=Array.isArray(p.birthdayGifts)?p.birthdayGifts:[];const idx=gifts.findIndex(g=>g.id===id);if(idx<0)return sendText(env,interaction,"🎁 That gift is already opened or doesn't exist.");const g=gifts[idx];const def=BIRTHDAY_GIFTS[g.type];if(!def)return sendText(env,interaction,"🎁 That gift is corrupted.");gifts.splice(idx,1);let msg=`🎁✨ **${def.name} OPENED!**\n\n`;if(def.reward.sparkles){p.sparkles+=def.reward.sparkles;msg+=`💰 **+${def.reward.sparkles.toLocaleString()} Sparkles**\n`;}if(def.reward.candies){p.birthdayCandies+=def.reward.candies;msg+=`🎟️ **+${def.reward.candies} Birthday Candies**\n`;}if(def.reward.collectible){p.birthdayCollection=Array.isArray(p.birthdayCollection)?p.birthdayCollection:[];p.birthdayCollection.push(def.reward.collectible);msg+=`✨ **Permanent collectible added to your Birthday Collection!**`;}p.birthdayGifts=gifts;await savePlayer(env,p,uid,{skipDoppelganger:true,skipSparkleMagnet:true,skipRaccoonEmpireBonus:true});if(def.reward.sparkles)await markBingoAction(env,interaction.guild_id,uid,"receive_sparkles");return sendText(env,interaction,msg);}
 
 async function handleBirthdayGift(env,interaction){
   const {people}=await ensureBirthdayEvent(env,interaction.guild_id); if(!people.length)return sendText(env,interaction,"🔒 Birthday gifting is closed.");
@@ -13257,7 +13336,7 @@ async function fireBirthdayCannon(env,interaction){const state=await getGuildSta
 
 function birthdayTricksterComponents(){return [{type:1,components:[{type:5,custom_id:"birthday:trickstertarget",placeholder:"🦝 Choose a player to prank...",min_values:1,max_values:1}]}];}
 
-async function birthdayTrickster(env,interaction,targetOverride=null){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Trickster is closed.");const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const now=Date.now();if(p.birthdayTricksterLast&&now-p.birthdayTricksterLast<3*60*60*1000)return sendText(env,interaction,`🦝 Trickster cooldown: **${Math.ceil((3*60*60*1000-(now-p.birthdayTricksterLast))/60000)} minutes** remaining.`);const target=targetOverride||getOption(interaction,"user")||interaction.data?.values?.[0];if(!target)return sendText(env,interaction,"🦝 **Birthday Trickster**\n\nChoose another player to prank!",birthdayTricksterComponents());if(target===uid)return sendText(env,interaction,"🦝 You can't trick yourself! Choose another player.",birthdayTricksterComponents());const tp=await getPlayer(env,target);p.birthdayTricksterLast=now;const outcomes=["candy","tax","bonk","bat","present","sparkle","web"];const out=outcomes[randomInt(0,outcomes.length-1)];const protectedSteal=["candy","tax","sparkle"].includes(out)&&birthdayPersonId(state,target);if(protectedSteal){p.birthdayCandies=Math.max(0,Number(p.birthdayCandies||0)-100);await savePlayer(env,p);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,"🚨🎂 **BIRTHDAY PROTECTION ACTIVATED!**\n\nYou targeted the birthday person with a stealing effect. Your attempt is wasted and you lose **100 Birthday Candies**. Their birthday rewards remain untouched.");}let msg="";if(out==="candy"){const a=randomInt(50,150);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`🎟️ Candy Heist! You stole **${a2} Birthday Candies**.`;}else if(out==="tax"){const a=randomInt(25,75);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`👻 Ghostly Tax! **${a2} Candies** transferred.`;}else if(out==="sparkle"){const a=randomInt(100,500);const a2=Math.min(a,Number(tp.sparkles||0));tp.sparkles-=a2;p.sparkles+=a2;msg=`✨ Sparkle Snatch! You stole **${a2} Sparkles**.`;}else if(out==="bat"){p.birthdayCandies+=50;msg="🦇 Bat Ambush! The target gets bats and you gain **50 Birthday Candies**.";}else if(out==="present"){p.birthdayCandies+=randomInt(10,30);msg="🎁 Present Swipe! A tiny gift mysteriously ended up in your pockets.";}else if(out==="web"){msg="🕸️ Webbed! The target has been covered in a temporary silly status.";}else{msg="🎃 Pumpkin Bonk! Harmless spooky birthday mischief!";}await savePlayer(env,p);await savePlayer(env,tp);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,`🦝🎂 **BIRTHDAY TRICKSTER!**\n\n${msg}`);}
+async function birthdayTrickster(env,interaction,targetOverride=null){const state=await getGuildState(env,interaction.guild_id);if(!birthdayEventActive(state))return sendText(env,interaction,"🔒 Birthday Trickster is closed.");const uid=getUserFromInteraction(interaction).id;const p=await getPlayer(env,uid);const now=Date.now();if(p.birthdayTricksterLast&&now-p.birthdayTricksterLast<3*60*60*1000)return sendText(env,interaction,`🦝 Trickster cooldown: **${Math.ceil((3*60*60*1000-(now-p.birthdayTricksterLast))/60000)} minutes** remaining.`);const target=targetOverride||getOption(interaction,"user")||interaction.data?.values?.[0];if(!target)return sendText(env,interaction,"🦝 **Birthday Trickster**\n\nChoose another player to prank!",birthdayTricksterComponents());if(target===uid)return sendText(env,interaction,"🦝 You can't trick yourself! Choose another player.",birthdayTricksterComponents());const tp=await getPlayer(env,target);p.birthdayTricksterLast=now;const outcomes=["candy","tax","bonk","bat","present","sparkle","web"];const out=outcomes[randomInt(0,outcomes.length-1)];const protectedSteal=["candy","tax","sparkle"].includes(out)&&birthdayPersonId(state,target);if(protectedSteal){p.birthdayCandies=Math.max(0,Number(p.birthdayCandies||0)-100);await savePlayer(env,p,null,{ skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,"🚨🎂 **BIRTHDAY PROTECTION ACTIVATED!**\n\nYou targeted the birthday person with a stealing effect. Your attempt is wasted and you lose **100 Birthday Candies**. Their birthday rewards remain untouched.");}let msg="";if(out==="candy"){const a=randomInt(50,150);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`🎟️ Candy Heist! You stole **${a2} Birthday Candies**.`;}else if(out==="tax"){const a=randomInt(25,75);const a2=Math.min(a,Number(tp.birthdayCandies||0));tp.birthdayCandies-=a2;p.birthdayCandies+=a2;msg=`👻 Ghostly Tax! **${a2} Candies** transferred.`;}else if(out==="sparkle"){const a=randomInt(100,500);const a2=Math.min(a,Number(tp.sparkles||0));const phoenixReflected=a2>0?phoenixBackfireAmount(p,tp,a2):null;if(phoenixReflected!==null){msg=`🔥🪽 **IMMORTAL PHOENIX!** The Sparkle Snatch was blocked and **${phoenixReflected.toLocaleString()} ✨** backfired to the Phoenix owner.`;}else{tp.sparkles-=a2;p.sparkles+=a2;msg=`✨ Sparkle Snatch! You stole **${a2} Sparkles**.`;}}else if(out==="bat"){p.birthdayCandies+=50;msg="🦇 Bat Ambush! The target gets bats and you gain **50 Birthday Candies**.";}else if(out==="present"){p.birthdayCandies+=randomInt(10,30);msg="🎁 Present Swipe! A tiny gift mysteriously ended up in your pockets.";}else if(out==="web"){msg="🕸️ Webbed! The target has been covered in a temporary silly status.";}else{msg="🎃 Pumpkin Bonk! Harmless spooky birthday mischief!";}await savePlayer(env,p,null,{ skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });await savePlayer(env,tp,null,{ skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });if(msg.includes("IMMORTAL PHOENIX"))await sendUserDM(env,target,`🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\nYour Phoenix blocked a Birthday Trickster sparkle theft from <@${uid}> and reflected the backfire to you.`);await markBingoAction(env,interaction.guild_id,uid,"trickster");return sendText(env,interaction,`🦝🎂 **BIRTHDAY TRICKSTER!**\n\n${msg}`);}
 
 function birthdayBossLobbyText(g){return `🦇🎂 **CURSED BIRTHDAY CAKE BOSS BATTLE LOBBY**\n\n👑 Host: <@${g.host}>\n👥 Players: **${g.players.length}/10**\n\n${g.players.length?g.players.map((id,i)=>`${i+1}. <@${id}>`).join("\n"):"No players yet."}\n\n🎂 Gather your party, then the host can start the battle!`}
 function birthdayBossLobbyButtons(g){return [row(button("👥 Join Boss Battle","birthday:bossjoin",1,g.players.length>=10),button("▶️ Start Boss Battle","birthday:bossstart",1,g.players.length<2)),row(button("🚪 Leave Lobby","birthday:bossleave",2))];}
@@ -15062,24 +15141,24 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
 
   if (bomb.typeId === "love") {
     target.loveStruckUntil = now + type.durationMs;
-    await savePlayer(env, target, bomb.targetId);
+    await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     effectText = `💘 **LOVE-STRUCK for 30 minutes!** Random WereWives actions may be rejected because your brain is currently 100% butterflies.`;
   } else if (bomb.typeId === "glitter") {
     target.glitteredUntil = now + type.durationMs;
-    await savePlayer(env, target, bomb.targetId);
+    await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     effectText = `✨ **GLITTERED for 15 minutes!** ALL WereWives bot commands and interactions are blocked while the glitter incident is active.`;
   } else if (bomb.typeId === "chaos") {
     effectText = await applyBombChaos(env, bomb, target, state);
   } else if (bomb.typeId === "fire") {
     target.fireBombUntil = now + type.durationMs;
-    await savePlayer(env, target, bomb.targetId);
+    await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     effectText = `🔥 **TREE ON FIRE for 2 HOURS!** ALL tree commands are disabled while the flames are active. Games still work normally.`;
   } else if (bomb.typeId === "stink") {
     effectText = await applyStinkBomb(env, target, bomb, now);
   } else if (bomb.typeId === "jester") {
     target.jesterBombUntil = now + type.durationMs;
     target.jesterBombNextEventAt = now + randomInt(15, 35) * 60 * 1000;
-    await savePlayer(env, target, bomb.targetId);
+    await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     effectText = `🃏 **JESTERED for 6 HOURS!** The Jester can hijack commands, reject buttons, and randomly interfere with WereWives controls. Good luck. 😭`;
   } else if (bomb.typeId === "fake_id") {
     effectText = await applyFakeIdentity(env, target, bomb, now);
@@ -15093,10 +15172,17 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     if (backfire) {
       const lost = Math.min(amount, Math.max(0, Number(attacker.sparkles || 0)));
       attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - lost);
-      await savePlayer(env, attacker, bomb.attackerId);
+      await savePlayer(env, attacker, bomb.attackerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
       effectText = `🥒💥 **PICKLE SLAP BACKFIRED!** The pickle ignored <@${bomb.targetId}> and smacked <@${bomb.attackerId}> instead.\n\n💸 <@${bomb.attackerId}> lost **${lost.toLocaleString()} ✨**.`;
     } else {
       const stolen = Math.min(amount, targetSparkles);
+      const phoenixReflected = phoenixBackfireAmount(attacker, target, stolen);
+      if (phoenixReflected !== null) {
+        await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+        await savePlayer(env, attacker, bomb.attackerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+        await sendUserDM(env, bomb.targetId, `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\nYour Phoenix blocked a Pickle Bomb theft from <@${bomb.attackerId}>. The attack backfired and **${phoenixReflected.toLocaleString()} ✨** was transferred to you.`);
+        effectText = `🔥🪽 **IMMORTAL PHOENIX — DOUBLE BACKFIRE!** The Phoenix blocked the Pickle Bomb theft and reflected **${phoenixReflected.toLocaleString()} ✨** to its owner.`;
+      } else {
       target.sparkles = Math.max(0, targetSparkles - stolen);
       attacker.sparkles = Number(attacker.sparkles || 0) + stolen;
       if (bomb.rubberBandReflected && bomb.rubberBandOwnerId) {
@@ -15107,9 +15193,10 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
       }
       attacker.badgeStats = attacker.badgeStats && typeof attacker.badgeStats === "object" ? attacker.badgeStats : {};
       attacker.badgeStats.sparklesStolen = Number(attacker.badgeStats.sparklesStolen || 0) + stolen;
-      await savePlayer(env, target, bomb.targetId);
-      await savePlayer(env, attacker, bomb.attackerId);
+      await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+      await savePlayer(env, attacker, bomb.attackerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
       effectText = `🥒💥 **PICKLE SLAP!** <@${bomb.targetId}> lost **${stolen.toLocaleString()} ✨** and <@${bomb.attackerId}> received them.`;
+      }
     }
   } else if (bomb.typeId === "raccoon") {
     target.raccoonBeefUntil = now + type.durationMs;
@@ -15120,7 +15207,7 @@ async function applyBombDetonation(env, bomb, reason = "wrong") {
     target.raccoonBeefCollections = 0;
     target.raccoonBeefChannelId = bomb.channelId;
     target.rubberBandRaccoonOwnerId = bomb.rubberBandOwnerId || "";
-    await savePlayer(env, target, bomb.targetId);
+    await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     effectText = `🦝 **RACCOON BEEF for 1 hour!** The raccoons collect **200–1,000 ✨ every 15 minutes** and will also randomly show up to talk trash between collections.`;
   }
 
@@ -15576,7 +15663,7 @@ async function processBombTimers(env) {
             target.raccoonBeefCollections = 0;
             target.raccoonBeefChannelId = "";
             target.rubberBandRaccoonOwnerId = "";
-            await savePlayer(env, target, bomb.targetId);
+            await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
             continue;
           }
 
@@ -15586,10 +15673,22 @@ async function processBombTimers(env) {
             const requested = randomInt(200, 1000);
             const balance = Math.max(0, Number(target.sparkles || 0));
             const actual = Math.min(requested, balance);
-            target.sparkles = Math.max(0, balance - actual);
+            // Immortal Phoenix also protects against ongoing raccoon drains.
+            // Each scheduled collection is an independent legitimate theft attempt.
+            let phoenixBlocked = false;
+            let phoenixReflected = 0;
+            if (actual > 0 && bomb.attackerId) {
+              const raccoonAttacker = await getPlayer(env, String(bomb.attackerId));
+              phoenixReflected = phoenixBackfireAmount(raccoonAttacker, target, actual);
+              phoenixBlocked = phoenixReflected !== null;
+              if (phoenixBlocked) {
+                await savePlayer(env, raccoonAttacker, String(bomb.attackerId), { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+              }
+            }
+            if (!phoenixBlocked) target.sparkles = Math.max(0, balance - actual);
             target.raccoonBeefCollections = Number(target.raccoonBeefCollections || 0) + 1;
 
-            if (target.rubberBandRaccoonOwnerId && actual > 0) {
+            if (!phoenixBlocked && target.rubberBandRaccoonOwnerId && actual > 0) {
               const rubberOwner = await getPlayer(env, target.rubberBandRaccoonOwnerId);
               rubberOwner.sparkles = Number(rubberOwner.sparkles || 0) + actual;
               await savePlayer(env, rubberOwner, target.rubberBandRaccoonOwnerId);
@@ -15602,7 +15701,9 @@ async function processBombTimers(env) {
               await sendChannelMessage(
                 env,
                 target.raccoonBeefChannelId,
-                `${flavor}\n\n💸 The raccoons collected **${actual.toLocaleString()} ✨** from <@${bomb.targetId}>.${actual < requested ? `\n😭 They only had **${actual.toLocaleString()} ✨**, so they took everything.` : ""}`
+                phoenixBlocked
+                  ? `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\n${flavor}\n\nThe Phoenix blocked this scheduled raccoon drain and reflected **${phoenixReflected.toLocaleString()} ✨** to its owner. The next scheduled collection gets its own 40% protection roll.`
+                  : `${flavor}\n\n💸 The raccoons collected **${actual.toLocaleString()} ✨** from <@${bomb.targetId}>.${actual < requested ? `\n😭 They only had **${actual.toLocaleString()} ✨**, so they took everything.` : ""}`
               );
             }
           }
@@ -15624,7 +15725,7 @@ async function processBombTimers(env) {
             );
           }
 
-          await savePlayer(env, target, bomb.targetId);
+          await savePlayer(env, target, bomb.targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
         }
 
         if (bomb.typeId === "chaos" && bomb.status === "detonated" && bomb.targetId) {
@@ -15758,6 +15859,187 @@ async function checkBombRestriction(env, interaction) {
    COMPONENT ROUTER
 ========================================================= */
 
+
+/* =========================================================
+   MILLIONAIRE SHOP — premium utility items (separate inventory)
+   Items are intentionally not added to cosmetic SHOP_ITEMS.
+========================================================= */
+const MILLIONAIRE_ITEMS = {
+  golden_goose: {name:"🪿 Golden Goose",price:1000000,description:"Permanent tree decoration. While equipped, each successful watering has a 20% chance to award 1,000–50,000 ✨."},
+  doppelganger: {name:"🪞 Doppelgänger",price:5000000,description:"Secretly redirects eligible sparkle earnings from one target to you for 24 hours. 24-hour cooldown after the link ends; same target is protected for 7 days."},
+  boomerang_bomb: {name:"💣 Boomerang Bomb",price:6000000,description:"After a 40-second fuse, attempts six 30-minute sparkle drains over 3 hours, with each drain capped so the total cannot exceed 25% of the target’s balance at detonation. 6-hour cooldown."},
+  immortal_phoenix: {name:"🔥 Immortal Phoenix",price:10000000,description:"Permanent defensive relic. 40% chance to block each eligible theft attempt and reflect a double backfire to the attacker, up to their available balance."}
+};
+const MILLIONAIRE_MESSAGES = {
+ goose:["🥚 A golden egg just rolled out of the nest!","🪿 HONK! Your goose has committed a tiny financial miracle.","✨ The goose has reviewed your watering technique and approved a bonus.","👑 Your royal goose laid an egg made of pure profit.","💰 The goose says this is absolutely not a pyramid scheme.","🪿 Your goose has opened a tiny offshore nest account.","🥚 A gilded egg tumbles out with suspiciously excellent timing.","✨ The goose has promoted you to Assistant Vice President of Honking.","💸 The nest’s quarterly report is looking VERY shiny.","👑 The royal goose bows, then invoices the kingdom."],
+ gooseSmall:["The egg was modest, but extremely shiny.","A little golden luck!","The goose is saving the enormous egg for later.","A small honk, a small fortune."],
+ bomb:["💣 The royal fuse is lit. The target has 40 seconds to enjoy the peace.","👑 A black-and-gold parcel has been delivered. It is emphatically not a gift.","✨ The boomerang has left the palace. The accounting department is nervous.","💥 Royal Detonation protocol initiated. Please keep hands and sparkles inside the kingdom."],
+ doppel:["🪞 The mirror has chosen its reflection. The secret is sealed for 24 hours.","🌑 A second shadow follows your target. They have no idea why.","👑 The royal mirror is now collecting eligible earnings. Quietly. Efficiently.","✨ A reflection has stepped out of the glass. Nobody noticed… yet.","🕯️ The glass fogged over, then wrote a name nobody else can see.","🌘 A silent twin slipped through the mirror. The clock has started.","💎 The mirror's ledger opened to a fresh page. One name is highlighted.","👁️ The reflection blinked first. That is never a good sign.","🔮 The mirror sealed the pact with a gold thread and a very suspicious sparkle.","👑 The royal archivist has filed this under 'definitely not a normal reflection'."],
+ collection:["💸 The royal boomerang returned with a suspiciously neat ledger.","🦅 A gold-edged shadow swept past and collected its scheduled share.","💣 The boomerang completed another collection. The palace accountant is sweating.","👑 Royal collection complete. The gold ink is still wet.","✨ The boomerang curved back through the treasury and took its scheduled cut.","🪙 A black-and-gold blur crossed the balance sheet. Collection complete.","🌑 The mirror-boomerang returned from the shadows with another scheduled collection.","📜 The royal ledger has recorded another collection. No refunds from the palace.","💫 The boomerang whistled past, leaving a fresh line in the sparkle ledger.","🏹 Another collection is complete. The royal seal glows ominously."],
+ detonation:["💥👑 ROYAL DETONATION! The gold fuse erupted into a storm of black-and-gold fragments.","💣✨ THE PALACE HAS DETONATED! The boomerang is loose and the ledger is open.","🌟 ROYAL DETONATION! A ring of gold light split into a shower of sharp-edged sparks.","💥 The fuse burned out in a flash of gold. The boomerang is beginning its collection run.","👑💥 ROYAL DETONATION CONFIRMED. The treasury's most dramatic delivery has arrived.","✨ A gold-white blast lit the channel. The boomerang's collection schedule is now active.","💣 The black-and-gold core burst into flying fragments. Collection protocol begins.","🌑💥 A royal shockwave rippled through the mirror realm. The boomerang is active."]
+};
+function millionaireOwned(p,id){return Number(p.millionaireItems?.[id]||0)>0;}
+function millionaireUnlocked(p){return !!p.millionaireShopUnlocked || Number(p.sparkles||0)>=1000000 || (Array.isArray(p.inventory)&&p.inventory.includes("profile_frame_millionaire_vault")) || (Array.isArray(p.titles)&&p.titles.includes("millionaire")) || Object.values(p.millionaireItems||{}).some(v=>Number(v)>0);}
+function millionaireShopRows(){return [row(button("🪿 Golden Goose — 1,000,000 ✨","millionaire:buy:golden_goose",1),button("🪞 Doppelgänger — 5,000,000 ✨","millionaire:buy:doppelganger",1)),row(button("💣 Boomerang Bomb — 6,000,000 ✨","millionaire:buy:boomerang_bomb",1),button("🔥 Immortal Phoenix — 10,000,000 ✨","millionaire:buy:immortal_phoenix",1)),row(button("🎁 Golden Chest Inventory","millionaire:inventory",2),button("⬅️ Regular Shop","shop",2))];}
+function millionaireInventoryRows(p){const rows=[]; if(millionaireOwned(p,"golden_goose")) rows.push(row(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1),button("🪿 Goose Details","millionaire:details:golden_goose",2))); if(millionaireOwned(p,"boomerang_bomb")) rows.push(row(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1))); if(millionaireOwned(p,"doppelganger")) rows.push(row(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1))); if(millionaireOwned(p,"immortal_phoenix")) rows.push(row(button("🔥 Phoenix Relic Details","millionaire:details:immortal_phoenix",2))); rows.push(row(button("⬅️ Millionaire Shop","millionaire:shop",2))); return rows;}
+async function millionaireComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(!user?.id)return sendText(env,interaction,"❌ I couldn't identify your account.");const p=await getPlayer(env,user.id);p.millionaireItems=p.millionaireItems||{};p.millionaireState=p.millionaireState||{};
+ if(id==="millionaire:shop") {if(!millionaireUnlocked(p))return sendText(env,interaction,"🔒 **MILLIONAIRE SHOP LOCKED**\n\nReach 1,000,000 ✨ to unlock this exclusive shop.");if(Number(p.sparkles||0)>=1000000&&!p.millionaireShopUnlocked){p.millionaireShopUnlocked=true;await savePlayer(env,p,user.id,{skipDoppelganger:true});}return sendText(env,interaction,"👑💰 **THE MILLIONAIRE SHOP**\n\nOnly the finest long-term chaos and fortune. These items are separate from the regular cosmetic shop and RaccoonMart.\n\n🪿 Golden Goose • 🪞 Doppelgänger • 💣 Boomerang Bomb • 🔥 Immortal Phoenix",millionaireShopRows());}
+ if(id==="millionaire:inventory")return sendText(env,interaction,"🎁 **THE GOLDEN CHEST**\n\nYour exclusive Millionaire Shop inventory. Items here never appear in the regular shop inventory.\n\n"+(Object.keys(MILLIONAIRE_ITEMS).filter(k=>millionaireOwned(p,k)).map(k=>`${MILLIONAIRE_ITEMS[k].name} — **Owned**`).join("\n")||"The chest is empty for now. Visit the Millionaire Shop to fill it!"),millionaireInventoryRows(p));
+ if(parts[1]==="buy"){const key=parts[2],item=MILLIONAIRE_ITEMS[key];if(!item)return sendText(env,interaction,"❌ That item doesn't exist.");if(!millionaireUnlocked(p))return sendText(env,interaction,"🔒 Reach 1,000,000 ✨ to unlock the Millionaire Shop.");if(millionaireOwned(p,key))return sendText(env,interaction,`📦 You already own **${item.name}**. Check your Golden Chest!`,millionaireInventoryRows(p));if(Number(p.sparkles||0)<item.price)return sendText(env,interaction,`❌ You need **${(item.price-Number(p.sparkles||0)).toLocaleString()} ✨** more for ${item.name}.`,[row(button("⬅️ Millionaire Shop","millionaire:shop",2))]);p.sparkles-=item.price;p.millionaireItems[key]=1;if(key==="immortal_phoenix"){if(!Array.isArray(p.unlockedBadges))p.unlockedBadges=[];if(!p.unlockedBadges.includes("phoenix"))p.unlockedBadges.push("phoenix");}refreshProfileBadges(p);await savePlayer(env,p,user.id);return sendText(env,interaction,`👑 **PURCHASE COMPLETE!**\n\nYou acquired **${item.name}** for **${item.price.toLocaleString()} ✨**.\n\n${item.description}\n\n✨ Balance: **${Number(p.sparkles).toLocaleString()}**`,millionaireInventoryRows(p));}
+ if(id==="millionaire:equip:golden_goose"){if(!millionaireOwned(p,"golden_goose"))return sendText(env,interaction,"❌ You don't own the Golden Goose.");p.equipped=p.equipped||{};p.equipped.decoration=p.equipped.decoration==="golden_goose"?null:"golden_goose";await savePlayer(env,p,user.id);return sendText(env,interaction,p.equipped.decoration==="golden_goose"?"🪿 **GOLDEN GOOSE EQUIPPED!**\n\nYour successful waterings now have a 20% chance to trigger a golden egg reward.":"🪿 Golden Goose unequipped.",millionaireInventoryRows(p));}
+ if(parts[1]==="details")return sendText(env,interaction,(MILLIONAIRE_ITEMS[parts[2]]?.description||"No details found.")+(parts[2]==="immortal_phoenix"?"\n\n🔥 **PHOENIX RELIC**\nPermanent protection: each eligible theft attempt has a 40% chance to be blocked and reflected back at double the attempted amount, capped by the attacker’s available balance.":""),millionaireInventoryRows(p));
+ if(id==="millionaire:use:boomerang_bomb"){if(!millionaireOwned(p,"boomerang_bomb"))return sendText(env,interaction,"❌ You don't own a Boomerang Bomb.");const ready=Number(p.millionaireState.boomerangReadyAt||0);if(Date.now()<ready)return sendText(env,interaction,`⏳ Your Boomerang Bomb is recharging. Ready <t:${Math.ceil(ready/1000)}:R>.`);return sendText(env,interaction,`💣 **BOOMERANG BOMB**\n\nChoose a target. The fuse is 40 seconds after launch.\n\n![Royal Boomerang Bomb](${BASE_URL}${IMAGES.boomerangBomb})`,[ {type:1,components:[{type:5,custom_id:"millionaire:target:boomerang_bomb",placeholder:"Choose a target",min_values:1,max_values:1}]},row(button("⬅️ Golden Chest","millionaire:inventory",2))]);}
+ if(id==="millionaire:use:doppelganger"){if(!millionaireOwned(p,"doppelganger"))return sendText(env,interaction,"❌ You don't own a Doppelgänger.");if(Date.now()<Number(p.millionaireState.doppelgangerReadyAt||0))return sendText(env,interaction,`⏳ Doppelgänger cooldown active until <t:${Math.ceil(p.millionaireState.doppelgangerReadyAt/1000)}:R>.`);return sendText(env,interaction,"🪞 **DOPPELGÄNGER**\n\nChoose a target for a secret 24-hour link.",[ {type:1,components:[{type:5,custom_id:"millionaire:target:doppelganger",placeholder:"Choose a target",min_values:1,max_values:1}]},row(button("⬅️ Golden Chest","millionaire:inventory",2))]);}
+ if(parts[1]==="target"){const kind=parts[2],targetId=interaction.data?.values?.[0];if(!targetId||targetId===user.id)return sendText(env,interaction,"❌ Choose another player.");const target=await getPlayer(env,targetId);target.millionaireState=target.millionaireState||{};if(kind==="boomerang_bomb"){if(Date.now()<Number(p.millionaireState.boomerangReadyAt||0))return sendText(env,interaction,"⏳ Your bomb is recharging.");p.millionaireState.boomerangReadyAt=Date.now()+6*60*60*1000;target.millionaireState.boomerangDrains=Array.isArray(target.millionaireState.boomerangDrains)?target.millionaireState.boomerangDrains:[];const now=Date.now();const detonateAt=now+40000;target.millionaireState.boomerangDrains=target.millionaireState.boomerangDrains.filter(d=>Number(d.collections||0)<6||d.pendingTransfer);target.millionaireState.boomerangDrains.push({id:`${user.id}:${now}:${Math.random().toString(36).slice(2,8)}`,attackerId:String(user.id),channelId:String(interaction.channel_id||""),detonateAt,nextAt:detonateAt+30*60*1000,detonated:false,collections:0,cap:null,collected:0,processedAt:0,pendingTransfer:null});await savePlayer(env,p,user.id,{skipDoppelganger:true});await savePlayer(env,target,targetId,{skipDoppelganger:true});return sendText(env,interaction,`${MILLIONAIRE_MESSAGES.bomb[randomInt(0,MILLIONAIRE_MESSAGES.bomb.length-1)]}\n\n💣 **BOOMERANG BOMB LAUNCHED!** The fuse is lit on <@${targetId}>. Detonation occurs in 40 seconds; six collection attempts begin 30 minutes after detonation and continue every 30 minutes.\n\n![Royal Boomerang Bomb](${BASE_URL}${IMAGES.boomerangBomb})`,[row(button("🎁 Golden Chest","millionaire:inventory",2))]);}
+ if(kind==="doppelganger"){if(Date.now()<Number(p.millionaireState.doppelgangerReadyAt||0))return sendText(env,interaction,"⏳ Doppelgänger cooldown active.");if(Date.now()<Number(target.millionaireState.doppelgangerProtectedUntil||0))return sendText(env,interaction,`🛡️ <@${targetId}> is protected from Doppelgängers until <t:${Math.ceil(Number(target.millionaireState.doppelgangerProtectedUntil)/1000)}:R>.`);if(target.doppelgangerOwnerId&&Number(target.doppelgangerUntil||0)>Date.now())return sendText(env,interaction,"🛡️ That player already has an active secret mirror link.");if(p.millionaireState.doppelgangerLink&&Date.now()<Number(p.millionaireState.doppelgangerLink.endsAt||0))return sendText(env,interaction,"🪞 You already have an active Doppelgänger link.");p.millionaireState.doppelgangerLink={targetId:String(targetId),startedAt:Date.now(),endsAt:Date.now()+24*60*60*1000};p.millionaireState.doppelgangerReadyAt=Date.now()+48*60*60*1000;target.millionaireState.doppelgangerProtectedUntil=Date.now()+7*24*60*60*1000;target.doppelgangerOwnerId=String(user.id);target.doppelgangerUntil=Date.now()+24*60*60*1000;await savePlayer(env,p,user.id);await savePlayer(env,target,targetId);return sendText(env,interaction,`${MILLIONAIRE_MESSAGES.doppel[randomInt(0,MILLIONAIRE_MESSAGES.doppel.length-1)]}\n\n🪞 **THE DOPPELGÄNGER LINK IS ACTIVE.** Your link with <@${targetId}> lasts 24 hours. Eligible earnings are redirected to you while it is active. The reveal happens when it ends.`);}}
+ return sendText(env,interaction,"❌ Unknown Millionaire Shop action.");}
+async function processMillionaireTimers(env){
+  const now = Date.now();
+  let cursor = undefined;
+  do {
+    const list = await env.TREE_DATA.list(cursor ? { cursor } : {});
+    for (const item of list.keys || []) {
+    if (!item.name || item.name.includes(":")) continue;
+    let p;
+    try { p = await getPlayer(env, item.name); } catch { continue; }
+    p.millionaireState = p.millionaireState || {};
+    let changed = false;
+    const drains = Array.isArray(p.millionaireState.boomerangDrains) ? p.millionaireState.boomerangDrains : [];
+
+    for (const d of drains) {
+      const drainId = String(d.id || `${d.attackerId}:${d.detonateAt}`);
+      const attackerId = String(d.attackerId || "");
+      if (!attackerId || attackerId === String(item.name)) { d.collections = 6; changed = true; continue; }
+
+      // A pending transfer is completed idempotently after crashes/retries.
+      // The target record stores the transfer intent; the attacker record stores
+      // a transfer receipt alongside the balance mutation.
+      const hadPendingTransfer = Boolean(d.pendingTransfer && d.pendingTransfer.id);
+      if (hadPendingTransfer) {
+        const pending = d.pendingTransfer;
+        try {
+          const attacker = await getPlayer(env, attackerId);
+          attacker.millionaireState = attacker.millionaireState || {};
+          attacker.millionaireState.processedDrainTransfers = attacker.millionaireState.processedDrainTransfers || {};
+          if (!attacker.millionaireState.processedDrainTransfers[pending.id]) {
+            if (pending.kind === "theft") attacker.sparkles = Number(attacker.sparkles || 0) + Number(pending.amount || 0);
+            else if (pending.kind === "backfire") attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - Number(pending.amount || 0));
+            attacker.millionaireState.processedDrainTransfers[pending.id] = now;
+            // Keep the receipt set bounded while preserving recent retry safety.
+            const receiptEntries = Object.entries(attacker.millionaireState.processedDrainTransfers);
+            if (receiptEntries.length > 300) {
+              receiptEntries.sort((a,b) => Number(a[1] || 0) - Number(b[1] || 0));
+              for (const [key] of receiptEntries.slice(0, receiptEntries.length - 250)) delete attacker.millionaireState.processedDrainTransfers[key];
+            }
+            await savePlayer(env, attacker, attackerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+          }
+          d.pendingTransfer = null;
+          d.processedAt = Number(pending.scheduledAt || now);
+          changed = true;
+        } catch (error) {
+          console.error("Millionaire pending Boomerang transfer retry failed:", error);
+          continue;
+        }
+        // Resolve a retry and wait for the next scheduler pass before another
+        // collection, so a delayed Worker never bursts multiple collections.
+        continue;
+      }
+
+      // Detonate once at +40 seconds. Capture the lifetime cap from the balance
+      // at detonation and show the R2 explosion in the channel where it launched.
+      if (!d.detonated && now >= Number(d.detonateAt || 0)) {
+        d.detonated = true;
+        d.cap = Math.floor(Math.max(0, Number(p.sparkles || 0)) * 0.25);
+        changed = true;
+        if (d.channelId) {
+          const explosionUrl = `${BASE_URL}${IMAGES.boomerangExplosion}`;
+          await sendChannelMessage(env, d.channelId,
+            `${MILLIONAIRE_MESSAGES.detonation[randomInt(0, MILLIONAIRE_MESSAGES.detonation.length - 1)]}\n\n<@${item.name}>'s Boomerang Bomb is now attempting six collections, 30 minutes apart, with a lifetime loss cap of **25% of the balance at detonation**. Each collection has its own 40% Immortal Phoenix protection roll.\n\n![Royal Boomerang Explosion](${explosionUrl})`);
+        }
+      }
+      if (!d.detonated || Number(d.collections || 0) >= 6 || now < Number(d.nextAt || 0)) continue;
+
+      // A scheduled collection is marked before any external balance transfer.
+      // A persisted pending intent plus attacker receipt prevents duplicate credit
+      // if the scheduled worker retries after a partial failure.
+      const scheduledAt = Number(d.nextAt || now);
+      const remainingCap = Math.max(0, Number(d.cap || 0) - Number(d.collected || 0));
+      const balance = Math.max(0, Number(p.sparkles || 0));
+      const requested = Math.floor(balance * randomInt(5, 20) / 100);
+      const amount = Math.min(remainingCap, requested, balance);
+      const collectionIndex = Number(d.collections || 0) + 1;
+      const transferId = `${drainId}:collection:${collectionIndex}`;
+      const phoenixBlocked = amount > 0 && millionaireOwned(p, "immortal_phoenix") && Math.random() < 0.40;
+      let reflected = 0;
+
+      d.collections = collectionIndex;
+      d.nextAt = scheduledAt + 30 * 60 * 1000;
+      // If a scheduler missed multiple intervals, process only one collection per
+      // pass, but keep the cadence anchored to the scheduled time.
+      if (d.nextAt <= now) d.nextAt = now + 30 * 60 * 1000;
+      if (phoenixBlocked) {
+        const attacker = await getPlayer(env, attackerId);
+        reflected = Math.min(Math.max(0, Number(attacker.sparkles || 0)), amount * 2);
+        p.sparkles = Number(p.sparkles || 0) + reflected;
+        d.pendingTransfer = { id: transferId, kind: "backfire", amount: reflected, scheduledAt };
+        // Blocked thefts do not consume the 25% lifetime loss allowance.
+      } else {
+        p.sparkles = Math.max(0, Number(p.sparkles || 0) - amount);
+        d.collected = Number(d.collected || 0) + amount;
+        d.pendingTransfer = { id: transferId, kind: "theft", amount, scheduledAt };
+      }
+      changed = true;
+      // Persist the target's balance and pending transfer before processing the
+      // attacker record. If the Worker stops, the pending transfer is retried.
+      await savePlayer(env, p, item.name, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+      try {
+        const attacker = await getPlayer(env, attackerId);
+        attacker.millionaireState = attacker.millionaireState || {};
+        attacker.millionaireState.processedDrainTransfers = attacker.millionaireState.processedDrainTransfers || {};
+        if (!attacker.millionaireState.processedDrainTransfers[transferId]) {
+          if (phoenixBlocked) attacker.sparkles = Math.max(0, Number(attacker.sparkles || 0) - reflected);
+          else attacker.sparkles = Number(attacker.sparkles || 0) + amount;
+          attacker.millionaireState.processedDrainTransfers[transferId] = now;
+          await savePlayer(env, attacker, attackerId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+        }
+        d.pendingTransfer = null;
+        d.processedAt = scheduledAt;
+      } catch (error) {
+        console.error("Millionaire Boomerang transfer queued for retry:", error);
+      }
+      if (phoenixBlocked) {
+        await sendUserDM(env, String(item.name), `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!**\n\nYour Phoenix blocked Boomerang Bomb collection ${collectionIndex}/6 from <@${attackerId}>. The attack backfired and **${reflected.toLocaleString()} ✨** was transferred to you.`);
+      }
+      if (d.channelId) {
+        const flavor = phoenixBlocked
+          ? `🔥🪽 **IMMORTAL PHOENIX ACTIVATED!** The scheduled theft against <@${item.name}> was blocked. The attacker lost **${reflected.toLocaleString()} ✨** to the Phoenix owner. This was collection ${collectionIndex}/6.`
+          : `<@${item.name}> — ${MILLIONAIRE_MESSAGES.collection[randomInt(0, MILLIONAIRE_MESSAGES.collection.length - 1)]}\n\n**Collection ${collectionIndex}/6:** **${amount.toLocaleString()} ✨** collected. The target's total loss remains capped at 25% of their balance at detonation.`;
+        await sendChannelMessage(env, d.channelId, flavor);
+      }
+    }
+
+    p.millionaireState.boomerangDrains = drains.filter(d => Number(d.collections || 0) < 6 || d.pendingTransfer);
+    const link = p.millionaireState.doppelgangerLink;
+    if (link && now >= Number(link.endsAt || 0)) {
+      p.millionaireState.doppelgangerLastReveal = { targetId: link.targetId, endedAt: now };
+      p.millionaireState.doppelgangerLink = null;
+      changed = true;
+      try { await sendUserDM(env, String(item.name), `🪞 **DOPPELGÄNGER REVEAL!**\n\nYour 24-hour link with <@${link.targetId}> has ended. The mirror goes dark… until next time.`); } catch {}
+      try { await sendUserDM(env, String(link.targetId), `🪞 **THE MIRROR REVEALS ITSELF!**\n\nYour 24-hour Doppelgänger link has ended. Eligible earnings are yours again. The mystery is over… for now.`); } catch {}
+      try {
+        const target = await getPlayer(env, String(link.targetId));
+        if (String(target.doppelgangerOwnerId || "") === String(item.name)) {
+          delete target.doppelgangerOwnerId; delete target.doppelgangerUntil;
+          await savePlayer(env, target, String(link.targetId), { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+        }
+      } catch (error) { console.error("Doppelgänger cleanup failed:", error); }
+    }
+    if (changed) await savePlayer(env, p, item.name, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    }
+    cursor = list.list_complete ? undefined : list.cursor;
+  } while (cursor);
+}
+
 async function handleComponent(
   env,
   interaction,
@@ -15778,6 +16060,7 @@ async function handleComponent(
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
     if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
   }
+  if (id.startsWith("millionaire:")) return millionaireComponent(env, interaction);
   if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction,ctx);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
   if (id.startsWith("sparkleshop:")) return handleSparkleShopComponent(env, interaction);
@@ -28169,8 +28452,8 @@ async function handleRaccoon(env, interaction) {
     player.sparkles = Math.max(0, Number(player.sparkles || 0) - lost);
     target.sparkles = Number(target.sparkles || 0) + lost;
 
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
 
     await sendText(
       env,
@@ -28192,8 +28475,8 @@ async function handleRaccoon(env, interaction) {
   }
 
   if (Number(target.raccoonShieldUntil || 0) > now) {
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     await sendText(env, interaction, `🧀🦝 **CHEESE SHIELD!**\n\n<@${targetId}> is protected from /raccoon until **${punishmentTimeText(target.raccoonShieldUntil)}**.\n\nYour raccoon bounced off the cheese. 😭`);
     return;
   }
@@ -28203,8 +28486,8 @@ async function handleRaccoon(env, interaction) {
   }
   if (Number(target.raccoonShieldUses || 0) > 0) {
     target.raccoonShieldUses = Math.max(0, Number(target.raccoonShieldUses || 0) - 1);
-    await savePlayer(env, player, user.id);
-    await savePlayer(env, target, targetId);
+    await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+    await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
     await sendText(env, interaction, `🧀🦝 **CHEESE SLICE BLOCKED THE ROBBERY!**\n\n<@${targetId}> was protected from your /raccoon attack. The cheese slice was consumed. 😭`);
     await sendUserDM(env, targetId, `🧀🦝 **CHEESE SLICE USED!**\n\nYour Cheese Slice blocked a /raccoon attack from <@${user.id}>. Your sparkles are safe!`);
     return;
@@ -28256,6 +28539,10 @@ async function handleRaccoon(env, interaction) {
       player.secretAchievements.push("secret_ate");
     }
   } else {
+    const phoenixReflected = phoenixBackfireAmount(player, target, stolen);
+    if (phoenixReflected !== null) {
+      result = `🔥🪽 **IMMORTAL PHOENIX — DOUBLE BACKFIRE!** The Phoenix blocked your raccoon’s theft and reflected **${phoenixReflected.toLocaleString()} ✨** to its owner.`;
+    } else {
     const successResponses = [
       `🦝 Your raccoon robbed **${stolen} sparkles** from **${victimName}**!`,
       `💰 Your raccoon came back carrying **${stolen} sparkles**! Crime pays. 🦝`,
@@ -28271,17 +28558,20 @@ async function handleRaccoon(env, interaction) {
     if (!player.badgeStats.uniqueRaccoonTargets.includes(targetId)) player.badgeStats.uniqueRaccoonTargets.push(targetId);
     player.badgeStats.sparklesEarned = Number(player.badgeStats.sparklesEarned || 0) + stolen;
     target.sparkles = Math.max(0, Number(target.sparkles || 0) - stolen);
+    }
   }
 
-  await savePlayer(env, player);
-  await savePlayer(env, target);
+  await savePlayer(env, player, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+  await savePlayer(env, target, targetId, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
 
   await sendText(env, interaction, `${result}\n\n🕒 Your raccoon needs **3 hours** to recover before the next robbery.`);
 
-  const dmText =
-    stolen > 0
-      ? `🦝 **A RACCOON ROBBED YOU!**\n\nA raccoon sent by **${player.displayName || player.username || "another Werewife"}** stole **${stolen} sparkles** from you. 😭\n\nYour remaining balance: **${target.sparkles} sparkles**.`
-      : `🦝 **A RACCOON TRIED TO ROB YOU!**\n\nSomeone sent a raccoon after your sparkles, but it came back empty-handed. 😂\n\nYour balance is still **${target.sparkles} sparkles**.`;
+  const phoenixBlocked = String(result || "").includes("IMMORTAL PHOENIX");
+  const dmText = phoenixBlocked
+      ? `🔥🪽 **IMMORTAL PHOENIX PROTECTED YOUR SPARKLES!**\n\nA raccoon sent by **${player.displayName || player.username || "another Werewife"}** was blocked by your Phoenix relic. The theft failed, and the attacker suffered a double backfire.\n\nYour balance: **${Number(target.sparkles || 0).toLocaleString()} sparkles**.`
+      : stolen > 0
+        ? `🦝 **A RACCOON ROBBED YOU!**\n\nA raccoon sent by **${player.displayName || player.username || "another Werewife"}** stole **${stolen} sparkles** from you. 😭\n\nYour remaining balance: **${target.sparkles} sparkles**.`
+        : `🦝 **A RACCOON TRIED TO ROB YOU!**\n\nSomeone sent a raccoon after your sparkles, but it came back empty-handed. 😂\n\nYour balance is still **${target.sparkles} sparkles**.`;
 
   await sendUserDM(env, targetId, dmText);
 }
@@ -28396,8 +28686,8 @@ async function handleGift(env, interaction) {
   const receiver = await getPlayer(env, target);
   sender.sparkles -= amount;
   receiver.sparkles += amount;
-  await savePlayer(env, sender);
-  await savePlayer(env, receiver);
+  await savePlayer(env, sender, user.id, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
+  await savePlayer(env, receiver, target, { skipDoppelganger: true, skipSparkleMagnet: true, skipRaccoonEmpireBonus: true });
 
   await sendText(
     env,
@@ -31478,9 +31768,12 @@ function witchShopRows() {
 function witchShopText(p) {
  return `🧙‍♀️ **THE WITCH’S SHOP**\n\n*Rubber Bands are useless against witchcraft. Every item bypasses Rubber Band.*\n\n👻 **Your Spookies:** ${Number(p.halloweenSpookies||0).toLocaleString()}\n\n🧪 Potions boost your own earnings. 🔮 Curses sabotage a target’s eligible rewards.\n\nUnlimited stock. Spookies only. Decorations are coming later.`;
 }
-function witchCategoryRows(kind) {
+function witchCategoryRows(kind, page = 0) {
  const entries=Object.entries(WITCH_ITEMS).filter(([,v])=>v.kind===kind);
- const rows=entries.map(([id,v])=>row(button(`${v.name} · ${v.price.toLocaleString()} Spookies`, `halloween:witch:buy:${id}`, 1)));
+ const pageSize=3, totalPages=Math.max(1,Math.ceil(entries.length/pageSize));
+ const safePage=Math.max(0,Math.min(totalPages-1,Number(page)||0));
+ const rows=entries.slice(safePage*pageSize,(safePage+1)*pageSize).map(([id,v])=>row(button(`${v.name} · ${v.price.toLocaleString()} Spookies`, `halloween:witch:buy:${id}`, 1)));
+ const nav=[]; if(safePage>0)nav.push(button("⬅️ Previous",`halloween:witch:category:${kind}:page:${safePage-1}`,2)); nav.push(button(`Page ${safePage+1}/${totalPages}`,`halloween:witch:category:${kind}:page:${safePage}`,2,true)); if(safePage<totalPages-1)nav.push(button("Next ➡️",`halloween:witch:category:${kind}:page:${safePage+1}`,1)); rows.push(row(...nav));
  rows.push(row(button("🎒 My Inventory","halloween:witch:inventory",2),button("⬅️ Witch’s Shop","halloween:witch:shop",2)));
  return rows;
 }
@@ -31498,11 +31791,13 @@ async function witchShopComponent(env,interaction,id,parts) {
  if(!user?.id) return sendText(env,interaction,"❌ I couldn't identify your Discord account. Please try the Witch's Shop again.");
  const p=await getPlayer(env,user.id);
  if(id==="halloween:witch:shop") return sendText(env,interaction,witchShopText(p),witchShopRows());
- if(id==="halloween:witch:category:potion") return sendText(env,interaction,"🧪 **POTIONS**\n\nChoose a potion to purchase. Effects begin when used.",witchCategoryRows("potion"));
- if(id==="halloween:witch:category:curse") return sendText(env,interaction,"🔮 **CURSES**\n\nChoose a curse to purchase. You’ll select a target when using it. Rubber Band cannot block these.",witchCategoryRows("curse"));
- if(id==="halloween:witch:inventory") {
-  const useRows=Object.entries(WITCH_ITEMS).filter(([key])=>Number(p.witchShopInventory?.[key]||0)>0).map(([key,item])=>row(button(`Use ${item.name}`,`halloween:witch:use:${key}`,1)));
-  useRows.push(...witchShopRows());
+ if(id.startsWith("halloween:witch:category:potion")) return sendText(env,interaction,"🧪 **POTIONS**\n\nChoose a potion to purchase. Effects begin when used.",witchCategoryRows("potion",Number(parts[5]||0)));
+ if(id.startsWith("halloween:witch:category:curse")) return sendText(env,interaction,"🔮 **CURSES**\n\nChoose a curse to purchase. You’ll select a target when using it. Rubber Band cannot block these.",witchCategoryRows("curse",Number(parts[5]||0)));
+ if(id.startsWith("halloween:witch:inventory")) {
+  const ownedWitchItems=Object.entries(WITCH_ITEMS).filter(([key])=>Number(p.witchShopInventory?.[key]||0)>0);
+  const page=Math.max(0,Number(parts[4]||0)); const pageSize=3; const total=Math.max(1,Math.ceil(ownedWitchItems.length/pageSize)); const safe=Math.min(page,total-1);
+  const useRows=ownedWitchItems.slice(safe*pageSize,(safe+1)*pageSize).map(([key,item])=>row(button(`Use ${item.name}`,`halloween:witch:use:${key}`,1)));
+  const nav=[]; if(safe>0)nav.push(button("⬅️ Previous","halloween:witch:inventory:page:"+(safe-1),2)); nav.push(button(`Page ${safe+1}/${total}`,"halloween:witch:inventory:page:"+safe,2,true)); if(safe<total-1)nav.push(button("Next ➡️","halloween:witch:inventory:page:"+(safe+1),1)); useRows.push(row(...nav)); useRows.push(row(button("🛍️ Witch’s Shop","halloween:witch:shop",2),button("⬅️ Halloween Hub","halloween:hub",2)));
   return sendText(env,interaction,witchInventoryText(p),useRows);
  }
  if(id.startsWith("halloween:witch:buy:")) {
@@ -31533,7 +31828,9 @@ async function witchShopComponent(env,interaction,id,parts) {
   const effectMap={sloth:"sloth_until",empty_coffers:"empty_coffers_until",broken_fortune:"broken_fortune_until",withering:"withering_until",mad_jester:"mad_jester_until",hollow_soul:"hollow_soul_until",final_judgment:"final_judgment_until"};
   const effect=effectMap[key]; if(!effect)return sendText(env,interaction,"❌ This curse is not ready.");
   if(Number(p.witchShopInventory?.[key]||0)<1)return sendText(env,interaction,"❌ You don't own that curse anymore.");
-  target.witchEffects[effect]=Date.now()+item.duration;target.witchMessageState=target.witchMessageState||{};target.witchMessageState[key]={nextAt:Date.now()+randomInt(15,50)*60000,attackerId:user.id};
+  target.witchEffects[effect]=Date.now()+item.duration;
+  if(key==="withering") target.witchEffects.witheringExpUntil=Date.now()+12*60*60*1000;
+  target.witchMessageState=target.witchMessageState||{};target.witchMessageState[key]={nextAt:Date.now()+randomInt(15,50)*60000,attackerId:user.id};
   p.witchShopInventory[key]--;await savePlayer(env,p,user.id);await savePlayer(env,target,targetId);
   const msgs=WITCH_MESSAGES[key];return sendText(env,interaction,`🔮 **CURSE CAST SUCCESSFULLY!**\n\n${item.name} was cast on <@${targetId}> for **${Math.round(item.duration/3600000)} hour(s)**.\n🪢 Rubber Band was ignored. The curse cannot be reflected.\n\n${msgs[randomInt(0,msgs.length-1)]}`,[row(button("🛍️ Witch’s Shop","halloween:witch:shop",1))]);
  }
@@ -36008,7 +36305,7 @@ export default {
         processRaccoonMegaphoneJobs(env),
         processRaccoonSuitPaydays(env),
         processRaccoonEmpireDividends(env)
-        ,processBombTimers(env),processWitchMessages(env)
+        ,processBombTimers(env),processWitchMessages(env),processMillionaireTimers(env)
       ])
     );
   }
