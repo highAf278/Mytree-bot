@@ -34805,17 +34805,17 @@ const COMMANDS = [
   {
     name: "recycle",
     description:
-      "Recycle 20-200 sparkles for a random 1x-10x payout",
+      "Recycle 20-50,000 sparkles for a random 1x-10x payout",
 
     options: [
       {
         type: 4,
         name: "amount",
         description:
-          "Amount of sparkles to recycle (20-200)",
+          "Amount of sparkles to recycle (20-50,000)",
         required: true,
-        min_value: 20,
-        max_value: 200
+        min_value: RECYCLE_MIN_AMOUNT,
+        max_value: RECYCLE_MAX_AMOUNT
       }
     ]
   },
