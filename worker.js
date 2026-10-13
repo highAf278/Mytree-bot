@@ -15863,7 +15863,7 @@ async function checkBombRestriction(env, interaction) {
 ========================================================= */
 const MILLIONAIRE_ITEMS = {
   golden_goose: {name:"🪿 Golden Goose",price:1000000,description:"Permanent tree decoration. While equipped, each successful watering has a 20% chance to award 1,000–50,000 ✨."},
-  doppelganger: {name:"🪞 Doppelgänger",price:5000000,description:"Secretly redirects eligible sparkle earnings from one target to you for 24 hours. 24-hour cooldown after the link ends; same target is protected for 7 days."},
+  doppelganger: {name:"🪞 Doppelgänger",price:20000000,description:"Secretly redirects eligible sparkle earnings from one target to you for 24 hours. 24-hour cooldown after the link ends; same target is protected for 7 days."},
   boomerang_bomb: {name:"💣 Boomerang Bomb",price:6000000,description:"After a 40-second fuse, attempts six 30-minute sparkle drains over 3 hours, with each drain capped so the total cannot exceed 25% of the target’s balance at detonation. 6-hour cooldown."},
   immortal_phoenix: {name:"🔥 Immortal Phoenix",price:10000000,description:"Permanent defensive relic. 40% chance to block each eligible theft attempt and reflect a double backfire to the attacker, up to their available balance."}
 };
@@ -15877,7 +15877,7 @@ const MILLIONAIRE_MESSAGES = {
 };
 function millionaireOwned(p,id){return Number(p.millionaireItems?.[id]||0)>0;}
 function millionaireUnlocked(p){return !!p.millionaireShopUnlocked || Number(p.sparkles||0)>=1000000 || (Array.isArray(p.inventory)&&p.inventory.includes("profile_frame_millionaire_vault")) || (Array.isArray(p.titles)&&p.titles.includes("millionaire")) || Object.values(p.millionaireItems||{}).some(v=>Number(v)>0);}
-function millionaireShopRows(){return [row(button("🪿 Golden Goose — 1,000,000 ✨","millionaire:buy:golden_goose",1),button("🪞 Doppelgänger — 5,000,000 ✨","millionaire:buy:doppelganger",1)),row(button("💣 Boomerang Bomb — 6,000,000 ✨","millionaire:buy:boomerang_bomb",1),button("🔥 Immortal Phoenix — 10,000,000 ✨","millionaire:buy:immortal_phoenix",1)),row(button("🎁 Golden Chest Inventory","millionaire:inventory",2),button("⬅️ Regular Shop","shop",2))];}
+function millionaireShopRows(){return [row(button("🪿 Golden Goose — 1,000,000 ✨","millionaire:buy:golden_goose",1),button("🪞 Doppelgänger — 20,000,000 ✨","millionaire:buy:doppelganger",1)),row(button("💣 Boomerang Bomb — 6,000,000 ✨","millionaire:buy:boomerang_bomb",1),button("🔥 Immortal Phoenix — 10,000,000 ✨","millionaire:buy:immortal_phoenix",1)),row(button("🎁 Golden Chest Inventory","millionaire:inventory",2),button("⬅️ Regular Shop","shop",2))];}
 function millionaireInventoryRows(p){const rows=[]; if(millionaireOwned(p,"golden_goose")) rows.push(row(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1),button("🪿 Goose Details","millionaire:details:golden_goose",2))); if(millionaireOwned(p,"boomerang_bomb")) rows.push(row(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1))); if(millionaireOwned(p,"doppelganger")) rows.push(row(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1))); if(millionaireOwned(p,"immortal_phoenix")) rows.push(row(button("🔥 Phoenix Relic Details","millionaire:details:immortal_phoenix",2))); rows.push(row(button("⬅️ Millionaire Shop","millionaire:shop",2))); return rows;}
 async function millionaireComponent(env,interaction){const id=String(interaction.data?.custom_id||"");const parts=id.split(":");const user=getUserFromInteraction(interaction);if(!user?.id)return sendText(env,interaction,"❌ I couldn't identify your account.");const p=await getPlayer(env,user.id);p.millionaireItems=p.millionaireItems||{};p.millionaireState=p.millionaireState||{};
  if(id==="millionaire:shop") {if(!millionaireUnlocked(p))return sendText(env,interaction,"🔒 **MILLIONAIRE SHOP LOCKED**\n\nReach 1,000,000 ✨ to unlock this exclusive shop.");if(Number(p.sparkles||0)>=1000000&&!p.millionaireShopUnlocked){p.millionaireShopUnlocked=true;await savePlayer(env,p,user.id,{skipDoppelganger:true});}return sendText(env,interaction,"👑💰 **THE MILLIONAIRE SHOP**\n\nOnly the finest long-term chaos and fortune. These items are separate from the regular cosmetic shop and RaccoonMart.\n\n🪿 Golden Goose • 🪞 Doppelgänger • 💣 Boomerang Bomb • 🔥 Immortal Phoenix",millionaireShopRows());}
@@ -36769,4 +36769,3 @@ async function birthdayMemoryNext(env, interaction) {
 
 
 ;
-
