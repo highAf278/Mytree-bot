@@ -15967,42 +15967,27 @@ function millionaireShopRows(p){
     ["immortal_phoenix","🔥 Immortal Phoenix"]
   ];
   const rows=[];
-  const itemButtons=[];
   for(const [key,label] of items){
     const item=MILLIONAIRE_ITEMS[key];
     const owned=millionaireOwned(p,key);
-    itemButtons.push(button(
-      owned?`${label} — Owned`:`${label} — ${item.price.toLocaleString()} ✨`,
-      owned?"millionaire:inventory":`millionaire:buy:${key}`,
-      owned?2:1,
-      owned
-    ));
+    rows.push(row(button(owned?`${label} — Owned`:`${label} — ${item.price.toLocaleString()} ✨`,owned?"millionaire:inventory":`millionaire:buy:${key}`,owned?2:1,owned)));
   }
-  // Discord allows at most 5 action rows per message. Keep two purchase
-  // buttons per row so the shop stays within the component limit.
-  for(let i=0;i<itemButtons.length;i+=2) rows.push(row(...itemButtons.slice(i,i+2)));
   rows.push(row(button("ℹ️ Item Details","millionaire:details",2)));
   rows.push(row(button("🎁 Golden Chest Inventory","millionaire:inventory",2),button("⬅️ Regular Shop","shop",2)));
   return rows;
 }
 function millionaireInventoryRows(p){
   const rows=[];
-  const actions=[];
-  if(millionaireOwned(p,"golden_goose")) actions.push(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1));
-  if(millionaireOwned(p,"boomerang_bomb")) actions.push(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1));
-  if(millionaireOwned(p,"doppelganger")) actions.push(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1));
+  if(millionaireOwned(p,"golden_goose")) rows.push(row(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1)));
+  if(millionaireOwned(p,"boomerang_bomb")) rows.push(row(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1)));
+  if(millionaireOwned(p,"doppelganger")) rows.push(row(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1)));
   if(millionaireOwned(p,"golden_panda")){
-    actions.push(button(p.equipped?.decoration==="golden_panda"?"🐼 Panda Equipped":"🐼 Equip Golden Panda","millionaire:equip:golden_panda",p.equipped?.decoration==="golden_panda"?3:1));
-    actions.push(button("🔐 Golden Vault","millionaire:vault",1));
-    actions.push(button("🐾 Golden Claw","millionaire:claw:start",1));
+    rows.push(row(button(p.equipped?.decoration==="golden_panda"?"🐼 Panda Equipped":"🐼 Equip Golden Panda","millionaire:equip:golden_panda",p.equipped?.decoration==="golden_panda"?3:1)));
+    rows.push(row(button("🔐 Golden Vault","millionaire:vault",1),button("🐾 Golden Claw","millionaire:claw:start",1)));
   }
   if(millionaireOwned(p,"golden_tree_set")){
-    actions.push(button(p.equipped?.tree==="golden_tree"?"👑 Tree Equipped":"👑 Equip Golden Tree","equip_tree_golden_tree",p.equipped?.tree==="golden_tree"?3:1));
-    actions.push(button(p.equipped?.theme==="golden_tree"?"🌌 Background Equipped":"🌌 Equip Golden Background","equip_theme_golden_tree",p.equipped?.theme==="golden_tree"?3:1));
+    rows.push(row(button(p.equipped?.tree==="golden_tree"?"👑 Tree Equipped":"👑 Equip Golden Tree","equip_tree_golden_tree",p.equipped?.tree==="golden_tree"?3:1),button(p.equipped?.theme==="golden_tree"?"🌌 Background Equipped":"🌌 Equip Golden Background","equip_theme_golden_tree",p.equipped?.theme==="golden_tree"?3:1)));
   }
-  // Group inventory actions two per row; even a fully stocked chest uses no
-  // more than four action rows plus the final navigation row.
-  for(let i=0;i<actions.length;i+=2) rows.push(row(...actions.slice(i,i+2)));
   rows.push(row(button("⬅️ Millionaire Shop","millionaire:shop",2)));
   return rows;
 }
@@ -35834,6 +35819,46 @@ export default {
         customId.startsWith("custom_effects_page_") ||
         customId.startsWith("equip_")
       );
+
+    // MILLIONAIRE SHOP FAST PATH: acknowledge privately before any KV reads.
+    // millionaireComponent() loads/saves player data before it can send its
+    // response, which can exceed Discord's 3-second initial interaction window.
+    // Use a private type-5 defer so sendText() can edit the ephemeral response
+    // while leaving the public shop message and its buttons intact.
+    if (interaction.type === 3 && customId.startsWith("millionaire:")) {
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 5, data: { flags: 64 } })
+        }
+      );
+      if (!ack.ok) {
+        console.error("Millionaire Shop initial response failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = true;
+      interaction.__requestUrl = request.url;
+      ctx.waitUntil((async () => {
+        try {
+          await handleComponent(env, interaction, ctx);
+        } catch (error) {
+          console.error("Millionaire Shop component error:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Millionaire Shop error: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not send Millionaire Shop error:", editError);
+          }
+        }
+      })());
+      return new Response("OK", { status: 200 });
+    }
 
     // SPOOK N SMASH FAST PATH: acknowledge with type 6 so the button never
     // sits in Discord's loading/thinking state while Browser Rendering runs.
