@@ -7054,9 +7054,9 @@ async function renderTreeDirectFallback(env, player) {
     // standard tree assets. Scale it down and lower it slightly so it sits
     // farther back in its matching background, like the pink set.
     const isGoldenTree = player.equipped?.tree === "golden_tree";
-    const treeBox = Math.round(width * (isGoldenTree ? 0.70 : 0.9004));
+    const treeBox = Math.round(width * (isGoldenTree ? 0.66 : 0.9004));
     const layer = containRGBA(tree, treeBox, treeBox);
-    const treeTop = isGoldenTree ? 0.235 : 0.1797;
+    const treeTop = isGoldenTree ? 0.245 : 0.1797;
     alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * treeTop));
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
