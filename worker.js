@@ -7050,9 +7050,14 @@ async function renderTreeDirectFallback(env, player) {
   // itself. It exists so /tree can NEVER be held hostage by Browser Rendering.
   try {
     const tree = await getPngAsset(env, getTreeImage(player));
-    const treeBox = Math.round(width * 0.9004);
+    // The Golden Tree artwork is a wider, more elaborate scene than the
+    // standard tree assets. Scale it down and lower it slightly so it sits
+    // farther back in its matching background, like the pink set.
+    const isGoldenTree = player.equipped?.tree === "golden_tree";
+    const treeBox = Math.round(width * (isGoldenTree ? 0.70 : 0.9004));
     const layer = containRGBA(tree, treeBox, treeBox);
-    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * 0.1797));
+    const treeTop = isGoldenTree ? 0.235 : 0.1797;
+    alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * treeTop));
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
   }
