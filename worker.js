@@ -7873,7 +7873,7 @@ async function handleWater(
     let goldenTreeRareDrop = null;
     if (Number(player.millionaireItems?.golden_tree_set || 0) > 0 &&
         Array.isArray(player.inventory) && player.inventory.includes("golden_tree_tree") && player.inventory.includes("golden_tree_background") &&
-        player.equipped?.tree === "golden_tree" && player.equipped?.theme === "golden_tree" && Math.random() < 0.02) {
+        player.equipped?.tree === "golden_tree" && player.equipped?.theme === "golden_tree" && Math.random() < 0.20) {
       const kind = Math.random() < 0.5 ? "💎 DIAMOND" : "👑 CROWN";
       const amount = randomInt(50000, 100000);
       player.sparkles = Number(player.sparkles || 0) + amount;
