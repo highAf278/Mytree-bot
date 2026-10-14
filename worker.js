@@ -962,6 +962,7 @@ function defaultPlayer() {
     lastRaccoon: 0,
     lastFortune: 0,
     sparklesOnTree: [],
+    goldenTreeDrops: [],
     sceneMessage: "",
     claimedLevelRewards: [],
     inventory: ["pink_sky_background"],
@@ -1233,6 +1234,7 @@ async function getPlayer(env, userId) {
         Array.isArray(player.sparklesOnTree)
           ? player.sparklesOnTree
           : [],
+      goldenTreeDrops: Array.isArray(player.goldenTreeDrops) ? player.goldenTreeDrops : [],
       birthdayCollection: Array.isArray(player.birthdayCollection) ? player.birthdayCollection : [],
       birthdayGifts: Array.isArray(player.birthdayGifts) ? player.birthdayGifts : [],
       equipped: {
@@ -3452,6 +3454,7 @@ function treeButtons(ownerId = "", player = null) {
 
   if (sparkles.length) {
     for (let i = 0; i < sparkles.length; i += 5) {
+      if (rows.length >= 4) break;
       rows.push(
         row(
           ...sparkles.slice(i, i + 5).map(sparkle =>
@@ -3464,6 +3467,13 @@ function treeButtons(ownerId = "", player = null) {
         )
       );
     }
+  }
+
+  const goldenDrops = Array.isArray(player?.goldenTreeDrops) ? player.goldenTreeDrops : [];
+  if (goldenDrops.length && rows.length < 5) {
+    rows.push(row(...goldenDrops.slice(0, 5).map(drop =>
+      button(`${drop.kind === "diamond" ? "💎" : "👑"} Collect ${drop.kind === "diamond" ? "Diamond" : "Crown"}!`, `${prefix}catch:golden-${drop.id}`, 1)
+    )));
   }
 
   return rows;
@@ -7869,15 +7879,17 @@ async function handleWater(
       }
     }
 
-    // Golden Tree Set rare drops: only when both set pieces are owned and equipped.
-    let goldenTreeRareDrop = null;
-    if (Number(player.millionaireItems?.golden_tree_set || 0) > 0 &&
-        Array.isArray(player.inventory) && player.inventory.includes("golden_tree_tree") && player.inventory.includes("golden_tree_background") &&
-        player.equipped?.tree === "golden_tree" && player.equipped?.theme === "golden_tree" && Math.random() < 0.20) {
-      const kind = Math.random() < 0.5 ? "💎 DIAMOND" : "👑 CROWN";
-      const amount = randomInt(50000, 100000);
-      player.sparkles = Number(player.sparkles || 0) + amount;
-      goldenTreeRareDrop = { kind, amount };
+    // Golden Tree drops are collectible buttons, never automatic payouts.
+    const goldenTreeEligible = Number(player.millionaireItems?.golden_tree_set || 0) > 0 &&
+      Array.isArray(player.inventory) && player.inventory.includes("golden_tree_tree") &&
+      player.inventory.includes("golden_tree_background") &&
+      player.equipped?.tree === "golden_tree" && player.equipped?.theme === "golden_tree";
+    player.goldenTreeDrops = Array.isArray(player.goldenTreeDrops) ? player.goldenTreeDrops : [];
+    let goldenTreeDropSpawned = false;
+    if (goldenTreeEligible && player.goldenTreeDrops.length === 0 && Math.random() < 0.20) {
+      const kind = Math.random() < 0.5 ? "diamond" : "crown";
+      player.goldenTreeDrops.push({ id: `${Date.now().toString(36)}${randomInt(1000,9999)}`, kind, amount: randomInt(50000, 100000), createdAt: Date.now() });
+      goldenTreeDropSpawned = true;
     }
 
     const witchEffectsNow = player.witchEffects || {};
@@ -7924,7 +7936,7 @@ async function handleWater(
       `💧 You watered your tree! +${wateringExp} EXP${wateringExp === 0 ? " (a curse blocked the growth 😭)" : doubleGrowthActive ? " (DOUBLE GROWTH! 🧪)" : ""}.`,
       ...(goldenGooseReward > 0 ? [`${MILLIONAIRE_MESSAGES.goose[randomInt(0, MILLIONAIRE_MESSAGES.goose.length - 1)]}\n🥚 **Golden egg reward: +${goldenGooseReward.toLocaleString()} ✨!**` ] : []),
       ...(goldenPandaReward > 0 ? [`🐼👑 **GOLDEN PANDA FORTUNE!** Total payout: **${goldenPandaReward.toLocaleString()} ✨** — ${Math.floor(goldenPandaReward/2).toLocaleString()} ✨ deposited into your Golden Vault and ${(goldenPandaReward-Math.floor(goldenPandaReward/2)).toLocaleString()} ✨ added to your balance.`] : []),
-      ...(goldenTreeRareDrop ? [`👑✨ **GOLDEN TREE RARE DROP!** You discovered a **${goldenTreeRareDrop.kind}** worth **${goldenTreeRareDrop.amount.toLocaleString()} ✨**!`] : []),
+      ...(goldenTreeDropSpawned ? ["✨👑 **A RARE TREASURE APPEARED ON YOUR GOLDEN TREE!** Look for the diamond or crown button below and click it to collect your fortune!"] : []),
       `🎭 **${personality.name} Tree:** ${personality.messages[randomInt(0, personality.messages.length - 1)]}`
     ];
 
@@ -8030,6 +8042,40 @@ async function handleCatch(
     );
 
     cleanSparkles(player);
+
+    if (sparkleId && String(sparkleId).startsWith("golden-")) {
+      const dropId = String(sparkleId).slice("golden-".length);
+      player.goldenTreeDrops = Array.isArray(player.goldenTreeDrops) ? player.goldenTreeDrops : [];
+      const dropIndex = player.goldenTreeDrops.findIndex(drop => String(drop.id) === dropId);
+      if (dropIndex < 0) {
+        player.sceneMessage = "✨ That Golden Tree treasure has already been collected!";
+        await savePlayer(env, player);
+        await updateTreeMessage(env, interaction, player);
+        return;
+      }
+      const [drop] = player.goldenTreeDrops.splice(dropIndex, 1);
+      const amount = Math.max(50000, Math.min(100000, Number(drop.amount) || 50000));
+      player.sparkles = Number(player.sparkles || 0) + amount;
+      const messages = drop.kind === "diamond" ? [
+        `💎 **DIAMOND CLAIMED!** The Golden Tree revealed a flawless fortune! You collected **+${amount.toLocaleString()} ✨**!`,
+        `💎✨ **TREASURE FOUND!** The branches were hiding a diamond worth **${amount.toLocaleString()} Sparkles**. It's all yours!`,
+        `🌟💎 **LEGENDARY LUCK!** You plucked a sparkling diamond from your Golden Tree and earned **${amount.toLocaleString()} ✨**!`,
+        `💰💎 **DIAMOND IN THE CANOPY!** Your royal find earned you **+${amount.toLocaleString()} Sparkles**!`,
+        `👑💎 **THE GOLDEN TREE HAS CHOSEN YOU!** Diamond collected: **${amount.toLocaleString()} ✨**!`,
+        `✨💎 **A BRILLIANT CATCH!** That diamond just turned into **${amount.toLocaleString()} Sparkles**!`
+      ] : [
+        `👑 **CROWN CLAIMED!** Royal treasure is yours! You collected **+${amount.toLocaleString()} ✨**!`,
+        `👑✨ **ROYAL FORTUNE!** You claimed a golden crown worth **${amount.toLocaleString()} Sparkles**!`,
+        `🏆👑 **ALL HAIL THE TREASURE HUNTER!** Your crown earned you **+${amount.toLocaleString()} ✨**!`,
+        `💰👑 **CROWN IN THE BRANCHES!** You collected **${amount.toLocaleString()} Sparkles** from your Golden Tree!`,
+        `🌟👑 **ROYAL LUCK STRIKES!** The crown is yours, along with **+${amount.toLocaleString()} ✨**!`,
+        `✨👑 **THE GOLDEN CANOPY GIVES!** Crown collected for **${amount.toLocaleString()} Sparkles**!`
+      ];
+      player.sceneMessage = messages[randomInt(0, messages.length - 1)];
+      await savePlayer(env, player);
+      await updateTreeMessage(env, interaction, player);
+      return;
+    }
 
     const sparkles =
       Array.isArray(player.sparklesOnTree)
@@ -13670,6 +13716,23 @@ async function handleTree(
     player
   );
 
+  player.goldenTreeDrops = Array.isArray(player.goldenTreeDrops) ? player.goldenTreeDrops : [];
+  const goldenTreeEligible = Number(player.millionaireItems?.golden_tree_set || 0) > 0 &&
+    Array.isArray(player.inventory) && player.inventory.includes("golden_tree_tree") &&
+    player.inventory.includes("golden_tree_background") &&
+    player.equipped?.tree === "golden_tree" && player.equipped?.theme === "golden_tree";
+  let goldenTreeTreasureSpawned = false;
+  if (goldenTreeEligible && player.goldenTreeDrops.length === 0 && Math.random() < 0.20) {
+    player.goldenTreeDrops.push({
+      id: `${Date.now().toString(36)}${randomInt(1000, 9999)}`,
+      kind: Math.random() < 0.5 ? "diamond" : "crown",
+      amount: randomInt(50000, 100000),
+      createdAt: Date.now()
+    });
+    goldenTreeTreasureSpawned = true;
+    player.sceneMessage = "✨👑 **A RARE TREASURE APPEARED!** A diamond or crown is waiting on your Golden Tree — click its button below to collect it!";
+  }
+
   if (!player.sparklesOnTree.length) {
     maybeSpawnSparkles(player);
   }
@@ -13679,8 +13742,7 @@ async function handleTree(
     interaction.guild_id
   );
 
-  player.sceneMessage =
-    "";
+  if (!goldenTreeTreasureSpawned) player.sceneMessage = "";
   player.treeChecks =
     Number(player.treeChecks || 0) + 1;
 
