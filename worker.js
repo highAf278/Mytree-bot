@@ -15966,28 +15966,37 @@ function millionaireShopRows(p){
     ["boomerang_bomb","💣 Boomerang Bomb"],
     ["immortal_phoenix","🔥 Immortal Phoenix"]
   ];
-  const rows=[];
-  for(const [key,label] of items){
+  // Discord permits at most five action rows per message. Keep all six items,
+  // but place two item buttons in each of the first three rows.
+  const itemButtons=items.map(([key,label])=>{
     const item=MILLIONAIRE_ITEMS[key];
     const owned=millionaireOwned(p,key);
-    rows.push(row(button(owned?`${label} — Owned`:`${label} — ${item.price.toLocaleString()} ✨`,owned?"millionaire:inventory":`millionaire:buy:${key}`,owned?2:1,owned)));
-  }
+    return button(owned?`${label} — Owned`:`${label} — ${item.price.toLocaleString()} ✨`,owned?"millionaire:inventory":`millionaire:buy:${key}`,owned?2:1,owned);
+  });
+  const rows=[];
+  for(let i=0;i<itemButtons.length;i+=2) rows.push(row(...itemButtons.slice(i,i+2)));
   rows.push(row(button("ℹ️ Item Details","millionaire:details",2)));
   rows.push(row(button("🎁 Golden Chest Inventory","millionaire:inventory",2),button("⬅️ Regular Shop","shop",2)));
   return rows;
 }
 function millionaireInventoryRows(p){
-  const rows=[];
-  if(millionaireOwned(p,"golden_goose")) rows.push(row(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1)));
-  if(millionaireOwned(p,"boomerang_bomb")) rows.push(row(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1)));
-  if(millionaireOwned(p,"doppelganger")) rows.push(row(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1)));
+  // Build one compact list first, then group buttons into legal Discord rows.
+  // This keeps the chest valid even when every premium item is owned.
+  const buttons=[];
+  if(millionaireOwned(p,"golden_goose")) buttons.push(button(p.equipped?.decoration==="golden_goose"?"🪿 Goose Equipped":"🪿 Equip Golden Goose","millionaire:equip:golden_goose",p.equipped?.decoration==="golden_goose"?3:1));
+  if(millionaireOwned(p,"boomerang_bomb")) buttons.push(button("💣 Use Boomerang Bomb","millionaire:use:boomerang_bomb",1));
+  if(millionaireOwned(p,"doppelganger")) buttons.push(button("🪞 Use Doppelgänger","millionaire:use:doppelganger",1));
   if(millionaireOwned(p,"golden_panda")){
-    rows.push(row(button(p.equipped?.decoration==="golden_panda"?"🐼 Panda Equipped":"🐼 Equip Golden Panda","millionaire:equip:golden_panda",p.equipped?.decoration==="golden_panda"?3:1)));
-    rows.push(row(button("🔐 Golden Vault","millionaire:vault",1),button("🐾 Golden Claw","millionaire:claw:start",1)));
+    buttons.push(button(p.equipped?.decoration==="golden_panda"?"🐼 Panda Equipped":"🐼 Equip Golden Panda","millionaire:equip:golden_panda",p.equipped?.decoration==="golden_panda"?3:1));
+    buttons.push(button("🔐 Golden Vault","millionaire:vault",1));
+    buttons.push(button("🐾 Golden Claw","millionaire:claw:start",1));
   }
   if(millionaireOwned(p,"golden_tree_set")){
-    rows.push(row(button(p.equipped?.tree==="golden_tree"?"👑 Tree Equipped":"👑 Equip Golden Tree","equip_tree_golden_tree",p.equipped?.tree==="golden_tree"?3:1),button(p.equipped?.theme==="golden_tree"?"🌌 Background Equipped":"🌌 Equip Golden Background","equip_theme_golden_tree",p.equipped?.theme==="golden_tree"?3:1)));
+    buttons.push(button(p.equipped?.tree==="golden_tree"?"👑 Tree Equipped":"👑 Equip Golden Tree","equip_tree_golden_tree",p.equipped?.tree==="golden_tree"?3:1));
+    buttons.push(button(p.equipped?.theme==="golden_tree"?"🌌 Background Equipped":"🌌 Equip Golden Background","equip_theme_golden_tree",p.equipped?.theme==="golden_tree"?3:1));
   }
+  const rows=[];
+  for(let i=0;i<buttons.length;i+=3) rows.push(row(...buttons.slice(i,i+3)));
   rows.push(row(button("⬅️ Millionaire Shop","millionaire:shop",2)));
   return rows;
 }
