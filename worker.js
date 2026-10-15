@@ -327,6 +327,7 @@ const IMAGES = {
   candyEffect: "IMG_7397.png",
   halloweenEffect: "IMG_7390.png",
   goldenGoose: "IMG_8264.png",
+  halloweenMenaceTrophy: "IMG_8313.png",
   goldenPanda: "IMG_8290.png",
   goldenTree: "IMG_8298.png",
   goldenTreeBackground: "IMG_8299.png",
@@ -16255,6 +16256,482 @@ async function processMillionaireTimers(env){
   } while (cursor);
 }
 
+
+/* =========================================================
+   HAUNTED HATER — 2–6 PLAYER, 10-ROUND HALLOWEEN SHOWDOWN
+   Uses guild state for the live match and player records for
+   idempotent Spookies rewards / permanent collectible unlocks.
+========================================================= */
+const HATER_MIN_PLAYERS = 2;
+const HATER_MAX_PLAYERS = 6;
+const HATER_ROUNDS = 10;
+
+function haterGameKey(guildId) { return String(guildId || ""); }
+async function haterGetGame(env, guildId) {
+  const state = await getGuildState(env, guildId);
+  return state.hauntedHater || null;
+}
+async function haterSaveGame(env, guildId, game) {
+  const state = await getGuildState(env, guildId);
+  state.hauntedHater = game;
+  await saveGuildState(env, guildId, state);
+}
+function haterPlayerName(p) { return String(p?.displayName || p?.username || "Haunted Menace").slice(0, 70); }
+function haterPlayerRecord(user, interaction) {
+  return {
+    id: String(user.id),
+    username: String(user.username || ""),
+    displayName: String(interaction.member?.nick || user.global_name || user.username || "Haunted Menace"),
+    score: 0,
+    shield: 0,
+    submitted: false,
+    action: null,
+    targetId: null,
+    tieBreaker: Math.random()
+  };
+}
+function haterHowToText() {
+  return [
+    "👻💀 **HAUNTED HATER — HOW TO PLAY**",
+    "",
+    "A chaotic free-for-all for **2–6 players**. Play **10 rounds** and finish with the highest Menace Score to win Spookies.",
+    "",
+    "🧿 **HEX** — Choose an opponent. Deal **2 damage** to their score; your successful hex earns you **2 points**. A shield can block it.",
+    "🦝 **PICKPOCKET** — Choose an opponent and steal **2–5 points** from them. You can't steal points they don't have, and shields block the attempt.",
+    "🛡️ **GUARD** — Gain **2 shield** and **1 point**. Shields block incoming hexes, pickpockets, and hostile tricks, then wear off at the end of the round.",
+    "🎭 **TRICK** — Choose an opponent and let chaos decide: a curse, a steal, a lucky boost, or a prank that hits everyone else. Shields can block hostile outcomes.",
+    "👻 **GO GHOST** — Skip attacking and gain **1 shield**. Useful when you're expecting revenge.",
+    "",
+    "🎲 A random Halloween event may trigger each round. Choices stay secret until everyone has locked one in. **Every player must submit an action** for the round to resolve; Go Ghost is always available if you don't want to attack. If someone goes AFK, the host can resolve the round after 30 seconds; missing players automatically Go Ghost.",
+    "",
+    "🏆 **Spookies prizes** are based on final placement. The first-place player unlocks the permanent **🏆 The Menace Trophy** collectible after their first win.",
+    "",
+    "💡 You can only submit once per round. No action can target yourself, and a round cannot resolve twice."
+  ].join("\n");
+}
+function haterBoardText(game) {
+  const players = Object.values(game.players || {});
+  const list = players.map((p, i) =>
+    `${i + 1}. ${p.submitted && game.status === "playing" ? "🔒" : "👻"} **${haterPlayerName(p)}**${game.status === "playing" ? ` — ${Number(p.score || 0)} pts${Number(p.shield || 0) ? ` 🛡️${p.shield}` : ""}` : ""}`
+  ).join("\n");
+  if (game.status === "lobby") {
+    return [
+      "🎃👻 **HAUNTED HATER** 👻🎃",
+      "*A ten-round competition in being the most unbearable creature in the graveyard.*",
+      "",
+      `👥 **Lobby:** ${players.length}/${HATER_MAX_PLAYERS} players`,
+      `👑 **Host:** <@${game.hostId}>`,
+      "",
+      list || "Nobody's haunting this lobby yet.",
+      "",
+      "Press **Join** to enter, **How to Play** for the rules, and **Start Game** when at least two players are ready.",
+      "🕸️ *Only the host can start or cancel the lobby.*"
+    ].join("\n");
+  }
+  if (game.status === "ended") return haterEndText(game);
+  return [
+    `🎃👻 **HAUNTED HATER — ROUND ${game.round}/${HATER_ROUNDS}** 👻🎃`,
+    `🎲 **${players.filter(p => p.submitted).length}/${players.length} choices locked**`,
+    "",
+    list,
+    "",
+    game.lastEvent ? `📰 **Last round:** ${game.lastEvent}` : "💀 Lock in an action below. Choices are secret until everyone submits.",
+    "",
+    "Choose an action. Targeted actions will ask you to pick an opponent."
+  ].join("\n");
+}
+function haterComponents(game) {
+  if (game.status === "lobby") {
+    return [
+      row(
+        button("👻 Join", `hater:join:${game.id}`, 1),
+        button("🚪 Leave", `hater:leave:${game.id}`, 2),
+        button("🎃 Start Game", `hater:start:${game.id}`, 3),
+        button("📖 How to Play", `hater:howto:${game.id}`, 2),
+        button("❌ Cancel", `hater:cancel:${game.id}`, 4)
+      )
+    ];
+  }
+  if (game.status !== "playing") {
+    return [row(button("🎮 Back to Games", "games:menu", 2))];
+  }
+  const players = Object.values(game.players || {});
+  const rows = [
+    row(
+      button("🧿 Hex", `hater:act:${game.id}:${game.round}:hex`, 4, false),
+      button("🦝 Pickpocket", `hater:act:${game.id}:${game.round}:steal`, 4, false),
+      button("🎭 Trick", `hater:act:${game.id}:${game.round}:trick`, 4, false)
+    ),
+    row(
+      button("🛡️ Guard", `hater:act:${game.id}:${game.round}:guard`, 1, false),
+      button("👻 Go Ghost", `hater:act:${game.id}:${game.round}:ghost`, 2, false)
+    ),
+    row(button("⏭️ Resolve Round (host, after 30s)", `hater:resolve:${game.id}:${game.round}`, 2))
+  ];
+  return rows;
+}
+async function haterDeleteMessage(env, channelId, messageId) {
+  if (!channelId || !messageId) return;
+  try {
+    const res = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) console.error("Haunted Hater old-message delete failed:", res.status, await res.text());
+  } catch (error) { console.error("Haunted Hater old-message delete error:", error); }
+}
+async function haterReplaceBoard(env, game) {
+  if (!game?.channelId) return;
+  const oldMessageId = game.messageId || null;
+  const next = await sendChannelMessage(env, game.channelId, haterBoardText(game), haterComponents(game));
+  if (!next?.id) return;
+  game.messageId = next.id;
+  await haterSaveGame(env, game.guildId, game);
+  if (oldMessageId && oldMessageId !== next.id) await haterDeleteMessage(env, game.channelId, oldMessageId);
+}
+async function haterCreateLobby(env, interaction) {
+  if (!interaction.guild_id || !interaction.channel_id) {
+    return sendText(env, interaction, "❌ Haunted Hater can only be played inside a server channel.");
+  }
+  const existing = await haterGetGame(env, interaction.guild_id);
+  if (existing && ["lobby", "playing"].includes(existing.status)) {
+    return sendText(env, interaction, "👻 **A Haunted Hater game is already active in this server.** Join the existing lobby or finish that match first.");
+  }
+  const user = getUserFromInteraction(interaction);
+  if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
+  const game = {
+    id: `hh-${Date.now().toString(36)}-${randomInt(100, 999)}`,
+    guildId: String(interaction.guild_id),
+    channelId: String(interaction.channel_id),
+    messageId: null,
+    status: "lobby",
+    hostId: String(user.id),
+    players: { [String(user.id)]: haterPlayerRecord(user, interaction) },
+    round: 0,
+    rounds: HATER_ROUNDS,
+    lastEvent: "",
+    roundLog: [],
+    createdAt: Date.now(),
+    rewardsPaid: false
+  };
+  const msg = await sendChannelMessage(env, game.channelId, haterBoardText(game), haterComponents(game));
+  if (!msg?.id) return sendText(env, interaction, "❌ I couldn't post the Haunted Hater lobby. Check that the bot can view this channel and send messages.");
+  game.messageId = msg.id;
+  await haterSaveGame(env, game.guildId, game);
+  return sendText(env, interaction, "🎃 **Haunted Hater lobby created!** I posted the lobby in this channel. Invite 1–5 more players, then the host can start.");
+}
+async function haterJoin(env, interaction, gameId) {
+  const user = getUserFromInteraction(interaction);
+  const game = await haterGetGame(env, interaction.guild_id);
+  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That Haunted Hater lobby is no longer open.");
+  if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
+  if (game.players[user.id]) return sendText(env, interaction, "👻 You're already in this lobby.");
+  if (Object.keys(game.players).length >= HATER_MAX_PLAYERS) return sendText(env, interaction, "❌ Haunted Hater is full. Maximum **6 players**.");
+  game.players[user.id] = haterPlayerRecord(user, interaction);
+  await haterSaveGame(env, game.guildId, game);
+  await haterReplaceBoard(env, game);
+  return sendText(env, interaction, "🎃 You joined Haunted Hater! Prepare to be petty.");
+}
+async function haterLeave(env, interaction, gameId) {
+  const user = getUserFromInteraction(interaction);
+  const game = await haterGetGame(env, interaction.guild_id);
+  if (!game || game.id !== gameId || game.status !== "lobby" || !user || !game.players[user.id]) return sendText(env, interaction, "❌ You're not in that open lobby.");
+  delete game.players[user.id];
+  if (game.hostId === user.id) game.hostId = Object.keys(game.players)[0] || null;
+  if (!Object.keys(game.players).length) {
+    game.status = "ended";
+    game.lastEvent = "The lobby evaporated because everyone left.";
+  }
+  await haterSaveGame(env, game.guildId, game);
+  await haterReplaceBoard(env, game);
+  return sendText(env, interaction, "🚪 You left the Haunted Hater lobby.");
+}
+async function haterStart(env, interaction, gameId) {
+  const user = getUserFromInteraction(interaction);
+  const game = await haterGetGame(env, interaction.guild_id);
+  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That lobby is no longer available.");
+  if (!user || game.hostId !== user.id) return sendText(env, interaction, "❌ Only the host can start this match.");
+  const ids = Object.keys(game.players || {});
+  if (ids.length < HATER_MIN_PLAYERS) return sendText(env, interaction, "❌ Haunted Hater needs at least **2 players** to start.");
+  game.status = "playing";
+  game.round = 1;
+  game.startedAt = Date.now();
+  game.roundStartedAt = Date.now();
+  game.roundLog = [];
+  game.lastEvent = "The graveyard gates are open. Choose your first move!";
+  for (const p of Object.values(game.players)) {
+    p.score = 0; p.shield = 0; p.submitted = false; p.action = null; p.targetId = null;
+  }
+  await haterSaveGame(env, game.guildId, game);
+  await haterReplaceBoard(env, game);
+  return sendText(env, interaction, "💀 **THE HAUNTING HAS BEGUN!** Ten rounds. Zero maturity.");
+}
+async function haterSubmit(env, interaction, game, userId, action, targetId = null) {
+  const p = game.players[userId];
+  if (!p) return sendText(env, interaction, "❌ You're not a player in this match.");
+  if (game.status !== "playing") return sendText(env, interaction, "❌ This match isn't accepting actions.");
+  if (p.submitted) return sendText(env, interaction, "🔒 Your action is already locked for this round.");
+  if (!["hex", "steal", "trick", "guard", "ghost"].includes(action)) return sendText(env, interaction, "❌ Unknown action.");
+  if (["hex", "steal", "trick"].includes(action)) {
+    if (!targetId || !game.players[targetId] || targetId === userId) return sendText(env, interaction, "❌ Choose a valid opponent.");
+  }
+  p.action = action;
+  p.targetId = targetId;
+  p.submitted = true;
+  await haterSaveGame(env, game.guildId, game);
+  const allSubmitted = Object.values(game.players).every(x => x.submitted);
+  if (allSubmitted) {
+    await haterResolveRound(env, game.guildId, game.id);
+  } else {
+    await haterReplaceBoard(env, game);
+  }
+  const actionNames = { hex: "Hex", steal: "Pickpocket", trick: "Trick", guard: "Guard", ghost: "Go Ghost" };
+  return sendText(env, interaction, `🔒 **${actionNames[action]} locked in!** Your choice stays secret until the round resolves.`);
+}
+function haterRandom(arr) { return arr[randomInt(0, arr.length - 1)]; }
+async function haterResolveRound(env, guildId, gameId) {
+  let game = await haterGetGame(env, guildId);
+  if (!game || game.id !== gameId || game.status !== "playing" || game.resolving) return;
+  if (!Object.values(game.players || {}).length || !Object.values(game.players).every(p => p.submitted)) return;
+  game.resolving = true;
+  await haterSaveGame(env, guildId, game);
+  const players = Object.values(game.players);
+  const lines = [];
+  // Defensive moves resolve first so every shield can block one hostile action.
+  for (const p of players) {
+    if (p.action === "guard") {
+      p.shield = Number(p.shield || 0) + 2;
+      p.score = Number(p.score || 0) + 1;
+      lines.push(`🛡️ **${haterPlayerName(p)}** hid behind a haunted trash can and gained 2 shield + 1 point.`);
+    } else if (p.action === "ghost") {
+      p.shield = Number(p.shield || 0) + 1;
+      lines.push(`👻 **${haterPlayerName(p)}** went ghost and gained 1 shield. Cowardice? Tactical genius?`);
+    }
+  }
+  const hostile = coupShuffle(players.filter(p => ["hex", "steal", "trick"].includes(p.action)));
+  for (const attacker of hostile) {
+    const target = game.players[attacker.targetId];
+    if (!target) continue;
+    if (Number(target.shield || 0) > 0) {
+      target.shield = Math.max(0, Number(target.shield || 0) - 1);
+      lines.push(`🛡️ **${haterPlayerName(target)}** blocked **${haterPlayerName(attacker)}**'s ${attacker.action === "hex" ? "hex" : attacker.action === "steal" ? "pickpocket" : "trick"} with a shield!`);
+      continue;
+    }
+    if (attacker.action === "hex") {
+      target.score = Math.max(0, Number(target.score || 0) - 2);
+      attacker.score = Number(attacker.score || 0) + 2;
+      lines.push(`🧿 **${haterPlayerName(attacker)}** hexed **${haterPlayerName(target)}** for 2 points. Petty witchcraft!`);
+    } else if (attacker.action === "steal") {
+      const amount = Math.min(Number(target.score || 0), randomInt(2, 5));
+      target.score = Math.max(0, Number(target.score || 0) - amount);
+      attacker.score = Number(attacker.score || 0) + amount;
+      lines.push(`🦝 **${haterPlayerName(attacker)}** pickpocketed **${haterPlayerName(target)}** for ${amount} point${amount === 1 ? "" : "s"}.`);
+    } else {
+      const result = randomInt(1, 4);
+      if (result === 1) {
+        target.score = Math.max(0, Number(target.score || 0) - 3);
+        attacker.score = Number(attacker.score || 0) + 1;
+        lines.push(`🎭 **${haterPlayerName(attacker)}**'s trick cursed **${haterPlayerName(target)}**: −3 points. The ghost said "skill issue."`);
+      } else if (result === 2) {
+        attacker.score = Number(attacker.score || 0) + 4;
+        lines.push(`🎭 **${haterPlayerName(attacker)}** pulled a lucky trick and gained **4 points**. Suspicious.`);
+      } else if (result === 3) {
+        const amount = Math.min(Number(target.score || 0), 2);
+        target.score = Math.max(0, Number(target.score || 0) - amount);
+        attacker.score = Number(attacker.score || 0) + amount + 1;
+        lines.push(`🎭 **${haterPlayerName(attacker)}** pulled a double-cross on **${haterPlayerName(target)}** for ${amount} stolen points and 1 bonus point.`);
+      } else {
+        const victims = players.filter(p => p.id !== attacker.id);
+        for (const victim of victims) {
+          if (Number(victim.shield || 0) > 0) victim.shield = Math.max(0, Number(victim.shield || 0) - 1);
+          else victim.score = Math.max(0, Number(victim.score || 0) - 1);
+        }
+        attacker.score = Number(attacker.score || 0) + 2;
+        lines.push(`🎭 **${haterPlayerName(attacker)}** triggered ECTOPLASM SPLASH! Everyone else lost 1 point unless shielded; the trickster gained 2.`);
+      }
+    }
+  }
+  let eventLine = "";
+  if (Math.random() < 0.30) {
+    const event = randomInt(1, 5);
+    if (event === 1) {
+      const leader = [...players].sort((a, b) => Number(b.score || 0) - Number(a.score || 0))[0];
+      const lowest = [...players].sort((a, b) => Number(a.score || 0) - Number(b.score || 0))[0];
+      if (leader && lowest && leader.id !== lowest.id && leader.score > 0) {
+        leader.score = Math.max(0, leader.score - 2);
+        lowest.score = Number(lowest.score || 0) + 2;
+        eventLine = `🦝 **PETTY RACCOON!** It stole 2 points from ${haterPlayerName(leader)} and donated them to ${haterPlayerName(lowest)}.`;
+      } else {
+        const lucky = haterRandom(players); lucky.score = Number(lucky.score || 0) + 2;
+        eventLine = `🦝 **PETTY RACCOON!** Couldn't find a rich victim, so ${haterPlayerName(lucky)} got 2 points instead.`;
+      }
+    } else if (event === 2) {
+      const p = haterRandom(players); p.score = Number(p.score || 0) + 3;
+      eventLine = `🚽 **TOILET FROM HELL!** ${haterPlayerName(p)} survived the cursed flush and gained 3 points. Don't ask questions.`;
+    } else if (event === 3) {
+      const p = haterRandom(players); p.score = Math.max(0, Number(p.score || 0) - 2);
+      eventLine = `🧙 **WITCH'S BAD DECISION!** ${haterPlayerName(p)} was randomly fined 2 points for "vibes."`;
+    } else if (event === 4) {
+      for (const p of players) p.score = Number(p.score || 0) + 1;
+      eventLine = "🟢 **ECTOPLASM EXPLOSION!** Everyone gained 1 point. The graveyard is unionizing.";
+    } else {
+      const p = haterRandom(players); p.score = Number(p.score || 0) + 2;
+      eventLine = `🏚️ **LANDLORD'S REVENGE!** ${haterPlayerName(p)} collected 2 points in haunted rent.`;
+    }
+  }
+  for (const p of players) {
+    p.shield = 0;
+    p.submitted = false;
+    p.action = null;
+    p.targetId = null;
+  }
+  game.resolving = false;
+  game.roundLog = Array.isArray(game.roundLog) ? game.roundLog : [];
+  game.roundLog.push({ round: game.round, lines: lines.slice(0, 12), event: eventLine });
+  game.lastEvent = [...lines.slice(0, 6), eventLine].filter(Boolean).join("\n").slice(0, 1700) || "The ghosts were mysteriously well-behaved.";
+  if (game.round >= HATER_ROUNDS) {
+    game.status = "ended";
+    await haterFinish(env, game);
+  } else {
+    game.round += 1;
+    game.roundStartedAt = Date.now();
+    await haterSaveGame(env, guildId, game);
+    await haterReplaceBoard(env, game);
+  }
+}
+function haterPayouts(playerCount) {
+  if (playerCount <= 2) return [1000, 500];
+  if (playerCount <= 4) return [2000, 1000, 600, 300].slice(0, playerCount);
+  return [3500, 1500, 900, 600, 350, 200].slice(0, playerCount);
+}
+async function haterCreditOnce(env, userId, gameId, amount) {
+  const p = await getPlayer(env, userId);
+  p.hauntedHaterPaidMatches = Array.isArray(p.hauntedHaterPaidMatches) ? p.hauntedHaterPaidMatches : [];
+  if (p.hauntedHaterPaidMatches.includes(gameId)) return { amount: 0, duplicate: true };
+  const actual = Math.max(0, Math.floor(witchSpookieRewardAmount(p, amount)));
+  p.halloweenSpookies = Math.max(0, Number(p.halloweenSpookies || 0) + actual);
+  p.hauntedHaterPaidMatches.push(gameId);
+  p.hauntedHaterPaidMatches = p.hauntedHaterPaidMatches.slice(-40);
+  await savePlayer(env, p, userId, { skipRaccoonEmpireBonus: true, skipSparkleMagnet: true });
+  return { amount: actual, duplicate: false };
+}
+function haterEndText(game) {
+  const ranked = Array.isArray(game.finalRankings) ? game.finalRankings : [];
+  const rows = ranked.map((p, i) => {
+    const payout = Number(game.payouts?.[p.id] || 0);
+    const place = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+    return `${place} **${haterPlayerName(p)}** — ${Number(p.score || 0)} points — **+${payout.toLocaleString()} Spookies**`;
+  });
+  return [
+    "🏆🎃 **HAUNTED HATER — FINAL RESULTS** 🎃🏆",
+    "",
+    ...rows,
+    "",
+    game.winnerId ? `👑 **ULTIMATE MENACE:** <@${game.winnerId}>` : "👻 The graveyard has no champion.",
+    game.menaceUnlocked ? "🏆 **THE MENACE TROPHY UNLOCKED!** The winner's Halloween collectible book has a new treasure." : "",
+    "",
+    "💰 **All Spookies winnings are listed above.** Rewards are credited once per match.",
+    "💀 *The ghosts have filed a noise complaint. See you next haunting.*"
+  ].filter(Boolean).join("\n");
+}
+async function haterFinish(env, game) {
+  if (game.finishProcessed) {
+    await haterSaveGame(env, game.guildId, game);
+    await haterReplaceBoard(env, game);
+    return;
+  }
+  game.finishProcessed = true;
+  const ranked = Object.values(game.players || {}).sort((a, b) =>
+    Number(b.score || 0) - Number(a.score || 0) || Number(a.tieBreaker || 0) - Number(b.tieBreaker || 0)
+  );
+  game.finalRankings = ranked.map(p => ({ ...p }));
+  const prizes = haterPayouts(ranked.length);
+  game.payouts = {};
+  for (let i = 0; i < ranked.length; i++) {
+    const p = ranked[i];
+    const reward = Number(prizes[i] || 0);
+    const credited = await haterCreditOnce(env, p.id, game.id, reward);
+    game.payouts[p.id] = credited.amount;
+  }
+  game.winnerId = ranked[0]?.id || null;
+  game.menaceUnlocked = false;
+  if (game.winnerId) {
+    const winner = await getPlayer(env, game.winnerId);
+    const owned = Array.isArray(winner.halloweenCollection) ? winner.halloweenCollection : [];
+    if (!owned.includes("menace_trophy")) {
+      await halloweenUnlock(env, game.winnerId, "menace_trophy");
+      game.menaceUnlocked = true;
+    }
+  }
+  game.status = "ended";
+  game.endedAt = Date.now();
+  await haterSaveGame(env, game.guildId, game);
+  await haterReplaceBoard(env, game);
+}
+async function haterHandleComponent(env, interaction) {
+  const parts = String(interaction.data?.custom_id || "").split(":");
+  const action = parts[1];
+  const gameId = parts[2];
+  const user = getUserFromInteraction(interaction);
+  const userId = String(user?.id || "");
+  if (action === "howto") return sendText(env, interaction, haterHowToText());
+  if (action === "create") return haterCreateLobby(env, interaction);
+  const game = await haterGetGame(env, interaction.guild_id);
+  if (!game || game.id !== gameId) return sendText(env, interaction, "👻 That Haunted Hater match has expired or been replaced.");
+  if (action === "join") return haterJoin(env, interaction, gameId);
+  if (action === "leave") return haterLeave(env, interaction, gameId);
+  if (action === "cancel") {
+    if (!user || game.hostId !== user.id || game.status !== "lobby") return sendText(env, interaction, "❌ Only the host can cancel an open lobby.");
+    game.status = "ended";
+    game.lastEvent = "The host closed the gates.";
+    await haterSaveGame(env, game.guildId, game);
+    await haterReplaceBoard(env, game);
+    return sendText(env, interaction, "🚪 Haunted Hater lobby cancelled.");
+  }
+  if (action === "start") return haterStart(env, interaction, gameId);
+  if (action === "resolve") {
+    const round = Number(parts[3]);
+    if (!user || user.id !== game.hostId) return sendText(env, interaction, "❌ Only the host can resolve an unfinished round.");
+    if (game.status !== "playing" || round !== Number(game.round)) return sendText(env, interaction, "⏰ That resolve button belongs to an old round.");
+    const elapsed = Date.now() - Number(game.roundStartedAt || game.startedAt || 0);
+    if (elapsed < 30_000) return sendText(env, interaction, `⏳ Give everyone **${Math.ceil((30_000 - elapsed) / 1000)} more seconds** to choose. After 30 seconds, missing players automatically Go Ghost.`);
+    for (const p of Object.values(game.players || {})) {
+      if (!p.submitted) {
+        p.action = "ghost";
+        p.targetId = null;
+        p.submitted = true;
+      }
+    }
+    await haterSaveGame(env, game.guildId, game);
+    await haterResolveRound(env, game.guildId, game.id);
+    return sendText(env, interaction, "⏭️ **Round resolved!** Anyone who hadn't chosen automatically went ghost.");
+  }
+  if (action === "act") {
+    const round = Number(parts[3]);
+    const chosen = parts[4];
+    if (!user || !game.players[userId]) return sendText(env, interaction, "❌ You're not in this match.");
+    if (game.status !== "playing" || round !== Number(game.round)) return sendText(env, interaction, "⏰ That action belongs to an old round.");
+    if (game.players[userId].submitted) return sendText(env, interaction, "🔒 Your choice is already locked.");
+    if (["guard", "ghost"].includes(chosen)) return haterSubmit(env, interaction, game, userId, chosen);
+    if (!["hex", "steal", "trick"].includes(chosen)) return sendText(env, interaction, "❌ That action doesn't exist.");
+    const targets = Object.values(game.players).filter(p => p.id !== userId);
+    const rows = [];
+    for (let i = 0; i < targets.length; i += 5) {
+      rows.push(row(...targets.slice(i, i + 5).map(p =>
+        button(`${chosen === "hex" ? "🧿" : chosen === "steal" ? "🦝" : "🎭"} ${haterPlayerName(p).slice(0, 65)}`, `hater:target:${game.id}:${round}:${chosen}:${p.id}`, chosen === "hex" ? 4 : chosen === "steal" ? 1 : 2)
+      )));
+    }
+    return sendText(env, interaction, `${chosen === "hex" ? "🧿 **Choose who to hex:**" : chosen === "steal" ? "🦝 **Choose who to pickpocket:**" : "🎭 **Choose who to trick:**"}\n\nYour target choice stays secret.`, rows);
+  }
+  if (action === "target") {
+    const round = Number(parts[3]);
+    const chosen = parts[4];
+    const targetId = parts[5];
+    if (!user || !game.players[userId]) return sendText(env, interaction, "❌ You're not in this match.");
+    if (game.status !== "playing" || round !== Number(game.round)) return sendText(env, interaction, "⏰ That target menu belongs to an old round.");
+    return haterSubmit(env, interaction, game, userId, chosen, targetId);
+  }
+  return sendText(env, interaction, "❌ Unknown Haunted Hater action.");
+}
+
+
 async function handleComponent(
   env,
   interaction,
@@ -16275,6 +16752,7 @@ async function handleComponent(
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
     if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
   }
+  if (id.startsWith("hater:")) return haterHandleComponent(env, interaction);
   if (id.startsWith("millionaire:")) return millionaireComponent(env, interaction);
   if (id.startsWith("halloween:")) return handleHalloweenComponent(env,interaction,ctx);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
@@ -16594,6 +17072,7 @@ async function handleComponent(
     if (action === "menu") { await handleGamesMenu(env, interaction); return; }
     if (action === "solo") { await handleSoloStart(env, interaction); return; }
     if (action === "solo_leaderboard") { await handleSoloLeaderboard(env, interaction); return; }
+    if (action === "hauntedhater") { await haterCreateLobby(env, interaction); return; }
     if (action === "island") { await sendText(env, interaction, [
       "🏝️ **Chaos Island**",
       "",
@@ -23994,11 +24473,11 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🦝💥 **Raccoon Rumble** — exactly 3 players, secret objectives + chaos\n🔎 **Who Stole the Sparkles?** — detective cases for 1+ players\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🦝💥 **Raccoon Rumble** — exactly 3 players, secret objectives + chaos\n🔎 **Who Stole the Sparkles?** — detective cases for 1+ players\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n👻 **Haunted Hater** — 2–6 players, 10 rounds of sabotage, tricks, and Spookies\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
     row(button("🧪 The Experiment", "games:experiment", 1), button("🕵️ Solo Mission", "games:solo", 3)),
     row(button("🌳⚔️ Tree Battle", "games:battle", 1), button("🌈 Color Chaos", "games:colorchaos", 3)),
-    row(button("🦝💥 Raccoon Rumble", "games:rumble", 1), button("🔎 Sparkle Crime", "games:sparklecrime", 2)),
+    row(button("🦝💥 Raccoon Rumble", "games:rumble", 1), button("🔎 Sparkle Crime", "games:sparklecrime", 2), button("👻 Haunted Hater", "games:hauntedhater", 4)),
     row(button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2), button("🏷️ Titles", "title:list", 3))
   ]);
 }
@@ -29830,7 +30309,8 @@ const HALLOWEEN_BOOK_ASSETS = {
   smasherRelic: "halloweenSmasherRelic",
   graveMask: "halloweenGraveMask",
   phantomCompass: "halloweenPhantomCompass",
-  zombieBrain: "halloweenZombieBrain"
+  zombieBrain: "halloweenZombieBrain",
+  menaceTrophy: "halloweenMenaceTrophy"
 };
 
 const HALLOWEEN_ROOMS = {
@@ -30016,7 +30496,7 @@ function halloweenBookCollectionConfig() {
       requirement: "Answer at least 10 challenges correctly in one Haunted Trivia run.",
       imageKey: HALLOWEEN_BOOK_ASSETS.zombieBrain
     },
-    { id: "collectible_8", title: "🎃 Halloween Collectible #8", requirement: "Coming soon...", imageKey: null },
+    { id: "menace_trophy", title: "🏆 The Menace Trophy", requirement: "Win your first game of Haunted Hater.", imageKey: HALLOWEEN_BOOK_ASSETS.menaceTrophy },
     { id: "collectible_9", title: "🎃 Halloween Collectible #9", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_10", title: "🎃 Halloween Collectible #10", requirement: "Coming soon...", imageKey: null }
   ];
@@ -30066,7 +30546,8 @@ function halloweenBookLabelText(item, owned) {
     smasher_relic: "SMASHER'S RELIC",
     grave_mask: "GRAVE MASK",
     phantom_compass: "PHANTOM COMPASS",
-    zombie_brain: "ZOMBIE BRAIN"
+    zombie_brain: "ZOMBIE BRAIN",
+    menace_trophy: "THE MENACE TROPHY"
   };
   return labels[item.id] || String(item.title || "COLLECTIBLE").replace(/[^A-Za-z0-9 ]+/g, "").trim().toUpperCase();
 }
