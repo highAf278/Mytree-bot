@@ -30341,9 +30341,9 @@ const HALLOWEEN_HIDDEN_ROLES = ["Mimic", "Gravekeeper", "Web Weaver", "Haunted D
 const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Abandoned Store", "Safehouse", "Gas Station", "Radio Tower", "Garage", "Woods"];
 
 function halloweenHubComponents() {
+  // Keep Boo You! in the Halloween Games menu only, not on both menus.
   return [
     row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3)),
-    row(button("💀 Boo You! — Multiplayer Mayhem", "hater:create:hub", 4)),
     row(button("🧙‍♀️ Witch’s Shop", "halloween:witch:shop", 1))
   ];
 }
@@ -32402,21 +32402,37 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
 }
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){
-  const state=await getGuildState(env,interaction.guild_id);
-  const g=state.halloween?.activeGame;
-  if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");
-
-  // Emergency server-wide reset: ANYONE can use /halloween end.
-  // This prevents an absent player from trapping the whole Halloween event.
-  if(g.channelId&&g.publicMessageId){
-    try{
-      await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});
-    }catch{}
+  if (!interaction.guild_id) {
+    return sendText(env, interaction, "❌ Use `/halloween end` inside the server where the game is running.");
   }
 
-  state.halloween.activeGame=null;
-  await saveGuildState(env,interaction.guild_id,state);
-  return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
+  const state = await getGuildState(env, interaction.guild_id);
+  const halloweenGame = state.halloween?.activeGame || null;
+  const booYouGame = state.hauntedHater || null;
+
+  if (!halloweenGame && !booYouGame) {
+    return sendText(env, interaction, "🕷️ There is no active Halloween game to end.");
+  }
+
+  // Emergency reset covers both the older Halloween games (state.halloween.activeGame)
+  // and Boo You! (state.hauntedHater), which is stored separately.
+  if (halloweenGame?.channelId && halloweenGame?.publicMessageId) {
+    try {
+      await discordRequest(env, `/channels/${halloweenGame.channelId}/messages/${halloweenGame.publicMessageId}`, { method: "DELETE" });
+    } catch (error) {
+      console.error("/halloween end: couldn't delete Halloween game message:", error);
+    }
+  }
+
+  if (booYouGame?.channelId && booYouGame?.messageId) {
+    await haterDeleteMessage(env, booYouGame.channelId, booYouGame.messageId);
+  }
+
+  if (state.halloween) state.halloween.activeGame = null;
+  state.hauntedHater = null;
+  await saveGuildState(env, interaction.guild_id, state);
+
+  return sendText(env, interaction, "🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game and any Boo You! match have been cleared from this server. Their public game message was removed when possible. 🎃\n\nEveryone is free to start a new game now!");
 }
 
 
