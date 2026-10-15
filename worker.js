@@ -30343,6 +30343,7 @@ const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Aban
 function halloweenHubComponents() {
   return [
     row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3)),
+    row(button("💀 Boo You! — Multiplayer Mayhem", "hater:create:hub", 4)),
     row(button("🧙‍♀️ Witch’s Shop", "halloween:witch:shop", 1))
   ];
 }
@@ -32402,29 +32403,20 @@ async function halloweenTrickOrTreat(env,interaction,targetId=null){
 async function handleHalloweenCommand(env,interaction){const sub=interaction.data?.options?.find(o=>o.type===1)?.name||"";if(sub==="end")return halloweenEnd(env,interaction);return sendText(env,interaction,"Use `/halloweens` to open the Halloween hub, or `/halloween end` if you're stuck in a Halloween game.");}
 async function halloweenEnd(env,interaction){
   const state=await getGuildState(env,interaction.guild_id);
-  const halloweenGame=state.halloween?.activeGame || null;
-  const booYouGame=state.hauntedHater || null;
-  if((!halloweenGame || halloweenGame.status==="ended") && (!booYouGame || booYouGame.status==="ended")){
-    return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");
-  }
+  const g=state.halloween?.activeGame;
+  if(!g||g.status==="ended")return sendText(env,interaction,"🕷️ There is no active Halloween game to end.");
 
   // Emergency server-wide reset: ANYONE can use /halloween end.
-  // Clear both the regular Halloween-game slot and Boo You!, which stores
-  // its session separately under state.hauntedHater.
-  if(halloweenGame?.channelId){
-    const messageId=halloweenGame.publicMessageId || halloweenGame.messageId || null;
-    if(messageId){
-      try{ await discordRequest(env,`/channels/${halloweenGame.channelId}/messages/${messageId}`,{method:"DELETE"}); }catch{}
-    }
-  }
-  if(booYouGame?.channelId && booYouGame?.messageId){
-    try{ await discordRequest(env,`/channels/${booYouGame.channelId}/messages/${booYouGame.messageId}`,{method:"DELETE"}); }catch{}
+  // This prevents an absent player from trapping the whole Halloween event.
+  if(g.channelId&&g.publicMessageId){
+    try{
+      await discordRequest(env,`/channels/${g.channelId}/messages/${g.publicMessageId}`,{method:"DELETE"});
+    }catch{}
   }
 
-  if(state.halloween) state.halloween.activeGame=null;
-  state.hauntedHater=null;
+  state.halloween.activeGame=null;
   await saveGuildState(env,interaction.guild_id,state);
-  return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nAny active Halloween game, including **Boo You!**, has been cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
+  return sendText(env,interaction,"🆘 **HALLOWEEN GAME ENDED!**\n\nThe active Halloween game has been completely cleared from this server. 🎃\n\nEveryone is free to start a new game now!");
 }
 
 
@@ -36319,6 +36311,9 @@ export default {
     const isCrimeComponent = interaction.type === 3 && customId.startsWith("crime:");
     const isExperimentComponent = interaction.type === 3 && customId.startsWith("experiment:");
     const isRumbleComponent = interaction.type === 3 && customId.startsWith("rumble:");
+    // Boo You! action menus and target selections must never be public.
+    // Its handlers edit the deferred response, so acknowledge privately here.
+    const isHaterComponent = interaction.type === 3 && customId.startsWith("hater:");
 
     const isHeistComponent = interaction.type === 3 && customId.startsWith("heist:");
     const isIslandComponent = interaction.type === 3 && customId.startsWith("island:");
@@ -36863,6 +36858,11 @@ export default {
         // target choices, challenges, blocks, and responses stay private.
         if (["join", "leave", "start"].includes(action)) update = true;
         else ephemeral = true;
+      } else if (isHaterComponent) {
+        // Lobby confirmations, action choices, and target menus are private.
+        // The public game board is updated separately by haterReplaceBoard().
+        update = false;
+        ephemeral = true;
       } else if (isRumbleComponent) {
         const action = String(interaction.data.custom_id).split(":")[1];
         // The initial Open My Actions button creates the one private menu.
