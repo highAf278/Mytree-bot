@@ -16287,6 +16287,9 @@ function haterPlayerRecord(user, interaction) {
     submitted: false,
     action: null,
     targetId: null,
+    // Prevent attack-spam: Hex, Pickpocket, and Trick cannot be repeated
+    // by the same player on consecutive rounds. Defensive actions stay available.
+    lastAction: null,
     tieBreaker: Math.random()
   };
 }
@@ -16303,6 +16306,8 @@ function haterHowToText() {
     "👻 **GO GHOST** — Skip attacking and gain **1 shield**. Useful when you're expecting revenge.",
     "",
     "🎲 A random Halloween event may trigger each round. Choices stay secret until everyone has locked one in. **Every player must submit an action** for the round to resolve; Go Ghost is always available if you don't want to attack. If someone goes AFK, the host can resolve the round after 30 seconds; missing players automatically Go Ghost.",
+    "",
+    "⚖️ **No attack-spamming:** you cannot use the same attack (Hex, Pickpocket, or Trick) in back-to-back rounds. Switch attacks or use Guard/Go Ghost to change your strategy.",
     "",
     "🏆 **Spookies prizes** are based on final placement. The first-place player unlocks the permanent **🏆 The Menace Trophy** collectible after their first win.",
     "",
@@ -16469,6 +16474,10 @@ async function haterSubmit(env, interaction, game, userId, action, targetId = nu
   if (game.status !== "playing") return sendText(env, interaction, "❌ This match isn't accepting actions.");
   if (p.submitted) return sendText(env, interaction, "🔒 Your action is already locked for this round.");
   if (!["hex", "steal", "trick", "guard", "ghost"].includes(action)) return sendText(env, interaction, "❌ Unknown action.");
+  if (["hex", "steal", "trick"].includes(action) && p.lastAction === action) {
+    const labels = { hex: "Hex", steal: "Pickpocket", trick: "Trick" };
+    return sendText(env, interaction, `⚖️ **Switch it up!** You used **${labels[action]}** last round, so you can't use it again this round. Choose a different attack, Guard, or Go Ghost.`);
+  }
   if (["hex", "steal", "trick"].includes(action)) {
     if (!targetId || !game.players[targetId] || targetId === userId) return sendText(env, interaction, "❌ Choose a valid opponent.");
   }
@@ -16524,7 +16533,8 @@ async function haterResolveRound(env, guildId, gameId) {
       attacker.score = Number(attacker.score || 0) + amount;
       lines.push(`🦝 **${haterPlayerName(attacker)}** pickpocketed **${haterPlayerName(target)}** for ${amount} point${amount === 1 ? "" : "s"}.`);
     } else {
-      const result = randomInt(1, 4);
+      // Trick has eight possible outcomes so it feels unpredictable rather than repetitive.
+      const result = randomInt(1, 8);
       if (result === 1) {
         target.score = Math.max(0, Number(target.score || 0) - 3);
         attacker.score = Number(attacker.score || 0) + 1;
@@ -16537,7 +16547,7 @@ async function haterResolveRound(env, guildId, gameId) {
         target.score = Math.max(0, Number(target.score || 0) - amount);
         attacker.score = Number(attacker.score || 0) + amount + 1;
         lines.push(`🎭 **${haterPlayerName(attacker)}** pulled a double-cross on **${haterPlayerName(target)}** for ${amount} stolen points and 1 bonus point.`);
-      } else {
+      } else if (result === 4) {
         const victims = players.filter(p => p.id !== attacker.id);
         for (const victim of victims) {
           if (Number(victim.shield || 0) > 0) victim.shield = Math.max(0, Number(victim.shield || 0) - 1);
@@ -16545,6 +16555,26 @@ async function haterResolveRound(env, guildId, gameId) {
         }
         attacker.score = Number(attacker.score || 0) + 2;
         lines.push(`🎭 **${haterPlayerName(attacker)}** triggered ECTOPLASM SPLASH! Everyone else lost 1 point unless shielded; the trickster gained 2.`);
+      } else if (result === 5) {
+        attacker.score = Math.max(0, Number(attacker.score || 0) - 2);
+        target.score = Number(target.score || 0) + 1;
+        lines.push(`🪃 **TRICK BOOMERANG!** **${haterPlayerName(attacker)}**'s prank bounced back: −2 points for the trickster, +1 for **${haterPlayerName(target)}**.`);
+      } else if (result === 6) {
+        let hitCount = 0;
+        for (const victim of players.filter(p => p.id !== attacker.id)) {
+          if (Number(victim.shield || 0) > 0) victim.shield = Math.max(0, Number(victim.shield || 0) - 1);
+          else { victim.score = Math.max(0, Number(victim.score || 0) - 1); hitCount++; }
+        }
+        attacker.score = Number(attacker.score || 0) + 1;
+        lines.push(`👻 **GHOST TAX!** **${haterPlayerName(attacker)}** called in the collectors: ${hitCount} opponent${hitCount === 1 ? "" : "s"} lost 1 point, and the trickster gained 1.`);
+      } else if (result === 7) {
+        target.score = Number(target.score || 0) + 2;
+        attacker.score = Number(attacker.score || 0) + 2;
+        lines.push(`🤡 **CLOWN COLLEGE!** **${haterPlayerName(attacker)}** and **${haterPlayerName(target)}** both gained 2 points. Nobody understands the lesson.`);
+      } else {
+        target.score = Math.max(0, Number(target.score || 0) - 1);
+        attacker.score = Number(attacker.score || 0) + 3;
+        lines.push(`🧦 **POCKET SOCK CURSE!** **${haterPlayerName(attacker)}** hit **${haterPlayerName(target)}** with a suspicious sock: target −1, trickster +3.`);
       }
     }
   }
@@ -16577,6 +16607,9 @@ async function haterResolveRound(env, guildId, gameId) {
     }
   }
   for (const p of players) {
+    // Save the just-resolved choice so the same attack can't be repeated
+    // in consecutive rounds. Guard/Go Ghost remain repeatable defensive options.
+    p.lastAction = p.action;
     p.shield = 0;
     p.submitted = false;
     p.action = null;
@@ -16711,6 +16744,10 @@ async function haterHandleComponent(env, interaction) {
     if (game.players[userId].submitted) return sendText(env, interaction, "🔒 Your choice is already locked.");
     if (["guard", "ghost"].includes(chosen)) return haterSubmit(env, interaction, game, userId, chosen);
     if (!["hex", "steal", "trick"].includes(chosen)) return sendText(env, interaction, "❌ That action doesn't exist.");
+    if (game.players[userId].lastAction === chosen) {
+      const labels = { hex: "Hex", steal: "Pickpocket", trick: "Trick" };
+      return sendText(env, interaction, `⚖️ **Switch it up!** You used **${labels[chosen]}** last round, so you can't use it again this round. Choose a different attack, Guard, or Go Ghost.`);
+    }
     const targets = Object.values(game.players).filter(p => p.id !== userId);
     const rows = [];
     for (let i = 0; i < targets.length; i += 5) {
