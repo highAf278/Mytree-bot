@@ -16258,7 +16258,7 @@ async function processMillionaireTimers(env){
 
 
 /* =========================================================
-   HAUNTED HATER — 2–6 PLAYER, 10-ROUND HALLOWEEN SHOWDOWN
+   BOO YOU! — 2–6 PLAYER, 10-ROUND HALLOWEEN SHOWDOWN
    Uses guild state for the live match and player records for
    idempotent Spookies rewards / permanent collectible unlocks.
 ========================================================= */
@@ -16292,7 +16292,7 @@ function haterPlayerRecord(user, interaction) {
 }
 function haterHowToText() {
   return [
-    "👻💀 **HAUNTED HATER — HOW TO PLAY**",
+    "👻💀 **BOO YOU! — HOW TO PLAY**",
     "",
     "A chaotic free-for-all for **2–6 players**. Play **10 rounds** and finish with the highest Menace Score to win Spookies.",
     "",
@@ -16316,7 +16316,7 @@ function haterBoardText(game) {
   ).join("\n");
   if (game.status === "lobby") {
     return [
-      "🎃👻 **HAUNTED HATER** 👻🎃",
+      "🎃👻 **BOO YOU!** 👻🎃",
       "*A ten-round competition in being the most unbearable creature in the graveyard.*",
       "",
       `👥 **Lobby:** ${players.length}/${HATER_MAX_PLAYERS} players`,
@@ -16330,7 +16330,7 @@ function haterBoardText(game) {
   }
   if (game.status === "ended") return haterEndText(game);
   return [
-    `🎃👻 **HAUNTED HATER — ROUND ${game.round}/${HATER_ROUNDS}** 👻🎃`,
+    `🎃👻 **BOO YOU! — ROUND ${game.round}/${HATER_ROUNDS}** 👻🎃`,
     `🎲 **${players.filter(p => p.submitted).length}/${players.length} choices locked**`,
     "",
     list,
@@ -16374,8 +16374,8 @@ async function haterDeleteMessage(env, channelId, messageId) {
   if (!channelId || !messageId) return;
   try {
     const res = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, { method: "DELETE" });
-    if (!res.ok && res.status !== 404) console.error("Haunted Hater old-message delete failed:", res.status, await res.text());
-  } catch (error) { console.error("Haunted Hater old-message delete error:", error); }
+    if (!res.ok && res.status !== 404) console.error("Boo You! old-message delete failed:", res.status, await res.text());
+  } catch (error) { console.error("Boo You! old-message delete error:", error); }
 }
 async function haterReplaceBoard(env, game) {
   if (!game?.channelId) return;
@@ -16388,11 +16388,11 @@ async function haterReplaceBoard(env, game) {
 }
 async function haterCreateLobby(env, interaction) {
   if (!interaction.guild_id || !interaction.channel_id) {
-    return sendText(env, interaction, "❌ Haunted Hater can only be played inside a server channel.");
+    return sendText(env, interaction, "❌ Boo You! can only be played inside a server channel.");
   }
   const existing = await haterGetGame(env, interaction.guild_id);
   if (existing && ["lobby", "playing"].includes(existing.status)) {
-    return sendText(env, interaction, "👻 **A Haunted Hater game is already active in this server.** Join the existing lobby or finish that match first.");
+    return sendText(env, interaction, "👻 **A Boo You! game is already active in this server.** Join the existing lobby or finish that match first.");
   }
   const user = getUserFromInteraction(interaction);
   if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
@@ -16412,22 +16412,22 @@ async function haterCreateLobby(env, interaction) {
     rewardsPaid: false
   };
   const msg = await sendChannelMessage(env, game.channelId, haterBoardText(game), haterComponents(game));
-  if (!msg?.id) return sendText(env, interaction, "❌ I couldn't post the Haunted Hater lobby. Check that the bot can view this channel and send messages.");
+  if (!msg?.id) return sendText(env, interaction, "❌ I couldn't post the Boo You! lobby. Check that the bot can view this channel and send messages.");
   game.messageId = msg.id;
   await haterSaveGame(env, game.guildId, game);
-  return sendText(env, interaction, "🎃 **Haunted Hater lobby created!** I posted the lobby in this channel. Invite 1–5 more players, then the host can start.");
+  return sendText(env, interaction, "🎃 **Boo You! lobby created!** I posted the lobby in this channel. Invite 1–5 more players, then the host can start.");
 }
 async function haterJoin(env, interaction, gameId) {
   const user = getUserFromInteraction(interaction);
   const game = await haterGetGame(env, interaction.guild_id);
-  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That Haunted Hater lobby is no longer open.");
+  if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That Boo You! lobby is no longer open.");
   if (!user) return sendText(env, interaction, "❌ I couldn't identify your account.");
   if (game.players[user.id]) return sendText(env, interaction, "👻 You're already in this lobby.");
-  if (Object.keys(game.players).length >= HATER_MAX_PLAYERS) return sendText(env, interaction, "❌ Haunted Hater is full. Maximum **6 players**.");
+  if (Object.keys(game.players).length >= HATER_MAX_PLAYERS) return sendText(env, interaction, "❌ Boo You! is full. Maximum **6 players**.");
   game.players[user.id] = haterPlayerRecord(user, interaction);
   await haterSaveGame(env, game.guildId, game);
   await haterReplaceBoard(env, game);
-  return sendText(env, interaction, "🎃 You joined Haunted Hater! Prepare to be petty.");
+  return sendText(env, interaction, "🎃 You joined Boo You! Prepare to be petty.");
 }
 async function haterLeave(env, interaction, gameId) {
   const user = getUserFromInteraction(interaction);
@@ -16441,7 +16441,7 @@ async function haterLeave(env, interaction, gameId) {
   }
   await haterSaveGame(env, game.guildId, game);
   await haterReplaceBoard(env, game);
-  return sendText(env, interaction, "🚪 You left the Haunted Hater lobby.");
+  return sendText(env, interaction, "🚪 You left the Boo You! lobby.");
 }
 async function haterStart(env, interaction, gameId) {
   const user = getUserFromInteraction(interaction);
@@ -16449,7 +16449,7 @@ async function haterStart(env, interaction, gameId) {
   if (!game || game.id !== gameId || game.status !== "lobby") return sendText(env, interaction, "❌ That lobby is no longer available.");
   if (!user || game.hostId !== user.id) return sendText(env, interaction, "❌ Only the host can start this match.");
   const ids = Object.keys(game.players || {});
-  if (ids.length < HATER_MIN_PLAYERS) return sendText(env, interaction, "❌ Haunted Hater needs at least **2 players** to start.");
+  if (ids.length < HATER_MIN_PLAYERS) return sendText(env, interaction, "❌ Boo You! needs at least **2 players** to start.");
   game.status = "playing";
   game.round = 1;
   game.startedAt = Date.now();
@@ -16620,7 +16620,7 @@ function haterEndText(game) {
     return `${place} **${haterPlayerName(p)}** — ${Number(p.score || 0)} points — **+${payout.toLocaleString()} Spookies**`;
   });
   return [
-    "🏆🎃 **HAUNTED HATER — FINAL RESULTS** 🎃🏆",
+    "🏆🎃 **BOO YOU! — FINAL RESULTS** 🎃🏆",
     "",
     ...rows,
     "",
@@ -16674,7 +16674,7 @@ async function haterHandleComponent(env, interaction) {
   if (action === "howto") return sendText(env, interaction, haterHowToText());
   if (action === "create") return haterCreateLobby(env, interaction);
   const game = await haterGetGame(env, interaction.guild_id);
-  if (!game || game.id !== gameId) return sendText(env, interaction, "👻 That Haunted Hater match has expired or been replaced.");
+  if (!game || game.id !== gameId) return sendText(env, interaction, "👻 That Boo You! match has expired or been replaced.");
   if (action === "join") return haterJoin(env, interaction, gameId);
   if (action === "leave") return haterLeave(env, interaction, gameId);
   if (action === "cancel") {
@@ -16683,7 +16683,7 @@ async function haterHandleComponent(env, interaction) {
     game.lastEvent = "The host closed the gates.";
     await haterSaveGame(env, game.guildId, game);
     await haterReplaceBoard(env, game);
-    return sendText(env, interaction, "🚪 Haunted Hater lobby cancelled.");
+    return sendText(env, interaction, "🚪 Boo You! lobby cancelled.");
   }
   if (action === "start") return haterStart(env, interaction, gameId);
   if (action === "resolve") {
@@ -16728,7 +16728,7 @@ async function haterHandleComponent(env, interaction) {
     if (game.status !== "playing" || round !== Number(game.round)) return sendText(env, interaction, "⏰ That target menu belongs to an old round.");
     return haterSubmit(env, interaction, game, userId, chosen, targetId);
   }
-  return sendText(env, interaction, "❌ Unknown Haunted Hater action.");
+  return sendText(env, interaction, "❌ Unknown Boo You! action.");
 }
 
 
@@ -24473,11 +24473,11 @@ async function handleGamesMenu(env, interaction) {
   const player = await getPlayer(env, user.id);
   updatePlayerIdentity(player, interaction);
   await savePlayer(env, player);
-  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🦝💥 **Raccoon Rumble** — exactly 3 players, secret objectives + chaos\n🔎 **Who Stole the Sparkles?** — detective cases for 1+ players\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n👻 **Haunted Hater** — 2–6 players, 10 rounds of sabotage, tricks, and Spookies\n\n🌳 The Tree is separate — use **/tree**.`, [
+  await sendText(env, interaction, `🎮 **WEREWIVES GAMES**\n\n👤 **${soloPlayerName(player)}**\n\n🕵️ **Solo Mission** — single-player strategic chaos\n🏝️ **Chaos Island** — multiplayer survival chaos\n💰 **Heist Game** — multiplayer social deduction\n🧪 **The Experiment** — secret clues + group decisions\n🦝💥 **Raccoon Rumble** — exactly 3 players, secret objectives + chaos\n🔎 **Who Stole the Sparkles?** — detective cases for 1+ players\n🌳⚔️ **Tree Battle** — battle another tree\n🌈 **Color Chaos** — pastel territory chaos\n👻 **Boo You!** — 2–6 players, 10 rounds of sabotage, tricks, and Spookies\n\n🌳 The Tree is separate — use **/tree**.`, [
     row(button("🏝️ Chaos Island", "games:island", 1), button("💰 Heist Game", "games:heist", 2)),
     row(button("🧪 The Experiment", "games:experiment", 1), button("🕵️ Solo Mission", "games:solo", 3)),
     row(button("🌳⚔️ Tree Battle", "games:battle", 1), button("🌈 Color Chaos", "games:colorchaos", 3)),
-    row(button("🦝💥 Raccoon Rumble", "games:rumble", 1), button("🔎 Sparkle Crime", "games:sparklecrime", 2), button("👻 Haunted Hater", "games:hauntedhater", 4)),
+    row(button("🦝💥 Raccoon Rumble", "games:rumble", 1), button("🔎 Sparkle Crime", "games:sparklecrime", 2), button("👻 Boo You!", "games:hauntedhater", 4)),
     row(button("🏆 Solo Leaderboard", "games:solo_leaderboard", 2), button("🏷️ Titles", "title:list", 3))
   ]);
 }
@@ -30343,6 +30343,7 @@ const HALLOWEEN_ZOMBIE_LOCATIONS = ["Medical Center", "Emergency Station", "Aban
 function halloweenHubComponents() {
   return [
     row(button("🎮 Halloween Games", "halloween:games", 1), button("🏆 Leaderboard", "halloween:leaderboard", 2), button("🎁 Daily Reward", "halloween:daily", 3)),
+    row(button("💀 Boo You! — Multiplayer Mayhem", "hater:create:hub", 4)),
     row(button("🧙‍♀️ Witch’s Shop", "halloween:witch:shop", 1))
   ];
 }
@@ -30350,7 +30351,7 @@ function halloweenHubText(player) {
   return [
     "🎃🕷️ **WEREWIVES HALLOWEEN 2026** 🕷️🎃",
     "",
-    "The gates are open. Seven games are ready for the first Halloween release. 👻",
+    "The gates are open. Eight games are ready for the Halloween release. 👻",
     "",
     "👻 **Spookies** are the Halloween event currency.",
     `💰 **Your Spookies:** ${Number(player?.halloweenSpookies || 0).toLocaleString()}`,
@@ -30362,8 +30363,8 @@ function halloweenHubText(player) {
 
 function halloweenGameMenuComponents() {
   return [
-    row(button("👻 Haunted Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
-    row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3)),
+    row(button("👻 Hide & Seek", "halloween:start:hide", 1), button("🧟 Zombie Panic", "halloween:start:zombie", 1)),
+    row(button("🎃 Spook N Smash", "halloween:start:spook", 1), button("🍬 Trick or Treat", "halloween:start:trick", 3), button("💀 Boo You!", "hater:create:hub", 4)),
     row(button("⚰️ Grave Robber", "halloween:start:grave", 1), button("🗺️ Haunted Maze", "halloween:start:maze", 1)),
     row(button("🧠 Haunted Trivia", "halloween:start:trivia", 1)),
     row(button("📖 How Halloween Works", "halloween:howto", 2), button("⬅️ Halloween Hub", "halloween:hub", 2))
@@ -30401,7 +30402,7 @@ function halloweenUnlockText(player) {
     "",
     line("🧠", "Zombie Brain", "Answer **at least 10 challenges correctly in one Haunted Trivia run**.", "zombie_brain"),
     "",
-    "🔒 **Collectibles 8–10** — COMING SOON",
+    "🔒 **Collectibles 9–10** — COMING SOON",
     "Their games and unlock requirements haven't been revealed yet. 👀"
   ].join("\n");
 }
@@ -30496,7 +30497,7 @@ function halloweenBookCollectionConfig() {
       requirement: "Answer at least 10 challenges correctly in one Haunted Trivia run.",
       imageKey: HALLOWEEN_BOOK_ASSETS.zombieBrain
     },
-    { id: "menace_trophy", title: "🏆 The Menace Trophy", requirement: "Win your first game of Haunted Hater.", imageKey: HALLOWEEN_BOOK_ASSETS.menaceTrophy },
+    { id: "menace_trophy", title: "🏆 The Menace Trophy", requirement: "Win your first game of **Boo You!**.", imageKey: HALLOWEEN_BOOK_ASSETS.menaceTrophy },
     { id: "collectible_9", title: "🎃 Halloween Collectible #9", requirement: "Coming soon...", imageKey: null },
     { id: "collectible_10", title: "🎃 Halloween Collectible #10", requirement: "Coming soon...", imageKey: null }
   ];
