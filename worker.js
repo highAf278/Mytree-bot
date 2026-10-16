@@ -7796,6 +7796,17 @@ async function handleWater(
       interaction
     );
 
+    // Court Tree Confiscation must block watering as well as /tree.
+    // Refresh punishment state first so expired sentences are cleared consistently.
+    await refreshPunishmentState(env, player);
+    if (Number(player.courtTreeConfiscationUntil || 0) > Date.now()) {
+      return sendText(
+        env,
+        interaction,
+        `🌳❌ **YOUR TREE HAS BEEN CONFISCATED BY THE COURTS.**\n\nThe raccoons have taken custody of your tree for **${punishmentTimeText(player.courtTreeConfiscationUntil)}** more.\n\n🦝 Please do not attempt to negotiate with the Court.`
+      );
+    }
+
     const now =
       Date.now();
 
