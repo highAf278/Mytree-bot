@@ -7167,12 +7167,17 @@ async function renderTreeDirectFallback(env, player) {
     const tree = await getPngAsset(env, getTreeImage(player));
     // Golden Tree and Thunder God artwork need a smaller, farther-back
     // placement so each tree fits naturally into its matching background.
+    // Void Prism's artwork is especially wide and visually dense, so give it
+    // a modest size reduction and lift it slightly to create more background
+    // breathing room without changing any other tree set's placement.
     const isGoldenTree = player.equipped?.tree === "golden_tree";
     const isThunderGodTree = player.equipped?.tree === "thunder_god";
+    const isVoidPrismTree = player.equipped?.tree === "void_prism";
     const useSetScale = isGoldenTree || isThunderGodTree;
-    const treeBox = Math.round(width * (useSetScale ? 0.66 : 0.9004));
+    const treeScale = useSetScale ? 0.66 : (isVoidPrismTree ? 0.82 : 0.9004);
+    const treeBox = Math.round(width * treeScale);
     const layer = containRGBA(tree, treeBox, treeBox);
-    const treeTop = useSetScale ? 0.245 : 0.1797;
+    const treeTop = useSetScale ? 0.245 : (isVoidPrismTree ? 0.155 : 0.1797);
     alphaComposite(scene, layer, Math.round((width - layer.width) / 2), Math.round(height * treeTop));
   } catch (error) {
     console.error("Direct tree fallback tree layer failed:", error);
