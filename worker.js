@@ -365,6 +365,18 @@ const IMAGES = {
   glamTree: "IMG_7878.png",
   glamBackground: "IMG_7879.png",
   glamEffect: "IMG_7895.png",
+  rainbowReverieTree: "IMG_8277.png",
+  rainbowReverieBackground: "IMG_8281.png",
+  rainbowReverieEffect: "IMG_8282.png",
+  rainbowReverieDecoration: "IMG_8283.png",
+  neonEclipseTree: "IMG_8284.png",
+  neonEclipseBackground: "IMG_8285.png",
+  neonEclipseEffect: "IMG_8288.png",
+  neonEclipseDecoration: "IMG_8287.png",
+  voidPrismTree: "IMG_8377.png",
+  voidPrismBackground: "IMG_8373.png",
+  voidPrismEffect: "IMG_8379.gif",
+  rainbowKitsune: "IMG_8376.png",
   blackCatMagicTree: "IMG_7881.png",
   blackCatMagicBackground: "IMG_7882.png",
   blackCatMagicEffect: "IMG_7883.png",
@@ -731,7 +743,22 @@ const SHOP_ITEMS = {
   candy_storm_animated_effect: { name: "🍬 Candy Storm", price: 110000, type: "effect", value: "candy_storm_animated" },
   kitty_parade_animated_effect: { name: "🐱 Kitty Parade", price: 120000, type: "effect", value: "kitty_parade_animated" },
   electric_storm_animated_effect: { name: "⚡ Electric Storm", price: 135000, type: "effect", value: "electric_storm_animated" },
-  experimental_effect_animated_effect: { name: "🧪 Experimental Effect", price: 200000, type: "effect", value: "experimental_effect_animated" }
+  experimental_effect_animated_effect: { name: "🧪 Experimental Effect", price: 200000, type: "effect", value: "experimental_effect_animated" },
+
+  rainbow_reverie_tree: { name: "🌈🖤 Rainbow Reverie Tree", price: 100000, type: "tree", value: "rainbow_reverie" },
+  rainbow_reverie_background: { name: "🌈 Rainbow Reverie Background", price: 100000, type: "background", value: "rainbow_reverie" },
+  rainbow_reverie_effect: { name: "✨ Rainbow Reverie Effect", price: 100000, type: "effect", value: "rainbow_reverie" },
+  rainbow_reverie_decoration: { name: "🐆 Rainbow Reverie Decoration", price: 100000, type: "decoration", value: "rainbow_reverie" },
+
+  neon_eclipse_tree: { name: "💚 Neon Eclipse Tree", price: 100000, type: "tree", value: "neon_eclipse" },
+  neon_eclipse_background: { name: "💚 Neon Eclipse Background", price: 100000, type: "background", value: "neon_eclipse" },
+  neon_eclipse_effect: { name: "✨ Neon Eclipse Effect", price: 100000, type: "effect", value: "neon_eclipse" },
+  neon_eclipse_decoration: { name: "🟢 Neon Eclipse Decoration", price: 100000, type: "decoration", value: "neon_eclipse" },
+
+  void_prism_tree: { name: "🖤🌈 Void Prism Tree", price: 100000, type: "tree", value: "void_prism" },
+  void_prism_background: { name: "🌌 Void Prism Background", price: 100000, type: "background", value: "void_prism" },
+  void_prism_effect: { name: "🌠 Rainbow Starfall", price: 100000, type: "effect", value: "void_prism" },
+  rainbow_kitsune_decoration: { name: "🦊🌈 Rainbow Kitsune", price: 100000, type: "decoration", value: "rainbow_kitsune" }
 };
 
 const RIDDLES = [
@@ -3543,6 +3570,15 @@ function getBackgroundImage(player) {
     case "glam":
       return IMAGES.glamBackground;
 
+    case "rainbow_reverie":
+      return IMAGES.rainbowReverieBackground;
+
+    case "neon_eclipse":
+      return IMAGES.neonEclipseBackground;
+
+    case "void_prism":
+      return IMAGES.voidPrismBackground;
+
     case "black_cat_magic":
       return IMAGES.blackCatMagicBackground;
 
@@ -3629,6 +3665,15 @@ function getTreeImage(player) {
 
     case "glam":
       return IMAGES.glamTree;
+
+    case "rainbow_reverie":
+      return IMAGES.rainbowReverieTree;
+
+    case "neon_eclipse":
+      return IMAGES.neonEclipseTree;
+
+    case "void_prism":
+      return IMAGES.voidPrismTree;
 
     case "black_cat_magic":
       return IMAGES.blackCatMagicTree;
@@ -3718,6 +3763,15 @@ function getDecorationImage(player) {
     case "black_ice_wolf":
       return IMAGES.blackIceDecoration;
 
+    case "rainbow_reverie":
+      return IMAGES.rainbowReverieDecoration;
+
+    case "neon_eclipse":
+      return IMAGES.neonEclipseDecoration;
+
+    case "rainbow_kitsune":
+      return IMAGES.rainbowKitsune;
+
     default:
       return null;
   }
@@ -3762,6 +3816,17 @@ function getEffectImage(player) {
 
     case "glam":
       return IMAGES.glamEffect;
+
+    case "rainbow_reverie":
+      return IMAGES.rainbowReverieEffect;
+
+    case "neon_eclipse":
+      return IMAGES.neonEclipseEffect;
+
+    // Void Prism starfall is rendered by the native animated-effect pipeline;
+    // the source GIF is recorded in IMAGES but the PNG compositor cannot decode GIF layers.
+    case "void_prism":
+      return null;
 
     case "black_cat_magic":
       return IMAGES.blackCatMagicEffect;
@@ -6584,6 +6649,45 @@ function drawAnimatedCrystalAura(frame, phase=0) {
   }
 }
 
+function drawAnimatedVoidPrismStarfall(frame, phase = 0) {
+  // Rainbow-goth starfall: sharp, irregular stars with colored rays, varied
+  // sizes, staggered movement, and brief scale/brightness pops. No round glow blobs.
+  const palette = [
+    [255, 55, 205], [255, 125, 45], [255, 225, 65],
+    [60, 245, 170], [55, 190, 255], [180, 95, 255]
+  ];
+  const stars = [
+    [.08, .03, 10, 0], [.24, .16, 19, 1], [.41, .05, 7, 2],
+    [.59, .23, 13, 3], [.78, .09, 9, 4], [.92, .28, 16, 5],
+    [.15, .43, 13, 2], [.36, .54, 8, 4], [.53, .41, 21, 0],
+    [.73, .62, 11, 3], [.88, .76, 17, 1], [.27, .82, 10, 5],
+    [.06, .71, 7, 3], [.46, .91, 14, 2], [.65, .84, 8, 4]
+  ];
+  for (let i = 0; i < stars.length; i++) {
+    const [bx, by, baseSize, colorIndex] = stars[i];
+    const drift = (phase * (.22 + (i % 4) * .055) + i * .137) % 1;
+    const x = (bx + Math.sin(phase * Math.PI * 2 + i * 1.71) * .012) * frame.width;
+    const y = ((by + drift * .24) % 1.04) * frame.height;
+    const pulse = (Math.sin(phase * Math.PI * 2 * (1.2 + (i % 3) * .35) + i * 1.8) + 1) / 2;
+    const pop = Math.pow(Math.max(0, Math.sin(phase * Math.PI * 2 * 1.7 + i * 2.31)), 8);
+    const size = baseSize * (.68 + pulse * .28 + pop * .82);
+    const color = palette[colorIndex];
+    const alpha = Math.round(115 + pulse * 90 + pop * 50);
+    const ray = size * (1.25 + pop * 1.35);
+    const thin = Math.max(1.1, size * .12);
+    // Four long rays with unequal lengths keep the silhouettes crisp and non-circular.
+    effectRibbonPath(frame, [[x, y-ray], [x, y+ray*.88]], thin, color, alpha);
+    effectRibbonPath(frame, [[x-ray*.92, y], [x+ray*1.08, y]], thin, color, alpha);
+    if (baseSize >= 12 || pop > .45) {
+      effectRibbonPath(frame, [[x-ray*.52, y-ray*.52], [x+ray*.52, y+ray*.52]], Math.max(1, thin*.72), color, Math.round(alpha*.8));
+      effectRibbonPath(frame, [[x-ray*.45, y+ray*.45], [x+ray*.45, y-ray*.45]], Math.max(1, thin*.68), color, Math.round(alpha*.75));
+    }
+    const core = Math.max(1.2, size * .09);
+    effectRibbonPath(frame, [[x-core, y], [x+core, y]], core, [255,255,255], Math.min(255, alpha+35));
+    effectRibbonPath(frame, [[x, y-core], [x, y+core]], core, [255,255,255], Math.min(255, alpha+35));
+  }
+}
+
 function drawAnimatedStarfall(frame, phase=0) {
   const stars=[
     [.08,.02,14,0],[.22,.20,18,1],[.37,.06,11,2],[.52,.28,16,3],[.68,.10,13,4],
@@ -7253,7 +7357,9 @@ if (Number(player.fireBombUntil || 0) > Date.now()) {
     candy_storm_animated: drawAnimatedCandyStorm,
     kitty_parade_animated: drawAnimatedKittyParade,
     electric_storm_animated: drawAnimatedElectricStorm,
-    experimental_effect_animated: drawAnimatedExperimentalEffect
+    experimental_effect_animated: drawAnimatedExperimentalEffect,
+    // Void Prism uses the native crisp, popping rainbow starfall animation.
+    void_prism: drawAnimatedVoidPrismStarfall
   };
   if (animatedEffectDrawers[animatedShopEffect]) {
     const frames=[]; const frameCount=6; const baseData=scene.data.slice();
@@ -9653,37 +9759,104 @@ async function showAnimatedEffectShop(env, interaction, page = 1) {
 
 const REGULAR_SHOP_SETS = [
   {
-    id: "candyland",
-    label: "🍭 Candyland Bundle",
-    description: "Dreamy pastel candy set",
+    id: "rainbow_reverie",
+    label: "🌈 Rainbow Reverie",
+    description: "A vivid rainbow collection with coordinated tree, background, effect, and decoration.",
     items: [
-      ["cotton_candy_tree", "🍭 Cotton Candy Tree", "buy_cotton_candy"],
-      ["candyland_background", "🍬 Candyland Background", "buy_candyland"],
-      ["candy_effect", "🍭 Candy Effect", "buy_candy_effect"]
+      ["rainbow_reverie_tree", "🌈 Rainbow Reverie Tree", "buy_rainbow_reverie_tree"],
+      ["rainbow_reverie_background", "🌈 Rainbow Reverie Background", "buy_rainbow_reverie_background"],
+      ["rainbow_reverie_effect", "✨ Rainbow Reverie Effect", "buy_rainbow_reverie_effect"],
+      ["rainbow_reverie_decoration", "🐆 Rainbow Reverie Decoration", "buy_rainbow_reverie_decoration"]
+    ]
+  },
+  {
+    id: "neon_eclipse",
+    label: "💚 Neon Eclipse",
+    description: "A bold neon collection with coordinated tree, background, effect, and decoration.",
+    items: [
+      ["neon_eclipse_tree", "💚 Neon Eclipse Tree", "buy_neon_eclipse_tree"],
+      ["neon_eclipse_background", "💚 Neon Eclipse Background", "buy_neon_eclipse_background"],
+      ["neon_eclipse_effect", "✨ Neon Eclipse Effect", "buy_neon_eclipse_effect"],
+      ["neon_eclipse_decoration", "🟢 Neon Eclipse Decoration", "buy_neon_eclipse_decoration"]
+    ]
+  },
+  {
+    id: "void_prism",
+    label: "🖤🌈 Void Prism",
+    description: "A rainbow-goth collection of black prismatic magic, Rainbow Starfall, and the Rainbow Kitsune.",
+    items: [
+      ["void_prism_tree", "🖤🌈 Void Prism Tree", "buy_void_prism_tree"],
+      ["void_prism_background", "🌌 Void Prism Background", "buy_void_prism_background"],
+      ["void_prism_effect", "🌠 Rainbow Starfall", "buy_void_prism_effect"],
+      ["rainbow_kitsune_decoration", "🦊🌈 Rainbow Kitsune", "buy_rainbow_kitsune_decoration"]
     ]
   }
 ];
 
 async function showRegularShop(env, interaction) {
   await deferInteraction(env, interaction, { update: true });
-  const buttons = REGULAR_SHOP_SETS.map(set => button(set.label, `regular_set:${set.id}`, 1));
-  const rows=[]; for(let i=0;i<buttons.length;i+=2) rows.push(row(...buttons.slice(i,i+2)));
-  rows.push(row(button("🌌 Backgrounds","shop_backgrounds",2),button("🌳 Trees","shop_trees",2)));
-  rows.push(row(button("🎀 Decorations","shop_decorations",2),button("✨ Effects","shop_effects",2),button("🎞️ Animated","shop_animated_effects",1)));
-  rows.push(row(button("🎁 Limited / Holiday","shop_limited",1),button("⬅️ Back","back_tree",2)));
+
+  const setButtons = REGULAR_SHOP_SETS.map(set =>
+    button(set.label, `regular_set:${set.id}`, 1)
+  );
+  const rows = [];
+  rows.push(row(...setButtons));
+  rows.push(row(
+    button("🎁 Limited / Holiday", "shop_limited", 1),
+    button("⬅️ Back", "back_tree", 2)
+  ));
+
+  // Keep the existing separate Millionaire Shop entry and unlock behavior intact.
   const shopPlayer = await getPlayer(env, getUserFromInteraction(interaction).id);
-  if (Number(shopPlayer.sparkles || 0) >= 1000000 && !shopPlayer.millionaireShopUnlocked) { shopPlayer.millionaireShopUnlocked = true; await savePlayer(env, shopPlayer, shopPlayer.userId); }
-  if (millionaireUnlocked(shopPlayer)) rows.push(row(button("👑 Millionaire Shop","millionaire:shop",1)));
-  await sendText(env,interaction,"🛍️ **REGULAR SHOP**\n\n🍭 **Candyland** is the only full bundle in the Regular Shop. Forest and nature cosmetics are sold in their proper individual categories. Candyland items are bundle-only here. ✨",rows);
+  if (Number(shopPlayer.sparkles || 0) >= 1000000 && !shopPlayer.millionaireShopUnlocked) {
+    shopPlayer.millionaireShopUnlocked = true;
+    await savePlayer(env, shopPlayer, shopPlayer.userId);
+  }
+  if (millionaireUnlocked(shopPlayer)) {
+    rows.push(row(button("👑 Millionaire Shop", "millionaire:shop", 1)));
+  }
+
+  await sendText(
+    env,
+    interaction,
+    "🛍️ **REGULAR SHOP**\n\nChoose a cosmetic set to browse its four individual items. Each item costs **100,000 Sparkles** and can be purchased separately. No bundles. ✨",
+    rows
+  );
 }
 
-async function showRegularSet(env,interaction,setId){
-  await deferInteraction(env,interaction,{update:true});
-  const set=REGULAR_SHOP_SETS.find(x=>x.id===setId); if(!set)return sendText(env,interaction,"❌ That regular bundle doesn't exist.");
-  const user=getUserFromInteraction(interaction); const player=await getPlayer(env,user.id);
-  const buttons=set.items.map(([itemId,label,buyId])=>{const owned=player.inventory.includes(itemId);const item=SHOP_ITEMS[itemId];return button(owned?`${label} Owned`:`${label} — ${item?.price||0}`,buyId,owned?2:1,owned);});
-  const rows=[];for(let i=0;i<buttons.length;i+=3)rows.push(row(...buttons.slice(i,i+3)));rows.push(row(button("⬅️ Back to Regular Shop","shop",2)));
-  await sendText(env,interaction,`🛍️ **${set.label}**\n\n${set.description}\n\nChoose an item to purchase. ✨`,rows);
+async function showRegularSet(env, interaction, setId) {
+  await deferInteraction(env, interaction, { update: true });
+  const set = REGULAR_SHOP_SETS.find(x => x.id === setId);
+  if (!set) {
+    await sendText(env, interaction, "❌ That regular cosmetic set doesn't exist.");
+    return;
+  }
+
+  const user = getUserFromInteraction(interaction);
+  const player = await getPlayer(env, user.id);
+  const buttons = set.items.map(([itemId, label, buyId]) => {
+    const owned = player.inventory.includes(itemId);
+    const item = SHOP_ITEMS[itemId];
+    return button(
+      owned ? `${label} Owned` : `${label} — ${(item?.price || 0).toLocaleString()} ✨`,
+      buyId,
+      owned ? 2 : 1,
+      owned
+    );
+  });
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 4) {
+    rows.push(row(...buttons.slice(i, i + 4)));
+  }
+  rows.push(row(button("⬅️ Back to Regular Shop", "shop", 2)));
+
+  await sendText(
+    env,
+    interaction,
+    `🛍️ **${set.label}**\n\n${set.description}\n\nEach item costs **100,000 Sparkles**. Choose items individually — there is no bundle purchase. ✨`,
+    rows
+  );
 }
 
 const LIMITED_SHOP_SETS = [
@@ -10344,6 +10517,9 @@ async function showCustomBackgrounds(
     ["ocean_opal_background", "🩵🌊 Ocean Opal", "ocean_opal"],
     ["fairy_hollow_background", "🧚 Fairy Hollow", "fairy_hollow"],
     ["glam_background", "💎 Glam", "glam"],
+    ["rainbow_reverie_background", "🌈 Rainbow Reverie", "rainbow_reverie"],
+    ["neon_eclipse_background", "💚 Neon Eclipse", "neon_eclipse"],
+    ["void_prism_background", "🖤🌈 Void Prism", "void_prism"],
     ["black_cat_magic_background", "🐈‍⬛ Black Cat Magic", "black_cat_magic"],
     ["dragon_realm_background", "🐉 Dragon Realm", "dragon_realm"],
     ["inferno_king_background", "🔥 Inferno King", "inferno_king"],
@@ -10429,6 +10605,9 @@ async function showCustomTrees(
     ["ocean_opal", "🩵🌊 Ocean Opal", "ocean_opal_tree"],
     ["fairy_hollow", "🧚 Fairy Hollow", "fairy_hollow_tree"],
     ["glam", "💎 Glam", "glam_tree"],
+    ["rainbow_reverie", "🌈 Rainbow Reverie", "rainbow_reverie_tree"],
+    ["neon_eclipse", "💚 Neon Eclipse", "neon_eclipse_tree"],
+    ["void_prism", "🖤🌈 Void Prism", "void_prism_tree"],
     ["black_cat_magic", "🐈‍⬛ Black Cat Magic", "black_cat_magic_tree"],
     ["dragon_realm", "🐉 Dragon Realm", "dragon_realm_tree"],
     ["inferno_king", "🔥 Inferno King", "inferno_king_tree"],
@@ -10501,6 +10680,9 @@ async function showCustomEffects(
   if (player.inventory.includes("ocean_opal_effect")) buttons.push(button("🩵🌊 Ocean Opal", "equip_effect_ocean_opal", player.equipped.effect === "ocean_opal" ? 3 : 2));
   if (player.inventory.includes("fairy_hollow_effect")) buttons.push(button("🧚 Fairy Hollow", "equip_effect_fairy_hollow", player.equipped.effect === "fairy_hollow" ? 3 : 2));
   if (player.inventory.includes("glam_effect")) buttons.push(button("💎 Glam", "equip_effect_glam", player.equipped.effect === "glam" ? 3 : 2));
+  if (player.inventory.includes("rainbow_reverie_effect")) buttons.push(button("🌈 Rainbow Reverie", "equip_effect_rainbow_reverie", player.equipped.effect === "rainbow_reverie" ? 3 : 2));
+  if (player.inventory.includes("neon_eclipse_effect")) buttons.push(button("💚 Neon Eclipse", "equip_effect_neon_eclipse", player.equipped.effect === "neon_eclipse" ? 3 : 2));
+  if (player.inventory.includes("void_prism_effect")) buttons.push(button("🌠 Rainbow Starfall", "equip_effect_void_prism", player.equipped.effect === "void_prism" ? 3 : 2));
   if (player.inventory.includes("black_cat_magic_effect")) buttons.push(button("🐈‍⬛ Black Cat Magic", "equip_effect_black_cat_magic", player.equipped.effect === "black_cat_magic" ? 3 : 2));
   if (player.inventory.includes("dragon_realm_effect")) buttons.push(button("🐉 Dragon Realm", "equip_effect_dragon_realm", player.equipped.effect === "dragon_realm" ? 3 : 2));
   if (player.inventory.includes("inferno_king_effect")) buttons.push(button("🔥 Inferno King", "equip_effect_inferno_king", player.equipped.effect === "inferno_king" ? 3 : 2));
@@ -10663,7 +10845,10 @@ async function showCustomDecorations(
     ["duck_hat_boots_decoration", "🦆 Duck With Hat & Boots", "duck_hat_boots"],
     ["cheddar_falls_decoration", "🧀 Cheddar Falls", "cheddar_falls"],
     ["eggward_decoration", "🥚 Eggward", "eggward"],
-    ["hedgy_decoration", "🦔 Hedgy", "hedgy"]
+    ["hedgy_decoration", "🦔 Hedgy", "hedgy"],
+    ["rainbow_reverie_decoration", "🌈 Rainbow Reverie Decoration", "rainbow_reverie"],
+    ["neon_eclipse_decoration", "💚 Neon Eclipse Decoration", "neon_eclipse"],
+    ["rainbow_kitsune_decoration", "🦊🌈 Rainbow Kitsune", "rainbow_kitsune"]
   ];
   for (const [itemId,label,value] of newDecorations) {
     if (player.inventory.includes(itemId)) buttons.push(button(label, `equip_decoration_${value}`, player.equipped.decoration === value ? 3 : 2));
@@ -10806,6 +10991,10 @@ async function equipTheme(
 
     glam:
       player.inventory.includes("glam_background"),
+
+    rainbow_reverie: player.inventory.includes("rainbow_reverie_background"),
+    neon_eclipse: player.inventory.includes("neon_eclipse_background"),
+    void_prism: player.inventory.includes("void_prism_background"),
 
     black_cat_magic:
       player.inventory.includes("black_cat_magic_background"),
@@ -10962,6 +11151,10 @@ async function equipTree(
     glam:
       player.inventory.includes("glam_tree"),
 
+    rainbow_reverie: player.inventory.includes("rainbow_reverie_tree"),
+    neon_eclipse: player.inventory.includes("neon_eclipse_tree"),
+    void_prism: player.inventory.includes("void_prism_tree"),
+
     black_cat_magic:
       player.inventory.includes("black_cat_magic_tree"),
 
@@ -11056,6 +11249,9 @@ async function equipEffect(
       ocean_opal: "ocean_opal_effect",
       fairy_hollow: "fairy_hollow_effect",
       glam: "glam_effect",
+      rainbow_reverie: "rainbow_reverie_effect",
+      neon_eclipse: "neon_eclipse_effect",
+      void_prism: "void_prism_effect",
       black_cat_magic: "black_cat_magic_effect",
       dragon_realm: "dragon_realm_effect",
       inferno_king: "inferno_king_effect",
@@ -11175,7 +11371,11 @@ async function equipDecoration(
         "hedgy_decoration",
 
       black_ice_wolf:
-        "black_ice_decoration"
+        "black_ice_decoration",
+
+      rainbow_reverie: "rainbow_reverie_decoration",
+      neon_eclipse: "neon_eclipse_decoration",
+      rainbow_kitsune: "rainbow_kitsune_decoration"
     }[decoration];
 
     if (
@@ -17594,7 +17794,22 @@ async function handleComponent(
     buy_black_ice_decoration:
       "black_ice_decoration",
     buy_black_ice_snow_animated:
-      "black_ice_snow_animated_effect"
+      "black_ice_snow_animated_effect",
+
+    buy_rainbow_reverie_tree: "rainbow_reverie_tree",
+    buy_rainbow_reverie_background: "rainbow_reverie_background",
+    buy_rainbow_reverie_effect: "rainbow_reverie_effect",
+    buy_rainbow_reverie_decoration: "rainbow_reverie_decoration",
+
+    buy_neon_eclipse_tree: "neon_eclipse_tree",
+    buy_neon_eclipse_background: "neon_eclipse_background",
+    buy_neon_eclipse_effect: "neon_eclipse_effect",
+    buy_neon_eclipse_decoration: "neon_eclipse_decoration",
+
+    buy_void_prism_tree: "void_prism_tree",
+    buy_void_prism_background: "void_prism_background",
+    buy_void_prism_effect: "void_prism_effect",
+    buy_rainbow_kitsune_decoration: "rainbow_kitsune_decoration"
   };
 
   if (
