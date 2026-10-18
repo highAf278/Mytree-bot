@@ -6302,37 +6302,55 @@ function drawAnimatedButterflyGarden(frame, phase=0) {
 }
 
 function drawAnimatedPetalspellButterflies(frame, phase=0) {
-  // Petalspell's uploaded IMG_8386.gif is retained in IMAGES, but this Worker
-  // rasterizer cannot composite GIF layers directly. Recreate the effect as a
-  // native looping gold-butterfly animation so it still renders in /tree.
+  // Small, crisp butterfly silhouettes designed to survive Discord's GIF
+  // compression. Use pointed wings instead of the large translucent ellipses
+  // that blurred into yellow blobs at normal mobile display size.
   const butterflies = [
-    [0.16,0.23,31,-0.28,0],[0.37,0.38,25,0.40,1],[0.60,0.19,34,-0.34,2],
-    [0.81,0.42,28,0.24,3],[0.75,0.70,25,-0.52,4],[0.25,0.72,30,0.16,5]
+    [0.14,0.24,19,-0.30,0],[0.38,0.17,16,0.36,1],
+    [0.80,0.25,20,-0.22,2],[0.19,0.62,17,0.28,3],
+    [0.78,0.66,18,-0.42,4]
   ];
-  const golds = [[255,190,48],[255,211,92],[225,151,28],[255,224,125]];
-  for (let i=0;i<butterflies.length;i++) {
+  const golds = [[255,198,72],[255,218,118],[235,166,43],[255,229,155]];
+  const rotatePoint=(cx,cy,x,y,a)=>[cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];
+  for(let i=0;i<butterflies.length;i++){
     const [bx,by,size,angle,seed]=butterflies[i];
-    const t=phase*Math.PI*2+i*1.18;
-    const x=(bx+Math.sin(t*1.12)*0.052)*frame.width;
-    const y=(by+Math.cos(t*1.28)*0.055)*frame.height;
-    drawButterfly(frame,x,y,size,angle+Math.sin(t)*0.20,golds[seed%golds.length],phase,seed+20);
-    // Fine gold glitter trails and crisp four-point twinkles around each wing.
-    for(let j=0;j<3;j++){
-      const a=t*0.72+j*2.094;
-      const sx=x+Math.cos(a)*(size*0.62+j*3);
-      const sy=y+Math.sin(a)*(size*0.55+j*2);
-      effectDisc(frame,sx,sy,1.4+(j%2)*0.7,[255,225,135],205);
-      if((i+j+Math.floor(phase*12))%4===0) drawSparkle(frame,Math.round(sx),Math.round(sy),'star');
+    const t=phase*Math.PI*2+i*1.27;
+    const cx=(bx+Math.sin(t*0.72)*0.022)*frame.width;
+    const cy=(by+Math.cos(t*0.86)*0.028)*frame.height;
+    const flap=0.82+0.18*Math.sin(t*2.4);
+    const a=angle+Math.sin(t)*0.12;
+    const color=golds[seed%golds.length];
+    const wing=(side,upper)=>{
+      const pts=upper
+        ? [[0,0],[side*size*0.18,-size*0.06*flap],[side*size*0.62,-size*0.62*flap],[side*size*0.43,-size*0.08],[side*size*0.15,size*0.05]]
+        : [[0,size*0.03],[side*size*0.37,size*0.04],[side*size*0.48,size*0.40*flap],[side*size*0.12,size*0.28],[side*size*0.05,size*0.12]];
+      effectPolygon(frame,pts.map(([x,y])=>rotatePoint(cx,cy,x,y,a)),color,218);
+      const hi=upper
+        ? [[side*size*0.16,-size*0.09],[side*size*0.37,-size*0.42*flap],[side*size*0.32,-size*0.12]]
+        : [[side*size*0.10,size*0.11],[side*size*0.30,size*0.13],[side*size*0.34,size*0.29]];
+      effectPolygon(frame,hi.map(([x,y])=>rotatePoint(cx,cy,x,y,a)),[255,244,194],175);
+    };
+    wing(-1,true); wing(1,true); wing(-1,false); wing(1,false);
+    const bodyTop=rotatePoint(cx,cy,0,-size*0.26,a), bodyBottom=rotatePoint(cx,cy,0,size*0.31,a);
+    effectRibbonPath(frame,[bodyTop,bodyBottom],Math.max(1.3,size*0.075),[115,72,25],235);
+    for(const side of [-1,1]){
+      const p1=rotatePoint(cx,cy,side*size*0.025,-size*0.23,a);
+      const p2=rotatePoint(cx,cy,side*size*0.14,-size*0.43,a);
+      effectRibbonPath(frame,[p1,p2],0.8,[255,232,155],190);
+    }
+    // A few tiny glints, never large stars over the tree.
+    if(i%2===0){
+      const gx=cx+Math.cos(t*1.2)*size*0.82, gy=cy+Math.sin(t*1.1)*size*0.68;
+      effectDisc(frame,gx,gy,1.1,[255,232,160],155);
     }
   }
-  // Delicate floating gold dust, kept sparse so the tree remains the focal point.
-  for(let i=0;i<26;i++){
-    const t=(phase*0.78+i/26)%1;
-    const x=(0.04+((i*37)%92)/100+Math.sin(t*6+i)*0.012)*frame.width;
-    const y=((i*19)%100/100 + t*0.14)%1*frame.height;
-    const pulse=0.5+0.5*Math.sin(phase*Math.PI*2*2+i*1.7);
-    effectDisc(frame,x,y,0.9+pulse*1.2,[255,211,92],Math.round(70+pulse*125));
-    if(pulse>0.88 && i%3===0) drawSparkle(frame,Math.round(x),Math.round(y),'star');
+  // Sparse fine dust provides a glitter trail without turning into visual noise.
+  for(let i=0;i<15;i++){
+    const t=(phase*0.55+i/15)%1;
+    const x=(0.04+((i*37)%92)/100+Math.sin(t*5+i)*0.009)*frame.width;
+    const y=((i*19)%100/100+t*0.10)%1*frame.height;
+    const pulse=0.5+0.5*Math.sin(phase*Math.PI*2*1.5+i*1.7);
+    effectDisc(frame,x,y,0.7+pulse*0.65,[255,220,125],Math.round(45+pulse*80));
   }
 }
 
@@ -7225,8 +7243,12 @@ async function renderTreeDirectFallback(env, player) {
     // breathing room without changing any other tree set's placement.
     const isGoldenTree = player.equipped?.tree === "golden_tree";
     const isThunderGodTree = player.equipped?.tree === "thunder_god";
+    const isPetalspellTree = player.equipped?.tree === "petalspell";
     const isVoidPrismTree = player.equipped?.tree === "void_prism";
-    const useSetScale = isGoldenTree || isThunderGodTree;
+    // Petalspell needs the same farther-back, smaller composition as the
+    // known-good Golden/Thunder God sets; its wide canopy otherwise crowds
+    // the background and makes the effect feel oversized.
+    const useSetScale = isGoldenTree || isThunderGodTree || isPetalspellTree;
     const treeScale = useSetScale ? 0.66 : (isVoidPrismTree ? 0.82 : 0.9004);
     const treeBox = Math.round(width * treeScale);
     const layer = containRGBA(tree, treeBox, treeBox);
