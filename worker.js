@@ -377,6 +377,10 @@ const IMAGES = {
   voidPrismBackground: "IMG_8373.png",
   voidPrismEffect: "IMG_8379.gif",
   rainbowKitsune: "IMG_8376.png",
+  petalspellTree: "IMG_8383.png",
+  petalspellBackground: "IMG_8384.png",
+  petalspellEffect: "IMG_8386.gif",
+  petalspellBunny: "IMG_8387.png",
   blackCatMagicTree: "IMG_7881.png",
   blackCatMagicBackground: "IMG_7882.png",
   blackCatMagicEffect: "IMG_7883.png",
@@ -758,7 +762,12 @@ const SHOP_ITEMS = {
   void_prism_tree: { name: "🖤🌈 Void Prism Tree", price: 100000, type: "tree", value: "void_prism" },
   void_prism_background: { name: "🌌 Void Prism Background", price: 100000, type: "background", value: "void_prism" },
   void_prism_effect: { name: "🌠 Rainbow Starfall", price: 100000, type: "effect", value: "void_prism" },
-  rainbow_kitsune_decoration: { name: "🦊🌈 Rainbow Kitsune", price: 100000, type: "decoration", value: "rainbow_kitsune" }
+  rainbow_kitsune_decoration: { name: "🦊🌈 Rainbow Kitsune", price: 100000, type: "decoration", value: "rainbow_kitsune" },
+
+  petalspell_tree: { name: "🌸 Petalspell Tree", price: 100000, type: "tree", value: "petalspell" },
+  petalspell_background: { name: "🌷 Petalspell Background", price: 100000, type: "background", value: "petalspell" },
+  petalspell_effect: { name: "🦋 Golden Glitter Butterflies", price: 100000, type: "effect", value: "petalspell" },
+  petalspell_decoration: { name: "🐰 Petal Bunny", price: 100000, type: "decoration", value: "petal_bunny" }
 };
 
 const RIDDLES = [
@@ -3579,6 +3588,9 @@ function getBackgroundImage(player) {
     case "void_prism":
       return IMAGES.voidPrismBackground;
 
+    case "petalspell":
+      return IMAGES.petalspellBackground;
+
     case "black_cat_magic":
       return IMAGES.blackCatMagicBackground;
 
@@ -3674,6 +3686,9 @@ function getTreeImage(player) {
 
     case "void_prism":
       return IMAGES.voidPrismTree;
+
+    case "petalspell":
+      return IMAGES.petalspellTree;
 
     case "black_cat_magic":
       return IMAGES.blackCatMagicTree;
@@ -3772,6 +3787,9 @@ function getDecorationImage(player) {
     case "rainbow_kitsune":
       return IMAGES.rainbowKitsune;
 
+    case "petal_bunny":
+      return IMAGES.petalspellBunny;
+
     default:
       return null;
   }
@@ -3823,9 +3841,9 @@ function getEffectImage(player) {
     case "neon_eclipse":
       return IMAGES.neonEclipseEffect;
 
-    // Void Prism starfall is rendered by the native animated-effect pipeline;
-    // the source GIF is recorded in IMAGES but the PNG compositor cannot decode GIF layers.
+    // GIF-based set effects use the native animated-effect pipeline because the PNG compositor cannot decode GIF layers.
     case "void_prism":
+    case "petalspell":
       return null;
 
     case "black_cat_magic":
@@ -6283,6 +6301,41 @@ function drawAnimatedButterflyGarden(frame, phase=0) {
   }
 }
 
+function drawAnimatedPetalspellButterflies(frame, phase=0) {
+  // Petalspell's uploaded IMG_8386.gif is retained in IMAGES, but this Worker
+  // rasterizer cannot composite GIF layers directly. Recreate the effect as a
+  // native looping gold-butterfly animation so it still renders in /tree.
+  const butterflies = [
+    [0.16,0.23,31,-0.28,0],[0.37,0.38,25,0.40,1],[0.60,0.19,34,-0.34,2],
+    [0.81,0.42,28,0.24,3],[0.75,0.70,25,-0.52,4],[0.25,0.72,30,0.16,5]
+  ];
+  const golds = [[255,190,48],[255,211,92],[225,151,28],[255,224,125]];
+  for (let i=0;i<butterflies.length;i++) {
+    const [bx,by,size,angle,seed]=butterflies[i];
+    const t=phase*Math.PI*2+i*1.18;
+    const x=(bx+Math.sin(t*1.12)*0.052)*frame.width;
+    const y=(by+Math.cos(t*1.28)*0.055)*frame.height;
+    drawButterfly(frame,x,y,size,angle+Math.sin(t)*0.20,golds[seed%golds.length],phase,seed+20);
+    // Fine gold glitter trails and crisp four-point twinkles around each wing.
+    for(let j=0;j<3;j++){
+      const a=t*0.72+j*2.094;
+      const sx=x+Math.cos(a)*(size*0.62+j*3);
+      const sy=y+Math.sin(a)*(size*0.55+j*2);
+      effectDisc(frame,sx,sy,1.4+(j%2)*0.7,[255,225,135],205);
+      if((i+j+Math.floor(phase*12))%4===0) drawSparkle(frame,Math.round(sx),Math.round(sy),'star');
+    }
+  }
+  // Delicate floating gold dust, kept sparse so the tree remains the focal point.
+  for(let i=0;i<26;i++){
+    const t=(phase*0.78+i/26)%1;
+    const x=(0.04+((i*37)%92)/100+Math.sin(t*6+i)*0.012)*frame.width;
+    const y=((i*19)%100/100 + t*0.14)%1*frame.height;
+    const pulse=0.5+0.5*Math.sin(phase*Math.PI*2*2+i*1.7);
+    effectDisc(frame,x,y,0.9+pulse*1.2,[255,211,92],Math.round(70+pulse*125));
+    if(pulse>0.88 && i%3===0) drawSparkle(frame,Math.round(x),Math.round(y),'star');
+  }
+}
+
 function drawAnimatedRainbowTrail(frame, phase=0) {
   const rainbow=[[255,45,75],[255,130,35],[255,225,45],[75,220,105],[65,190,255],[105,105,255],[205,80,245]];
   const paths=[];
@@ -7364,7 +7417,8 @@ if (Number(player.fireBombUntil || 0) > Date.now()) {
     electric_storm_animated: drawAnimatedElectricStorm,
     experimental_effect_animated: drawAnimatedExperimentalEffect,
     // Void Prism uses the native crisp, popping rainbow starfall animation.
-    void_prism: drawAnimatedVoidPrismStarfall
+    void_prism: drawAnimatedVoidPrismStarfall,
+    petalspell: drawAnimatedPetalspellButterflies
   };
   if (animatedEffectDrawers[animatedShopEffect]) {
     const frames=[]; const frameCount=6; const baseData=scene.data.slice();
@@ -9795,6 +9849,17 @@ const REGULAR_SHOP_SETS = [
       ["void_prism_effect", "🌠 Rainbow Starfall", "buy_void_prism_effect"],
       ["rainbow_kitsune_decoration", "🦊🌈 Rainbow Kitsune", "buy_rainbow_kitsune_decoration"]
     ]
+  },
+  {
+    id: "petalspell",
+    label: "🌸 Petalspell",
+    description: "An enchanted blossom-garden collection with golden glitter butterflies and the Petal Bunny.",
+    items: [
+      ["petalspell_tree", "🌸 Petalspell Tree", "buy_petalspell_tree"],
+      ["petalspell_background", "🌷 Petalspell Background", "buy_petalspell_background"],
+      ["petalspell_effect", "🦋 Golden Glitter Butterflies", "buy_petalspell_effect"],
+      ["petalspell_decoration", "🐰 Petal Bunny", "buy_petalspell_decoration"]
+    ]
   }
 ];
 
@@ -10525,6 +10590,7 @@ async function showCustomBackgrounds(
     ["rainbow_reverie_background", "🌈 Rainbow Reverie", "rainbow_reverie"],
     ["neon_eclipse_background", "💚 Neon Eclipse", "neon_eclipse"],
     ["void_prism_background", "🖤🌈 Void Prism", "void_prism"],
+    ["petalspell_background", "🌸 Petalspell", "petalspell"],
     ["black_cat_magic_background", "🐈‍⬛ Black Cat Magic", "black_cat_magic"],
     ["dragon_realm_background", "🐉 Dragon Realm", "dragon_realm"],
     ["inferno_king_background", "🔥 Inferno King", "inferno_king"],
@@ -10613,6 +10679,7 @@ async function showCustomTrees(
     ["rainbow_reverie", "🌈 Rainbow Reverie", "rainbow_reverie_tree"],
     ["neon_eclipse", "💚 Neon Eclipse", "neon_eclipse_tree"],
     ["void_prism", "🖤🌈 Void Prism", "void_prism_tree"],
+    ["petalspell", "🌸 Petalspell", "petalspell_tree"],
     ["black_cat_magic", "🐈‍⬛ Black Cat Magic", "black_cat_magic_tree"],
     ["dragon_realm", "🐉 Dragon Realm", "dragon_realm_tree"],
     ["inferno_king", "🔥 Inferno King", "inferno_king_tree"],
@@ -10688,6 +10755,7 @@ async function showCustomEffects(
   if (player.inventory.includes("rainbow_reverie_effect")) buttons.push(button("🌈 Rainbow Reverie", "equip_effect_rainbow_reverie", player.equipped.effect === "rainbow_reverie" ? 3 : 2));
   if (player.inventory.includes("neon_eclipse_effect")) buttons.push(button("💚 Neon Eclipse", "equip_effect_neon_eclipse", player.equipped.effect === "neon_eclipse" ? 3 : 2));
   if (player.inventory.includes("void_prism_effect")) buttons.push(button("🌠 Rainbow Starfall", "equip_effect_void_prism", player.equipped.effect === "void_prism" ? 3 : 2));
+  if (player.inventory.includes("petalspell_effect")) buttons.push(button("🦋 Golden Glitter Butterflies", "equip_effect_petalspell", player.equipped.effect === "petalspell" ? 3 : 2));
   if (player.inventory.includes("black_cat_magic_effect")) buttons.push(button("🐈‍⬛ Black Cat Magic", "equip_effect_black_cat_magic", player.equipped.effect === "black_cat_magic" ? 3 : 2));
   if (player.inventory.includes("dragon_realm_effect")) buttons.push(button("🐉 Dragon Realm", "equip_effect_dragon_realm", player.equipped.effect === "dragon_realm" ? 3 : 2));
   if (player.inventory.includes("inferno_king_effect")) buttons.push(button("🔥 Inferno King", "equip_effect_inferno_king", player.equipped.effect === "inferno_king" ? 3 : 2));
@@ -10853,7 +10921,8 @@ async function showCustomDecorations(
     ["hedgy_decoration", "🦔 Hedgy", "hedgy"],
     ["rainbow_reverie_decoration", "🌈 Rainbow Reverie Decoration", "rainbow_reverie"],
     ["neon_eclipse_decoration", "💚 Neon Eclipse Decoration", "neon_eclipse"],
-    ["rainbow_kitsune_decoration", "🦊🌈 Rainbow Kitsune", "rainbow_kitsune"]
+    ["rainbow_kitsune_decoration", "🦊🌈 Rainbow Kitsune", "rainbow_kitsune"],
+    ["petalspell_decoration", "🐰 Petal Bunny", "petal_bunny"]
   ];
   for (const [itemId,label,value] of newDecorations) {
     if (player.inventory.includes(itemId)) buttons.push(button(label, `equip_decoration_${value}`, player.equipped.decoration === value ? 3 : 2));
@@ -11000,6 +11069,7 @@ async function equipTheme(
     rainbow_reverie: player.inventory.includes("rainbow_reverie_background"),
     neon_eclipse: player.inventory.includes("neon_eclipse_background"),
     void_prism: player.inventory.includes("void_prism_background"),
+    petalspell: player.inventory.includes("petalspell_background"),
 
     black_cat_magic:
       player.inventory.includes("black_cat_magic_background"),
@@ -11159,6 +11229,7 @@ async function equipTree(
     rainbow_reverie: player.inventory.includes("rainbow_reverie_tree"),
     neon_eclipse: player.inventory.includes("neon_eclipse_tree"),
     void_prism: player.inventory.includes("void_prism_tree"),
+    petalspell: player.inventory.includes("petalspell_tree"),
 
     black_cat_magic:
       player.inventory.includes("black_cat_magic_tree"),
@@ -11257,6 +11328,7 @@ async function equipEffect(
       rainbow_reverie: "rainbow_reverie_effect",
       neon_eclipse: "neon_eclipse_effect",
       void_prism: "void_prism_effect",
+      petalspell: "petalspell_effect",
       black_cat_magic: "black_cat_magic_effect",
       dragon_realm: "dragon_realm_effect",
       inferno_king: "inferno_king_effect",
@@ -11380,7 +11452,8 @@ async function equipDecoration(
 
       rainbow_reverie: "rainbow_reverie_decoration",
       neon_eclipse: "neon_eclipse_decoration",
-      rainbow_kitsune: "rainbow_kitsune_decoration"
+      rainbow_kitsune: "rainbow_kitsune_decoration",
+      petal_bunny: "petalspell_decoration"
     }[decoration];
 
     if (
@@ -11559,6 +11632,10 @@ const INVENTORY_NAMES = {
   glam_tree: "💎 Glam Tree",
   glam_background: "💎 Glam Background",
   glam_effect: "✨ Glam Effect",
+  petalspell_tree: "🌸 Petalspell Tree",
+  petalspell_background: "🌷 Petalspell Background",
+  petalspell_effect: "🦋 Golden Glitter Butterflies",
+  petalspell_decoration: "🐰 Petal Bunny",
   black_cat_magic_tree: "🐈‍⬛ Black Cat Magic Tree",
   black_cat_magic_background: "🐈‍⬛ Black Cat Magic Background",
   black_cat_magic_effect: "✨ Black Cat Magic Effect",
@@ -17814,7 +17891,12 @@ async function handleComponent(
     buy_void_prism_tree: "void_prism_tree",
     buy_void_prism_background: "void_prism_background",
     buy_void_prism_effect: "void_prism_effect",
-    buy_rainbow_kitsune_decoration: "rainbow_kitsune_decoration"
+    buy_rainbow_kitsune_decoration: "rainbow_kitsune_decoration",
+
+    buy_petalspell_tree: "petalspell_tree",
+    buy_petalspell_background: "petalspell_background",
+    buy_petalspell_effect: "petalspell_effect",
+    buy_petalspell_decoration: "petalspell_decoration"
   };
 
   if (
