@@ -30522,21 +30522,36 @@ async function renderFriendsgivingAnimatedTree(env, event = {}) {
     </style></head><body><div id="stage">
       <img id="tree" src="${imageUrl("IMG_8813.png")}">
       <img id="overlay" src="${imageUrl("IMG_8826.gif")}">
-      ${avatars.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%;animation-delay:${(a.index%6)*-0.2}s"><img crossorigin="anonymous" src="${a.url}"></div>`).join("")}
+      ${avatars.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%;animation-delay:${(a.index%6)*-0.2}s"><img src="${a.url}" referrerpolicy="no-referrer"></div>`).join("")}
     </div></body></html>`;
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(async () => {
       await Promise.all(Array.from(document.images).map(async img => {
-        if (!img.complete) await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+        if (!img.complete) await new Promise(resolve => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
         if (img.decode) { try { await img.decode(); } catch (_) {} }
       }));
+      // Restart CSS motion after layout and image decoding have completed.
+      document.querySelectorAll(".leaf").forEach(node => {
+        node.style.animationPlayState = "running";
+      });
     });
     const frames = [];
-    for (let i = 0; i < 12; i++) {
-      await new Promise(resolve => setTimeout(resolve, 160));
+    // Sample long enough to capture multiple frames of the original 9-frame
+    // falling-leaf overlay as well as the gently swaying avatar leaves.
+    for (let i = 0; i < 18; i++) {
+      await new Promise(resolve => setTimeout(resolve, 200));
       frames.push(await page.screenshot({ type: "png" }));
     }
-    return await encodePNGFramesToGIF(frames, width, height, 16);
+    const animatedGif = await encodePNGFramesToGIF(frames, width, height, 20);
+    console.log("Friendsgiving tree rendered:", {
+      contributors: avatars.length,
+      frames: frames.length,
+      gifBytes: animatedGif?.byteLength || 0
+    });
+    return animatedGif;
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
