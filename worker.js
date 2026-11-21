@@ -30636,9 +30636,9 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // Keep the slash command fast and reliable: do not launch Browser Rendering
-  // during an interaction. The persistent channel post is the shared tree;
-  // this ephemeral view provides the count and navigation controls.
+  // Reuse the already-rendered GIF from the persistent channel post.
+  // This keeps the slash command fast and avoids returning the bare PNG,
+  // which cannot show contributor avatar leaves or animation.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
@@ -30647,9 +30647,33 @@ async function showFriendsgiving(env, interaction) {
       content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`."
     });
   }
-  const panel = friendsgivingPanelData(event, `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`);
+
+  let treeImageUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  if (event.channelId && event.messageId) {
+    try {
+      const response = await discordRequest(
+        env,
+        `/channels/${event.channelId}/messages/${event.messageId}`,
+        { method: "GET" }
+      );
+      if (response.ok) {
+        const message = await response.json();
+        const gifAttachment = (message.attachments || []).find(file =>
+          String(file.filename || "").toLowerCase().endsWith(".gif") ||
+          String(file.content_type || "").toLowerCase() === "image/gif"
+        );
+        if (gifAttachment?.url) treeImageUrl = gifAttachment.url;
+      } else {
+        console.error("Friendsgiving tree attachment lookup failed:", response.status, await response.text());
+      }
+    } catch (error) {
+      console.error("Friendsgiving tree attachment lookup error:", error);
+    }
+  }
+
+  const panel = friendsgivingPanelData(event, treeImageUrl);
   return editOriginalResponse(env, interaction, {
-    content: "🍂 Here's the shared Friendsgiving tree! Use **View All Leaves** to read everyone's messages.",
+    content: "🍂 Here's our shared Friendsgiving tree! Use **View All Leaves** to read everyone's messages.",
     embeds: panel.embeds,
     components: panel.components
   });
