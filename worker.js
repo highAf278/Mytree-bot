@@ -30483,6 +30483,77 @@ async function sendHalloweenBook(env, interaction, spread=0) {
    60-second reaction game. The board updates automatically;
    button presses only resolve the creature currently in that hole.
 ========================================================= */
+// Render the original Friendsgiving tree PNG with the original transparent
+// falling-leaf GIF layered over it, using the same Puppeteer frame-capture and
+// PNG-to-GIF encoder already used by the bot's animated artwork.
+async function renderFriendsgivingAnimatedTree(env) {
+  let browser;
+  try {
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    const width = 768, height = 768;
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+      #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
+      #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+      #overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+    </style></head><body><div id="stage">
+      <img id="tree" src="${imageUrl("IMG_8813.png")}">
+      <img id="overlay" src="${imageUrl("IMG_8826.gif")}">
+    </div></body></html>`;
+    await page.setContent(html, { waitUntil: "load" });
+    await page.evaluate(async () => {
+      await Promise.all(Array.from(document.images).map(img =>
+        img.complete ? Promise.resolve() : new Promise(resolve => {
+          img.onload = resolve; img.onerror = resolve;
+        })
+      ));
+    });
+    const frames = [];
+    for (let i = 0; i < 9; i++) {
+      await new Promise(resolve => setTimeout(resolve, 180));
+      frames.push(await page.screenshot({ type: "png" }));
+    }
+    return await encodePNGFramesToGIF(frames, width, height, 18);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
+  const gif = await renderFriendsgivingAnimatedTree(env);
+  const form = new FormData();
+  form.append("payload_json", JSON.stringify({
+    content, components: panel.components, embeds: panel.embeds,
+    attachments: [{ id: 0, filename: "friendsgiving-tree.gif" }]
+  }));
+  form.append("files[0]", new Blob([gif], { type: "image/gif" }), "friendsgiving-tree.gif");
+  const response = await discordRequest(env, `/channels/${channelId}/messages`, {
+    method: "POST", body: form
+  });
+  if (!response.ok) {
+    console.error("Friendsgiving animated tree post failed:", response.status, await response.text());
+    return null;
+  }
+  return response.json();
+}
+
+async function editFriendsgivingTreeMessage(env, channelId, messageId, content, panel) {
+  const gif = await renderFriendsgivingAnimatedTree(env);
+  const form = new FormData();
+  form.append("payload_json", JSON.stringify({
+    content, components: panel.components, embeds: panel.embeds,
+    attachments: [{ id: 0, filename: "friendsgiving-tree.gif" }]
+  }));
+  form.append("files[0]", new Blob([gif], { type: "image/gif" }), "friendsgiving-tree.gif");
+  const response = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, {
+    method: "PATCH", body: form
+  });
+  if (!response.ok) console.error("Friendsgiving animated tree update failed:", response.status, await response.text());
+  return response;
+}
+
 // FRIENDSGIVING 2026 — shared gratitude tree and permanent participation collectible.
 const FRIENDSGIVING_TREE_IMAGE = "IMG_8813.png";
 const FRIENDSGIVING_BOOK_ID = "friendsgiving_2026";
@@ -30497,7 +30568,7 @@ function friendsgivingAvatar(user) {
   return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-function friendsgivingPanelData(event) {
+function friendsgivingPanelData(event, treeImageUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`) {
   const entries = Object.values(event?.contributions || {});
   const open = event?.status === "open";
   const description = entries.length
@@ -30508,7 +30579,7 @@ function friendsgivingPanelData(event) {
       title: "🍂 Friendsgiving 2026 — Our Gratitude Tree",
       description: `${open ? "Add your gratitude to our shared tree!" : "This year's gratitude tree is complete."}\n\n**${entries.length}** ${entries.length === 1 ? "leaf" : "leaves"} on the tree\n\n${description}`.slice(0, 3900),
       color: 0xD88A32,
-      image: { url: `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}` },
+      image: { url: treeImageUrl },
       footer: { text: "Every message adds a leaf to our community tree • Friendsgiving 2026" }
     }, ...entries.slice(0, 9).map(entry => ({
       author: { name: String(entry.name || "Werewife").slice(0, 256), icon_url: entry.avatarUrl },
@@ -30543,8 +30614,18 @@ async function friendsgivingStart(env, interaction) {
     bookId: FRIENDSGIVING_BOOK_ID
   };
   await saveGuildState(env, interaction.guild_id, state);
-  const panel = friendsgivingPanelData(state.friendsgiving);
-  const posted = await sendChannelMessage(env, interaction.channel_id, "🍂 **Friendsgiving 2026 is OPEN!** Add a gratitude leaf to our shared tree. Anyone who submits a message unlocks the permanent Friendsgiving 2026 collectible!", panel.components, { embeds: panel.embeds });
+  const panel = friendsgivingPanelData(state.friendsgiving, "attachment://friendsgiving-tree.gif");
+  let posted = null;
+  try {
+    posted = await sendFriendsgivingTreeMessage(
+      env, interaction.channel_id,
+      "🍂 **Friendsgiving 2026 is OPEN!** Add a gratitude leaf to our shared tree. Anyone who submits a message unlocks the permanent Friendsgiving 2026 collectible!",
+      panel
+    );
+  } catch (error) {
+    console.error("Friendsgiving tree render failed:", error);
+    return sendText(env, interaction, `⚠️ Friendsgiving was opened, but the animated tree couldn't be rendered: ${error?.message || "Unknown rendering error"}`);
+  }
   if (posted?.id) { state.friendsgiving.messageId = posted.id; await saveGuildState(env, interaction.guild_id, state); }
   return sendText(env, interaction, posted ? "🍂 Friendsgiving 2026 is open! The shared tree has been posted in this channel." : "⚠️ The event was opened, but I couldn't post the tree. Check the bot's channel permissions.");
 }
@@ -30557,23 +30638,39 @@ async function friendsgivingClose(env, interaction) {
   event.status = "closed"; event.closedAt = Date.now();
   event.finalized = true;
   await saveGuildState(env, interaction.guild_id, state);
-  const panel = friendsgivingPanelData(event);
+  const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
   if (event.channelId && event.messageId) {
-    await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, {
-      method: "PATCH", body: JSON.stringify({ content: "🍂 **Friendsgiving 2026 is now closed!** Thank you to everyone who shared what they're grateful for.", embeds: panel.embeds, components: panel.components })
-    });
+    await editFriendsgivingTreeMessage(
+      env, event.channelId, event.messageId,
+      "🍂 **Friendsgiving 2026 is now closed!** Thank you to everyone who shared what they're grateful for.",
+      panel
+    );
   }
   return sendText(env, interaction, `🍂 Friendsgiving 2026 is closed and saved as a permanent event keepsake! **${Object.keys(event.contributions || {}).length}** people participated.`);
 }
 
 async function showFriendsgivingModal(env, interaction) {
-  const state = await getGuildState(env, interaction.guild_id);
-  const event = state.friendsgiving;
-  if (!event || event.status !== "open") return sendText(env, interaction, "🍂 Friendsgiving submissions are closed right now.");
-  const user = getUserFromInteraction(interaction);
-  const prior = event.contributions?.[user.id];
-  const modal = { type: 9, data: { custom_id: "friendsgiving:modal", title: "🍂 Your Gratitude Leaf", components: [{ type: 1, components: [{ type: 4, custom_id: "gratitude_message", label: "What are you grateful for?", style: 2, placeholder: "Share something meaningful...", required: true, max_length: 500, ...(prior?.message ? { value: prior.message } : {}) }] }] } };
-  return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(modal) });
+  // A Discord modal must be the initial response. Do not wait for KV before
+  // opening it; the modal-submit handler checks that the event is still open.
+  const modal = {
+    type: 9,
+    data: {
+      custom_id: "friendsgiving:modal",
+      title: "🍂 Your Gratitude Leaf",
+      components: [{
+        type: 1,
+        components: [{
+          type: 4, custom_id: "gratitude_message",
+          label: "What are you grateful for?", style: 2,
+          placeholder: "Share something meaningful...",
+          required: true, max_length: 500
+        }]
+      }]
+    }
+  };
+  return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(modal)
+  });
 }
 
 async function friendsgivingSubmit(env, interaction, message) {
@@ -30603,11 +30700,13 @@ async function friendsgivingSubmit(env, interaction, message) {
   if (newlyUnlocked) player.specialEventBooks.push(FRIENDSGIVING_BOOK_ID);
   await savePlayer(env, player, user.id);
 
-  const panel = friendsgivingPanelData(event);
+  const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
   if (event.channelId && event.messageId) {
-    await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, {
-      method: "PATCH", body: JSON.stringify({ content: "🍂 **Friendsgiving 2026 — Our Gratitude Tree**", embeds: panel.embeds, components: panel.components })
-    });
+    await editFriendsgivingTreeMessage(
+      env, event.channelId, event.messageId,
+      "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
+      panel
+    );
   }
   const reward = newlyUnlocked ? "\n\n📖 **COLLECTIBLE UNLOCKED!** Friendsgiving 2026 has been added to your permanent collection!" : "\n\n📖 You already own the Friendsgiving 2026 collectible — your leaf has been updated!";
   return sendText(env, interaction, `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`);
@@ -34378,6 +34477,11 @@ export default {
     const isCourtCommand =
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
+
+    // Respond to Friendsgiving Add Leaf with a modal before generic ACK/defer.
+    if (interaction.type === 3 && customId === "friendsgiving:add") {
+      return showFriendsgivingModal(env, interaction);
+    }
     const isSparkleShopCommand = interaction.type === 2 && interaction.data?.name === "sparkleshop";
     const isBombCommand = interaction.type === 2 && interaction.data?.name === "bomb";
     const isSparkleShopComponent = interaction.type === 3 && (customId.startsWith("sparkleshop:") || customId.startsWith("sparklepurchase:"));
@@ -34402,7 +34506,7 @@ export default {
     const isCollectionComponent = interaction.type === 3 && customId.startsWith("collection:");
     const isPermanentGameComponent = interaction.type === 3 && (customId.startsWith("talent:") || customId.startsWith("truthpass:"));
     const isBirthdayModal = interaction.type === 5 && customId === "birthday:cursemodal";
-    const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal");
+    const isPermanentGameModal = interaction.type === 5 && (customId === "talent:modal" || customId === "truthpass:modal" || customId === "friendsgiving:modal");
     // Tree buttons can involve KV reads and optional Browser Rendering.
     // Acknowledge them immediately so Discord never leaves the button
     // spinning on "Bot is thinking..." while the tree action finishes.
