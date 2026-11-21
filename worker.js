@@ -30621,18 +30621,23 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
+  // Keep the slash command fast and reliable: do not launch Browser Rendering
+  // during an interaction. The persistent channel post is the shared tree;
+  // this ephemeral view provides the count and navigation controls.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
-  if (!event) return editOriginalResponse(env, interaction, { content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`." });
-  try {
-    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
-    const gif = await renderFriendsgivingAnimatedTree(env, event);
-    return await editFriendsgivingOriginalWithFile(env, interaction, panel, gif);
-  } catch (error) {
-    console.error("Friendsgiving view render failed:", error);
-    return editOriginalResponse(env, interaction, { content: `⚠️ I couldn't render the Friendsgiving tree: ${error?.message || "Unknown rendering error"}` });
+  if (!event) {
+    return editOriginalResponse(env, interaction, {
+      content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`."
+    });
   }
+  const panel = friendsgivingPanelData(event, `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`);
+  return editOriginalResponse(env, interaction, {
+    content: "🍂 Here's the shared Friendsgiving tree! Use **View All Leaves** to read everyone's messages.",
+    embeds: panel.embeds,
+    components: panel.components
+  });
 }
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
@@ -30735,7 +30740,7 @@ async function showFriendsgivingModal(env, interaction) {
   });
 }
 
-async function friendsgivingSubmit(env, interaction, message) {
+async function friendsgivingSubmit(env, interaction, message, ctx) {
   const user = getUserFromInteraction(interaction);
   const text = String(message || "").trim().slice(0, 500);
   if (!text) return sendText(env, interaction, "🍂 Your leaf needs a gratitude message first.");
@@ -30762,16 +30767,31 @@ async function friendsgivingSubmit(env, interaction, message) {
   if (newlyUnlocked) player.specialEventBooks.push(FRIENDSGIVING_BOOK_ID);
   await savePlayer(env, player, user.id);
 
-  const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
-  if (event.channelId && event.messageId) {
-    await editFriendsgivingTreeMessage(
-      env, event.channelId, event.messageId,
-      "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
-      panel
-    );
-  }
   const reward = newlyUnlocked ? "\n\n📖 **COLLECTIBLE UNLOCKED!** Friendsgiving 2026 has been added to your permanent collection!" : "\n\n📖 You already own the Friendsgiving 2026 collectible — your leaf has been updated!";
-  return sendText(env, interaction, `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`);
+  // Finish the user's interaction immediately after the contribution and reward
+  // are safely stored. Browser Rendering/GIF encoding must never hold the
+  // Discord interaction open.
+  const confirmation = await sendText(
+    env,
+    interaction,
+    `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`
+  );
+
+  if (event.channelId && event.messageId && ctx?.waitUntil) {
+    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
+    ctx.waitUntil((async () => {
+      try {
+        await editFriendsgivingTreeMessage(
+          env, event.channelId, event.messageId,
+          "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
+          panel
+        );
+      } catch (error) {
+        console.error("Friendsgiving tree background refresh failed:", error);
+      }
+    })());
+  }
+  return confirmation;
 }
 
 async function handleCommand(
@@ -34562,7 +34582,7 @@ export default {
       interaction.__requestUrl = request.url;
       ctx.waitUntil((async () => {
         try {
-          await friendsgivingSubmit(env, interaction, getModalTextInput(interaction, "gratitude_message"));
+          await friendsgivingSubmit(env, interaction, getModalTextInput(interaction, "gratitude_message"), ctx);
         } catch (error) {
           console.error("Friendsgiving submission failed:", error);
           try {
