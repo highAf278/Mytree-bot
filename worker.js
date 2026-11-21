@@ -30653,6 +30653,9 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
+  // This command must stay fast. The contribution renderer runs after
+  // submissions in the background; /friendsgiving only displays the latest
+  // already-rendered attachment and never launches Browser Rendering itself.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
@@ -30661,18 +30664,35 @@ async function showFriendsgiving(env, interaction) {
       content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`."
     });
   }
-  const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
-  try {
-    const png = await renderFriendsgivingTreeWithLeaves(env, event);
-    return await editFriendsgivingOriginalWithFile(env, interaction, panel, png);
-  } catch (error) {
-    console.error("Friendsgiving tree view render failed:", error);
-    return editOriginalResponse(env, interaction, {
-      content: `⚠️ I couldn't build the tree image: ${error?.message || "Unknown rendering error"}. Your saved messages are still available with **View All Leaves**.`,
-      embeds: [],
-      components: panel.components
-    });
+
+  let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  if (event.channelId && event.messageId) {
+    try {
+      const response = await discordRequest(
+        env,
+        `/channels/${event.channelId}/messages/${event.messageId}`,
+        { method: "GET" }
+      );
+      if (response.ok) {
+        const message = await response.json();
+        const attachment = (message.attachments || []).find(file =>
+          /^friendsgiving-tree\.(png|gif)$/i.test(String(file.filename || ""))
+        );
+        if (attachment?.url) treeUrl = attachment.url;
+      } else {
+        console.error("Friendsgiving latest tree lookup failed:", response.status, await response.text());
+      }
+    } catch (error) {
+      console.error("Friendsgiving latest tree lookup error:", error);
+    }
   }
+
+  const panel = friendsgivingPanelData(event, treeUrl);
+  return editOriginalResponse(env, interaction, {
+    content: "🍂 Your community's gratitude tree is below. Tap **View All Leaves** to read everyone's messages.",
+    embeds: panel.embeds,
+    components: panel.components
+  });
 }
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
