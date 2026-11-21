@@ -30490,48 +30490,82 @@ async function sendHalloweenBook(env, interaction, spread=0) {
 // PNG-to-GIF encoder already used by the bot's animated artwork.
 async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
   let browser;
+  const asDataUri = async (url, fallback = null) => {
+    try {
+      const response = await fetch(url, { cf: { cacheTtl: 300, cacheEverything: true } });
+      if (!response.ok) throw new Error(`Image request returned ${response.status}`);
+      const contentType = response.headers.get("content-type") || "image/png";
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return `data:${contentType};base64,${btoa(binary)}`;
+    } catch (error) {
+      console.error("Friendsgiving image fetch failed:", url, error?.message || error);
+      return fallback;
+    }
+  };
+
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
+    const baseTreeUrl = imageUrl("IMG_8813.png");
+    const baseTreeData = await asDataUri(baseTreeUrl);
+    if (!baseTreeData) throw new Error("The original Friendsgiving tree image could not be loaded.");
+
+    const defaultAvatar = await asDataUri("https://cdn.discordapp.com/embed/avatars/0.png");
     const width = 768, height = 768;
-    await page.setViewport({ width, height, deviceScaleFactor: 1 });
     const avatarPositions = [
       [31,25],[42,19],[53,17],[64,23],[23,36],[36,34],[49,29],[62,34],
       [76,36],[17,48],[30,48],[43,43],[57,43],[70,48],[82,49],[25,60],
       [39,57],[53,55],[67,59],[77,62],[34,69],[49,67],[63,69],[55,77]
     ];
     const entries = Object.values(event?.contributions || {});
-    const avatars = entries.map((entry, index) => ({
-      url: String(entry.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"),
-      x: avatarPositions[index % avatarPositions.length][0],
-      y: avatarPositions[index % avatarPositions.length][1],
-      index
+    const avatars = await Promise.all(entries.map(async (entry, index) => {
+      const url = String(entry.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png");
+      const avatarData = await asDataUri(url, defaultAvatar);
+      return {
+        data: avatarData || defaultAvatar,
+        x: avatarPositions[index % avatarPositions.length][0],
+        y: avatarPositions[index % avatarPositions.length][1],
+        index
+      };
     }));
+
+    browser = await puppeteer.launch(env.BROWSER);
+    const page = await browser.newPage();
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#120b10}
       #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
       #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-      .leaf{position:absolute;width:54px;height:54px;border-radius:50% 50% 45% 50%;
+      .leaf{position:absolute;width:58px;height:58px;border-radius:50% 50% 45% 50%;
         padding:4px;background:linear-gradient(135deg,#fff0b8,#d88724 55%,#78310e);
         box-shadow:0 0 10px #ffbd45,0 2px 6px #160900;transform:translate(-50%,-50%) rotate(-12deg);
         z-index:3}
       .leaf img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
       .leaf:after{content:"";position:absolute;width:15px;height:3px;background:#f5d18a;
-        left:39px;top:43px;transform:rotate(-35deg);border-radius:3px}
+        left:42px;top:46px;transform:rotate(-35deg);border-radius:3px}
     </style></head><body><div id="stage">
-      <img id="tree" src="${imageUrl("IMG_8813.png")}">
-      ${avatars.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%"><img src="${a.url}" referrerpolicy="no-referrer"></div>`).join("")}
+      <img id="tree" src="${baseTreeData}">
+      ${avatars.map(a => a.data ? `<div class="leaf" style="left:${a.x}%;top:${a.y}%"><img src="${a.data}"></div>` : "").join("")}
     </div></body></html>`;
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(async () => {
-      await Promise.all(Array.from(document.images).map(img => new Promise(resolve => {
-        if (img.complete) return resolve();
-        img.addEventListener("load", resolve, { once: true });
-        img.addEventListener("error", resolve, { once: true });
-      })));
+      await Promise.all(Array.from(document.images).map(async img => {
+        if (!img.complete) await new Promise(resolve => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+        if (!img.naturalWidth) throw new Error("A tree or avatar image failed to load.");
+      }));
     });
     const png = await page.screenshot({ type: "png" });
-    console.log("Friendsgiving leaf image rendered:", { contributors: avatars.length, bytes: png?.byteLength || 0 });
+    console.log("Friendsgiving avatar-leaf image rendered:", {
+      contributors: entries.length,
+      avatarsLoaded: avatars.filter(a => Boolean(a.data)).length,
+      bytes: png?.byteLength || 0
+    });
     return png;
   } finally {
     if (browser) await browser.close().catch(() => {});
@@ -30610,9 +30644,9 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
     content: "🍂 Here's our shared Friendsgiving tree!",
     embeds: panel.embeds,
     components: panel.components,
-    attachments: [{ id: 0, filename: "friendsgiving-tree.gif" }]
+    attachments: [{ id: 0, filename: "friendsgiving-tree.png" }]
   }));
-  form.append("files[0]", new Blob([bytes], { type: "image/gif" }), "friendsgiving-tree.gif");
+  form.append("files[0]", new Blob([bytes], { type: "image/png" }), "friendsgiving-tree.png");
   return fetch(`https://discord.com/api/v10/webhooks/${env.CLIENT_ID}/${interaction.token}/messages/@original`, {
     method: "PATCH", body: form
   });
@@ -30627,27 +30661,18 @@ async function showFriendsgiving(env, interaction) {
       content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`."
     });
   }
-  let imageUrlForPanel = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
-  if (event.channelId && event.messageId) {
-    try {
-      const response = await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, { method: "GET" });
-      if (response.ok) {
-        const message = await response.json();
-        const attachment = (message.attachments || []).find(file =>
-          String(file.filename || "").toLowerCase() === "friendsgiving-tree.png"
-        );
-        if (attachment?.url) imageUrlForPanel = attachment.url;
-      }
-    } catch (error) {
-      console.error("Friendsgiving tree image lookup failed:", error);
-    }
+  const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
+  try {
+    const png = await renderFriendsgivingTreeWithLeaves(env, event);
+    return await editFriendsgivingOriginalWithFile(env, interaction, panel, png);
+  } catch (error) {
+    console.error("Friendsgiving tree view render failed:", error);
+    return editOriginalResponse(env, interaction, {
+      content: `⚠️ I couldn't build the tree image: ${error?.message || "Unknown rendering error"}. Your saved messages are still available with **View All Leaves**.`,
+      embeds: [],
+      components: panel.components
+    });
   }
-  const panel = friendsgivingPanelData(event, imageUrlForPanel);
-  return editOriginalResponse(env, interaction, {
-    content: "🍂 Your community's gratitude tree is below. Tap **View All Leaves** to read everyone's messages.",
-    embeds: panel.embeds,
-    components: panel.components
-  });
 }
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
