@@ -30488,7 +30488,7 @@ async function sendHalloweenBook(env, interaction, spread=0) {
 // Render the original Friendsgiving tree PNG with the original transparent
 // falling-leaf GIF layered over it, using the same Puppeteer frame-capture and
 // PNG-to-GIF encoder already used by the bot's animated artwork.
-async function renderFriendsgivingAnimatedTree(env, event = {}) {
+async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
   let browser;
   try {
     browser = await puppeteer.launch(env.BROWSER);
@@ -30508,84 +30508,67 @@ async function renderFriendsgivingAnimatedTree(env, event = {}) {
       index
     }));
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-      *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+      *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#120b10}
       #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
       #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-      #overlay{position:absolute;left:0;top:50%;width:100%;height:auto;object-fit:contain;transform:translateY(-50%);pointer-events:none}
-      .leaf{position:absolute;width:48px;height:48px;border-radius:50% 50% 45% 50%;padding:3px;
-        background:linear-gradient(135deg,#ffe7a3,#c56a19 55%,#7c3211);
-        box-shadow:0 0 9px #ffbd45,0 2px 5px #160900;transform:translate(-50%,-50%) rotate(-12deg);
-        animation:sway 1.8s ease-in-out infinite alternate;z-index:3}
+      .leaf{position:absolute;width:54px;height:54px;border-radius:50% 50% 45% 50%;
+        padding:4px;background:linear-gradient(135deg,#fff0b8,#d88724 55%,#78310e);
+        box-shadow:0 0 10px #ffbd45,0 2px 6px #160900;transform:translate(-50%,-50%) rotate(-12deg);
+        z-index:3}
       .leaf img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
-      .leaf:after{content:"";position:absolute;width:12px;height:2px;background:#f5c66c;left:35px;top:39px;transform:rotate(-35deg);border-radius:2px}
-      @keyframes sway{from{margin-top:-2px;transform:translate(-50%,-50%) rotate(-16deg)}to{margin-top:2px;transform:translate(-50%,-50%) rotate(5deg)}}
+      .leaf:after{content:"";position:absolute;width:15px;height:3px;background:#f5d18a;
+        left:39px;top:43px;transform:rotate(-35deg);border-radius:3px}
     </style></head><body><div id="stage">
       <img id="tree" src="${imageUrl("IMG_8813.png")}">
-      <img id="overlay" src="${imageUrl("IMG_8826.gif")}">
-      ${avatars.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%;animation-delay:${(a.index%6)*-0.2}s"><img src="${a.url}" referrerpolicy="no-referrer"></div>`).join("")}
+      ${avatars.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%"><img src="${a.url}" referrerpolicy="no-referrer"></div>`).join("")}
     </div></body></html>`;
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(async () => {
-      await Promise.all(Array.from(document.images).map(async img => {
-        if (!img.complete) await new Promise(resolve => {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", resolve, { once: true });
-        });
-        if (img.decode) { try { await img.decode(); } catch (_) {} }
-      }));
-      // Restart CSS motion after layout and image decoding have completed.
-      document.querySelectorAll(".leaf").forEach(node => {
-        node.style.animationPlayState = "running";
-      });
+      await Promise.all(Array.from(document.images).map(img => new Promise(resolve => {
+        if (img.complete) return resolve();
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      })));
     });
-    const frames = [];
-    // Sample long enough to capture multiple frames of the original 9-frame
-    // falling-leaf overlay as well as the gently swaying avatar leaves.
-    for (let i = 0; i < 18; i++) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      frames.push(await page.screenshot({ type: "png" }));
-    }
-    const animatedGif = await encodePNGFramesToGIF(frames, width, height, 20);
-    console.log("Friendsgiving tree rendered:", {
-      contributors: avatars.length,
-      frames: frames.length,
-      gifBytes: animatedGif?.byteLength || 0
-    });
-    return animatedGif;
+    const png = await page.screenshot({ type: "png" });
+    console.log("Friendsgiving leaf image rendered:", { contributors: avatars.length, bytes: png?.byteLength || 0 });
+    return png;
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
 }
 async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
-  const gif = await renderFriendsgivingAnimatedTree(env, panel.event);
+  const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
-    content, components: panel.components, embeds: panel.embeds,
-    attachments: [{ id: 0, filename: "friendsgiving-tree.gif" }]
+    content, components: panel.components,
+    embeds: [{ ...panel.embeds[0], image: { url: "attachment://friendsgiving-tree.png" } }],
+    attachments: [{ id: 0, filename: "friendsgiving-tree.png" }]
   }));
-  form.append("files[0]", new Blob([gif], { type: "image/gif" }), "friendsgiving-tree.gif");
+  form.append("files[0]", new Blob([png], { type: "image/png" }), "friendsgiving-tree.png");
   const response = await discordRequest(env, `/channels/${channelId}/messages`, {
     method: "POST", body: form
   });
   if (!response.ok) {
-    console.error("Friendsgiving animated tree post failed:", response.status, await response.text());
+    console.error("Friendsgiving tree image post failed:", response.status, await response.text());
     return null;
   }
   return response.json();
 }
 
 async function editFriendsgivingTreeMessage(env, channelId, messageId, content, panel) {
-  const gif = await renderFriendsgivingAnimatedTree(env, panel.event);
+  const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
-    content, components: panel.components, embeds: panel.embeds,
-    attachments: [{ id: 0, filename: "friendsgiving-tree.gif" }]
+    content, components: panel.components,
+    embeds: [{ ...panel.embeds[0], image: { url: "attachment://friendsgiving-tree.png" } }],
+    attachments: [{ id: 0, filename: "friendsgiving-tree.png" }]
   }));
-  form.append("files[0]", new Blob([gif], { type: "image/gif" }), "friendsgiving-tree.gif");
+  form.append("files[0]", new Blob([png], { type: "image/png" }), "friendsgiving-tree.png");
   const response = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, {
     method: "PATCH", body: form
   });
-  if (!response.ok) console.error("Friendsgiving animated tree update failed:", response.status, await response.text());
+  if (!response.ok) console.error("Friendsgiving tree image update failed:", response.status, await response.text());
   return response;
 }
 
@@ -30636,9 +30619,6 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // Reuse the already-rendered GIF from the persistent channel post.
-  // This keeps the slash command fast and avoids returning the bare PNG,
-  // which cannot show contributor avatar leaves or animation.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
@@ -30647,33 +30627,24 @@ async function showFriendsgiving(env, interaction) {
       content: "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving-start`."
     });
   }
-
-  let treeImageUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  let imageUrlForPanel = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
   if (event.channelId && event.messageId) {
     try {
-      const response = await discordRequest(
-        env,
-        `/channels/${event.channelId}/messages/${event.messageId}`,
-        { method: "GET" }
-      );
+      const response = await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, { method: "GET" });
       if (response.ok) {
         const message = await response.json();
-        const gifAttachment = (message.attachments || []).find(file =>
-          String(file.filename || "").toLowerCase().endsWith(".gif") ||
-          String(file.content_type || "").toLowerCase() === "image/gif"
+        const attachment = (message.attachments || []).find(file =>
+          String(file.filename || "").toLowerCase() === "friendsgiving-tree.png"
         );
-        if (gifAttachment?.url) treeImageUrl = gifAttachment.url;
-      } else {
-        console.error("Friendsgiving tree attachment lookup failed:", response.status, await response.text());
+        if (attachment?.url) imageUrlForPanel = attachment.url;
       }
     } catch (error) {
-      console.error("Friendsgiving tree attachment lookup error:", error);
+      console.error("Friendsgiving tree image lookup failed:", error);
     }
   }
-
-  const panel = friendsgivingPanelData(event, treeImageUrl);
+  const panel = friendsgivingPanelData(event, imageUrlForPanel);
   return editOriginalResponse(env, interaction, {
-    content: "🍂 Here's our shared Friendsgiving tree! Use **View All Leaves** to read everyone's messages.",
+    content: "🍂 Your community's gratitude tree is below. Tap **View All Leaves** to read everyone's messages.",
     embeds: panel.embeds,
     components: panel.components
   });
@@ -30682,8 +30653,12 @@ async function showFriendsgiving(env, interaction) {
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
-  const entries = Object.values(state.friendsgiving?.contributions || {});
-  if (!entries.length) return editOriginalResponse(env, interaction, { content: "🍂 No gratitude leaves have been added yet.", embeds: [], components: [] });
+  const entries = Object.values(state.friendsgiving?.contributions || {})
+    .sort((a, b) => Number(a.submittedAt || 0) - Number(b.submittedAt || 0));
+  if (!entries.length) return editOriginalResponse(env, interaction, {
+    content: "🍂 No gratitude leaves have been added yet. Tap **Add Your Gratitude Leaf** to be the first!",
+    embeds: [], components: []
+  });
   const pageSize = 8;
   const pageCount = Math.ceil(entries.length / pageSize);
   const current = Math.max(0, Math.min(pageCount - 1, Number(page) || 0));
@@ -30816,8 +30791,11 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
     `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`
   );
 
+  // The contribution is already saved and acknowledged. Render the avatar
+  // leaf and refresh the persistent tree post in the background so image work
+  // cannot delay the user's submission confirmation.
   if (event.channelId && event.messageId && ctx?.waitUntil) {
-    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
+    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
     ctx.waitUntil((async () => {
       try {
         await editFriendsgivingTreeMessage(
@@ -30826,7 +30804,7 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
           panel
         );
       } catch (error) {
-        console.error("Friendsgiving tree background refresh failed:", error);
+        console.error("Friendsgiving avatar-leaf tree refresh failed:", error);
       }
     })());
   }
