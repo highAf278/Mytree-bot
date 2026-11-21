@@ -2761,7 +2761,8 @@ async function getGuildState(env, guildId) {
       rumble: null,
       nextChaosAt: 0,
       birthday: null,
-      halloween: null
+      halloween: null,
+      friendsgiving: null
     };
   }
 
@@ -2778,7 +2779,8 @@ async function getGuildState(env, guildId) {
       rumble: null,
       nextChaosAt: 0,
       birthday: null,
-      halloween: null
+      halloween: null,
+      friendsgiving: null
     };
   }
 
@@ -2800,7 +2802,8 @@ async function getGuildState(env, guildId) {
       hunt: null,
       island: null,
       nextChaosAt: 0,
-      halloween: null
+      halloween: null,
+      friendsgiving: null
     };
   }
 }
@@ -16632,6 +16635,8 @@ async function handleComponent(
     interaction.data?.custom_id ||
     "";
 
+  if (id === "friendsgiving:add") return showFriendsgivingModal(env, interaction);
+
   if (id.startsWith("collection:")) {
     const parts=id.split(":");
     if(id==="collection:archive") return halloweenArchive(env,interaction);
@@ -16640,7 +16645,7 @@ async function handleComponent(
     if(id.startsWith("collection:halloween:page:")) return sendHalloweenBook(env,interaction,Number(parts[3]||0));
     if(id==="collection:halloween:unlock") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); return sendText(env,interaction,halloweenUnlockText(p),[row(button("⬅️ Back to Book","collection:halloween",2))]); }
     if(id==="collection:birthday") return showBirthdayCollection(env,interaction);
-    if(id==="collection:special") return sendText(env,interaction,"✨ **SPECIAL EVENTS**\n\nMore permanent event books are coming soon! 🕷️");
+    if(id==="collection:special") { const p=await getPlayer(env,getUserFromInteraction(interaction).id); const owns=Array.isArray(p.specialEventBooks)&&p.specialEventBooks.includes(FRIENDSGIVING_BOOK_ID); return sendText(env,interaction,`✨ **SPECIAL EVENTS**\n\n${owns ? "🍂 **Friendsgiving 2026** — Unlocked! Your gratitude tree keepsake is in your collection.\n\n" : "🍂 **Friendsgiving 2026** — Participate in the gratitude tree to unlock this book.\n\n"}More special event books will appear here!`); }
   }
   if (id.startsWith("millionaire:")) return millionaireComponent(env, interaction);
   if (id.startsWith("bomb:")) return handleBombComponent(env, interaction);
@@ -30478,6 +30483,136 @@ async function sendHalloweenBook(env, interaction, spread=0) {
    60-second reaction game. The board updates automatically;
    button presses only resolve the creature currently in that hole.
 ========================================================= */
+// FRIENDSGIVING 2026 — shared gratitude tree and permanent participation collectible.
+const FRIENDSGIVING_TREE_IMAGE = "IMG_8813.png";
+const FRIENDSGIVING_BOOK_ID = "friendsgiving_2026";
+
+function friendsgivingAvatar(user) {
+  if (!user?.id) return "https://cdn.discordapp.com/embed/avatars/0.png";
+  if (user.avatar) {
+    const ext = String(user.avatar).startsWith("a_") ? "gif" : "png";
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${ext}?size=128`;
+  }
+  const index = Number(BigInt(user.id) >> 22n) % 6n;
+  return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
+
+function friendsgivingPanelData(event) {
+  const entries = Object.values(event?.contributions || {});
+  const open = event?.status === "open";
+  const description = entries.length
+    ? entries.slice(0, 20).map((entry, i) => `**${i + 1}. ${String(entry.name || "Werewife").replace(/([*_`~|])/g, "\\$1").slice(0, 32)}**\n${String(entry.message || "").slice(0, 220)}`).join("\n\n")
+    : "No gratitude leaves yet. Be the first to add yours! 🍂";
+  return {
+    embeds: [{
+      title: "🍂 Friendsgiving 2026 — Our Gratitude Tree",
+      description: `${open ? "Add your gratitude to our shared tree!" : "This year's gratitude tree is complete."}\n\n**${entries.length}** ${entries.length === 1 ? "leaf" : "leaves"} on the tree\n\n${description}`.slice(0, 3900),
+      color: 0xD88A32,
+      image: { url: `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}` },
+      footer: { text: "Every message adds a leaf to our community tree • Friendsgiving 2026" }
+    }, ...entries.slice(0, 9).map(entry => ({
+      author: { name: String(entry.name || "Werewife").slice(0, 256), icon_url: entry.avatarUrl },
+      description: String(entry.message || "").slice(0, 2000),
+      color: 0xC8792C
+    }))],
+    components: [row(button("🍂 Add Your Gratitude Leaf", "friendsgiving:add", 3, !open))]
+  };
+}
+
+async function showFriendsgiving(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const event = state.friendsgiving;
+  if (!event) return sendText(env, interaction, "🍂 Friendsgiving 2026 hasn't been opened yet. The owner can start it with `/friendsgiving start`.");
+  const data = friendsgivingPanelData(event);
+  const response = interaction.__deferred
+    ? await editOriginalResponse(env, interaction, { content: "", ...data })
+    : await fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: 4, data }) });
+  if (!response.ok) console.error("Friendsgiving panel failed:", response.status, await response.text());
+  return response;
+}
+
+async function friendsgivingStart(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const existing = state.friendsgiving;
+  if (existing?.status === "open") return sendText(env, interaction, "🍂 Friendsgiving submissions are already open! Use `/friendsgiving` to view the tree.");
+  state.friendsgiving = {
+    status: "open", openedAt: Date.now(), closedAt: null,
+    channelId: interaction.channel_id || null, messageId: null,
+    contributions: existing?.contributions || {},
+    bookId: FRIENDSGIVING_BOOK_ID
+  };
+  await saveGuildState(env, interaction.guild_id, state);
+  const panel = friendsgivingPanelData(state.friendsgiving);
+  const posted = await sendChannelMessage(env, interaction.channel_id, "🍂 **Friendsgiving 2026 is OPEN!** Add a gratitude leaf to our shared tree. Anyone who submits a message unlocks the permanent Friendsgiving 2026 collectible!", panel.components, { embeds: panel.embeds });
+  if (posted?.id) { state.friendsgiving.messageId = posted.id; await saveGuildState(env, interaction.guild_id, state); }
+  return sendText(env, interaction, posted ? "🍂 Friendsgiving 2026 is open! The shared tree has been posted in this channel." : "⚠️ The event was opened, but I couldn't post the tree. Check the bot's channel permissions.");
+}
+
+async function friendsgivingClose(env, interaction) {
+  if (!(await requireOwner(env, interaction))) return;
+  const state = await getGuildState(env, interaction.guild_id);
+  const event = state.friendsgiving;
+  if (!event || event.status !== "open") return sendText(env, interaction, "🍂 There isn't an open Friendsgiving event to close.");
+  event.status = "closed"; event.closedAt = Date.now();
+  event.finalized = true;
+  await saveGuildState(env, interaction.guild_id, state);
+  const panel = friendsgivingPanelData(event);
+  if (event.channelId && event.messageId) {
+    await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, {
+      method: "PATCH", body: JSON.stringify({ content: "🍂 **Friendsgiving 2026 is now closed!** Thank you to everyone who shared what they're grateful for.", embeds: panel.embeds, components: panel.components })
+    });
+  }
+  return sendText(env, interaction, `🍂 Friendsgiving 2026 is closed and saved as a permanent event keepsake! **${Object.keys(event.contributions || {}).length}** people participated.`);
+}
+
+async function showFriendsgivingModal(env, interaction) {
+  const state = await getGuildState(env, interaction.guild_id);
+  const event = state.friendsgiving;
+  if (!event || event.status !== "open") return sendText(env, interaction, "🍂 Friendsgiving submissions are closed right now.");
+  const user = getUserFromInteraction(interaction);
+  const prior = event.contributions?.[user.id];
+  const modal = { type: 9, data: { custom_id: "friendsgiving:modal", title: "🍂 Your Gratitude Leaf", components: [{ type: 1, components: [{ type: 4, custom_id: "gratitude_message", label: "What are you grateful for?", style: 2, placeholder: "Share something meaningful...", required: true, max_length: 500, ...(prior?.message ? { value: prior.message } : {}) }] }] } };
+  return fetch(`https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(modal) });
+}
+
+async function friendsgivingSubmit(env, interaction, message) {
+  const user = getUserFromInteraction(interaction);
+  const text = String(message || "").trim().slice(0, 500);
+  if (!text) return sendText(env, interaction, "🍂 Your leaf needs a gratitude message first.");
+  const state = await getGuildState(env, interaction.guild_id);
+  const event = state.friendsgiving;
+  if (!event || event.status !== "open") return sendText(env, interaction, "🍂 Friendsgiving submissions are closed.");
+  event.contributions = event.contributions || {};
+  const existed = Boolean(event.contributions[user.id]);
+  event.contributions[user.id] = {
+    userId: user.id,
+    name: String(interaction.member?.nick || user.global_name || user.username || "Werewife").slice(0, 32),
+    username: user.username || "",
+    avatarUrl: friendsgivingAvatar(user),
+    message: text,
+    submittedAt: event.contributions[user.id]?.submittedAt || Date.now(),
+    updatedAt: Date.now()
+  };
+  await saveGuildState(env, interaction.guild_id, state);
+
+  // Award once per account; edits never duplicate the collectible.
+  const player = await getPlayer(env, user.id);
+  player.specialEventBooks = Array.isArray(player.specialEventBooks) ? player.specialEventBooks : [];
+  const newlyUnlocked = !player.specialEventBooks.includes(FRIENDSGIVING_BOOK_ID);
+  if (newlyUnlocked) player.specialEventBooks.push(FRIENDSGIVING_BOOK_ID);
+  await savePlayer(env, player, user.id);
+
+  const panel = friendsgivingPanelData(event);
+  if (event.channelId && event.messageId) {
+    await discordRequest(env, `/channels/${event.channelId}/messages/${event.messageId}`, {
+      method: "PATCH", body: JSON.stringify({ content: "🍂 **Friendsgiving 2026 — Our Gratitude Tree**", embeds: panel.embeds, components: panel.components })
+    });
+  }
+  const reward = newlyUnlocked ? "\n\n📖 **COLLECTIBLE UNLOCKED!** Friendsgiving 2026 has been added to your permanent collection!" : "\n\n📖 You already own the Friendsgiving 2026 collectible — your leaf has been updated!";
+  return sendText(env, interaction, `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`);
+}
+
 async function handleCommand(
   env,
   interaction
@@ -30486,6 +30621,7 @@ async function handleCommand(
     interaction.data?.name;
 
   if (name === "collections") { await halloweenArchive(env, interaction); return; }
+  if (name === "friendsgiving") { const action = String(getOption(interaction, "action") || "view"); if (action === "start") await friendsgivingStart(env, interaction); else if (action === "close") await friendsgivingClose(env, interaction); else await showFriendsgiving(env, interaction); return; }
 
   if (name === "news") { await handleNewsCommand(env, interaction); return; }
   if (name === "blacklist") { await handleBlacklistCommand(env, interaction); return; }
@@ -32797,6 +32933,9 @@ async function handlePastelRules(env,interaction){await sendEphemeralFollowup(en
 
 const COMMANDS = [
   { name: "collections", description: "Open the permanent event collection archive" },
+  { name: "friendsgiving", description: "View the shared Friendsgiving tree or manage the event", options: [
+    { type: 3, name: "action", description: "Optional event action (leave blank to view the tree)", required: false, choices: [{ name: "View tree", value: "view" }, { name: "Start event (owner)", value: "start" }, { name: "Close event (owner)", value: "close" }] }
+  ] },
   {
     name: "birthday",
     description: "Open the Birthday Party hub"
@@ -34496,6 +34635,11 @@ export default {
     // clicked repeatedly.
     if (interaction.type === 3 && customId === "birthday:curseinput") {
       return showBirthdayCurseModal(env, interaction);
+    }
+
+    // Friendsgiving leaf modal is submitted once per participant; edits reuse the same leaf.
+    if (interaction.type === 5 && customId === "friendsgiving:modal") {
+      return friendsgivingSubmit(env, interaction, getModalTextInput(interaction, "gratitude_message"));
     }
 
     // Talent Show text submissions must open a modal as the initial response.
