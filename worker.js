@@ -30720,13 +30720,9 @@ async function handleCommand(
     interaction.data?.name;
 
   if (name === "collections") { await halloweenArchive(env, interaction); return; }
-  if (name === "friendsgiving") {
-    const subcommand = interaction.data?.options?.find(option => option.type === 1)?.name || "view";
-    if (subcommand === "start") await friendsgivingStart(env, interaction);
-    else if (subcommand === "end" || subcommand === "close") await friendsgivingClose(env, interaction);
-    else await showFriendsgiving(env, interaction);
-    return;
-  }
+  if (name === "friendsgiving") { await showFriendsgiving(env, interaction); return; }
+  if (name === "friendsgiving-start") { await friendsgivingStart(env, interaction); return; }
+  if (name === "friendsgiving-end") { await friendsgivingClose(env, interaction); return; }
 
   if (name === "news") { await handleNewsCommand(env, interaction); return; }
   if (name === "blacklist") { await handleBlacklistCommand(env, interaction); return; }
@@ -33038,10 +33034,9 @@ async function handlePastelRules(env,interaction){await sendEphemeralFollowup(en
 
 const COMMANDS = [
   { name: "collections", description: "Open the permanent event collection archive" },
-  { name: "friendsgiving", description: "View the shared Friendsgiving gratitude tree", options: [
-    { type: 1, name: "start", description: "Open Friendsgiving submissions (bot owner only)" },
-    { type: 1, name: "end", description: "Close Friendsgiving submissions (bot owner only)" }
-  ] },
+  { name: "friendsgiving", description: "View the shared Friendsgiving gratitude tree" },
+  { name: "friendsgiving-start", description: "Open Friendsgiving submissions (bot owner only)" },
+  { name: "friendsgiving-end", description: "Close Friendsgiving submissions (bot owner only)" },
   {
     name: "birthday",
     description: "Open the Birthday Party hub"
