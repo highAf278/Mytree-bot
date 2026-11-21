@@ -30497,18 +30497,24 @@ async function renderFriendsgivingAnimatedTree(env) {
       *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
       #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
       #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-      #overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+      #overlay{position:absolute;left:0;top:50%;width:100%;height:auto;object-fit:contain;transform:translateY(-50%);pointer-events:none}
     </style></head><body><div id="stage">
       <img id="tree" src="${imageUrl("IMG_8813.png")}">
       <img id="overlay" src="${imageUrl("IMG_8826.gif")}">
     </div></body></html>`;
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(async () => {
-      await Promise.all(Array.from(document.images).map(img =>
-        img.complete ? Promise.resolve() : new Promise(resolve => {
-          img.onload = resolve; img.onerror = resolve;
-        })
-      ));
+      await Promise.all(Array.from(document.images).map(async img => {
+        if (!img.complete) {
+          await new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        }
+        if (img.decode) {
+          try { await img.decode(); } catch (_) {}
+        }
+      }));
     });
     const frames = [];
     for (let i = 0; i < 9; i++) {
@@ -34473,9 +34479,47 @@ export default {
       interaction.type === 2 && (interaction.data?.name === "court" || interaction.data?.name === "court-leaderboard");
     const customId = String(interaction.data?.custom_id || "");
 
-    // Respond to Friendsgiving Add Leaf with a modal before generic ACK/defer.
+    // Opening a modal must be the initial response to the button interaction.
     if (interaction.type === 3 && customId === "friendsgiving:add") {
       return showFriendsgivingModal(env, interaction);
+    }
+
+    // Acknowledge the gratitude modal immediately. Saving the contribution,
+    // awarding the collectible, and re-rendering the animated tree can take
+    // longer than Discord's 3-second interaction deadline.
+    if (interaction.type === 5 && customId === "friendsgiving:modal") {
+      const ack = await fetch(
+        `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 5, data: { flags: 64 } })
+        }
+      );
+      if (!ack.ok) {
+        console.error("Friendsgiving modal acknowledgement failed:", ack.status, await ack.text());
+        return new Response("OK", { status: 200 });
+      }
+      interaction.__deferred = true;
+      interaction.__deferredUpdate = false;
+      interaction.__deferredEphemeral = true;
+      interaction.__requestUrl = request.url;
+      ctx.waitUntil((async () => {
+        try {
+          await friendsgivingSubmit(env, interaction, getModalTextInput(interaction, "gratitude_message"));
+        } catch (error) {
+          console.error("Friendsgiving submission failed:", error);
+          try {
+            await editOriginalResponse(env, interaction, {
+              content: `❌ Your gratitude leaf couldn't be saved: ${error?.message || "Unknown error"}`,
+              components: []
+            });
+          } catch (editError) {
+            console.error("Could not report Friendsgiving submission error:", editError);
+          }
+        }
+      })());
+      return new Response("OK", { status: 200 });
     }
     const isSparkleShopCommand = interaction.type === 2 && interaction.data?.name === "sparkleshop";
     const isBombCommand = interaction.type === 2 && interaction.data?.name === "bomb";
@@ -34741,11 +34785,6 @@ export default {
     // clicked repeatedly.
     if (interaction.type === 3 && customId === "birthday:curseinput") {
       return showBirthdayCurseModal(env, interaction);
-    }
-
-    // Friendsgiving leaf modal is submitted once per participant; edits reuse the same leaf.
-    if (interaction.type === 5 && customId === "friendsgiving:modal") {
-      return friendsgivingSubmit(env, interaction, getModalTextInput(interaction, "gratitude_message"));
     }
 
     // Talent Show text submissions must open a modal as the initial response.
