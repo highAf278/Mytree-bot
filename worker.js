@@ -30836,22 +30836,43 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
     `${existed ? "🍂 Your gratitude leaf has been updated!" : "🍂 Your gratitude leaf has been added to the tree!"}${reward}`
   );
 
-  // The contribution is already saved and acknowledged. Render the avatar
-  // leaf and refresh the persistent tree post in the background so image work
-  // cannot delay the user's submission confirmation.
-  if (event.channelId && event.messageId && ctx?.waitUntil) {
-    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
-    ctx.waitUntil((async () => {
-      try {
-        await editFriendsgivingTreeMessage(
-          env, event.channelId, event.messageId,
-          "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
-          panel
-        );
-      } catch (error) {
-        console.error("Friendsgiving avatar-leaf tree refresh failed:", error);
+  // The modal router already runs friendsgivingSubmit inside ONE outer
+  // ctx.waitUntil task after Discord has acknowledged the modal. Do not create
+  // a nested waitUntil here: nested background tasks are not a reliable way to
+  // keep Cloudflare work alive. Await the image update inside the existing task.
+  if (!event.channelId || !event.messageId) {
+    console.error("Friendsgiving tree refresh skipped: missing channel/message ID", {
+      guildId: interaction.guild_id,
+      channelId: event.channelId || null,
+      messageId: event.messageId || null,
+      contributionCount: Object.keys(event.contributions || {}).length
+    });
+  } else {
+    try {
+      const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
+      const updateResponse = await editFriendsgivingTreeMessage(
+        env, event.channelId, event.messageId,
+        "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
+        panel
+      );
+      if (!updateResponse?.ok) {
+        console.error("Friendsgiving tree refresh returned a failure status", {
+          status: updateResponse?.status || "no response",
+          guildId: interaction.guild_id,
+          channelId: event.channelId,
+          messageId: event.messageId,
+          contributionCount: Object.keys(event.contributions || {}).length
+        });
+      } else {
+        console.log("Friendsgiving tree refreshed successfully", {
+          guildId: interaction.guild_id,
+          contributionCount: Object.keys(event.contributions || {}).length,
+          avatarUrl: event.contributions[user.id]?.avatarUrl || null
+        });
       }
-    })());
+    } catch (error) {
+      console.error("Friendsgiving avatar-leaf tree refresh failed:", error);
+    }
   }
   return confirmation;
 }
