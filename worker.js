@@ -2808,15 +2808,30 @@ async function getGuildState(env, guildId) {
   }
 }
 
+// Discord snowflake IDs are numeric strings. Reject missing values and
+// accidental strings such as "undefined" before they reach Discord or KV.
+function isValidDiscordGuildId(guildId) {
+  return /^\d{17,20}$/.test(String(guildId ?? ""));
+}
+
 async function saveGuildState(env, guildId, state) {
+  if (!isValidDiscordGuildId(guildId)) {
+    console.error("Blocked saveGuildState with invalid guild ID:", guildId);
+    return false;
+  }
+
   await env.TREE_DATA.put(
     `guild:${guildId}`,
     JSON.stringify(state)
   );
+  return true;
 }
 
 async function rememberGuild(env, guildId) {
-  if (!guildId) return;
+  if (!isValidDiscordGuildId(guildId)) {
+    console.warn("Skipped rememberGuild with invalid guild ID:", guildId);
+    return;
+  }
 
   const state =
     await getGuildState(
@@ -7750,7 +7765,10 @@ async function announceChaos(
 }
 
 async function getGuildMembers(env, guildId) {
-  if (!guildId) return [];
+  if (!isValidDiscordGuildId(guildId)) {
+    console.warn("Skipped guild member lookup with invalid guild ID:", guildId);
+    return [];
+  }
 
   const members = [];
   let after = "";
@@ -27387,7 +27405,12 @@ async function getKnownGuildIds(env) {
       const page = await env.TREE_DATA.list({ prefix: "guild:", limit: 1000, cursor });
       for (const key of page.keys || []) {
         const id = String(key.name || "").slice("guild:".length);
-        if (id) ids.add(id);
+        // Ignore malformed/stale KV keys such as guild:undefined.
+        if (isValidDiscordGuildId(id)) {
+          ids.add(id);
+        } else if (id) {
+          console.warn("Ignoring invalid guild KV key:", key.name);
+        }
       }
       cursor = page.list_complete ? undefined : page.cursor;
     } while (cursor);
@@ -34211,7 +34234,10 @@ async function processRumbleTimers(env) {
   const rawGuilds = await env.TREE_DATA.list({ prefix: "guild:" });
   for (const key of rawGuilds.keys || []) {
     const guildId = String(key.name || "").slice(6);
-    if (!guildId) continue;
+    if (!isValidDiscordGuildId(guildId)) {
+      if (guildId) console.warn("Skipping Rumble timer for invalid guild key:", key.name);
+      continue;
+    }
     try {
       const state = await getGuildState(env, guildId);
       const game = state.rumble;
