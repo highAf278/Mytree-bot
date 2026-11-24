@@ -30807,9 +30807,6 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // This command must stay fast. The contribution renderer runs after
-  // submissions in the background; /friendsgiving only displays the latest
-  // already-rendered attachment and never launches Browser Rendering itself.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
@@ -30819,8 +30816,35 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
+  // IMPORTANT: Re-render the shared tree whenever /friendsgiving is opened.
+  // This repairs a stale Discord attachment even if an earlier background
+  // refresh failed or the bot was redeployed after a contribution was saved.
   let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
   if (event.channelId && event.messageId) {
+    try {
+      const refreshPanel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
+      const refresh = await editFriendsgivingTreeMessage(
+        env,
+        event.channelId,
+        event.messageId,
+        event.status === "open"
+          ? "🍂 **Friendsgiving 2026 — Our Gratitude Tree**"
+          : "🍂 **Friendsgiving 2026 — Our Gratitude Tree (Complete)**",
+        refreshPanel
+      );
+      if (!refresh?.ok) {
+        const detail = refresh ? await refresh.text().catch(() => "") : "No response from Discord";
+        console.error("Friendsgiving /friendsgiving repair refresh failed:", refresh?.status, detail);
+      }
+    } catch (error) {
+      console.error("Friendsgiving /friendsgiving repair render failed:", error);
+      return editOriginalResponse(env, interaction, {
+        content: `⚠️ I saved everyone's gratitude, but couldn't rebuild the tree image: ${error?.message || "Unknown rendering error"}. The contributions are safe; please try /friendsgiving again after the image issue is fixed.`,
+        embeds: [],
+        components: []
+      });
+    }
+
     try {
       const response = await discordRequest(
         env,
@@ -30830,14 +30854,14 @@ async function showFriendsgiving(env, interaction) {
       if (response.ok) {
         const message = await response.json();
         const attachment = (message.attachments || []).find(file =>
-          /^friendsgiving-tree\.(png|gif)$/i.test(String(file.filename || ""))
+          /^friendsgiving-tree\.png$/i.test(String(file.filename || ""))
         );
         if (attachment?.url) treeUrl = attachment.url;
       } else {
-        console.error("Friendsgiving latest tree lookup failed:", response.status, await response.text());
+        console.error("Friendsgiving refreshed tree lookup failed:", response.status, await response.text());
       }
     } catch (error) {
-      console.error("Friendsgiving latest tree lookup error:", error);
+      console.error("Friendsgiving refreshed tree lookup error:", error);
     }
   }
 
