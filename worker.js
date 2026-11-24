@@ -30807,10 +30807,9 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // Respond quickly: never launch Puppeteer or rebuild the image during the
-  // slash-command request. The contribution handler refreshes the shared
-  // message after each submission. This prevents Discord's loading state
-  // from appearing to hang while remote images/browser rendering complete.
+  // Defer first so Discord does not time out while Browser Rendering rebuilds
+  // the image. Unlike the previous version, this command explicitly refreshes
+  // the persistent tree message instead of reusing its possibly stale image.
   await deferInteraction(env, interaction, { ephemeral: true });
 
   const state = await getGuildState(env, interaction.guild_id);
@@ -30821,34 +30820,40 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
-  let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
-  if (event.channelId && event.messageId) {
-    try {
-      const response = await discordRequest(
-        env,
-        `/channels/${event.channelId}/messages/${event.messageId}`,
-        { method: "GET" }
-      );
-      if (response.ok) {
-        const message = await response.json();
-        const attachment = (message.attachments || []).find(file =>
-          /^friendsgiving-tree\.png$/i.test(String(file.filename || ""))
-        );
-        if (attachment?.url) treeUrl = attachment.url;
-      } else {
-        console.error("Friendsgiving tree message lookup failed:", response.status, await response.text());
-      }
-    } catch (error) {
-      console.error("Friendsgiving tree message lookup error:", error);
-    }
+  if (!event.channelId || !event.messageId) {
+    return editOriginalResponse(env, interaction, {
+      content: "⚠️ I found the Friendsgiving entries, but the original tree message ID is missing. The event needs to be reopened with `/friendsgiving-start` before I can update its picture."
+    });
   }
 
-  const panel = friendsgivingPanelData(event, treeUrl);
-  return editOriginalResponse(env, interaction, {
-    content: "🍂 Your community's gratitude tree is below. Tap **View All Leaves** to read everyone's messages.",
-    embeds: panel.embeds,
-    components: panel.components
-  });
+  try {
+    // Re-render from the saved contributions every time /friendsgiving is run.
+    // This also makes rendering / R2 asset failures visible to the user.
+    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
+    const refreshed = await editFriendsgivingTreeMessage(
+      env,
+      event.channelId,
+      event.messageId,
+      "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
+      panel
+    );
+
+    if (!refreshed?.ok) {
+      const detail = refreshed
+        ? await refreshed.text().catch(() => "")
+        : "No response from Discord";
+      throw new Error(`Discord rejected the tree image update (${refreshed?.status || "no status"}): ${detail.slice(0, 700)}`);
+    }
+
+    return editOriginalResponse(env, interaction, {
+      content: `🍂 I rebuilt the shared tree from the saved entries! **${Object.keys(event.contributions || {}).length}** ${Object.keys(event.contributions || {}).length === 1 ? "leaf" : "leaves"} are included. Check the original Friendsgiving post in this channel.`
+    });
+  } catch (error) {
+    console.error("Friendsgiving manual tree refresh failed:", error);
+    return editOriginalResponse(env, interaction, {
+      content: `⚠️ I found the saved gratitude entries, but couldn't rebuild the tree image: ${String(error?.message || error).slice(0, 1200)}`
+    });
+  }
 }
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
