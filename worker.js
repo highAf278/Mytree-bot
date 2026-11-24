@@ -30692,15 +30692,15 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
     await page.setContent(html, { waitUntil: "load" });
 
     await page.evaluate(async () => {
+      // decode() cannot miss a load event if an image finishes between checks.
       await Promise.all(Array.from(document.images).map(async img => {
-        if (!img.complete) {
-          await new Promise(resolve => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          });
+        try {
+          await img.decode();
+        } catch (error) {
+          throw new Error(`Friendsgiving image failed to decode: ${img.currentSrc || img.src}`);
         }
         if (!img.naturalWidth) {
-          throw new Error(`Friendsgiving image failed to load: ${img.currentSrc || img.src}`);
+          throw new Error(`Friendsgiving image has no decoded pixels: ${img.currentSrc || img.src}`);
         }
       }));
     });
@@ -30807,7 +30807,12 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
+  // Respond quickly: never launch Puppeteer or rebuild the image during the
+  // slash-command request. The contribution handler refreshes the shared
+  // message after each submission. This prevents Discord's loading state
+  // from appearing to hang while remote images/browser rendering complete.
   await deferInteraction(env, interaction, { ephemeral: true });
+
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
   if (!event) {
@@ -30816,35 +30821,8 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
-  // IMPORTANT: Re-render the shared tree whenever /friendsgiving is opened.
-  // This repairs a stale Discord attachment even if an earlier background
-  // refresh failed or the bot was redeployed after a contribution was saved.
   let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
   if (event.channelId && event.messageId) {
-    try {
-      const refreshPanel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
-      const refresh = await editFriendsgivingTreeMessage(
-        env,
-        event.channelId,
-        event.messageId,
-        event.status === "open"
-          ? "🍂 **Friendsgiving 2026 — Our Gratitude Tree**"
-          : "🍂 **Friendsgiving 2026 — Our Gratitude Tree (Complete)**",
-        refreshPanel
-      );
-      if (!refresh?.ok) {
-        const detail = refresh ? await refresh.text().catch(() => "") : "No response from Discord";
-        console.error("Friendsgiving /friendsgiving repair refresh failed:", refresh?.status, detail);
-      }
-    } catch (error) {
-      console.error("Friendsgiving /friendsgiving repair render failed:", error);
-      return editOriginalResponse(env, interaction, {
-        content: `⚠️ I saved everyone's gratitude, but couldn't rebuild the tree image: ${error?.message || "Unknown rendering error"}. The contributions are safe; please try /friendsgiving again after the image issue is fixed.`,
-        embeds: [],
-        components: []
-      });
-    }
-
     try {
       const response = await discordRequest(
         env,
@@ -30858,10 +30836,10 @@ async function showFriendsgiving(env, interaction) {
         );
         if (attachment?.url) treeUrl = attachment.url;
       } else {
-        console.error("Friendsgiving refreshed tree lookup failed:", response.status, await response.text());
+        console.error("Friendsgiving tree message lookup failed:", response.status, await response.text());
       }
     } catch (error) {
-      console.error("Friendsgiving refreshed tree lookup error:", error);
+      console.error("Friendsgiving tree message lookup error:", error);
     }
   }
 
