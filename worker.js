@@ -30485,36 +30485,34 @@ async function sendHalloweenBook(env, interaction, spread=0) {
    60-second reaction game. The board updates automatically;
    button presses only resolve the creature currently in that hole.
 ========================================================= */
-// Render the original Friendsgiving tree PNG with the original transparent
-// falling-leaf GIF layered over it, using the same Puppeteer frame-capture and
-// PNG-to-GIF encoder already used by the bot's animated artwork.
+// Friendsgiving custom leaf artwork stored in the public R2 bucket.
+// Each contributor keeps the same assigned leaf when editing their message.
+const FRIENDSGIVING_LEAF_IMAGES = [
+  "IMG_8816.png",
+  "IMG_8817.png",
+  "IMG_8818.png",
+  "IMG_8820.png",
+  "IMG_8821.png",
+  "IMG_8822.png",
+  "IMG_8823.png",
+  "IMG_8824.png"
+];
+
+// Render the Friendsgiving tree with a custom R2 leaf and the contributor's
+// Discord avatar composited together at each leaf position.
 async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
   let browser;
-
   const asDataUri = async (url, fallback = null) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort("Friendsgiving image fetch timed out after 10 seconds"), 10000);
-      let response;
-      try {
-        response = await fetch(url, {
-          cf: { cacheTtl: 300, cacheEverything: true },
-          signal: controller.signal
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      const response = await fetch(url, { cf: { cacheTtl: 3600, cacheEverything: true } });
       if (!response.ok) throw new Error(`Image request returned ${response.status}`);
-
       const contentType = response.headers.get("content-type") || "image/png";
       const bytes = new Uint8Array(await response.arrayBuffer());
       let binary = "";
       const chunkSize = 0x8000;
-
       for (let i = 0; i < bytes.length; i += chunkSize) {
         binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
       }
-
       return `data:${contentType};base64,${btoa(binary)}`;
     } catch (error) {
       console.error("Friendsgiving image fetch failed:", url, error?.message || error);
@@ -30523,223 +30521,84 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
   };
 
   try {
-    const width = 768;
-    const height = 768;
-
-    // These are the eight custom Friendsgiving leaf designs already uploaded
-    // to the same public R2 bucket as the original tree image.
-    const leafDesignFiles = [
-      "IMG_8816.png",
-      "IMG_8817.png",
-      "IMG_8818.png",
-      "IMG_8820.png",
-      "IMG_8821.png",
-      "IMG_8822.png",
-      "IMG_8823.png",
-      "IMG_8824.png"
-    ];
-
     const baseTreeData = await asDataUri(imageUrl(FRIENDSGIVING_TREE_IMAGE));
-    if (!baseTreeData) {
-      throw new Error(`The original Friendsgiving tree image could not be loaded: ${imageUrl(FRIENDSGIVING_TREE_IMAGE)}`);
-    }
+    if (!baseTreeData) throw new Error("The original Friendsgiving tree image could not be loaded.");
 
-    // Load every custom leaf separately. Do not silently replace a missing
-    // custom design with the old generic CSS circle.
-    const leafDesigns = await Promise.all(
-      leafDesignFiles.map(async filename => {
-        const data = await asDataUri(imageUrl(filename));
-        if (!data) throw new Error(`Custom Friendsgiving leaf image could not be loaded: ${filename}`);
-        return { filename, data };
-      })
-    );
-
-    const defaultAvatar = await asDataUri(
-      "https://cdn.discordapp.com/embed/avatars/0.png"
-    );
-
-    // Keep the carefully chosen positions from the original tree layout.
-    // Additional positions are generated deterministically so participants
-    // beyond the original 24 still receive their own leaf instead of sharing
-    // an occupied position.
+    const defaultAvatar = await asDataUri("https://cdn.discordapp.com/embed/avatars/0.png");
+    const width = 768, height = 768;
     const avatarPositions = [
       [31,25],[42,19],[53,17],[64,23],[23,36],[36,34],[49,29],[62,34],
       [76,36],[17,48],[30,48],[43,43],[57,43],[70,48],[82,49],[25,60],
       [39,57],[53,55],[67,59],[77,62],[34,69],[49,67],[63,69],[55,77]
     ];
-
-    const entries = Object.entries(event?.contributions || {});
-    const extraPositions = [];
-    if (entries.length > avatarPositions.length) {
-      const extraCount = entries.length - avatarPositions.length;
-      const columns = 6;
-      const rows = Math.ceil(extraCount / columns);
-      for (let i = 0; i < extraCount; i++) {
-        const column = i % columns;
-        const rowIndex = Math.floor(i / columns);
-        extraPositions.push([
-          14 + column * 14.4,
-          18 + (rowIndex % Math.max(rows, 1)) * (58 / Math.max(rows, 1))
-        ]);
-      }
-    }
-    const allPositions = avatarPositions.concat(extraPositions);
-
-    const avatars = await Promise.all(entries.map(async ([userId, entry], index) => {
-      const avatarUrl = String(
-        entry?.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png"
-      );
-      const avatarData = await asDataUri(avatarUrl, defaultAvatar);
-      const position = allPositions[index] || [50, 50];
-
+    const entries = Object.values(event?.contributions || {});
+    const leaves = await Promise.all(entries.map(async (entry, index) => {
+      const position = avatarPositions[index % avatarPositions.length];
+      const leafName = FRIENDSGIVING_LEAF_IMAGES.includes(entry.leafImage)
+        ? entry.leafImage
+        : FRIENDSGIVING_LEAF_IMAGES[index % FRIENDSGIVING_LEAF_IMAGES.length];
+      const avatarUrl = String(entry.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png");
+      const [leafData, avatarData] = await Promise.all([
+        asDataUri(imageUrl(leafName)),
+        asDataUri(avatarUrl, defaultAvatar)
+      ]);
       return {
-        userId,
+        leafName,
+        leafData,
         avatarData: avatarData || defaultAvatar,
-        leafData: leafDesigns[index % leafDesigns.length].data,
-        leafFile: leafDesigns[index % leafDesigns.length].filename,
         x: position[0],
-        y: position[1]
+        y: position[1],
+        index
       };
     }));
 
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(15000);
-    page.setDefaultTimeout(15000);
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
-
-    const html = `<!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            * { box-sizing: border-box; }
-            html, body {
-              margin: 0;
-              width: 100%;
-              height: 100%;
-              overflow: hidden;
-              background: #120b10;
-            }
-            #stage {
-              position: relative;
-              width: ${width}px;
-              height: ${height}px;
-              overflow: hidden;
-            }
-            #tree {
-              position: absolute;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-              z-index: 1;
-            }
-            .custom-leaf {
-              position: absolute;
-              width: 104px;
-              height: 104px;
-              transform: translate(-50%, -50%);
-              z-index: 3;
-              pointer-events: none;
-            }
-            .custom-leaf-art {
-              position: absolute;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-              display: block;
-            }
-            /* The avatar sits in a small ornate gold medallion near the base
-               of each custom leaf, matching the agreed Friendsgiving design. */
-            .avatar-medallion {
-              position: absolute;
-              left: 50%;
-              top: 68%;
-              width: 34px;
-              height: 34px;
-              transform: translate(-50%, -50%);
-              padding: 3px;
-              border-radius: 50%;
-              background: linear-gradient(135deg, #fff4c8 0%, #dca53e 42%, #8b5718 72%, #ffe7a0 100%);
-              border: 1px solid #fff0b2;
-              box-shadow:
-                0 0 0 2px rgba(105, 58, 12, 0.82),
-                0 1px 7px rgba(0, 0, 0, 0.65),
-                0 0 8px rgba(255, 197, 78, 0.8);
-              z-index: 2;
-            }
-            .avatar-medallion img {
-              display: block;
-              width: 100%;
-              height: 100%;
-              border-radius: 50%;
-              object-fit: cover;
-              border: 1px solid rgba(255, 248, 220, 0.95);
-            }
-          </style>
-        </head>
-        <body>
-          <div id="stage">
-            <img id="tree" src="${baseTreeData}">
-            ${avatars.map(leaf => `
-              <div class="custom-leaf"
-                   data-user-id="${String(leaf.userId).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}"
-                   style="left:${leaf.x}%;top:${leaf.y}%">
-                <img class="custom-leaf-art" src="${leaf.leafData}">
-                ${leaf.avatarData ? `
-                  <div class="avatar-medallion">
-                    <img src="${leaf.avatarData}">
-                  </div>
-                ` : ""}
-              </div>
-            `).join("")}
-          </div>
-        </body>
-      </html>`;
-
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
-
-    await Promise.race([
-      page.evaluate(async () => {
-        await Promise.all(Array.from(document.images).map(async img => {
-          try {
-            await img.decode();
-          } catch (error) {
-            throw new Error(`Friendsgiving image failed to decode: ${img.currentSrc || img.src}`);
-          }
-          if (!img.naturalWidth) {
-            throw new Error(`Friendsgiving image has no decoded pixels: ${img.currentSrc || img.src}`);
-          }
-        }));
-      }),
-      new Promise((_, reject) => setTimeout(
-        () => reject(new Error("Friendsgiving image decoding timed out after 15 seconds")),
-        15000
-      ))
-    ]);
-
-    const renderedLeafCount = await page.evaluate(() => document.querySelectorAll(".custom-leaf").length);
-    if (renderedLeafCount !== entries.length) {
-      throw new Error(`Friendsgiving render mismatch: expected ${entries.length} leaves, rendered ${renderedLeafCount}`);
-    }
-
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#120b10}
+      #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
+      #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1}
+      .leaf{position:absolute;width:82px;height:82px;transform:translate(-50%,-50%);z-index:3;
+        display:flex;align-items:center;justify-content:center}
+      .leaf-art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;
+        filter:drop-shadow(0 2px 4px rgba(0,0,0,.65))}
+      .leaf-fallback{position:absolute;inset:9px;border-radius:50% 8% 50% 8%;
+        background:linear-gradient(135deg,#ffe6a0,#d88724 55%,#78310e);
+        box-shadow:0 0 10px #ffbd45,0 2px 6px #160900;transform:rotate(-35deg)}
+      .leaf-avatar{position:relative;width:34px;height:34px;border-radius:50%;object-fit:cover;
+        display:block;border:2px solid #ffe4a0;box-shadow:0 1px 5px rgba(0,0,0,.85);z-index:2}
+    </style></head><body><div id="stage">
+      <img id="tree" src="${baseTreeData}">
+      ${leaves.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%">
+        ${a.leafData ? `<img class="leaf-art" src="${a.leafData}" alt="">` : `<span class="leaf-fallback"></span>`}
+        ${a.avatarData ? `<img class="leaf-avatar" src="${a.avatarData}" alt="">` : ""}
+      </div>`).join("")}
+    </div></body></html>`;
+    await page.setContent(html, { waitUntil: "load" });
+    await page.evaluate(async () => {
+      await Promise.all(Array.from(document.images).map(async img => {
+        if (!img.complete) await new Promise(resolve => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }));
+      const tree = document.getElementById("tree");
+      if (!tree || !tree.naturalWidth) throw new Error("The Friendsgiving tree background failed to load.");
+    });
     const png = await page.screenshot({ type: "png" });
-    console.log("Friendsgiving custom avatar-leaf tree rendered:", {
+    console.log("Friendsgiving custom-leaf image rendered:", {
       contributors: entries.length,
-      renderedLeaves: renderedLeafCount,
-      customLeafDesigns: leafDesigns.map(leaf => leaf.filename),
-      avatarsLoaded: avatars.filter(leaf => Boolean(leaf.avatarData)).length,
+      customLeavesLoaded: leaves.filter(a => Boolean(a.leafData)).length,
+      avatarsLoaded: leaves.filter(a => Boolean(a.avatarData)).length,
+      leafAssets: leaves.map(a => a.leafName),
       bytes: png?.byteLength || 0
     });
-
     return png;
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
 }
-
 async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const form = new FormData();
@@ -30976,9 +30835,14 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
   const event = state.friendsgiving;
   if (!event || event.status !== "open") return sendText(env, interaction, "🍂 Friendsgiving submissions are closed.");
   event.contributions = event.contributions || {};
-  const existed = Boolean(event.contributions[user.id]);
+  const previousContribution = event.contributions[user.id];
+  const existed = Boolean(previousContribution);
+  const assignedLeaf = FRIENDSGIVING_LEAF_IMAGES.includes(previousContribution?.leafImage)
+    ? previousContribution.leafImage
+    : FRIENDSGIVING_LEAF_IMAGES[Math.floor(Math.random() * FRIENDSGIVING_LEAF_IMAGES.length)];
   event.contributions[user.id] = {
     userId: user.id,
+    leafImage: assignedLeaf,
     name: String(interaction.member?.nick || user.global_name || user.username || "Werewife").slice(0, 32),
     username: user.username || "",
     avatarUrl: friendsgivingAvatar(user),
