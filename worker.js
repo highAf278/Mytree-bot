@@ -30493,9 +30493,17 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
 
   const asDataUri = async (url, fallback = null) => {
     try {
-      const response = await fetch(url, {
-        cf: { cacheTtl: 300, cacheEverything: true }
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort("Friendsgiving image fetch timed out after 10 seconds"), 10000);
+      let response;
+      try {
+        response = await fetch(url, {
+          cf: { cacheTtl: 300, cacheEverything: true },
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!response.ok) throw new Error(`Image request returned ${response.status}`);
 
       const contentType = response.headers.get("content-type") || "image/png";
@@ -30596,6 +30604,8 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
 
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(15000);
+    page.setDefaultTimeout(15000);
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
     const html = `<!doctype html>
@@ -30689,21 +30699,26 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
         </body>
       </html>`;
 
-    await page.setContent(html, { waitUntil: "load" });
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
 
-    await page.evaluate(async () => {
-      // decode() cannot miss a load event if an image finishes between checks.
-      await Promise.all(Array.from(document.images).map(async img => {
-        try {
-          await img.decode();
-        } catch (error) {
-          throw new Error(`Friendsgiving image failed to decode: ${img.currentSrc || img.src}`);
-        }
-        if (!img.naturalWidth) {
-          throw new Error(`Friendsgiving image has no decoded pixels: ${img.currentSrc || img.src}`);
-        }
-      }));
-    });
+    await Promise.race([
+      page.evaluate(async () => {
+        await Promise.all(Array.from(document.images).map(async img => {
+          try {
+            await img.decode();
+          } catch (error) {
+            throw new Error(`Friendsgiving image failed to decode: ${img.currentSrc || img.src}`);
+          }
+          if (!img.naturalWidth) {
+            throw new Error(`Friendsgiving image has no decoded pixels: ${img.currentSrc || img.src}`);
+          }
+        }));
+      }),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error("Friendsgiving image decoding timed out after 15 seconds")),
+        15000
+      ))
+    ]);
 
     const renderedLeafCount = await page.evaluate(() => document.querySelectorAll(".custom-leaf").length);
     if (renderedLeafCount !== entries.length) {
@@ -30807,11 +30822,10 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // Defer first so Discord does not time out while Browser Rendering rebuilds
-  // the image. Unlike the previous version, this command explicitly refreshes
-  // the persistent tree message instead of reusing its possibly stale image.
+  // This command must stay fast. The contribution renderer runs after
+  // submissions in the background; /friendsgiving only displays the latest
+  // already-rendered attachment and never launches Browser Rendering itself.
   await deferInteraction(env, interaction, { ephemeral: true });
-
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
   if (!event) {
@@ -30820,40 +30834,34 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
-  if (!event.channelId || !event.messageId) {
-    return editOriginalResponse(env, interaction, {
-      content: "⚠️ I found the Friendsgiving entries, but the original tree message ID is missing. The event needs to be reopened with `/friendsgiving-start` before I can update its picture."
-    });
-  }
-
-  try {
-    // Re-render from the saved contributions every time /friendsgiving is run.
-    // This also makes rendering / R2 asset failures visible to the user.
-    const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.png");
-    const refreshed = await editFriendsgivingTreeMessage(
-      env,
-      event.channelId,
-      event.messageId,
-      "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
-      panel
-    );
-
-    if (!refreshed?.ok) {
-      const detail = refreshed
-        ? await refreshed.text().catch(() => "")
-        : "No response from Discord";
-      throw new Error(`Discord rejected the tree image update (${refreshed?.status || "no status"}): ${detail.slice(0, 700)}`);
+  let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  if (event.channelId && event.messageId) {
+    try {
+      const response = await discordRequest(
+        env,
+        `/channels/${event.channelId}/messages/${event.messageId}`,
+        { method: "GET" }
+      );
+      if (response.ok) {
+        const message = await response.json();
+        const attachment = (message.attachments || []).find(file =>
+          /^friendsgiving-tree\.(png|gif)$/i.test(String(file.filename || ""))
+        );
+        if (attachment?.url) treeUrl = attachment.url;
+      } else {
+        console.error("Friendsgiving latest tree lookup failed:", response.status, await response.text());
+      }
+    } catch (error) {
+      console.error("Friendsgiving latest tree lookup error:", error);
     }
-
-    return editOriginalResponse(env, interaction, {
-      content: `🍂 I rebuilt the shared tree from the saved entries! **${Object.keys(event.contributions || {}).length}** ${Object.keys(event.contributions || {}).length === 1 ? "leaf" : "leaves"} are included. Check the original Friendsgiving post in this channel.`
-    });
-  } catch (error) {
-    console.error("Friendsgiving manual tree refresh failed:", error);
-    return editOriginalResponse(env, interaction, {
-      content: `⚠️ I found the saved gratitude entries, but couldn't rebuild the tree image: ${String(error?.message || error).slice(0, 1200)}`
-    });
   }
+
+  const panel = friendsgivingPanelData(event, treeUrl);
+  return editOriginalResponse(env, interaction, {
+    content: "🍂 Your community's gratitude tree is below. Tap **View All Leaves** to read everyone's messages.",
+    embeds: panel.embeds,
+    components: panel.components
+  });
 }
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
