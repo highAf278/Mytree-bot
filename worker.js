@@ -30524,153 +30524,108 @@ const FRIENDSGIVING_LEAF_IMAGES = [
 // Render the Friendsgiving tree with a custom R2 leaf and the contributor's
 // Discord avatar composited together at each leaf position.
 async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
-  let browser;
-  let stage = "starting";
-  const startedAt = Date.now();
-  const asDataUri = async (url, fallback = null, label = "image") => {
-    try {
-      const response = await fetch(url, { cf: { cacheTtl: 300, cacheEverything: true } });
-      if (!response.ok) throw new Error(`${label} request returned HTTP ${response.status}`);
-      const contentType = response.headers.get("content-type") || "image/png";
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      let binary = "";
-      const chunkSize = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-      }
-      return `data:${contentType};base64,${btoa(binary)}`;
-    } catch (error) {
-      console.error(`Friendsgiving ${label} fetch failed:`, {
-        url, error: error?.message || String(error)
-      });
-      return fallback;
+  const width = 768, height = 768;
+  const positions = [
+    [31,25],[42,19],[53,17],[64,23],[23,36],[36,34],[49,29],[62,34],
+    [76,36],[17,48],[30,48],[43,43],[57,43],[70,48],[82,49],[25,60],
+    [39,57],[53,55],[67,59],[77,62],[34,69],[49,67],[63,69],[55,77]
+  ];
+
+  // This renderer deliberately uses the same direct PNG decoder/compositor as
+  // /tree. It does not open Browser Rendering or create a WebSocket session.
+  const scene = await getPngAsset(env, FRIENDSGIVING_TREE_IMAGE);
+  const tree = coverRGBA(scene, width, height);
+  const entries = Object.values(event?.contributions || {});
+  console.log("Friendsgiving direct renderer started:", { contributors: entries.length });
+
+  const loadAvatar = async (url, userId) => {
+    const candidates = [];
+    if (url) {
+      // Discord animated avatar hashes can be requested as a static PNG.
+      candidates.push(String(url).replace(/\.gif(?=\?|$)/i, ".png"));
     }
+    const fallbackIndex = userId ? Number((BigInt(userId) >> 22n) % 6n) : 0;
+    candidates.push(`https://cdn.discordapp.com/embed/avatars/${fallbackIndex}.png`);
+    for (const candidate of candidates) {
+      try {
+        const response = await fetch(candidate);
+        if (!response.ok) continue;
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return await decodePNG(bytes);
+      } catch (error) {
+        console.warn("Friendsgiving avatar candidate failed:", candidate, error?.message || String(error));
+      }
+    }
+    return null;
   };
 
-  try {
-    stage = "loading-tree-background";
-    const baseTreeData = await asDataUri(
-      imageUrl(FRIENDSGIVING_TREE_IMAGE), null, "tree background"
-    );
-    if (!baseTreeData) throw new Error("The original Friendsgiving tree image could not be loaded.");
-
-    stage = "loading-leaf-and-avatar-assets";
-    const defaultAvatar = await asDataUri(
-      "https://cdn.discordapp.com/embed/avatars/0.png", null, "default avatar"
-    );
-    const width = 768, height = 768;
-    const avatarPositions = [
-      [31,25],[42,19],[53,17],[64,23],[23,36],[36,34],[49,29],[62,34],
-      [76,36],[17,48],[30,48],[43,43],[57,43],[70,48],[82,49],[25,60],
-      [39,57],[53,55],[67,59],[77,62],[34,69],[49,67],[63,69],[55,77]
-    ];
-    const entries = Object.values(event?.contributions || {});
-    const leaves = await Promise.all(entries.map(async (entry, index) => {
-      const position = avatarPositions[index % avatarPositions.length];
-      const leafName = FRIENDSGIVING_LEAF_IMAGES.includes(entry?.leafImage)
-        ? entry.leafImage
-        : FRIENDSGIVING_LEAF_IMAGES[index % FRIENDSGIVING_LEAF_IMAGES.length];
-      const avatarUrl = String(entry?.avatarUrl || "https://cdn.discordapp.com/embed/avatars/0.png");
-      const [leafData, avatarData] = await Promise.all([
-        asDataUri(imageUrl(leafName), null, `leaf ${leafName}`),
-        asDataUri(avatarUrl, defaultAvatar, `avatar for ${entry?.userId || index}`)
-      ]);
-      return {
-        leafName, leafData, avatarData: avatarData || defaultAvatar,
-        x: position[0], y: position[1], index
-      };
-    }));
-
-    stage = "launching-browser";
-    try {
-      browser = await puppeteer.launch(env.BROWSER);
-    } catch (firstLaunchError) {
-      console.error("Friendsgiving Browser Rendering launch attempt 1 failed:", firstLaunchError?.message || firstLaunchError);
-      // Browser Rendering occasionally drops a websocket while creating a
-      // session. Retry once before giving up on the tree refresh.
-      browser = await puppeteer.launch(env.BROWSER);
-    }
-
-    stage = "creating-page";
-    const page = await browser.newPage();
-    await page.setViewport({ width, height, deviceScaleFactor: 1 });
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-      *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#120b10}
-      #stage{position:relative;width:${width}px;height:${height}px;overflow:hidden}
-      #tree{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1}
-      .leaf{position:absolute;width:82px;height:82px;transform:translate(-50%,-50%);z-index:3;
-        display:flex;align-items:center;justify-content:center}
-      .leaf-art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;
-        filter:drop-shadow(0 2px 4px rgba(0,0,0,.65))}
-      .leaf-fallback{position:absolute;inset:9px;border-radius:50% 8% 50% 8%;
-        background:linear-gradient(135deg,#ffe6a0,#d88724 55%,#78310e);
-        box-shadow:0 0 10px #ffbd45,0 2px 6px #160900;transform:rotate(-35deg)}
-      .leaf-avatar{position:relative;width:34px;height:34px;border-radius:50%;object-fit:cover;
-        display:block;border:2px solid #ffe4a0;box-shadow:0 1px 5px rgba(0,0,0,.85);z-index:2}
-    </style></head><body><div id="stage">
-      <img id="tree" src="${baseTreeData}" alt="Friendsgiving tree">
-      ${leaves.map(a => `<div class="leaf" style="left:${a.x}%;top:${a.y}%">
-        ${a.leafData ? `<img class="leaf-art" src="${a.leafData}" alt="">` : `<span class="leaf-fallback"></span>`}
-        ${a.avatarData ? `<img class="leaf-avatar" src="${a.avatarData}" alt="">` : ""}
-      </div>`).join("")}
-    </div></body></html>`;
-
-    stage = "loading-render-page";
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
-    const imageStatus = await page.evaluate(async () => {
-      const images = Array.from(document.images);
-      await Promise.all(images.map(async img => {
-        try {
-          if (typeof img.decode === "function") await img.decode();
-          else if (!img.complete) await new Promise(resolve => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          });
-        } catch (_) {}
-      }));
-      const tree = document.getElementById("tree");
-      return {
-        treeLoaded: Boolean(tree && tree.naturalWidth > 0),
-        treeWidth: tree?.naturalWidth || 0,
-        totalImages: images.length,
-        loadedImages: images.filter(img => img.naturalWidth > 0).length
-      };
-    });
-    if (!imageStatus.treeLoaded) {
-      throw new Error(`Friendsgiving tree background did not decode in browser: ${JSON.stringify(imageStatus)}`);
-    }
-
-    stage = "capturing-screenshot";
-    const png = await page.screenshot({ type: "png", captureBeyondViewport: false });
-    if (!png || !png.byteLength) throw new Error("Friendsgiving screenshot returned an empty PNG.");
-    console.log("Friendsgiving custom-leaf image rendered successfully:", {
-      contributors: entries.length,
-      customLeavesLoaded: leaves.filter(a => Boolean(a.leafData)).length,
-      avatarsLoaded: leaves.filter(a => Boolean(a.avatarData)).length,
-      leafAssets: leaves.map(a => a.leafName),
-      browserImages: imageStatus,
-      bytes: png.byteLength,
-      elapsedMs: Date.now() - startedAt
-    });
-    return png;
-  } catch (error) {
-    console.error("Friendsgiving renderer failed:", {
-      stage,
-      error: error?.message || String(error),
-      stack: error?.stack || null,
-      elapsedMs: Date.now() - startedAt,
-      contributionCount: Object.keys(event?.contributions || {}).length
-    });
-    throw error;
-  } finally {
-    if (browser) {
-      try { await browser.close(); }
-      catch (closeError) {
-        console.error("Friendsgiving browser close failed:", closeError?.message || String(closeError));
+  const makeCircularAvatar = (source, size = 38) => {
+    const square = coverRGBA(source, size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x + 0.5 - size / 2, dy = y + 0.5 - size / 2;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const o = (y * size + x) * 4;
+        if (distance > size / 2 - 1.5) square.data[o + 3] = 0;
+        else if (distance > size / 2 - 3.2) {
+          square.data[o] = 255; square.data[o + 1] = 231; square.data[o + 2] = 174;
+          square.data[o + 3] = 255;
+        }
       }
     }
+    return square;
+  };
+
+  let rendered = 0, leafAssetsLoaded = 0, avatarsLoaded = 0;
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index] || {};
+    const [xPercent, yPercent] = positions[index % positions.length];
+    const leafName = FRIENDSGIVING_LEAF_IMAGES.includes(entry.leafImage)
+      ? entry.leafImage
+      : FRIENDSGIVING_LEAF_IMAGES[index % FRIENDSGIVING_LEAF_IMAGES.length];
+    const centerX = Math.round(width * xPercent / 100);
+    const centerY = Math.round(height * yPercent / 100);
+
+    try {
+      const leaf = await getPngAsset(env, leafName);
+      const leafLayer = containRGBA(leaf, 88, 88);
+      alphaComposite(tree, leafLayer,
+        Math.round(centerX - leafLayer.width / 2),
+        Math.round(centerY - leafLayer.height / 2));
+      leafAssetsLoaded++;
+    } catch (error) {
+      console.error("Friendsgiving leaf artwork failed to load:", {
+        leafName, error: error?.message || String(error)
+      });
+      // Keep a visible warm leaf fallback rather than silently dropping a contribution.
+      const fallback = solidRGBA(52, 38, "#d88724");
+      for (let y = 0; y < fallback.height; y++) for (let x = 0; x < fallback.width; x++) {
+        const dx = (x - 25) / 25, dy = (y - 18) / 18;
+        const o = (y * fallback.width + x) * 4;
+        if (dx * dx + dy * dy > 1) fallback.data[o + 3] = 0;
+        else { fallback.data[o] = 238; fallback.data[o + 1] = 157; fallback.data[o + 2] = 48; }
+      }
+      alphaComposite(tree, fallback, centerX - 26, centerY - 19);
+    }
+
+    const avatarUrl = String(entry.avatarUrl || "");
+    const avatar = await loadAvatar(avatarUrl, entry.userId);
+    if (avatar) {
+      const circle = makeCircularAvatar(avatar, 38);
+      alphaComposite(tree, circle, centerX - 19, centerY - 19);
+      avatarsLoaded++;
+    }
+    rendered++;
   }
+
+  const png = rgbaToRgbPng(tree);
+  console.log("Friendsgiving direct PNG render complete:", {
+    contributors: entries.length, rendered, leafAssetsLoaded, avatarsLoaded,
+    bytes: png.byteLength
+  });
+  return png;
 }
+
 async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const form = new FormData();
