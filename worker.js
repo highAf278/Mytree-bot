@@ -1581,7 +1581,7 @@ async function renderAnimatedProfile(env, player) {
   } finally { if(browser) await browser.close().catch(()=>{}); }
 }
 
-async async function decodePNG(pngBytes) {
+async function decodePNG(pngBytes) {
   const b = pngBytes instanceof Uint8Array ? pngBytes : new Uint8Array(pngBytes);
   const sig = [137,80,78,71,13,10,26,10];
   for (let i = 0; i < 8; i++) if (b[i] !== sig[i]) throw new Error("Invalid PNG signature");
