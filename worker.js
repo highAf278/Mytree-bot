@@ -30829,9 +30829,9 @@ async function editFriendsgivingOriginalWithFile(env, interaction, panel, bytes)
 }
 
 async function showFriendsgiving(env, interaction) {
-  // This command must stay fast. The contribution renderer runs after
-  // submissions in the background; /friendsgiving only displays the latest
-  // already-rendered attachment and never launches Browser Rendering itself.
+  // Rebuild from the authoritative contribution records whenever the command
+  // is opened. This repairs a missed background refresh without changing or
+  // recreating anyone's contribution.
   await deferInteraction(env, interaction, { ephemeral: true });
   const state = await getGuildState(env, interaction.guild_id);
   const event = state.friendsgiving;
@@ -30841,28 +30841,67 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
+  const contributionCount = Object.keys(event.contributions || {}).length;
   let treeUrl = event.treeImageUrl || `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  try {
+    if (event.channelId && event.messageId) {
+      const refreshed = await editFriendsgivingTreeMessage(
+        env,
+        event.channelId,
+        event.messageId,
+        event.status === "open"
+          ? "🍂 **Friendsgiving 2026 — Our Gratitude Tree**"
+          : "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
+        friendsgivingPanelData(event, treeUrl),
+        interaction.guild_id
+      );
+      if (refreshed?.ok && refreshed.message?.id && refreshed.permanentTreeUrl) {
+        event.messageId = refreshed.message.id;
+        event.treeImageUrl = refreshed.permanentTreeUrl;
+        treeUrl = refreshed.permanentTreeUrl;
+        await saveGuildState(env, interaction.guild_id, state);
+        console.log("Friendsgiving on-demand tree rebuild succeeded:", {
+          guildId: interaction.guild_id,
+          contributionCount,
+          messageId: event.messageId,
+          imageUrlPresent: true
+        });
+      } else {
+        console.error("Friendsgiving on-demand tree rebuild did not complete:", {
+          guildId: interaction.guild_id,
+          contributionCount,
+          status: refreshed?.status || "no response"
+        });
+      }
+    } else {
+      const png = await renderFriendsgivingTreeWithLeaves(env, event);
+      treeUrl = await saveFriendsgivingRenderedTree(env, interaction.guild_id, png);
+      event.treeImageUrl = treeUrl;
+      await saveGuildState(env, interaction.guild_id, state);
+      console.log("Friendsgiving on-demand R2 render saved (no canonical message):", {
+        guildId: interaction.guild_id, contributionCount, bytes: png.byteLength
+      });
+    }
+  } catch (error) {
+    console.error("Friendsgiving on-demand tree rebuild failed:", {
+      guildId: interaction.guild_id,
+      contributionCount,
+      error: error?.stack || error?.message || String(error)
+    });
+  }
+
+  // Prefer the freshly rendered shared R2 URL; otherwise use the last saved URL.
   try {
     const savedRendered = await env.TREE_DATA.get(
       friendsgivingRenderedImageKey(interaction.guild_id)
     );
     if (savedRendered) {
       const saved = JSON.parse(savedRendered);
-      if (saved?.url) {
-        treeUrl = saved.url;
-        console.log("Friendsgiving dedicated rendered-image pointer loaded:", {
-          guildId: interaction.guild_id,
-          messageId: saved.messageId || null,
-          filename: saved.filename || null
-        });
-      }
+      if (saved?.url) treeUrl = saved.url;
     }
   } catch (error) {
     console.error("Friendsgiving rendered-image pointer lookup failed:", error);
   }
-
-  // All channels display the same permanent R2 object, never a channel-bound
-  // Discord attachment. If no render exists yet, use the original tree image.
 
   const panel = friendsgivingPanelData(event, treeUrl);
   return editOriginalResponse(env, interaction, {
