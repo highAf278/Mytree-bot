@@ -30692,13 +30692,14 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
 
 async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
+  const imageFilename = `friendsgiving-tree-${Date.now()}.png`;
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
     content, components: panel.components,
-    embeds: [{ ...panel.embeds[0], image: { url: "attachment://friendsgiving-tree.png" } }],
-    attachments: [{ id: 0, filename: "friendsgiving-tree.png" }]
+    embeds: [{ ...panel.embeds[0], image: { url: `attachment://${imageFilename}` } }],
+    attachments: [{ id: 0, filename: imageFilename }]
   }));
-  form.append("files[0]", new Blob([png], { type: "image/png" }), "friendsgiving-tree.png");
+  form.append("files[0]", new Blob([png], { type: "image/png" }), imageFilename);
   const response = await discordRequest(env, `/channels/${channelId}/messages`, {
     method: "POST", body: form
   });
@@ -30715,14 +30716,17 @@ async function editFriendsgivingTreeMessage(env, channelId, messageId, content, 
     contributionCount: Object.keys(panel?.event?.contributions || {}).length
   });
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
-  console.log("Friendsgiving PNG ready for Discord upload:", { bytes: png.byteLength, channelId, messageId });
+  const imageFilename = `friendsgiving-tree-${Date.now()}.png`;
+  console.log("Friendsgiving PNG ready for Discord upload:", {
+    bytes: png.byteLength, channelId, messageId, imageFilename
+  });
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
     content, components: panel.components,
-    embeds: [{ ...panel.embeds[0], image: { url: "attachment://friendsgiving-tree.png" } }],
-    attachments: [{ id: 0, filename: "friendsgiving-tree.png" }]
+    embeds: [{ ...panel.embeds[0], image: { url: `attachment://${imageFilename}` } }],
+    attachments: [{ id: 0, filename: imageFilename }]
   }));
-  form.append("files[0]", new Blob([png], { type: "image/png" }), "friendsgiving-tree.png");
+  form.append("files[0]", new Blob([png], { type: "image/png" }), imageFilename);
   const response = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, {
     method: "PATCH", body: form
   });
