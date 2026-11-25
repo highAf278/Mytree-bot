@@ -30712,31 +30712,80 @@ async function sendFriendsgivingTreeMessage(env, channelId, content, panel) {
 
 async function editFriendsgivingTreeMessage(env, channelId, messageId, content, panel) {
   console.log("Friendsgiving refresh started:", {
-    channelId, messageId,
+    channelId, previousMessageId: messageId,
     contributionCount: Object.keys(panel?.event?.contributions || {}).length
   });
+
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const imageFilename = `friendsgiving-tree-${Date.now()}.png`;
-  console.log("Friendsgiving PNG ready for Discord upload:", {
-    bytes: png.byteLength, channelId, messageId, imageFilename
-  });
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
-    content, components: panel.components,
+    content,
+    components: panel.components,
     embeds: [{ ...panel.embeds[0], image: { url: `attachment://${imageFilename}` } }],
     attachments: [{ id: 0, filename: imageFilename }]
   }));
   form.append("files[0]", new Blob([png], { type: "image/png" }), imageFilename);
-  const response = await discordRequest(env, `/channels/${channelId}/messages/${messageId}`, {
-    method: "PATCH", body: form
+
+  // Discord's PATCH edit endpoint has repeatedly returned a message with no
+  // attachments in this Worker. Post the verified composite as a new message
+  // instead, then let the caller persist the new message ID.
+  const response = await discordRequest(env, `/channels/${channelId}/messages`, {
+    method: "POST",
+    body: form
   });
+
   if (!response.ok) {
     const detail = await response.text();
-    console.error("Friendsgiving tree image update failed:", response.status, detail);
-  } else {
-    console.log("Friendsgiving Discord message image updated:", { status: response.status, channelId, messageId });
+    console.error("Friendsgiving replacement image post failed:", response.status, detail);
+    return { ok: false, status: response.status, message: null };
   }
-  return response;
+
+  const postedMessage = await response.json();
+  const uploadedAttachments = Array.isArray(postedMessage.attachments)
+    ? postedMessage.attachments
+    : [];
+  const uploadedImage = uploadedAttachments.find(file => file.filename === imageFilename);
+
+  console.log("Friendsgiving replacement image post verified:", {
+    status: response.status,
+    newMessageId: postedMessage.id || null,
+    imageFilename,
+    attachmentCount: uploadedAttachments.length,
+    attachmentUrlPresent: Boolean(uploadedImage?.url),
+    bytes: png.byteLength
+  });
+
+  if (!postedMessage.id || !uploadedImage?.url) {
+    console.error("Friendsgiving Discord POST returned no matching image attachment:", {
+      messageId: postedMessage.id || null,
+      attachmentFilenames: uploadedAttachments.map(file => file.filename)
+    });
+    return { ok: false, status: response.status, message: postedMessage };
+  }
+
+  // Remove the stale tree message only after Discord confirms the new image exists.
+  if (messageId && String(messageId) !== String(postedMessage.id)) {
+    const deleteResponse = await discordRequest(
+      env,
+      `/channels/${channelId}/messages/${messageId}`,
+      { method: "DELETE" }
+    );
+    if (!deleteResponse.ok && deleteResponse.status !== 404) {
+      console.warn("Friendsgiving old tree message could not be deleted:", {
+        status: deleteResponse.status,
+        oldMessageId: messageId,
+        newMessageId: postedMessage.id
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    status: response.status,
+    message: postedMessage,
+    attachmentUrl: uploadedImage.url
+  };
 }
 
 // FRIENDSGIVING 2026 — shared gratitude tree and permanent participation collectible.
@@ -30798,7 +30847,7 @@ async function showFriendsgiving(env, interaction) {
     });
   }
 
-  let treeUrl = `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
+  let treeUrl = event.treeImageUrl || `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
   if (event.channelId && event.messageId) {
     try {
       const response = await discordRequest(
@@ -30913,11 +30962,16 @@ async function friendsgivingClose(env, interaction) {
   await saveGuildState(env, interaction.guild_id, state);
   const panel = friendsgivingPanelData(event, "attachment://friendsgiving-tree.gif");
   if (event.channelId && event.messageId) {
-    await editFriendsgivingTreeMessage(
+    const posted = await editFriendsgivingTreeMessage(
       env, event.channelId, event.messageId,
       "🍂 **Friendsgiving 2026 is now closed!** Thank you to everyone who shared what they're grateful for.",
       panel
     );
+    if (posted?.ok && posted.message?.id) {
+      event.messageId = posted.message.id;
+      event.treeImageUrl = posted.attachmentUrl || null;
+      await saveGuildState(env, interaction.guild_id, state);
+    }
   }
   return sendText(env, interaction, `🍂 Friendsgiving 2026 is closed and saved as a permanent event keepsake! **${Object.keys(event.contributions || {}).length}** people participated.`);
 }
@@ -31007,7 +31061,7 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
         "🍂 **Friendsgiving 2026 — Our Gratitude Tree**",
         panel
       );
-      if (!updateResponse?.ok) {
+      if (!updateResponse?.ok || !updateResponse.message?.id) {
         console.error("Friendsgiving tree refresh returned a failure status", {
           status: updateResponse?.status || "no response",
           guildId: interaction.guild_id,
@@ -31016,10 +31070,15 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
           contributionCount: Object.keys(event.contributions || {}).length
         });
       } else {
-        console.log("Friendsgiving tree refreshed successfully", {
+        event.messageId = updateResponse.message.id;
+        event.treeImageUrl = updateResponse.attachmentUrl || null;
+        await saveGuildState(env, interaction.guild_id, state);
+        console.log("Friendsgiving tree refreshed and new message ID saved:", {
           guildId: interaction.guild_id,
+          channelId: event.channelId,
+          messageId: event.messageId,
           contributionCount: Object.keys(event.contributions || {}).length,
-          avatarUrl: event.contributions[user.id]?.avatarUrl || null
+          attachmentUrlPresent: Boolean(event.treeImageUrl)
         });
       }
     } catch (error) {
