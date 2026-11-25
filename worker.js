@@ -1581,15 +1581,79 @@ async function renderAnimatedProfile(env, player) {
   } finally { if(browser) await browser.close().catch(()=>{}); }
 }
 
-async function decodePNG(pngBytes) {
-  const b=pngBytes instanceof Uint8Array?pngBytes:new Uint8Array(pngBytes); const sig=[137,80,78,71,13,10,26,10]; for(let i=0;i<8;i++)if(b[i]!==sig[i])throw new Error("Invalid PNG");
-  let pos=8,w=0,h=0,ct=0,bd=0,parts=[];
-  while(pos<b.length){const len=(b[pos]<<24|b[pos+1]<<16|b[pos+2]<<8|b[pos+3])>>>0;const type=String.fromCharCode(...b.slice(pos+4,pos+8));const data=b.slice(pos+8,pos+8+len);pos+=12+len;if(type==="IHDR"){w=(data[0]<<24|data[1]<<16|data[2]<<8|data[3])>>>0;h=(data[4]<<24|data[5]<<16|data[6]<<8|data[7])>>>0;bd=data[8];ct=data[9];}else if(type==="IDAT")parts.push(data);else if(type==="IEND")break;}
-  if(bd!==8||(ct!==6&&ct!==2))throw new Error("Unsupported PNG format");
-  const compressed=new Uint8Array(parts.reduce((a,x)=>a+x.length,0));let off=0;for(const x of parts){compressed.set(x,off);off+=x.length;}
-  let raw;try{raw=new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer());}catch{raw=new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());}
-  const bpp=ct===6?4:3,stride=w*bpp,out=new Uint8Array(w*h*4);let rp=0,prev=new Uint8Array(stride);
-  for(let y=0;y<h;y++){const filter=raw[rp++];const row=raw.slice(rp,rp+stride);rp+=stride;for(let x=0;x<stride;x++){const left=x>=bpp?row[x-bpp]:0,up=prev[x]||0,ul=x>=bpp?(prev[x-bpp]||0):0;let v=row[x];if(filter===1)v=(v+left)&255;else if(filter===2)v=(v+up)&255;else if(filter===3)v=(v+Math.floor((left+up)/2))&255;else if(filter===4){const p=left+up-ul,pa=Math.abs(p-left),pb=Math.abs(p-up),pc=Math.abs(p-ul);v=(v+(pa<=pb&&pa<=pc?left:pb<=pc?up:ul))&255;}row[x]=v;}for(let x=0;x<w;x++){const q=y*w+x,o=x*bpp;out[q*4]=row[o];out[q*4+1]=row[o+1];out[q*4+2]=row[o+2];out[q*4+3]=ct===6?row[o+3]:255;}prev=row;}
+async async function decodePNG(pngBytes) {
+  const b = pngBytes instanceof Uint8Array ? pngBytes : new Uint8Array(pngBytes);
+  const sig = [137,80,78,71,13,10,26,10];
+  for (let i = 0; i < 8; i++) if (b[i] !== sig[i]) throw new Error("Invalid PNG signature");
+
+  let pos = 8, w = 0, h = 0, ct = 0, bd = 0, palette = null, transparency = null;
+  const parts = [];
+  while (pos + 12 <= b.length) {
+    const len = (b[pos]<<24 | b[pos+1]<<16 | b[pos+2]<<8 | b[pos+3]) >>> 0;
+    if (pos + 12 + len > b.length) throw new Error("Truncated PNG chunk");
+    const type = String.fromCharCode(...b.slice(pos+4,pos+8));
+    const data = b.slice(pos+8,pos+8+len);
+    pos += 12 + len;
+    if (type === "IHDR") {
+      w = (data[0]<<24 | data[1]<<16 | data[2]<<8 | data[3]) >>> 0;
+      h = (data[4]<<24 | data[5]<<16 | data[6]<<8 | data[7]) >>> 0;
+      bd = data[8]; ct = data[9];
+    } else if (type === "PLTE") palette = data;
+    else if (type === "tRNS") transparency = data;
+    else if (type === "IDAT") parts.push(data);
+    else if (type === "IEND") break;
+  }
+  if (!w || !h || w*h > 16000000) throw new Error(`Invalid PNG dimensions: ${w}x${h}`);
+  const indexed = ct === 3;
+  if (!(ct === 6 || ct === 2 || indexed)) throw new Error(`Unsupported PNG color type: ${ct}`);
+  if (indexed ? ![1,2,4,8].includes(bd) : bd !== 8) throw new Error(`Unsupported PNG bit depth ${bd} for color type ${ct}`);
+  if (indexed && (!palette || palette.length % 3 !== 0)) throw new Error("Indexed PNG is missing a valid PLTE palette");
+
+  const compressed = new Uint8Array(parts.reduce((n,x)=>n+x.length,0));
+  let off=0; for (const x of parts) { compressed.set(x,off); off+=x.length; }
+  let raw;
+  try {
+    raw = new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer());
+  } catch {
+    raw = new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+  }
+
+  const channels = ct === 6 ? 4 : ct === 2 ? 3 : 1;
+  const stride = indexed ? Math.ceil(w*bd/8) : w*channels;
+  const bpp = indexed ? 1 : channels;
+  const out = new Uint8Array(w*h*4);
+  let rp=0, prev=new Uint8Array(stride);
+  for (let y=0; y<h; y++) {
+    if (rp + 1 + stride > raw.length) throw new Error("Truncated PNG image data");
+    const filter=raw[rp++], row=raw.slice(rp,rp+stride); rp+=stride;
+    for (let x=0; x<stride; x++) {
+      const left=x>=bpp?row[x-bpp]:0, up=prev[x]||0, ul=x>=bpp?(prev[x-bpp]||0):0;
+      let v=row[x];
+      if (filter===1) v=(v+left)&255;
+      else if (filter===2) v=(v+up)&255;
+      else if (filter===3) v=(v+Math.floor((left+up)/2))&255;
+      else if (filter===4) {
+        const p0=left+up-ul, pa=Math.abs(p0-left), pb=Math.abs(p0-up), pc=Math.abs(p0-ul);
+        v=(v+(pa<=pb&&pa<=pc?left:pb<=pc?up:ul))&255;
+      } else if (filter!==0) throw new Error(`Unsupported PNG filter: ${filter}`);
+      row[x]=v;
+    }
+    for (let x=0; x<w; x++) {
+      const q=(y*w+x)*4;
+      if (indexed) {
+        const bit=x*bd, shift=8-bd-(bit%8), mask=(1<<bd)-1;
+        const pi=(row[Math.floor(bit/8)]>>shift)&mask, po=pi*3;
+        if (po+2>=palette.length) throw new Error("PNG palette index is out of range");
+        out[q]=palette[po]; out[q+1]=palette[po+1]; out[q+2]=palette[po+2];
+        out[q+3]=transparency && pi<transparency.length ? transparency[pi] : 255;
+      } else {
+        const o=x*channels;
+        out[q]=row[o]; out[q+1]=row[o+1]; out[q+2]=row[o+2];
+        out[q+3]=ct===6?row[o+3]:255;
+      }
+    }
+    prev=row;
+  }
   return {width:w,height:h,data:out};
 }
 
