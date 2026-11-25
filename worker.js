@@ -30913,33 +30913,43 @@ async function showFriendsgiving(env, interaction) {
 
 async function showFriendsgivingLeaves(env, interaction, page = 0) {
   await deferInteraction(env, interaction, { ephemeral: true });
+
+  // Read-only presentation: this function never edits, replaces, or deletes
+  // saved contributions. Each existing contribution gets its own journal card.
   const state = await getGuildState(env, interaction.guild_id);
   const entries = Object.values(state.friendsgiving?.contributions || {})
     .sort((a, b) => Number(a.submittedAt || 0) - Number(b.submittedAt || 0));
+
   if (!entries.length) return editOriginalResponse(env, interaction, {
     content: "🍂 No gratitude leaves have been added yet. Tap **Add Your Gratitude Leaf** to be the first!",
     embeds: [], components: []
   });
-  const pageSize = 8;
-  const pageCount = Math.ceil(entries.length / pageSize);
+
+  const pageCount = entries.length;
   const current = Math.max(0, Math.min(pageCount - 1, Number(page) || 0));
-  const selected = entries.slice(current * pageSize, (current + 1) * pageSize);
-  const description = selected.map((entry, j) =>
-    `**${current * pageSize + j + 1}. ${String(entry.name || "Werewife").replace(/([*_`~|])/g, "\\$1").slice(0, 32)}**\n${String(entry.message || "").slice(0, 500)}`
-  ).join("\n\n");
-  const components = [];
-  if (pageCount > 1) components.push(row(
-    button("⬅️ Previous", `friendsgiving:leaves:${current - 1}`, 2, current === 0),
-    button(`Page ${current + 1}/${pageCount}`, "friendsgiving:leaves:page", 2, true),
-    button("Next ➡️", `friendsgiving:leaves:${current + 1}`, 2, current >= pageCount - 1)
-  ));
+  const entry = entries[current];
+  const safeName = String(entry.name || "Werewife").replace(/([*_`~|])/g, "\\$1").slice(0, 32);
+  const safeMessage = String(entry.message || "").slice(0, 500);
+  const avatarUrl = /^https:\/\//i.test(String(entry.avatarUrl || ""))
+    ? String(entry.avatarUrl) : null;
+
+  const components = [row(
+    button("🍂 Previous Leaf", `friendsgiving:leaves:${current - 1}`, 2, current === 0),
+    button(`Leaf ${current + 1} of ${pageCount}`, "friendsgiving:leaves:page", 2, true),
+    button("Next Leaf 🍁", `friendsgiving:leaves:${current + 1}`, 2, current >= pageCount - 1)
+  )];
+
   return editOriginalResponse(env, interaction, {
     content: "",
     embeds: [{
-      title: `🍁 All Gratitude Leaves — ${entries.length} total`,
-      description,
+      title: "🍂 A Little Leaf of Gratitude",
+      author: {
+        name: safeName,
+        ...(avatarUrl ? { icon_url: avatarUrl } : {})
+      },
+      description: `> ${safeMessage.replace(/\n/g, "\n> ")}\n\n✦ *A little piece of our forest* ✦`,
       color: 0xD88A32,
-      footer: { text: `Page ${current + 1} of ${pageCount} • Friendsgiving 2026` }
+      footer: { text: `FRIENDSGIVING 2026 • LEAF ${current + 1} OF ${pageCount}` }
     }],
     components
   });
