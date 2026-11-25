@@ -30694,19 +30694,13 @@ async function renderFriendsgivingTreeWithLeaves(env, event = {}) {
 async function sendFriendsgivingTreeMessage(env, channelId, content, panel, guildId) {
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const permanentTreeUrl = await saveFriendsgivingRenderedTree(env, guildId, png);
-  const imageFilename = `friendsgiving-tree-${Date.now()}.png`;
-  const form = new FormData();
-  form.append("payload_json", JSON.stringify({
-    content, components: panel.components,
-    embeds: [{ ...panel.embeds[0], image: { url: `attachment://${imageFilename}` } }],
-    attachments: [{ id: 0, filename: imageFilename }]
-  }));
-  form.append("files[0]", new Blob([png], { type: "image/png" }), imageFilename);
+  const embeds = [{ ...panel.embeds[0], image: { url: permanentTreeUrl } }];
   const response = await discordRequest(env, `/channels/${channelId}/messages`, {
-    method: "POST", body: form
+    method: "POST",
+    body: JSON.stringify({ content, components: panel.components, embeds })
   });
   if (!response.ok) {
-    console.error("Friendsgiving tree image post failed:", response.status, await response.text());
+    console.error("Friendsgiving tree message post failed:", response.status, await response.text());
     return null;
   }
   const posted = await response.json();
@@ -30715,80 +30709,47 @@ async function sendFriendsgivingTreeMessage(env, channelId, content, panel, guil
 
 async function editFriendsgivingTreeMessage(env, channelId, messageId, content, panel, guildId) {
   console.log("Friendsgiving refresh started:", {
-    channelId, previousMessageId: messageId,
+    channelId, messageId,
     contributionCount: Object.keys(panel?.event?.contributions || {}).length
   });
 
+  // Persist the full composite PNG to the one stable R2 object first.
+  // Discord only receives its public URL; no Discord attachment upload is used.
   const png = await renderFriendsgivingTreeWithLeaves(env, panel.event);
   const permanentTreeUrl = await saveFriendsgivingRenderedTree(env, guildId, png);
-  const imageFilename = `friendsgiving-tree-${Date.now()}.png`;
-  const form = new FormData();
-  form.append("payload_json", JSON.stringify({
-    content,
-    components: panel.components,
-    embeds: [{ ...panel.embeds[0], image: { url: `attachment://${imageFilename}` } }],
-    attachments: [{ id: 0, filename: imageFilename }]
-  }));
-  form.append("files[0]", new Blob([png], { type: "image/png" }), imageFilename);
+  const embeds = [{ ...panel.embeds[0], image: { url: permanentTreeUrl } }];
 
-  // Discord's PATCH edit endpoint has repeatedly returned a message with no
-  // attachments in this Worker. Post the verified composite as a new message
-  // instead, then let the caller persist the new message ID.
-  const response = await discordRequest(env, `/channels/${channelId}/messages`, {
-    method: "POST",
-    body: form
-  });
+  const response = await discordRequest(
+    env,
+    `/channels/${channelId}/messages/${messageId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ content, components: panel.components, embeds })
+    }
+  );
 
   if (!response.ok) {
     const detail = await response.text();
-    console.error("Friendsgiving replacement image post failed:", response.status, detail);
-    return { ok: false, status: response.status, message: null };
-  }
-
-  const postedMessage = await response.json();
-  const uploadedAttachments = Array.isArray(postedMessage.attachments)
-    ? postedMessage.attachments
-    : [];
-  const uploadedImage = uploadedAttachments.find(file => file.filename === imageFilename);
-
-  console.log("Friendsgiving replacement image post verified:", {
-    status: response.status,
-    newMessageId: postedMessage.id || null,
-    imageFilename,
-    attachmentCount: uploadedAttachments.length,
-    attachmentUrlPresent: Boolean(uploadedImage?.url),
-    bytes: png.byteLength
-  });
-
-  if (!postedMessage.id || !uploadedImage?.url) {
-    console.error("Friendsgiving Discord POST returned no matching image attachment:", {
-      messageId: postedMessage.id || null,
-      attachmentFilenames: uploadedAttachments.map(file => file.filename)
+    console.error("Friendsgiving existing tree message update failed:", {
+      status: response.status, detail, channelId, messageId,
+      permanentTreeUrl
     });
-    return { ok: false, status: response.status, message: postedMessage };
+    return { ok: false, status: response.status, message: null, permanentTreeUrl };
   }
 
-  // Remove the stale tree message only after Discord confirms the new image exists.
-  if (messageId && String(messageId) !== String(postedMessage.id)) {
-    const deleteResponse = await discordRequest(
-      env,
-      `/channels/${channelId}/messages/${messageId}`,
-      { method: "DELETE" }
-    );
-    if (!deleteResponse.ok && deleteResponse.status !== 404) {
-      console.warn("Friendsgiving old tree message could not be deleted:", {
-        status: deleteResponse.status,
-        oldMessageId: messageId,
-        newMessageId: postedMessage.id
-      });
-    }
-  }
+  const updatedMessage = await response.json();
+  console.log("Friendsgiving existing tree message updated with permanent R2 image:", {
+    status: response.status,
+    messageId: updatedMessage.id || messageId,
+    permanentTreeUrl,
+    bytes: png.byteLength,
+    contributionCount: Object.keys(panel?.event?.contributions || {}).length
+  });
 
   return {
     ok: true,
     status: response.status,
-    message: postedMessage,
-    attachmentUrl: uploadedImage.url,
+    message: updatedMessage,
     permanentTreeUrl
   };
 }
@@ -30813,7 +30774,7 @@ async function saveFriendsgivingRenderedTree(env, guildId, png) {
     throw new Error("Missing FRIENDSGIVING_R2 R2 bucket binding. Add the existing bucket with variable name FRIENDSGIVING_R2.");
   }
   await env.FRIENDSGIVING_R2.put(FRIENDSGIVING_RENDERED_R2_KEY, png, {
-    httpMetadata: { contentType: "image/png", cacheControl: "public, max-age=60" }
+    httpMetadata: { contentType: "image/png", cacheControl: "public, max-age=0, no-cache, no-store, must-revalidate" }
   });
   const url = `${BASE_URL}${FRIENDSGIVING_RENDERED_R2_KEY}?v=${Date.now()}`;
   await env.TREE_DATA.put(friendsgivingRenderedImageKey(guildId), JSON.stringify({
@@ -31102,7 +31063,7 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
           channelId: event.channelId,
           messageId: event.messageId,
           contributionCount: Object.keys(event.contributions || {}).length,
-          attachmentUrlPresent: Boolean(event.treeImageUrl)
+          permanentR2ImagePresent: Boolean(event.treeImageUrl)
         });
       }
     } catch (error) {
