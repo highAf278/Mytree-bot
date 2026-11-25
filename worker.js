@@ -30792,6 +30792,12 @@ async function editFriendsgivingTreeMessage(env, channelId, messageId, content, 
 const FRIENDSGIVING_TREE_IMAGE = "IMG_8813.png";
 const FRIENDSGIVING_BOOK_ID = "friendsgiving_2026";
 
+// Keep the latest rendered image in its own KV record so a stale guild-state
+// write elsewhere in the bot cannot roll the shared tree back to the original.
+function friendsgivingRenderedImageKey(guildId) {
+  return `friendsgiving:rendered-image:${guildId}`;
+}
+
 function friendsgivingAvatar(user) {
   if (!user?.id) return "https://cdn.discordapp.com/embed/avatars/0.png";
   if (user.avatar) {
@@ -30848,7 +30854,28 @@ async function showFriendsgiving(env, interaction) {
   }
 
   let treeUrl = event.treeImageUrl || `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}`;
-  if (event.channelId && event.messageId) {
+  try {
+    const savedRendered = await env.TREE_DATA.get(
+      friendsgivingRenderedImageKey(interaction.guild_id)
+    );
+    if (savedRendered) {
+      const saved = JSON.parse(savedRendered);
+      if (saved?.url) {
+        treeUrl = saved.url;
+        console.log("Friendsgiving dedicated rendered-image pointer loaded:", {
+          guildId: interaction.guild_id,
+          messageId: saved.messageId || null,
+          filename: saved.filename || null
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Friendsgiving rendered-image pointer lookup failed:", error);
+  }
+
+  // Only query the canonical Discord message when no separately persisted
+  // rendered-image URL is available.
+  if (treeUrl === `${BASE_URL}${FRIENDSGIVING_TREE_IMAGE}` && event.channelId && event.messageId) {
     try {
       const response = await discordRequest(
         env,
@@ -30971,6 +30998,18 @@ async function friendsgivingClose(env, interaction) {
       event.messageId = posted.message.id;
       event.treeImageUrl = posted.attachmentUrl || null;
       await saveGuildState(env, interaction.guild_id, state);
+      if (event.treeImageUrl) {
+        await env.TREE_DATA.put(
+          friendsgivingRenderedImageKey(interaction.guild_id),
+          JSON.stringify({
+            url: event.treeImageUrl,
+            messageId: event.messageId,
+            channelId: event.channelId,
+            filename: posted.message.attachments?.find(file => file.url === event.treeImageUrl)?.filename || null,
+            updatedAt: Date.now()
+          })
+        );
+      }
     }
   }
   return sendText(env, interaction, `🍂 Friendsgiving 2026 is closed and saved as a permanent event keepsake! **${Object.keys(event.contributions || {}).length}** people participated.`);
@@ -31073,6 +31112,18 @@ async function friendsgivingSubmit(env, interaction, message, ctx) {
         event.messageId = updateResponse.message.id;
         event.treeImageUrl = updateResponse.attachmentUrl || null;
         await saveGuildState(env, interaction.guild_id, state);
+        if (event.treeImageUrl) {
+          await env.TREE_DATA.put(
+            friendsgivingRenderedImageKey(interaction.guild_id),
+            JSON.stringify({
+              url: event.treeImageUrl,
+              messageId: event.messageId,
+              channelId: event.channelId,
+              filename: updateResponse.message.attachments?.find(file => file.url === event.treeImageUrl)?.filename || null,
+              updatedAt: Date.now()
+            })
+          );
+        }
         console.log("Friendsgiving tree refreshed and new message ID saved:", {
           guildId: interaction.guild_id,
           channelId: event.channelId,
